@@ -1,0 +1,31 @@
+.breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.link {
+    color: var(--color-text-secondary);
+    transition: color var(--transition-fast);
+}
+
+.link:hover {
+    color: var(--color-primary);
+}
+
+.current {
+    color: var(--color-text);
+    font-weight: var(--font-weight-medium);
+}
+
+.separator {
+    color: var(--color-text-muted);
+}

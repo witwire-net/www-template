@@ -1,0 +1,22 @@
+{
+  "files": ["packages/**/*.{ts,tsx}"],
+  "rules": {
+    "max-lines": [
+      "error",
+      {
+        "max": 500,
+        "skipComments": true,
+        "skipBlankLines": true
+      }
+    ],
+    "max-lines-per-function": [
+      "error",
+      {
+        "max": 100,
+        "skipComments": true,
+        "skipBlankLines": true,
+        "IIFEs": true
+      }
+    ]
+  }
+}

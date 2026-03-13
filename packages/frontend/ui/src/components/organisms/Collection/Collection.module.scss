@@ -1,0 +1,10 @@
+.grid {
+    --_columns: 2;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(var(--_columns), minmax(0, 1fr));
+}
+
+.item {
+    min-width: 0;
+}

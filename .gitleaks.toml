@@ -1,0 +1,12 @@
+title = "cfreact-template"
+
+[[allowlists]]
+description = "Ignore dependency and generated directories"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)coverage/''',
+  '''(^|/)playwright-report/''',
+  '''(^|/)test-results/''',
+  '''(^|/)packages/backend/internal/generated/''',
+]

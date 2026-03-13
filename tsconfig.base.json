@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@www-template-frontend/app/*": ["packages/frontend/app/src/*"],
+      "@www-template-frontend/domain/*": ["packages/frontend/domain/src/*"],
+      "@www-template-frontend/api/*": ["packages/frontend/api/src/*"],
+      "@www-template-frontend/api": ["packages/frontend/api/src/index.ts"],
+      "@www-template-frontend/ui/*": ["packages/frontend/ui/src/*"],
+      "@www-template-frontend/ui": ["packages/frontend/ui/src/index.ts"]
+    },
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  "exclude": ["node_modules", "dist", "build", ".wrangler"]
+}

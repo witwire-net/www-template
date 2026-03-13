@@ -1,0 +1,19 @@
+.search {
+    width: 100%;
+}
+
+.input {
+    width: 100%;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding: 0 var(--spacing-lg);
+    height: 44px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition: all var(--transition-bounce);
+}
+
+.input:focus {
+    border-color: var(--color-primary);
+    transform: scale(1.01);
+}

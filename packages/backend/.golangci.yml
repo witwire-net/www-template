@@ -1,0 +1,110 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - cyclop
+    - depguard
+    - errcheck
+    - funlen
+    - gocritic
+    - gofmt
+    - goimports
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - nolintlint
+    - revive
+    - staticcheck
+    - unused
+
+linters-settings:
+  cyclop:
+    max-complexity: 15
+  depguard:
+    rules:
+      cmd:
+        files:
+          - cmd/api/*.go
+        allow:
+          - $gostd
+          - witwire.net/www-template/packages/backend/internal/app
+      domain:
+        files:
+          - internal/domain/*.go
+        allow:
+          - $gostd
+          - witwire.net/www-template/packages/backend/internal/domain
+          - witwire.net/www-template/packages/backend/internal/types
+      usecases:
+        files:
+          - internal/usecases/*.go
+        allow:
+          - $gostd
+          - witwire.net/www-template/packages/backend/internal/domain
+          - witwire.net/www-template/packages/backend/internal/types
+          - witwire.net/www-template/packages/backend/internal/usecases
+      http:
+        files:
+          - internal/http/*.go
+        allow:
+          - $gostd
+          - github.com/gin-contrib/cors
+          - github.com/gin-gonic/gin
+          - github.com/oapi-codegen/runtime/types
+          - witwire.net/www-template/packages/backend/internal/domain
+          - witwire.net/www-template/packages/backend/internal/generated/openapi
+          - witwire.net/www-template/packages/backend/internal/http
+          - witwire.net/www-template/packages/backend/internal/types
+          - witwire.net/www-template/packages/backend/internal/usecases
+      persistence:
+        files:
+          - internal/persistence/*.go
+        allow:
+          - $gostd
+          - gorm.io/driver/postgres
+          - gorm.io/gorm
+          - witwire.net/www-template/packages/backend/internal/domain
+          - witwire.net/www-template/packages/backend/internal/persistence
+          - witwire.net/www-template/packages/backend/internal/types
+      app:
+        files:
+          - internal/app/*.go
+        allow:
+          - $gostd
+          - witwire.net/www-template/packages/backend/internal/app
+          - witwire.net/www-template/packages/backend/internal/domain
+          - witwire.net/www-template/packages/backend/internal/http
+          - witwire.net/www-template/packages/backend/internal/persistence
+          - witwire.net/www-template/packages/backend/internal/types
+          - witwire.net/www-template/packages/backend/internal/usecases
+  funlen:
+    lines: 100
+    statements: 60
+  goimports:
+    local-prefixes: witwire.net/www-template
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: error-return
+      - name: error-strings
+      - name: if-return
+      - name: receiver-naming
+      - name: var-naming
+
+issues:
+  exclude-use-default: false
+
+  exclude-rules:
+    - path: tools/analyzers/cmd/guardrails/main.go
+      linters:
+        - cyclop
+        - funlen
+        - gocritic
+        - gosec

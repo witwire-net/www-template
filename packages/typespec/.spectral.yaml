@@ -1,0 +1,27 @@
+functionsDir: ./spectral
+functions:
+  - path-policy
+  - app-security
+  - bearer-scheme
+
+rules:
+  template-path-policy:
+    description: Paths must stay under /api/v1/* or /api/v1/app/*
+    severity: error
+    given: $.paths
+    then:
+      function: path-policy
+
+  template-app-security:
+    description: App endpoints must declare bearer security
+    severity: error
+    given: $.paths
+    then:
+      function: app-security
+
+  template-bearer-security-scheme:
+    description: Bearer auth security scheme must be declared
+    severity: error
+    given: $
+    then:
+      function: bearer-scheme

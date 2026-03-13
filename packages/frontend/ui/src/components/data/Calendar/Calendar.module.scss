@@ -1,0 +1,59 @@
+.calendar {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.header {
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+}
+
+.weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.weekday {
+    text-align: center;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--spacing-xs);
+}
+
+.cell {
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.cell.active {
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    /* Soft Primary for better readability */
+    color: var(--color-primary);
+    font-weight: var(--font-weight-bold);
+}
+
+.cell.active:hover {
+    background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.cell.empty {
+    cursor: default;
+}

@@ -1,0 +1,303 @@
+name: new-feature
+version: 1
+description: New feature workflow - proposal → specs (domain-layer Spec Units) → design → tasks
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Initial proposal document outlining the change
+    template: proposal.md
+    instruction: |
+      Create the proposal document that establishes WHY this change is needed.
+      language rule:
+      - Think in English; output in Japanese.
+
+      Placeholder rule:
+      - Use `<!-- TODO: details of what to write -->` for placeholders.
+
+      This workflow uses fixed-granularity **Spec Units** instead of loosely defined capabilities.
+
+      Spec Unit rules:
+      - Spec Unit = `<domain>-<layer>`
+      - `<domain>`: kebab-case (e.g., `user-mgmt`, `billing`, `order-checkout`)
+      - `<layer>`: `fe` or `be`
+      - Delta spec file path (within the change): `specs/<domain>-<layer>/spec.md`
+      - Main spec file path (source of truth after archiving/sync): `openspec/specs/<domain>-<layer>/spec.md`
+
+      Naming rules:
+      - Scenario ID format: `<DOMAIN>-<LAYER>-S###` (e.g., `USER-MGMT-FE-S001`)
+      - Requirement reference ID format (for planning/traceability): `<DOMAIN>-<LAYER>-R###` (e.g., `USER-MGMT-BE-R002`)
+      - `<DOMAIN>` is `<domain>` uppercased with hyphens; `<LAYER>` is `FE` or `BE`.
+
+      Document structure:
+      - The proposal MUST include the following headings (in this order):
+        - `## Why`
+        - `## What Changes`
+        - `## Spec Units`
+          - `### New Spec Units`
+          - `### Modified Spec Units`
+        - `## Naming`
+        - `## Impact`
+
+      Spec Units section requirements:
+      - The Spec Units section is the contract between proposal and specs.
+      - Every Spec Unit that will be created or modified MUST be listed here.
+      - Each listed Spec Unit MUST have a corresponding delta spec file in `specs/<domain>-<layer>/spec.md`.
+      - Spec Unit names MUST describe enduring system capabilities or responsibility areas, not the current change activity.
+      - Avoid change-oriented names such as `setup-*`, `migrate-*`, `rename-*`, `cleanup-*`, `replace-*`, `refactor-*`, or names copied directly from the change id unless they also describe a lasting product capability.
+      - For each Spec Unit entry, include:
+        - a 1-line scope summary (what this Spec Unit covers)
+        - whether it is New or Modified
+        - any cross-cutting concerns (security/migration/performance) if relevant
+
+      What Changes section requirements:
+      - Be explicit and user-facing.
+      - Mark breaking changes with **BREAKING**.
+
+      Naming section requirements:
+      - Confirm the DOMAIN prefix you will use for Scenario IDs (derived from `<domain>`).
+      - Confirm that FE and BE scenarios use different prefixes (e.g., `USER-MGMT-FE-*` vs `USER-MGMT-BE-*`).
+
+      Proposal boundary rules:
+      - proposal.md explains why the change is needed and which lasting Spec Units are affected.
+      - proposal.md MUST NOT contain implementation steps, migration task lists, file-by-file edit plans, dependency ordering, or release checklists.
+
+      Keep it concise (1-2 pages). Focus on "why" not "how"; implementation details belong in design.md.
+    requires: []
+
+  - id: specs
+    generates: 'specs/*/spec.md'
+    description: Delta specs for each Spec Unit
+    template: spec.md
+    instruction: |
+      Create delta specification files that define WHAT the system should do.
+
+      Placeholder rule:
+      - Use `<!-- TODO: details of what to write -->` for placeholders. 
+
+      File layout:
+      - Create one delta spec per Spec Unit listed in proposal.md.
+      - For Spec Unit `<domain>-<layer>`, create: `specs/<domain>-<layer>/spec.md`
+
+      Delta format:
+      - Use top-level `##` headers for delta sections.
+      - Allowed delta sections:
+        - `## ADDED Requirements`
+        - `## MODIFIED Requirements`
+        - `## REMOVED Requirements`
+        - `## RENAMED Requirements`
+
+      Rules for new vs existing main specs:
+      - If the corresponding main spec does NOT exist yet at `openspec/specs/<domain>-<layer>/spec.md`, the delta spec SHOULD contain only **ADDED** requirements.
+      - MODIFIED/RENAMED require an existing main spec to apply cleanly.
+
+      Requirement block rules (ADDED/MODIFIED):
+      - Each requirement MUST start with: `### Requirement: <name>`
+      - Each requirement MUST include a **Customer Context** section explaining the customer pain/background that motivates it.
+      - Each requirement MUST include normative statements using SHALL or MUST (avoid should/may).
+      - Each requirement MUST include at least one scenario.
+      - Requirements define enduring system behavior/constraints, not the work performed in this change.
+
+      Spec boundary rules:
+      - spec.md defines WHAT the system must do after the change is complete.
+      - spec.md MUST NOT contain implementation tasks, migration procedures, file edit plans, release steps, rollout sequencing, or change-history wording tied to this specific change.
+      - Avoid change-relative wording such as "in this change", "during migration", "replace X with Y", or "update package ..." unless it is required to describe a lasting externally observable constraint.
+      - spec.md MUST describe only enduring end-state behavior, constraints, boundaries, and observable outcomes.
+      - spec.md MUST NOT rely on before/after comparisons or wording whose meaning depends on the current change context.
+      - Avoid change-relative labels such as `旧`, `新`, `現行`, `変更後`, `移行後`, `不要になった`, `再混入`, `legacy`, `deprecated`, `cleanup`, `replace`, or `refactor` in requirement/scenario prose.
+      - Rewrite change-relative statements into end-state constraints such as allowed packages, forbidden dependencies, reachable modules, required runtime properties, or observable outputs.
+      - Bad: "旧 frontend 構成は build graph に残ってはならない。"
+      - Good: "公開 frontend と非公開 frontend の build graph は、許可された app entrypoint と shared package のみを到達可能にしなければならない。"
+      - Bad: "legacy backend dependency の再混入を拒否する。"
+      - Good: "Hono、Wrangler、Drizzle、Cloudflare Workers 固有 backend runtime は backend dependency として宣言されてはならない。"
+      - Package/path references are allowed only when they express enduring responsibility boundaries or externally relevant structural guarantees.
+
+      Scenario rules:
+      - Each scenario MUST be a level-4 heading:
+        - `#### Scenario: <name> (<SCENARIO_ID>)`
+      - Scenario IDs MUST be stable and MUST match: `<DOMAIN>-<LAYER>-S###`.
+      - Scenarios SHOULD be observable and testable.
+      - Prefer Given/When/Then style bullets.
+
+      Manual scenarios:
+      - If a scenario cannot be automated, include `Tags: manual` within the scenario body.
+      - Place the tag close to the scenario heading (within the next ~20 lines) so tooling can detect it.
+
+      REMOVED rules:
+      - REMOVED requirements MUST include **Reason** and **Migration** notes.
+
+      MODIFIED workflow:
+      1. Locate the existing requirement in `openspec/specs/<domain>-<layer>/spec.md`
+      2. Copy the ENTIRE requirement block (from `### Requirement:` through all scenarios)
+      3. Paste under `## MODIFIED Requirements` and edit to reflect new behavior
+      4. Ensure the requirement header text matches exactly (whitespace-insensitive)
+
+      Quality bar:
+      - Specs should be testable - each scenario is a potential test case.
+      - Avoid mixing FE and BE concerns in the same Spec Unit; split by `<layer>`.
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: Technical design document with implementation details
+    template: design.md
+    instruction: |
+      Create the design document that explains HOW to implement the change.
+
+      Document structure:
+      - The design MUST use English headings and MUST include all sections present in the template.
+      - If a section is not applicable, keep the section and write "N/A" with a brief reason.
+
+      Placeholder rule:
+      - Use `<!-- TODO: details of what to write -->` for placeholders.
+
+      Scope:
+      - Clearly define In Scope and Out of Scope.
+
+      Assumptions/Dependencies:
+      - List prerequisites, external dependencies, and required migrations.
+
+      Impacted Areas:
+      - List impacted packages/modules, external systems, APIs, DB schema, and operational concerns.
+
+      Directory Tree:
+      - MUST list only files you will create/edit.
+      - MUST use box-drawing characters like `└─`, `├─`, and `│`.
+
+      New / Changed Files:
+      - MUST include every created/edited file.
+      - For each entry, state what changes and why.
+
+      Diagrams:
+      - System/Package/Sequence/Domain Model/ER diagrams MUST reflect the spec units being changed.
+      - Keep diagrams minimal but accurate.
+
+      UI Wireframes (conditional):
+      - If this change includes UI implementation/modification and the wireframe conveys meaningful screen structure, interaction flow, or state design, you MUST:
+         - Create at least one Draw.io wireframe exported as `.drawio.svg`.
+         - Place wireframe files under `wireframes/` (relative to this design.md).
+         - Add a `## UI Wireframes` section in design.md.
+         - Embed the SVG(s) using relative paths (e.g., `![Title](wireframes/example.drawio.svg)`).
+         - Include wireframe files in **Directory Tree** and **New / Changed Files**.
+      - If this change has no UI work, or the change is limited to runtime/package/infrastructure replacement without meaningful screen design decisions, keep the `## UI Wireframes` section and write `N/A` with a brief reason.
+
+      Design boundary rules:
+      - design.md explains HOW the approved specs will be implemented.
+      - design.md MUST NOT introduce new product requirements that are absent from spec.md.
+      - design.md MUST NOT replace tasks.md by listing the full implementation checklist as prose; task breakdown belongs in tasks.md.
+      - Test plans in design.md describe verification design and traceability, not change history.
+
+      Package-Level Design:
+      - Provide a package list with responsibilities, public APIs, and dependencies.
+      - For each important package, include key flows, error handling, and testing strategy.
+
+      Implementation Plan:
+      - Use arrows to show dependency order.
+      - Use branches to show parallelizable work.
+
+      Test Plan (mandatory):
+      - MUST include 4 required subsections with tables.
+      - Each subsection MUST use the exact heading text and the exact columns listed below.
+
+      1) `### User Acceptance Test (Manual)`
+         Columns:
+         - UAT ID
+         - Related Requirement
+         - Spec Summary
+         - Customer Problem Summary
+         - Steps
+         - Expected Behavior
+
+      2) `### E2E Test (Playwright)`
+         Columns:
+         - E2E ID
+         - Playwright Test Name
+         - Related Scenario
+         - Category
+         - Summary
+         - Steps (Playwright)
+         - Expected Behavior
+
+      3) `### Integration Test (Endpoint)`
+         Columns:
+         - IT ID
+         - Test Name
+         - Genre
+         - Category
+         - Summary
+         - Steps (Test)
+         - Expected Behavior
+
+      4) `### Unit/Component Test (UT)`
+         Columns:
+         - UT ID
+         - Test Name
+         - Package
+         - Category
+         - Summary
+         - Steps (Test)
+         - Expected Behavior
+
+      Test naming conventions (recommended):
+      - Scenario ID: `<DOMAIN>-<LAYER>-S###` (e.g., `USER-MGMT-FE-S001`)
+      - Requirement reference ID: `<DOMAIN>-<LAYER>-R###` (e.g., `USER-MGMT-BE-R002`)
+      - Category (`CAT`): `HAP`, `ERR`, `BND`, `PERM`, `SEC`, `A11Y`, `PERF`, `REG`, `SMK`
+      - UAT ID: `UAT-<DOMAIN>-<LAYER>-<CAT>-###`
+      - E2E ID: `E2E-<DOMAIN>-<LAYER>-<CAT>-###`
+      - IT ID: `IT-<DOMAIN>-<LAYER>-<CAT>-###`
+      - UT ID: `UT-<DOMAIN>-<LAYER>-<CAT>-###`
+
+      Traceability rules:
+      - UAT rows SHOULD reference a requirement reference ID (e.g., `USER-MGMT-FE-R001`) and the requirement name.
+      - E2E/IT/UT rows SHOULD reference a Scenario ID.
+      - A single Scenario ID may be covered by multiple tests (1:N). Add multiple E2E/IT/UT rows referencing the same Scenario ID as needed (happy/error/boundary/security/performance/etc.).
+      - Automated tests MUST include the Scenario ID in the test title in brackets:
+        - Example: `test('[USER-MGMT-FE-S001] Create user', async () => { ... })`
+
+      Rollback/Migration/Release:
+      - If DB or contract changes exist, include rollback and migration steps.
+      - Provide release steps that a teammate can follow.
+    requires:
+      - proposal
+
+  - id: tasks
+    generates: tasks.md
+    description: Implementation checklist with trackable tasks
+    template: tasks.md
+    instruction: |
+      Create the task list that breaks down the implementation work.
+
+      Placeholder rule:
+      - Use `<!-- TODO: details of what to write -->` for placeholders.
+
+      Formatting requirements:
+      - MUST follow the template's checkbox format: `- [ ] X.Y Task description`
+      - MUST group tasks under `##` headings.
+      - Tasks MUST be dependency-ordered.
+      - Tasks SHOULD be small enough to complete in one session.
+
+      Coverage and traceability:
+      - For each ADDED/MODIFIED Scenario ID, include a task to add/update automated tests.
+      - It is valid (and often expected) to add multiple tests per Scenario ID (1:N) to cover different categories.
+      - Automated tests MUST reference Scenario IDs in test titles using brackets.
+      - Include tasks for updating docs (spec/design) when behavior changes.
+
+      Task boundary rules:
+      - tasks.md defines concrete implementation work only.
+      - tasks.md MUST NOT restate product requirements using SHALL/MUST language.
+      - tasks.md MUST NOT include Customer Context, requirement prose blocks, or architectural rationale that belongs in proposal/spec/design.
+
+      Reference specs for what needs to be built, design for how to build it.
+      Each task should be verifiable - you know when it's done.
+    requires:
+      - specs
+      - design
+
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: |
+    Read context files, work through pending tasks, mark complete as you go.
+    Pause if you hit blockers or need clarification.

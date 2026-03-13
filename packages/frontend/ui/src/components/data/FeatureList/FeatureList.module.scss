@@ -1,0 +1,16 @@
+.item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.title {
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-normal);
+    color: var(--color-text);
+}
+
+.description {
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-relaxed);
+}

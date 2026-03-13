@@ -1,0 +1,40 @@
+.card {
+    height: 100%;
+}
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    height: 100%;
+}
+
+.quote {
+    margin: 0;
+    color: var(--color-text);
+    line-height: var(--line-height-relaxed);
+}
+
+.profile {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.identity {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+}
+
+.role {
+    font-size: var(--font-size-2xs);
+    color: var(--color-text-secondary);
+}

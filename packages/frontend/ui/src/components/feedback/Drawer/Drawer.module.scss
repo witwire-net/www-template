@@ -1,0 +1,43 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    pointer-events: none;
+}
+
+.backdrop {
+    composes: backdropBase from "@/styles/shared/drawer.module.scss";
+}
+
+.drawer {
+    composes: drawerBase from "@/styles/shared/drawer.module.scss";
+    position: fixed;
+    top: 0;
+    height: 100vh;
+    transform: translateX(100%);
+    transition: transform var(--transition-normal);
+}
+
+.left {
+    left: 0;
+    transform: translateX(-100%);
+    border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
+}
+
+.right {
+    right: 0;
+    border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+}
+
+.open {
+    pointer-events: auto;
+}
+
+.open.drawer {
+    transform: translateX(0);
+}
+
+.open.backdrop {
+    opacity: 1;
+    pointer-events: auto;
+}

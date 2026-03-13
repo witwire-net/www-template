@@ -1,0 +1,34 @@
+/* Premium Soft Style - The Middle Ground */
+.navPill {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    /* Smooth rounded corners */
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-medium);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        transform var(--transition-fast);
+    border: 1px solid transparent;
+    /* Prepare for border transition */
+    position: relative;
+    z-index: 1;
+    text-decoration: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.navPill:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-primary);
+    transform: translateY(-1px);
+}
+
+/* Active State: Subtle brand-color text, matching brand guidelines sidebar */
+.navPillActive {
+    color: var(--color-primary);
+    background-color: transparent;
+    border-color: transparent;
+}

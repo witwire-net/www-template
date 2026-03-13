@@ -1,0 +1,28 @@
+.pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.button,
+.page {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    transition: all var(--transition-fast);
+}
+
+.page:hover,
+.button:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.active {
+    background: var(--color-primary);
+    color: var(--color-on-status);
+    border-color: transparent;
+}

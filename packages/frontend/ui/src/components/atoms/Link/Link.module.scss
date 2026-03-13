@@ -1,0 +1,46 @@
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-weight: var(--font-weight-medium);
+    transition: color var(--transition-fast), transform var(--transition-fast);
+    text-decoration: none;
+}
+
+.link:active {
+    transform: scale(0.98);
+}
+
+.default {
+    color: var(--color-text);
+}
+
+.primary {
+    color: var(--color-primary);
+}
+
+.muted {
+    color: var(--color-text-secondary);
+}
+
+.ghost {
+    color: var(--color-text-muted);
+}
+
+.none {
+    text-decoration: none;
+}
+
+.hover {
+    text-decoration: none;
+}
+
+.hover:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.always {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}

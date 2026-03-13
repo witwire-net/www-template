@@ -1,0 +1,210 @@
+.header {
+    width: calc(100% - (var(--spacing-lg) * 2));
+    margin: var(--spacing-md) var(--spacing-lg);
+    height: 4.5rem;
+    background: var(--color-surface-floating);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: var(--spacing-md);
+    z-index: 1000;
+    transition: all var(--transition-normal);
+}
+
+.header.minimized {
+    height: 3.5rem;
+    width: calc(100% - (var(--spacing-sm) * 2));
+    margin: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--palette-white) 95%, transparent);
+}
+
+[data-theme='dark'] .header.minimized {
+    background: color-mix(in srgb, var(--palette-neutral-900) 95%, transparent);
+}
+
+[data-theme='dark'] .header {
+    background: var(--color-surface-floating);
+    border-color: var(--color-border-subtle);
+}
+
+.inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    padding: 0 var(--spacing-lg);
+    width: 100%;
+    overflow: visible;
+}
+
+.leftSection {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.menuButton {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-primary);
+    padding: var(--spacing-xs);
+    transition: transform var(--transition-bounce);
+}
+
+.menuButton:active {
+    transform: scale(0.9) rotate(-10deg);
+}
+
+.menuIcon {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .menuButton {
+        display: block;
+    }
+}
+
+.logo {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-black);
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    letter-spacing: -0.5px;
+}
+
+.nav {
+    display: none;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+@media (min-width: 768px) {
+    .nav {
+        display: flex;
+    }
+}
+
+/* Unified Desktop Nav Item - Uses shared styles via Composition */
+.navItem {
+    composes: navPill from '@/styles/shared/navPill.module.scss';
+    white-space: nowrap;
+}
+
+/* Header.tsx uses `styles.active` condition */
+.active {
+    composes: navPillActive from '@/styles/shared/navPill.module.scss';
+}
+
+.rightSection {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+/* Mobile Styles */
+.mobileBackdrop {
+    composes: backdropBase from '@/styles/shared/drawer.module.scss';
+}
+
+.mobileBackdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mobileDrawer {
+    composes: drawerBase from '@/styles/shared/drawer.module.scss';
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+        transform var(--transition-normal),
+        visibility 0s ease var(--transition-normal);
+    border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+    border-left: 1px solid var(--color-border);
+    border-right: none;
+}
+
+.mobileDrawer.open {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+        transform var(--transition-normal),
+        visibility 0s ease 0s;
+}
+
+.overlayHeader {
+    composes: logoBase from '@/styles/shared/drawer.module.scss';
+}
+
+.closeButton {
+    background: none;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xs);
+    cursor: pointer;
+    color: var(--color-text);
+    transition: transform var(--transition-bounce);
+}
+
+.closeIcon {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.closeButton:hover {
+    transform: rotate(90deg);
+    color: var(--color-primary);
+}
+
+.overlayContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+}
+
+.mobileNav {
+    composes: navBase from '@/styles/shared/drawer.module.scss';
+}
+
+.mobileNavItem {
+    composes: navPill from '@/styles/shared/navPill.module.scss';
+}
+
+.mobileActive {
+    composes: navPillActive from '@/styles/shared/navPill.module.scss';
+}
+
+.mobileActions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+    .header.website .actions {
+        display: none;
+    }
+}

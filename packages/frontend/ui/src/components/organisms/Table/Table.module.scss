@@ -1,0 +1,23 @@
+.container {
+    overflow: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    text-align: left;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.headerCell {
+    font-weight: var(--font-weight-bold);
+}
+
+.cell {
+    vertical-align: top;
+}

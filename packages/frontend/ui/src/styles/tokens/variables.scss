@@ -1,0 +1,149 @@
+:root {
+    /* --- Primitive Colors (Palette) --- */
+    --palette-brand-500: #5fd9db;
+    /* Strict adherence */
+    --palette-brand-400: #4ac6c8;
+    --palette-brand-600: #3daeb0;
+
+    /* Extended Neutral Palette (Soft Pure Grayscale / Base #1f1f1f) */
+    --palette-neutral-50: #fafafa;
+    --palette-neutral-100: #f4f4f4;
+    --palette-neutral-200: #e6e6e6;
+    --palette-neutral-300: #d4d4d4;
+    --palette-neutral-400: #a3a3a3;
+    --palette-neutral-500: #737373;
+    --palette-neutral-600: #575757;
+    --palette-neutral-700: #424242;
+    --palette-neutral-800: #333333;
+    --palette-neutral-900: #292929;
+    --palette-neutral-950: #1f1f1f;
+
+    /* Absolute */
+    --palette-white: #ffffff;
+
+    /* --- Semantic Functional Tokens --- */
+    /* Brand */
+    --color-primary: var(--palette-brand-500);
+    --color-primary-hover: var(--palette-brand-400);
+    --color-primary-active: var(--palette-brand-600);
+    --color-primary-contrast: var(--palette-neutral-950);
+
+    /* Surfaces - FLAT & BRIGHT */
+    --color-background: var(--palette-neutral-50);
+    --color-surface: var(--palette-white);
+    --color-surface-floating: var(--palette-white);
+    /* No glass, solid white */
+    --color-surface-hover: var(--palette-neutral-100);
+
+    /* Text */
+    --color-text: var(--palette-neutral-900);
+    --color-text-secondary: var(--palette-neutral-600);
+    --color-text-muted: var(--palette-neutral-400);
+    --color-text-on-brand: var(--palette-neutral-950);
+
+    /* Borders */
+    /* Using neutral colors instead of rgba black for cleaner rendering */
+    --color-border: var(--palette-neutral-200);
+    --color-border-subtle: var(--palette-neutral-100);
+    --color-border-hover: var(--color-primary);
+
+    /* Status */
+    --color-success: #00b894;
+    --color-warning: #fdcb6e;
+    --color-error: #ff7675;
+    --color-info: #74b9ff;
+
+    /* Gradients - Subtle only, mostly solid */
+    --gradient-primary: linear-gradient(
+        135deg,
+        var(--palette-brand-400),
+        var(--palette-brand-500)
+    );
+
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+    --spacing-3xl: 5rem;
+
+    /* Typography */
+    --font-family-sans:
+        'IBM Plex Sans', 'IBM Plex Sans JP', system-ui, -apple-system,
+        sans-serif;
+    --font-family-mono:
+        'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        monospace;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.25rem;
+    --font-size-2xl: 1.5rem;
+    --font-size-3xl: 2.5rem;
+
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-bold: 700;
+    --font-weight-black: 900;
+
+    /* Radius - ROUNDED IS BACK */
+    --radius-sm: 0.5rem;
+    --radius-md: 1rem;
+    --radius-lg: 1.5rem;
+    --radius-xl: 2rem;
+    --radius-full: 9999px;
+
+    /* Effects - NO SHADOWS/GLOWS */
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-glow: none;
+
+    --backdrop-blur: none;
+
+    --transition-fast: 150ms ease-out;
+    --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* Rich animation */
+    --transition-smooth: 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    /* コンテナ展開・スライド等の空間的アニメーション用 */
+
+    /* On-status text */
+    --color-on-status: var(--palette-white);
+    /* status 系背景（success/error/info/primary）の上に乗る白テキスト */
+
+    /* Extended font sizes */
+    --font-size-2xs: 0.8125rem;
+    /* SectionHeading eyebrow 等、xs(0.75) と sm(0.875) の中間 */
+
+    /* Line heights */
+    --line-height-tight: 1.2;
+    /* 見出し用 */
+    --line-height-normal: 1.5;
+    /* 本文用（デフォルト） */
+    --line-height-relaxed: 1.65;
+    /* 説明文・長文用 */
+}
+
+[data-theme='dark'] {
+    --color-background: var(--palette-neutral-950);
+    --color-surface: var(--palette-neutral-900);
+    --color-surface-floating: var(--palette-neutral-900);
+    --color-surface-hover: var(--palette-neutral-800);
+
+    --color-text: var(--palette-neutral-50);
+    --color-text-secondary: var(--palette-neutral-300);
+    --color-text-muted: var(--palette-neutral-400);
+
+    --color-border: var(--palette-neutral-800);
+    --color-border-subtle: var(--palette-neutral-900);
+    --color-border-hover: var(--color-primary);
+
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-glow: none;
+}

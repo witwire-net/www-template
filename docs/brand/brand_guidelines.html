@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>WitWire Brand Guidelines</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans+JP:wght@400;500;700;900&family=IBM+Plex+Sans:wght@400;500;700;900&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="brand_guidelines.css" />
+    </head>
+
+    <body>
+        <div class="page-wrapper">
+            <!-- ===== SIDEBAR ===== -->
+            <aside class="sidebar">
+                <a href="#" class="sidebar-logo">
+                    <svg
+                        viewBox="0 0 347 315"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M319.784 65.03L330.118 45.65c.376-.706 1.388-.706 1.764 0l10.334 19.375c.355.666-.128 1.47-.883 1.47H320.667c-.755 0-1.238-.805-.883-1.47z"
+                            fill="#5FD9DB"
+                        />
+                        <path
+                            fill-rule="evenodd"
+                            clip-rule="evenodd"
+                            d="M9.598 26.78C3.482 32.387 0 40.304 0 48.6v184.308c0 7.57 3.302 14.763 9.043 19.697 5.835 5.015 13.274 7.773 21.968 7.773H216.78c1.024 0 2.024.315 2.863.902l59.877 41.838c3.828 2.675 8.909-.894 7.69-5.403l-9.564-35.395c-.264-.979.497-1.942 1.511-1.942h.623c7.063 0 13.828-2.847 18.765-7.897C303.316 247.578 306 240.993 306 234.136V77.176c0-5.352-7.273-6.963-9.533-2.111L234.898 207.263c-.82 1.762-2.588 2.889-4.532 2.889h-37.09c-1.998 0-3.804-1.19-4.593-3.025l-28.248-65.706c-.542-1.261-.542-2.69.001-3.951l14.848-34.508c1.752-4.074 7.548-4.019 9.222.088l23.456 57.515c1.646 4.036 7.309 4.18 9.157.232l38.76-82.761c.311-.664.472-1.388.472-2.121V24c0-2.761-2.239-5-5-5H29.601c-7.406 0-14.543 2.776-20.003 7.78zM138.498 77.028c-1.966 0-3.749 1.152-4.558 2.944L99.168 157.044c-1.86 4.122-7.802 3.854-9.282-.42L63.48 80.392c-.697-2.013-2.594-3.364-4.725-3.364H25.424c-3.524 0-5.943 3.549-4.653 6.83l48.403 123.123c.752 1.913 2.598 3.171 4.653 3.171h37.517c1.926 0 3.681-1.107 4.512-2.845l58.087-121.595c.667-1.395.65-3.02-.044-4.401l-.769-1.528c-.849-1.688-2.577-2.753-4.467-2.753h-30.165z"
+                            fill="#5FD9DB"
+                        />
+                        <circle cx="333" cy="19" r="14" fill="#5FD9DB" />
+                        <rect
+                            x="270"
+                            y="19"
+                            width="36"
+                            height="36"
+                            rx="5"
+                            fill="#5FD9DB"
+                        />
+                    </svg>
+                    <span>WitWire</span>
+                </a>
+                <nav>
+                    <a href="#intro">イントロダクション</a>
+                    <a href="#naming">ブランドネーム</a>
+                    <a href="#logo">ロゴ</a>
+                    <a href="#colors">カラーパレット</a>
+                    <a href="#typography">タイポグラフィ</a>
+                    <a href="#principles">デザイン原則</a>
+                    <a href="#icons">アイコン</a>
+                    <a href="#photo">写真・画像</a>
+                    <a href="#spacing">スペーシング</a>
+                    <a href="#motion">モーション</a>
+                    <a href="#donts">禁止事項</a>
+                </nav>
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <span>テーマ切替</span>
+                    <span id="theme-icon">☀️</span>
+                </button>
+            </aside>
+
+            <!-- ===== MAIN CONTENT ===== -->
+            <main class="main-content">
+                <!-- 1. イントロダクション -->
+                <section id="intro">
+                    <p class="section-label">Brand Guidelines</p>
+                    <h1>WitWire<br />ブランドガイドライン</h1>
+                    <p>
+                        このドキュメントは、WitWire Inc.
+                        のブランドアイデンティティを一貫して運用するためのガイドラインです。ロゴ、カラー、タイポグラフィ、デザイン原則など、すべてのタッチポイントで統一された体験を届けるための基盤となります。
+                    </p>
+
+                    <div class="card-grid" style="margin-top: 2rem">
+                        <div class="card">
+                            <h3>事業内容</h3>
+                            <p style="font-size: 0.875rem">
+                                次世代ソーシャルメディア基盤「WitWire」の開発及び運営（BaaSプラットフォーム運営）、および次世代ソーシャルメディアの事業開発・運用支援（SI）
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Vision</h3>
+                            <p
+                                style="
+                                    font-size: 1.25rem;
+                                    font-weight: 700;
+                                    color: var(--text);
+                                "
+                            >
+                                なんかすごいUX
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Mission</h3>
+                            <p style="font-size: 0.875rem">
+                                コミュニティにテクノロジーで新たな体験を創出する
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <hr />
+
+                <!-- 2. ブランドネーム -->
+                <section id="naming">
+                    <p class="section-label">01</p>
+                    <h2>ブランドネーム & 表記ルール</h2>
+                    <p>
+                        プロダクト名および社名の表記を統一し、ブランドの認知を正確に保ちます。
+                    </p>
+
+                    <table class="naming-table">
+                        <thead>
+                            <tr>
+                                <th>用途</th>
+                                <th>表記</th>
+                                <th>判定</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>プロダクト名</td>
+                                <td><strong>WitWire</strong></td>
+                                <td class="ok">✓ 正</td>
+                            </tr>
+                            <tr>
+                                <td>社名（日本語）</td>
+                                <td><strong>WitWire株式会社</strong></td>
+                                <td class="ok">✓ 正</td>
+                            </tr>
+                            <tr>
+                                <td>社名（英語）</td>
+                                <td><strong>WitWire Inc.</strong></td>
+                                <td class="ok">✓ 正</td>
+                            </tr>
+                            <tr>
+                                <td>全小文字</td>
+                                <td>witwire</td>
+                                <td class="ng">✗ 不可</td>
+                            </tr>
+                            <tr>
+                                <td>全大文字</td>
+                                <td>WITWIRE</td>
+                                <td class="ng">✗ 不可</td>
+                            </tr>
+                            <tr>
+                                <td>スペース挿入</td>
+                                <td>Wit Wire</td>
+                                <td class="ng">✗ 不可</td>
+                            </tr>
+                            <tr>
+                                <td>ハイフン挿入</td>
+                                <td>Wit-Wire</td>
+                                <td class="ng">✗ 不可</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <hr />
+
+                <!-- 3. ロゴ -->
+                <section id="logo">
+                    <p class="section-label">02</p>
+                    <h2>ロゴ</h2>
+                    <p>
+                        WitWire ロゴは「アイコンマーク」と「ワードマーク（IBM
+                        Plex Sans
+                        Bold）」の組み合わせで構成されます。横組みでは、左にアイコン・右にワードマークを配置します。
+                    </p>
+
+                    <h3 style="margin-top: 2rem">ロゴロックアップ — 背景別</h3>
+                    <div class="logo-showcase">
+                        <div>
+                            <div class="logo-box light">
+                                <div class="logo-lockup">
+                                    <svg
+                                        viewBox="0 0 347 315"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M319.784 65.03L330.118 45.65c.376-.706 1.388-.706 1.764 0l10.334 19.375c.355.666-.128 1.47-.883 1.47H320.667c-.755 0-1.238-.805-.883-1.47z"
+                                            fill="#5FD9DB"
+                                        />
+                                        <path
+                                            fill-rule="evenodd"
+                                            clip-rule="evenodd"
+                                            d="M9.598 26.78C3.482 32.387 0 40.304 0 48.6v184.308c0 7.57 3.302 14.763 9.043 19.697 5.835 5.015 13.274 7.773 21.968 7.773H216.78c1.024 0 2.024.315 2.863.902l59.877 41.838c3.828 2.675 8.909-.894 7.69-5.403l-9.564-35.395c-.264-.979.497-1.942 1.511-1.942h.623c7.063 0 13.828-2.847 18.765-7.897C303.316 247.578 306 240.993 306 234.136V77.176c0-5.352-7.273-6.963-9.533-2.111L234.898 207.263c-.82 1.762-2.588 2.889-4.532 2.889h-37.09c-1.998 0-3.804-1.19-4.593-3.025l-28.248-65.706c-.542-1.261-.542-2.69.001-3.951l14.848-34.508c1.752-4.074 7.548-4.019 9.222.088l23.456 57.515c1.646 4.036 7.309 4.18 9.157.232l38.76-82.761c.311-.664.472-1.388.472-2.121V24c0-2.761-2.239-5-5-5H29.601c-7.406 0-14.543 2.776-20.003 7.78zM138.498 77.028c-1.966 0-3.749 1.152-4.558 2.944L99.168 157.044c-1.86 4.122-7.802 3.854-9.282-.42L63.48 80.392c-.697-2.013-2.594-3.364-4.725-3.364H25.424c-3.524 0-5.943 3.549-4.653 6.83l48.403 123.123c.752 1.913 2.598 3.171 4.653 3.171h37.517c1.926 0 3.681-1.107 4.512-2.845l58.087-121.595c.667-1.395.65-3.02-.044-4.401l-.769-1.528c-.849-1.688-2.577-2.753-4.467-2.753h-30.165z"
+                                            fill="#5FD9DB"
+                                        />
+                                        <circle
+                                            cx="333"
+                                            cy="19"
+                                            r="14"
+                                            fill="#5FD9DB"
+                                        />
+                                        <rect
+                                            x="270"
+                                            y="19"
+                                            width="36"
+                                            height="36"
+                                            rx="5"
+                                            fill="#5FD9DB"
+                                        />
+                                    </svg>
+                                    <span class="wordmark on-light"
+                                        >WitWire</span
+                                    >
+                                </div>
+                            </div>
+                            <p class="logo-label">ライト背景</p>
+                        </div>
+                        <div>
+                            <div class="logo-box dark">
+                                <div class="logo-lockup">
+                                    <svg
+                                        viewBox="0 0 347 315"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M319.784 65.03L330.118 45.65c.376-.706 1.388-.706 1.764 0l10.334 19.375c.355.666-.128 1.47-.883 1.47H320.667c-.755 0-1.238-.805-.883-1.47z"
+                                            fill="#5FD9DB"
+                                        />
+                                        <path
+                                            fill-rule="evenodd"
+                                            clip-rule="evenodd"
+                                            d="M9.598 26.78C3.482 32.387 0 40.304 0 48.6v184.308c0 7.57 3.302 14.763 9.043 19.697 5.835 5.015 13.274 7.773 21.968 7.773H216.78c1.024 0 2.024.315 2.863.902l59.877 41.838c3.828 2.675 8.909-.894 7.69-5.403l-9.564-35.395c-.264-.979.497-1.942 1.511-1.942h.623c7.063 0 13.828-2.847 18.765-7.897C303.316 247.578 306 240.993 306 234.136V77.176c0-5.352-7.273-6.963-9.533-2.111L234.898 207.263c-.82 1.762-2.588 2.889-4.532 2.889h-37.09c-1.998 0-3.804-1.19-4.593-3.025l-28.248-65.706c-.542-1.261-.542-2.69.001-3.951l14.848-34.508c1.752-4.074 7.548-4.019 9.222.088l23.456 57.515c1.646 4.036 7.309 4.18 9.157.232l38.76-82.761c.311-.664.472-1.388.472-2.121V24c0-2.761-2.239-5-5-5H29.601c-7.406 0-14.543 2.776-20.003 7.78zM138.498 77.028c-1.966 0-3.749 1.152-4.558 2.944L99.168 157.044c-1.86 4.122-7.802 3.854-9.282-.42L63.48 80.392c-.697-2.013-2.594-3.364-4.725-3.364H25.424c-3.524 0-5.943 3.549-4.653 6.83l48.403 123.123c.752 1.913 2.598 3.171 4.653 3.171h37.517c1.926 0 3.681-1.107 4.512-2.845l58.087-121.595c.667-1.395.65-3.02-.044-4.401l-.769-1.528c-.849-1.688-2.577-2.753-4.467-2.753h-30.165z"
+                                            fill="#5FD9DB"
+                                        />
+                                        <circle
+                                            cx="333"
+                                            cy="19"
+                                            r="14"
+                                            fill="#5FD9DB"
+                                        />
+                                        <rect
+                                            x="270"
+                                            y="19"
+                                            width="36"
+                                            height="36"
+                                            rx="5"
+                                            fill="#5FD9DB"
+                                        />
+                                    </svg>
+                                    <span class="wordmark on-dark"
+                                        >WitWire</span
+                                    >
+                                </div>
+                            </div>
+                            <p class="logo-label">ダーク背景</p>
+                        </div>
+                        <div>
+                            <div class="logo-box brand">
+                                <div class="logo-lockup">
+                                    <svg
+                                        viewBox="0 0 347 315"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M319.784 65.03L330.118 45.65c.376-.706 1.388-.706 1.764 0l10.334 19.375c.355.666-.128 1.47-.883 1.47H320.667c-.755 0-1.238-.805-.883-1.47z"
+                                            fill="#1f1f1f"
+                                        />
+                                        <path
+                                            fill-rule="evenodd"
+                                            clip-rule="evenodd"
+                                            d="M9.598 26.78C3.482 32.387 0 40.304 0 48.6v184.308c0 7.57 3.302 14.763 9.043 19.697 5.835 5.015 13.274 7.773 21.968 7.773H216.78c1.024 0 2.024.315 2.863.902l59.877 41.838c3.828 2.675 8.909-.894 7.69-5.403l-9.564-35.395c-.264-.979.497-1.942 1.511-1.942h.623c7.063 0 13.828-2.847 18.765-7.897C303.316 247.578 306 240.993 306 234.136V77.176c0-5.352-7.273-6.963-9.533-2.111L234.898 207.263c-.82 1.762-2.588 2.889-4.532 2.889h-37.09c-1.998 0-3.804-1.19-4.593-3.025l-28.248-65.706c-.542-1.261-.542-2.69.001-3.951l14.848-34.508c1.752-4.074 7.548-4.019 9.222.088l23.456 57.515c1.646 4.036 7.309 4.18 9.157.232l38.76-82.761c.311-.664.472-1.388.472-2.121V24c0-2.761-2.239-5-5-5H29.601c-7.406 0-14.543 2.776-20.003 7.78zM138.498 77.028c-1.966 0-3.749 1.152-4.558 2.944L99.168 157.044c-1.86 4.122-7.802 3.854-9.282-.42L63.48 80.392c-.697-2.013-2.594-3.364-4.725-3.364H25.424c-3.524 0-5.943 3.549-4.653 6.83l48.403 123.123c.752 1.913 2.598 3.171 4.653 3.171h37.517c1.926 0 3.681-1.107 4.512-2.845l58.087-121.595c.667-1.395.65-3.02-.044-4.401l-.769-1.528c-.849-1.688-2.577-2.753-4.467-2.753h-30.165z"
+                                            fill="#1f1f1f"
+                                        />
+                                        <circle
+                                            cx="333"
+                                            cy="19"
+                                            r="14"
+                                            fill="#1f1f1f"
+                                        />
+                                        <rect
+                                            x="270"
+                                            y="19"
+                                            width="36"
+                                            height="36"
+                                            rx="5"
+                                            fill="#1f1f1f"
+                                        />
+                                    </svg>
+                                    <span class="wordmark on-brand"
+                                        >WitWire</span
+                                    >
+                                </div>
+                            </div>
+                            <p class="logo-label">ブランドカラー背景</p>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2.5rem">
+                        クリアスペース & 最小サイズ
+                    </h3>
+                    <div class="card" style="margin-top: 1rem">
+                        <p style="font-size: 0.875rem">
+                            <strong>クリアスペース:</strong> アイコンの高さの
+                            25%
+                            を最小余白として、ロゴの上下左右に確保してください。
+                        </p>
+                        <p style="font-size: 0.875rem; margin-top: 0.5rem">
+                            <strong>最小サイズ:</strong>
+                            ロゴロックアップの横幅は 120px
+                            以上で使用してください。アイコン単体は 24px 以上。
+                        </p>
+                    </div>
+                </section>
+
+                <hr />
+
+                <!-- 4. カラーパレット -->
+                <section id="colors">
+                    <p class="section-label">03</p>
+                    <h2>カラーパレット</h2>
+                    <p>
+                        すべてのカラーはデザイントークンとして定義されています。ハードコードされたカラー値の使用は禁止です。
+                    </p>
+
+                    <h3 style="margin-top: 2rem">ブランドカラー</h3>
+                    <div class="swatch-group">
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#5fd9db')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #5fd9db;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Brand 500</p>
+                            <p class="swatch-hex">#5fd9db</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#4ac6c8')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #4ac6c8;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Brand 400</p>
+                            <p class="swatch-hex">#4ac6c8</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#3daeb0')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #3daeb0;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Brand 600</p>
+                            <p class="swatch-hex">#3daeb0</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2rem">
+                        ニュートラル（Pure Grayscale）
+                    </h3>
+                    <div class="swatch-group">
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#fafafa')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #fafafa"
+                            ></div>
+                            <p class="swatch-name">N-50</p>
+                            <p class="swatch-hex">#fafafa</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#f4f4f4')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #f4f4f4"
+                            ></div>
+                            <p class="swatch-name">N-100</p>
+                            <p class="swatch-hex">#f4f4f4</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#e6e6e6')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #e6e6e6"
+                            ></div>
+                            <p class="swatch-name">N-200</p>
+                            <p class="swatch-hex">#e6e6e6</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#d4d4d4')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #d4d4d4"
+                            ></div>
+                            <p class="swatch-name">N-300</p>
+                            <p class="swatch-hex">#d4d4d4</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#a3a3a3')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #a3a3a3"
+                            ></div>
+                            <p class="swatch-name">N-400</p>
+                            <p class="swatch-hex">#a3a3a3</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#737373')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #737373"
+                            ></div>
+                            <p class="swatch-name">N-500</p>
+                            <p class="swatch-hex">#737373</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#575757')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #575757"
+                            ></div>
+                            <p class="swatch-name">N-600</p>
+                            <p class="swatch-hex">#575757</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#424242')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #424242"
+                            ></div>
+                            <p class="swatch-name">N-700</p>
+                            <p class="swatch-hex">#424242</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#333333')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #333333"
+                            ></div>
+                            <p class="swatch-name">N-800</p>
+                            <p class="swatch-hex">#333333</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#292929')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #292929"
+                            ></div>
+                            <p class="swatch-name">N-900</p>
+                            <p class="swatch-hex">#292929</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#1f1f1f')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="background: #1f1f1f"
+                            ></div>
+                            <p class="swatch-name">N-950</p>
+                            <p class="swatch-hex">#1f1f1f</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2rem">ステータスカラー</h3>
+                    <div class="swatch-group">
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#00b894')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #00b894;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Success</p>
+                            <p class="swatch-hex">#00b894</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#fdcb6e')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #fdcb6e;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Warning</p>
+                            <p class="swatch-hex">#fdcb6e</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#ff7675')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #ff7675;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Error</p>
+                            <p class="swatch-hex">#ff7675</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                        <div
+                            class="swatch"
+                            onclick="copySwatch(this, '#74b9ff')"
+                        >
+                            <div
+                                class="swatch-color"
+                                style="
+                                    background: #74b9ff;
+                                    border-color: transparent;
+                                "
+                            ></div>
+                            <p class="swatch-name">Info</p>
+                            <p class="swatch-hex">#74b9ff</p>
+                            <span class="copied-toast">Copied!</span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2.5rem">
+                        セマンティックトークン対応表
+                    </h3>
+                    <table class="token-table">
+                        <thead>
+                            <tr>
+                                <th>トークン</th>
+                                <th>ライト</th>
+                                <th>ダーク</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>--color-background</code></td>
+                                <td>N-50 (#fafafa)</td>
+                                <td>N-950 (#1f1f1f)</td>
+                            </tr>
+                            <tr>
+                                <td><code>--color-surface</code></td>
+                                <td>White (#fff)</td>
+                                <td>N-900 (#292929)</td>
+                            </tr>
+                            <tr>
+                                <td><code>--color-text</code></td>
+                                <td>N-900 (#292929)</td>
+                                <td>N-50 (#fafafa)</td>
+                            </tr>
+                            <tr>
+                                <td><code>--color-text-secondary</code></td>
+                                <td>N-600 (#575757)</td>
+                                <td>N-300 (#d4d4d4)</td>
+                            </tr>
+                            <tr>
+                                <td><code>--color-text-muted</code></td>
+                                <td>N-400 (#a3a3a3)</td>
+                                <td>N-400 (#a3a3a3)</td>
+                            </tr>
+                            <tr>
+                                <td><code>--color-border</code></td>
+                                <td>N-200 (#e6e6e6)</td>
+                                <td>N-800 (#333333)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <hr />
+
+                <!-- 5. タイポグラフィ -->
+                <section id="typography">
+                    <p class="section-label">04</p>
+                    <h2>タイポグラフィ</h2>
+                    <p>
+                        書体は <strong>IBM Plex Sans</strong>（欧文）と
+                        <strong>IBM Plex Sans JP</strong
+                        >（和文）を使用します。システムフォントをフォールバックに指定します。
+                    </p>
+
+                    <h3 style="margin-top: 2rem">サイズスケール</h3>
+                    <div class="type-specimen">
+                        <div class="type-row">
+                            <span class="type-meta">3xl — 2.5rem</span
+                            ><span
+                                class="type-sample"
+                                style="
+                                    font-size: 2.5rem;
+                                    font-weight: 900;
+                                    line-height: 1.2;
+                                "
+                                >見出しレベル 1</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">2xl — 1.5rem</span
+                            ><span
+                                class="type-sample"
+                                style="
+                                    font-size: 1.5rem;
+                                    font-weight: 700;
+                                    line-height: 1.2;
+                                "
+                                >見出しレベル 2</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">xl — 1.25rem</span
+                            ><span
+                                class="type-sample"
+                                style="font-size: 1.25rem; font-weight: 700"
+                                >見出しレベル 3</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">lg — 1.125rem</span
+                            ><span
+                                class="type-sample"
+                                style="font-size: 1.125rem; font-weight: 500"
+                                >リード文・強調テキスト</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">base — 1rem</span
+                            ><span class="type-sample" style="font-size: 1rem"
+                                >本文テキスト — The quick brown fox</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">sm — 0.875rem</span
+                            ><span
+                                class="type-sample"
+                                style="font-size: 0.875rem"
+                                >補足テキスト・キャプション</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">xs — 0.75rem</span
+                            ><span
+                                class="type-sample"
+                                style="
+                                    font-size: 0.75rem;
+                                    color: var(--text-muted);
+                                "
+                                >ラベル・バッジ等の装飾テキスト</span
+                            >
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2rem">ウェイト</h3>
+                    <div class="type-specimen">
+                        <div class="type-row">
+                            <span class="type-meta">Regular 400</span
+                            ><span class="type-sample" style="font-weight: 400"
+                                >本文に使用する標準ウェイト</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">Medium 500</span
+                            ><span class="type-sample" style="font-weight: 500"
+                                >ナビゲーション・ラベル等</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">Bold 700</span
+                            ><span class="type-sample" style="font-weight: 700"
+                                >見出し・ワードマーク</span
+                            >
+                        </div>
+                        <div class="type-row">
+                            <span class="type-meta">Black 900</span
+                            ><span class="type-sample" style="font-weight: 900"
+                                >ヒーローテキスト・数値</span
+                            >
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2rem">行間</h3>
+                    <table class="token-table">
+                        <thead>
+                            <tr>
+                                <th>トークン</th>
+                                <th>値</th>
+                                <th>用途</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>--line-height-tight</code></td>
+                                <td>1.2</td>
+                                <td>見出し</td>
+                            </tr>
+                            <tr>
+                                <td><code>--line-height-normal</code></td>
+                                <td>1.5</td>
+                                <td>本文（デフォルト）</td>
+                            </tr>
+                            <tr>
+                                <td><code>--line-height-relaxed</code></td>
+                                <td>1.65</td>
+                                <td>説明文・長文</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <hr />
+
+                <!-- 6. デザイン原則 -->
+                <section id="principles">
+                    <p class="section-label">05</p>
+                    <h2>デザイン原則</h2>
+                    <p>
+                        WitWire
+                        のすべてのプロダクトとコミュニケーションは、以下の原則に従ってデザインされます。
+                    </p>
+
+                    <div class="principle-grid">
+                        <div class="principle-card">
+                            <p class="principle-num">01</p>
+                            <p class="principle-title">配置がすべて</p>
+                            <p class="principle-desc">
+                                UIの本質はドットではなく配置。コンポーネントの位置関係、余白のリズム、視線の流れに徹底的にこだわり、ITスタートアップの洗練さを体現する。
+                            </p>
+                        </div>
+                        <div class="principle-card">
+                            <p class="principle-num">02</p>
+                            <p class="principle-title">角を取れ</p>
+                            <p class="principle-desc">
+                                シンプルで角がないデザイン。丸みのあるコーナー、柔らかなトランジション、フラットなサーフェス。シャドウやグローは使わない。
+                            </p>
+                        </div>
+                        <div class="principle-card">
+                            <p class="principle-num">03</p>
+                            <p class="principle-title">文字は読まれない</p>
+                            <p class="principle-desc">
+                                テキストによる表現は最小限に。アイコン、レイアウト、ビジュアルで伝えられることを文字に頼るな。
+                            </p>
+                        </div>
+                        <div class="principle-card">
+                            <p class="principle-num">04</p>
+                            <p class="principle-title">弱く見えるぞ</p>
+                            <p class="principle-desc">
+                                難しい表現、長い表現を使うな。わかりやすく、簡潔で、面白く、齟齬のない表現のみ許可される。機知に富んだ表現を。ネットミーム大歓迎。
+                            </p>
+                        </div>
+                        <div class="principle-card">
+                            <p class="principle-num">05</p>
+                            <p class="principle-title">入力か、出力か</p>
+                            <p class="principle-desc">
+                                UIが促すのはインプットか、アウトプットか。まずそれを明確にせよ。インプットのみ（LP等）なら
+                                Three.js・画像・SVG・動画・アニメーションで視覚に訴える。アウトプット（ダッシュボード等）なら機能的配置を優先。
+                            </p>
+                        </div>
+                        <div class="principle-card">
+                            <p class="principle-num">06</p>
+                            <p class="principle-title">Flat & Bright</p>
+                            <p class="principle-desc">
+                                ソリッドなサーフェス、クリーンなボーダー、明るいトーン。グラスモーフィズムやシャドウには頼らない。色とタイポグラフィで階層を表現する。
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <hr />
+
+                <!-- 7. アイコン -->
+                <section id="icons">
+                    <p class="section-label">06</p>
+                    <h2>アイコン</h2>
+                    <p>
+                        アイコンセットには
+                        <strong>Tabler Icons</strong
+                        >（<code>@tabler/icons-react</code>）を使用します。一貫したストロークと丸角が
+                        WitWire の Flat & Bright 美学と調和します。
+                    </p>
+
+                    <div class="card" style="margin-top: 1.5rem">
+                        <h3>ルール</h3>
+                        <table class="token-table" style="margin-top: 0.75rem">
+                            <thead>
+                                <tr>
+                                    <th>プロパティ</th>
+                                    <th>値</th>
+                                    <th>備考</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ストローク幅</td>
+                                    <td><code>1.5</code>（デフォルト）</td>
+                                    <td>統一感のため変更しない</td>
+                                </tr>
+                                <tr>
+                                    <td>サイズ（本文）</td>
+                                    <td><code>20px</code></td>
+                                    <td>ボタン・リスト・ナビゲーション等</td>
+                                </tr>
+                                <tr>
+                                    <td>サイズ（見出し）</td>
+                                    <td><code>24px</code></td>
+                                    <td>セクションヘッダ・ヒーロー</td>
+                                </tr>
+                                <tr>
+                                    <td>サイズ（装飾小）</td>
+                                    <td><code>16px</code></td>
+                                    <td>バッジ・ステータスインジケータ</td>
+                                </tr>
+                                <tr>
+                                    <td>カラー</td>
+                                    <td>テキストカラーを継承</td>
+                                    <td><code>currentColor</code> を使用</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <hr />
+
+                <!-- 8. 写真・画像ガイドライン -->
+                <section id="photo">
+                    <p class="section-label">07</p>
+                    <h2>写真・画像ガイドライン</h2>
+                    <p>
+                        写真・画像は、ブランドの「明るく、クリーンで、現代的」なトーンを反映してください。
+                    </p>
+
+                    <div class="card-grid" style="margin-top: 1.5rem">
+                        <div class="card">
+                            <h3>トーン & ライティング</h3>
+                            <p style="font-size: 0.8125rem">
+                                自然光ベースで明るいトーンを基本とする。コントラストは中程度に保ち、影が強すぎる写真は避ける。
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>カラーアクセント</h3>
+                            <p style="font-size: 0.8125rem">
+                                可能な場合、ブランドカラー（#5fd9db）系のアクセントを構図内に含める。強制ではないが意識する。
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>被写体</h3>
+                            <p style="font-size: 0.8125rem">
+                                人物写真は多様性を反映する。テクノロジー・コミュニティ・コラボレーションのイメージを優先。
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>加工ルール</h3>
+                            <p style="font-size: 0.8125rem">
+                                ヴィンテージフィルター・極端な彩度変更・HDR加工は禁止。ホワイトバランス調整と軽微な露出補正のみ許可。
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <hr />
+
+                <!-- 9. スペーシング -->
+                <section id="spacing">
+                    <p class="section-label">08</p>
+                    <h2>スペーシング & レイアウト</h2>
+                    <p>
+                        8px グリッドを基本とし、4px
+                        を補助単位として使用します。すべてのスペーシングはデザイントークンで管理します。
+                    </p>
+
+                    <div class="spacing-list" style="margin-top: 1.5rem">
+                        <div class="spacing-row">
+                            <span class="spacing-label">xs — 0.25rem</span>
+                            <div class="spacing-bar" style="width: 16px"></div>
+                        </div>
+                        <div class="spacing-row">
+                            <span class="spacing-label">sm — 0.5rem</span>
+                            <div class="spacing-bar" style="width: 32px"></div>
+                        </div>
+                        <div class="spacing-row">
+                            <span class="spacing-label">md — 1rem</span>
+                            <div class="spacing-bar" style="width: 64px"></div>
+                        </div>
+                        <div class="spacing-row">
+                            <span class="spacing-label">lg — 1.5rem</span>
+                            <div class="spacing-bar" style="width: 96px"></div>
+                        </div>
+                        <div class="spacing-row">
+                            <span class="spacing-label">xl — 2rem</span>
+                            <div class="spacing-bar" style="width: 128px"></div>
+                        </div>
+                        <div class="spacing-row">
+                            <span class="spacing-label">2xl — 3rem</span>
+                            <div class="spacing-bar" style="width: 192px"></div>
+                        </div>
+                        <div class="spacing-row">
+                            <span class="spacing-label">3xl — 5rem</span>
+                            <div class="spacing-bar" style="width: 320px"></div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2rem">角丸（Border Radius）</h3>
+                    <table class="token-table">
+                        <thead>
+                            <tr>
+                                <th>トークン</th>
+                                <th>値</th>
+                                <th>用途</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>--radius-sm</code></td>
+                                <td>0.5rem</td>
+                                <td>ボタン・入力欄・バッジ</td>
+                            </tr>
+                            <tr>
+                                <td><code>--radius-md</code></td>
+                                <td>1rem</td>
+                                <td>カード・モーダル</td>
+                            </tr>
+                            <tr>
+                                <td><code>--radius-lg</code></td>
+                                <td>1.5rem</td>
+                                <td>大型コンテナ</td>
+                            </tr>
+                            <tr>
+                                <td><code>--radius-xl</code></td>
+                                <td>2rem</td>
+                                <td>ヒーローセクション</td>
+                            </tr>
+                            <tr>
+                                <td><code>--radius-full</code></td>
+                                <td>9999px</td>
+                                <td>アバター・ピル形状</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <hr />
+
+                <!-- 10. モーション -->
+                <section id="motion">
+                    <p class="section-label">09</p>
+                    <h2>モーション</h2>
+                    <p>
+                        すべてのアニメーションは意味を持つこと。装飾的な動きは排除し、状態変化やフィードバックを伝えるモーションのみ使用します。
+                    </p>
+
+                    <div class="motion-demo">
+                        <div class="motion-card">
+                            <div class="motion-dot fast"></div>
+                            <p class="motion-name">Fast</p>
+                            <p class="motion-value">150ms ease-out</p>
+                            <p
+                                style="
+                                    font-size: 0.75rem;
+                                    color: var(--text-muted);
+                                    margin-top: 0.5rem;
+                                "
+                            >
+                                ホバー・フォーカス等の即時フィードバック
+                            </p>
+                        </div>
+                        <div class="motion-card">
+                            <div class="motion-dot normal"></div>
+                            <p class="motion-name">Normal</p>
+                            <p class="motion-value">300ms ease-in-out</p>
+                            <p
+                                style="
+                                    font-size: 0.75rem;
+                                    color: var(--text-muted);
+                                    margin-top: 0.5rem;
+                                "
+                            >
+                                テーマ切替・パネル開閉
+                            </p>
+                        </div>
+                        <div class="motion-card">
+                            <div class="motion-dot bounce"></div>
+                            <p class="motion-name">Bounce</p>
+                            <p class="motion-value">500ms spring</p>
+                            <p
+                                style="
+                                    font-size: 0.75rem;
+                                    color: var(--text-muted);
+                                    margin-top: 0.5rem;
+                                "
+                            >
+                                成功フィードバック・注目誘導
+                            </p>
+                        </div>
+                        <div class="motion-card">
+                            <div class="motion-dot smooth"></div>
+                            <p class="motion-name">Smooth</p>
+                            <p class="motion-value">320ms ease-out</p>
+                            <p
+                                style="
+                                    font-size: 0.75rem;
+                                    color: var(--text-muted);
+                                    margin-top: 0.5rem;
+                                "
+                            >
+                                コンテナ展開・スライド
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <hr />
+
+                <!-- 11. 禁止事項 -->
+                <section id="donts">
+                    <p class="section-label">10</p>
+                    <h2>禁止事項（Don'ts）</h2>
+                    <p>
+                        ブランドの一貫性を守るために、以下の行為を禁止します。
+                    </p>
+
+                    <div class="do-dont-grid">
+                        <div class="do-dont-item">
+                            <div
+                                class="do-dont-visual"
+                                style="background: var(--ww-n100)"
+                            >
+                                <div class="logo-lockup">
+                                    <svg
+                                        viewBox="0 0 347 315"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        style="width: 32px"
+                                    >
+                                        <path
+                                            d="M319.784 65.03L330.118 45.65c.376-.706 1.388-.706 1.764 0l10.334 19.375c.355.666-.128 1.47-.883 1.47H320.667c-.755 0-1.238-.805-.883-1.47z"
+                                            fill="#5FD9DB"
+                                        />
+                                        <path
+                                            fill-rule="evenodd"
+                                            clip-rule="evenodd"
+                                            d="M9.598 26.78C3.482 32.387 0 40.304 0 48.6v184.308c0 7.57 3.302 14.763 9.043 19.697 5.835 5.015 13.274 7.773 21.968 7.773H216.78c1.024 0 2.024.315 2.863.902l59.877 41.838c3.828 2.675 8.909-.894 7.69-5.403l-9.564-35.395c-.264-.979.497-1.942 1.511-1.942h.623c7.063 0 13.828-2.847 18.765-7.897C303.316 247.578 306 240.993 306 234.136V77.176c0-5.352-7.273-6.963-9.533-2.111L234.898 207.263c-.82 1.762-2.588 2.889-4.532 2.889h-37.09c-1.998 0-3.804-1.19-4.593-3.025l-28.248-65.706c-.542-1.261-.542-2.69.001-3.951l14.848-34.508c1.752-4.074 7.548-4.019 9.222.088l23.456 57.515c1.646 4.036 7.309 4.18 9.157.232l38.76-82.761c.311-.664.472-1.388.472-2.121V24c0-2.761-2.239-5-5-5H29.601c-7.406 0-14.543 2.776-20.003 7.78zM138.498 77.028c-1.966 0-3.749 1.152-4.558 2.944L99.168 157.044c-1.86 4.122-7.802 3.854-9.282-.42L63.48 80.392c-.697-2.013-2.594-3.364-4.725-3.364H25.424c-3.524 0-5.943 3.549-4.653 6.83l48.403 123.123c.752 1.913 2.598 3.171 4.653 3.171h37.517c1.926 0 3.681-1.107 4.512-2.845l58.087-121.595c.667-1.395.65-3.02-.044-4.401l-.769-1.528c-.849-1.688-2.577-2.753-4.467-2.753h-30.165z"
+                                            fill="#5FD9DB"
+                                        />
+                                        <circle
+                                            cx="333"
+                                            cy="19"
+                                            r="14"
+                                            fill="#5FD9DB"
+                                        />
+                                        <rect
+                                            x="270"
+                                            y="19"
+                                            width="36"
+                                            height="36"
+                                            rx="5"
+                                            fill="#5FD9DB"
+                                        />
+                                    </svg>
+                                    <span class="wordmark on-light"
+                                        >WitWire</span
+                                    >
+                                </div>
+                            </div>
+                            <p class="do-dont-label do">✓ 正しい使い方</p>
+                            <p class="do-dont-desc">
+                                ブランドカラーのアイコン +
+                                ダークテキストのワードマーク
+                            </p>
+                        </div>
+                        <div class="do-dont-item">
+                            <div
+                                class="do-dont-visual"
+                                style="background: var(--ww-n100)"
+                            >
+                                <div
+                                    class="logo-lockup"
+                                    style="transform: rotate(15deg)"
+                                >
+                                    <svg
+                                        viewBox="0 0 347 315"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        style="width: 32px"
+                                    >
+                                        <path
+                                            d="M319.784 65.03L330.118 45.65c.376-.706 1.388-.706 1.764 0l10.334 19.375c.355.666-.128 1.47-.883 1.47H320.667c-.755 0-1.238-.805-.883-1.47z"
+                                            fill="#ff7675"
+                                        />
+                                        <path
+                                            fill-rule="evenodd"
+                                            clip-rule="evenodd"
+                                            d="M9.598 26.78C3.482 32.387 0 40.304 0 48.6v184.308c0 7.57 3.302 14.763 9.043 19.697 5.835 5.015 13.274 7.773 21.968 7.773H216.78c1.024 0 2.024.315 2.863.902l59.877 41.838c3.828 2.675 8.909-.894 7.69-5.403l-9.564-35.395c-.264-.979.497-1.942 1.511-1.942h.623c7.063 0 13.828-2.847 18.765-7.897C303.316 247.578 306 240.993 306 234.136V77.176c0-5.352-7.273-6.963-9.533-2.111L234.898 207.263c-.82 1.762-2.588 2.889-4.532 2.889h-37.09c-1.998 0-3.804-1.19-4.593-3.025l-28.248-65.706c-.542-1.261-.542-2.69.001-3.951l14.848-34.508c1.752-4.074 7.548-4.019 9.222.088l23.456 57.515c1.646 4.036 7.309 4.18 9.157.232l38.76-82.761c.311-.664.472-1.388.472-2.121V24c0-2.761-2.239-5-5-5H29.601c-7.406 0-14.543 2.776-20.003 7.78zM138.498 77.028c-1.966 0-3.749 1.152-4.558 2.944L99.168 157.044c-1.86 4.122-7.802 3.854-9.282-.42L63.48 80.392c-.697-2.013-2.594-3.364-4.725-3.364H25.424c-3.524 0-5.943 3.549-4.653 6.83l48.403 123.123c.752 1.913 2.598 3.171 4.653 3.171h37.517c1.926 0 3.681-1.107 4.512-2.845l58.087-121.595c.667-1.395.65-3.02-.044-4.401l-.769-1.528c-.849-1.688-2.577-2.753-4.467-2.753h-30.165z"
+                                            fill="#ff7675"
+                                        />
+                                        <circle
+                                            cx="333"
+                                            cy="19"
+                                            r="14"
+                                            fill="#ff7675"
+                                        />
+                                        <rect
+                                            x="270"
+                                            y="19"
+                                            width="36"
+                                            height="36"
+                                            rx="5"
+                                            fill="#ff7675"
+                                        />
+                                    </svg>
+                                    <span
+                                        style="
+                                            font-weight: 700;
+                                            font-size: 1.25rem;
+                                            color: #ff7675;
+                                        "
+                                        >WitWire</span
+                                    >
+                                </div>
+                            </div>
+                            <p class="do-dont-label dont">✗ 禁止</p>
+                            <p class="do-dont-desc">ロゴの回転・色変更</p>
+                        </div>
+                        <div class="do-dont-item">
+                            <div
+                                class="do-dont-visual"
+                                style="background: var(--ww-n100)"
+                            >
+                                <span
+                                    style="
+                                        font-size: 1.25rem;
+                                        font-weight: 700;
+                                        filter: drop-shadow(
+                                            0 4px 8px rgba(0, 0, 0, 0.3)
+                                        );
+                                    "
+                                    >WitWire</span
+                                >
+                            </div>
+                            <p class="do-dont-label dont">✗ 禁止</p>
+                            <p class="do-dont-desc">
+                                ロゴへのシャドウ・グロー追加
+                            </p>
+                        </div>
+                        <div class="do-dont-item">
+                            <div
+                                class="do-dont-visual"
+                                style="background: var(--ww-n100)"
+                            >
+                                <span
+                                    style="
+                                        font-size: 1.25rem;
+                                        font-family: Georgia, serif;
+                                        font-weight: 700;
+                                    "
+                                    >WitWire</span
+                                >
+                            </div>
+                            <p class="do-dont-label dont">✗ 禁止</p>
+                            <p class="do-dont-desc">
+                                定義外フォントでのワードマーク表示
+                            </p>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2.5rem">その他の禁止事項</h3>
+                    <div class="card" style="margin-top: 1rem">
+                        <table class="token-table" style="margin-top: 0">
+                            <thead>
+                                <tr>
+                                    <th>カテゴリ</th>
+                                    <th>禁止事項</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ロゴ</td>
+                                    <td>
+                                        変形（縦横比変更）、回転、不透明度変更、要素の追加・削除
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>カラー</td>
+                                    <td>
+                                        ハードコードされた色値の直接使用（トークンを使うこと）
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>タイポグラフィ</td>
+                                    <td>
+                                        IBM Plex Sans / JP 以外のフォント使用
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>エフェクト</td>
+                                    <td>
+                                        box-shadow、text-shadow、glow、グラスモーフィズムの使用
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>言葉</td>
+                                    <td>
+                                        冗長な表現、難解な専門用語の羅列、曖昧な説明文
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>画像</td>
+                                    <td>
+                                        ヴィンテージフィルター、過度なHDR加工、低解像度素材の使用
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section
+                    style="
+                        margin-top: 5rem;
+                        padding-top: 3rem;
+                        border-top: 1px solid var(--border);
+                    "
+                >
+                    <p
+                        style="
+                            font-size: 0.8125rem;
+                            color: var(--text-muted);
+                            text-align: center;
+                        "
+                    >
+                        WitWire Brand Guidelines v1.0 — 2026.03 — WitWire Inc.
+                    </p>
+                </section>
+            </main>
+        </div>
+
+        <script>
+            function toggleTheme() {
+                const d = document.documentElement;
+                const isDark = d.getAttribute('data-theme') === 'dark';
+                d.setAttribute('data-theme', isDark ? '' : 'dark');
+                document.getElementById('theme-icon').textContent = isDark
+                    ? '☀️'
+                    : '🌙';
+            }
+            function copySwatch(el, hex) {
+                navigator.clipboard.writeText(hex);
+                const t = el.querySelector('.copied-toast');
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 1200);
+            }
+            // Sidebar active link tracking
+            const sections = document.querySelectorAll('section[id]');
+            const navLinks = document.querySelectorAll('.sidebar nav a');
+            const observer = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((e) => {
+                        if (e.isIntersecting) {
+                            navLinks.forEach((l) =>
+                                l.classList.remove('active')
+                            );
+                            const a = document.querySelector(
+                                '.sidebar nav a[href="#' + e.target.id + '"]'
+                            );
+                            if (a) a.classList.add('active');
+                        }
+                    });
+                },
+                { rootMargin: '-20% 0px -70% 0px' }
+            );
+            sections.forEach((s) => observer.observe(s));
+        </script>
+    </body>
+</html>

@@ -1,0 +1,48 @@
+.skeleton {
+    background-color: var(--color-surface-hover);
+    border-radius: var(--radius-lg);
+    /* Rounded */
+    position: relative;
+    overflow: hidden;
+    /* Pulsing opacity */
+    animation: pulse 1s ease-in-out infinite alternate;
+}
+
+[data-theme='dark'] .skeleton {
+    background-color: color-mix(
+        in srgb,
+        var(--color-surface-hover) 50%,
+        transparent
+    );
+}
+
+@keyframes pulse {
+    from {
+        opacity: 0.6;
+        transform: scale(0.99);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Remove shimmer overlay - using pulse */
+.skeleton::after {
+    display: none;
+}
+
+.text {
+    height: 1em;
+    margin-bottom: 0.5em;
+    border-radius: var(--radius-md);
+}
+
+.circular {
+    border-radius: var(--radius-full);
+}
+
+.rectangular {
+    border-radius: var(--radius-xl);
+}

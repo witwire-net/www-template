@@ -1,0 +1,27 @@
+.segmented {
+    display: inline-flex;
+    gap: var(--spacing-xs);
+    /* Tighter for segmented control */
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+}
+
+.item {
+    composes: navPill from "@/styles/shared/navPill.module.scss";
+    justify-content: center;
+    border-radius: var(--radius-full);
+    /* Ensure full rounded */
+}
+
+.active {
+    composes: navPillActive from "@/styles/shared/navPill.module.scss";
+    background: var(--color-surface-hover);
+    /* Ensure explicit background if needed */
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

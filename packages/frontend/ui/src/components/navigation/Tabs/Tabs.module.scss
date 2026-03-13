@@ -1,0 +1,26 @@
+.tabs {
+    display: inline-flex;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-floating);
+    /* Match SideNav container or similar */
+    border: 1px solid var(--color-border);
+}
+
+.tab {
+    composes: navPill from "@/styles/shared/navPill.module.scss";
+    justify-content: center;
+    border-radius: var(--radius-full);
+}
+
+
+
+.active {
+    composes: navPillActive from "@/styles/shared/navPill.module.scss";
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

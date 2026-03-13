@@ -1,0 +1,111 @@
+services:
+  workspace:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+      opensearch:
+        condition: service_started
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://template:template@postgres:5432/template?sslmode=disable
+      GOPATH: /go
+      GOMODCACHE: /go/pkg/mod
+      GOCACHE: /home/node/.cache/go-build
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_REGION: us-east-1
+      MINIO_SECRET_KEY: minioadmin
+      OPENSEARCH_URL: http://opensearch:9200
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      TOOLCHAIN_GO_VERSION: 1.26.1
+      TOOLCHAIN_PNPM_VERSION: 10.27.0
+      TOOLCHAIN_GORM_VERSION: 1.31.0
+      TOOLCHAIN_GOLANG_MIGRATE_VERSION: 4.18.3
+      TOOLCHAIN_OAPI_CODEGEN_VERSION: 2.4.1
+      TOOLCHAIN_TYPESPEC_VERSION: 1.8.0
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      VALKEY_URL: redis://valkey:6379/0
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    init: true
+    volumes:
+      - ..:/workspaces/www-tempalte:cached
+      - go-build-cache:/home/node/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+      - playwright-cache:/ms-playwright
+      - pnpm-store:/home/node/.local/share/pnpm/store
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: template
+      POSTGRES_PASSWORD: template
+      POSTGRES_USER: template
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U template -d template']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: ['valkey-server', '--save', '', '--appendonly', 'no']
+    restart: unless-stopped
+    volumes:
+      - valkey-data:/data
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    environment:
+      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+      DISABLE_SECURITY_PLUGIN: 'true'
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      discovery.type: single-node
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: minioadmin
+    restart: unless-stopped
+    volumes:
+      - minio-data:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+
+volumes:
+  go-build-cache:
+  go-mod-cache:
+  minio-data:
+  opensearch-data:
+  playwright-cache:
+  pnpm-store:
+  postgres-data:
+  valkey-data:

@@ -1,0 +1,119 @@
+.typography {
+    margin: 0;
+    color: var(--color-text);
+    line-height: var(--line-height-normal);
+}
+
+.h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-black);
+    line-height: var(--line-height-tight);
+    letter-spacing: -0.5px;
+}
+
+.h2 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+}
+
+.h3 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+}
+
+.h4 {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+}
+
+.h5 {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+}
+
+.h6 {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.subtitle {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+.body {
+    font-size: var(--font-size-base);
+}
+
+.body-sm {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.caption {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.overline {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.regular {
+    font-weight: var(--font-weight-regular);
+}
+
+.medium {
+    font-weight: var(--font-weight-medium);
+}
+
+.bold {
+    font-weight: var(--font-weight-bold);
+}
+
+.black {
+    font-weight: var(--font-weight-black);
+}
+
+.default {
+    color: var(--color-text);
+}
+
+.secondary {
+    color: var(--color-text-secondary);
+}
+
+.muted {
+    color: var(--color-text-muted);
+}
+
+.primary {
+    color: var(--color-primary);
+}
+
+.left {
+    text-align: left;
+}
+
+.center {
+    text-align: center;
+}
+
+.right {
+    text-align: right;
+}
+
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

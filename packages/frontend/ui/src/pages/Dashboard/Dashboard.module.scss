@@ -1,0 +1,110 @@
+.layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--color-background);
+}
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-left: 280px;
+    /* Sidebar width + margin */
+    min-width: 0;
+    transition: margin-left var(--transition-normal);
+}
+
+@media (max-width: 768px) {
+    .main {
+        margin-left: 0;
+    }
+}
+
+.content {
+    padding: var(--spacing-lg);
+    flex: 1;
+    background-color: var(--color-surface);
+}
+
+.pageTitle {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--spacing-lg);
+    color: var(--color-text);
+}
+
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+}
+
+.statCard {
+    background-color: var(--color-background);
+}
+
+.statValue {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary);
+    margin-top: var(--spacing-xs);
+}
+
+.statLabel {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.recentActivity {
+    background-color: var(--color-background);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+}
+
+.tableScroll {
+    overflow-x: auto;
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.userAvatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: var(--color-border);
+}
+
+.statusCompleted {
+    color: var(--color-success);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+    background-color: var(--color-surface);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}

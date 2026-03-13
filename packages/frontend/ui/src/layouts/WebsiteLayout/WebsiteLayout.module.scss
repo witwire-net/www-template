@@ -1,0 +1,30 @@
+.layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: var(--color-background);
+    position: relative;
+}
+
+.headerWrapper {
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.headerWrapper.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: transparent;
+    width: 100%;
+}
+
+.content {
+    flex: 1;
+    width: 100%;
+    /* Ensure content stacks properly */
+    display: flex;
+    flex-direction: column;
+}

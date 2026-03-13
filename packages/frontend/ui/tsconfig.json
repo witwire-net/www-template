@@ -1,0 +1,21 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "./dist",
+    "baseUrl": "./src",
+    "types": ["svelte", "vite/client"],
+    "paths": {
+      "@ui/*": ["./*"]
+    }
+  },
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/*.svelte",
+    "src/**/*.ts",
+    ".storybook/**/*.ts",
+    "svelte.config.js",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

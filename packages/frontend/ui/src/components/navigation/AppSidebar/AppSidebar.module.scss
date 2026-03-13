@@ -1,0 +1,105 @@
+.sidebar {
+  composes: drawerBase from '@/styles/shared/drawer.module.scss';
+
+  /* Layout specific overrides */
+  height: calc(100vh - (var(--spacing-md) * 2));
+  margin: var(--spacing-md) 0 var(--spacing-md) var(--spacing-md);
+  border-radius: var(--radius-xl);
+  position: fixed;
+  left: 0;
+  top: 0;
+  transition: transform var(--transition-normal);
+  overflow: visible;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-120%);
+    visibility: hidden;
+    height: 100vh;
+    margin: 0;
+    border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+}
+
+/* Overlay only on mobile */
+.overlay {
+  composes: backdropBase from '@/styles/shared/drawer.module.scss';
+  display: none;
+  border: 0;
+  padding: 0;
+}
+
+.overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+  .overlay {
+    display: block;
+  }
+}
+
+[data-theme='dark'] .sidebar {
+  background: var(--color-surface-floating);
+  border-color: var(--color-border-subtle);
+}
+
+.logo {
+  composes: logoBase from '@/styles/shared/drawer.module.scss';
+  /* Override specific to AppSidebar if needed, but keeping common is best */
+}
+
+.closeParams {
+  display: none;
+  background: none;
+  border: none;
+  padding: var(--spacing-xs);
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.closeIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .closeParams {
+    display: inline-flex;
+  }
+}
+
+.nav {
+  composes: navBase from '@/styles/shared/drawer.module.scss';
+}
+
+/* .navItem.active changed to .active for composition */
+.active {
+  composes: navPillActive from '@/styles/shared/navPill.module.scss';
+}
+
+.navItem {
+  composes: navPill from '@/styles/shared/navPill.module.scss';
+}
+
+.navIcon {
+  margin-right: 8px;
+}
+
+.footer {
+  margin-top: auto;
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}

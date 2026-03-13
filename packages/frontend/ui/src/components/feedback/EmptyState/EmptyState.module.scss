@@ -1,0 +1,29 @@
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--spacing-2xl);
+    gap: var(--spacing-sm);
+    color: var(--color-text-secondary);
+}
+
+.icon {
+    font-size: var(--font-size-2xl);
+    color: var(--color-primary);
+}
+
+.title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+}
+
+.description {
+    font-size: var(--font-size-sm);
+}
+
+.action {
+    margin-top: var(--spacing-sm);
+}

@@ -1,0 +1,29 @@
+.snackbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-floating);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+}
+
+.message {
+    flex: 1;
+}
+
+.action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xl);
+    cursor: pointer;
+}

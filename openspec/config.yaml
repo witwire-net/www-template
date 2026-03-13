@@ -1,0 +1,50 @@
+schema: new-feature
+
+context: |
+  Repository: cfreact-template
+  Tech stack: TypeScript, React, Cloudflare Workers, Hono, Drizzle ORM
+  Testing: Vitest (unit/integration), Playwright (e2e)
+
+  Spec -> Test contract:
+  - Specs live at openspec/specs/**/spec.md (source of truth)
+  - Every Scenario heading MUST end with a stable Scenario ID in parentheses:
+    - Example: #### Scenario: Create a user (USER-MGMT-FE-S001)
+  - Scenario ID format: ^[A-Z0-9]+(?:-[A-Z0-9]+)*-S\d{3,}$
+  - Automated tests MUST reference Scenario IDs in test titles using brackets:
+    - Example: it('[USER-MGMT-FE-S001] ...', ...)
+  - If a scenario cannot be automated, mark it explicitly with: Tags: manual
+
+  Note on Spec Units:
+  - Some schemas in this repo (e.g., new-feature, and future fix-feature/change-feature) use Spec Units:
+    - Spec Unit = <domain>-<layer>
+    - <domain>: kebab-case (e.g., user-mgmt)
+    - <layer>: fe | be
+    - Main spec path: openspec/specs/<domain>-<layer>/spec.md
+
+rules:
+  specs:
+    - Every Scenario heading MUST include a Scenario ID suffix in parentheses.
+    - Prefer Scenario IDs that include layer (FE/BE) in the prefix (e.g., USER-MGMT-FE-S001).
+    - Prefer Given/When/Then bullets. Keep scenarios testable and observable.
+    - If a scenario cannot be automated, include `Tags: manual` and explain why in the change proposal/PR.
+  tasks:
+    - For each ADDED/MODIFIED Scenario ID, include a task to add/update automated tests that reference the Scenario ID.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

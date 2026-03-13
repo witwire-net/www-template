@@ -1,0 +1,65 @@
+.grid {
+    width: 100%;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+}
+
+.label {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-secondary);
+}
+
+.value {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    color: var(--color-text);
+}
+
+.meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    align-items: center;
+}
+
+.trend {
+    font-size: var(--font-size-2xs);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-normal);
+}
+
+.context {
+    font-size: var(--font-size-2xs);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-secondary);
+}
+
+.neutral {
+    color: var(--color-text-secondary);
+}
+
+.primary {
+    color: var(--color-primary);
+}
+
+.success {
+    color: var(--color-success);
+}
+
+.warning {
+    color: var(--color-warning);
+}
+
+.info {
+    color: var(--color-info);
+}
