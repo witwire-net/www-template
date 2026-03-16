@@ -1,0 +1,1229 @@
+/* ====================================
+   HeroSection — Visual-first hero
+   "技術力を感じる" リッチ背景演出
+   WitWire Flat & Bright — no blur, no glow, no shadow
+   ==================================== */
+
+.root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background-color: var(--color-background);
+  transition: background-color var(--transition-normal);
+}
+
+/* ── Layer 1: Tech dot grid ── */
+.root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--color-primary) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.35;
+  z-index: 0;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 40%, transparent 85%);
+}
+
+/* ── Layer 2: Scan line (falling) ── */
+.root::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-primary) 20%,
+    var(--color-primary) 80%,
+    transparent 100%
+  );
+  opacity: 0.38;
+  z-index: 0;
+  pointer-events: none;
+  animation: scanline 8s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    top: -2%;
+  }
+
+  100% {
+    top: 102%;
+  }
+}
+
+/* ── Layer 3: Signal horizon ── */
+.signalField {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: min(42vh, 360px);
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, transparent 0%, black 20%, black 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 20%, black 100%);
+}
+
+/* Ellipse outline ring — removed per design feedback */
+.signalGlow {
+  display: none;
+}
+
+/* Solid 1 px horizon line — removed per design feedback */
+.signalHorizon {
+  display: none;
+}
+
+/* Perspective grid plane */
+.signalPlane {
+  position: absolute;
+  right: -12%;
+  bottom: -10%;
+  left: -12%;
+  height: 72%;
+  transform: perspective(960px) rotateX(76deg);
+  transform-origin: bottom center;
+  opacity: 0.32;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 72px,
+      var(--color-primary) 72px,
+      var(--color-primary) 73px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent 38px,
+      var(--color-primary) 38px,
+      var(--color-primary) 39px
+    );
+  mask-image: radial-gradient(ellipse 92% 88% at 50% 100%, black 46%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 92% 88% at 50% 100%, black 46%, transparent 100%);
+}
+
+@keyframes signalPulse {
+  0% {
+    opacity: 0.22;
+  }
+
+  100% {
+    opacity: 0.4;
+  }
+}
+
+/* ── Layer 4: Circuit traces (left side) ── */
+.circuitLeft {
+  position: absolute;
+  top: 12%;
+  left: 0;
+  width: 220px;
+  height: 380px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  animation: circuitFadeIn 1.2s ease-out 0.3s forwards;
+}
+
+.circuitRight {
+  position: absolute;
+  bottom: 14%;
+  right: 0;
+  width: 220px;
+  height: 380px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  animation: circuitFadeIn 1.2s ease-out 0.6s forwards;
+}
+
+@keyframes circuitFadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Individual circuit trace paths */
+.tracePath {
+  position: absolute;
+  background: var(--color-primary);
+}
+
+/* Left circuit — horizontal runs */
+.traceLH1 {
+  top: 0;
+  left: 0;
+  width: 140px;
+  height: 1px;
+  opacity: 0.42;
+}
+
+.traceLH2 {
+  top: 60px;
+  left: 0;
+  width: 180px;
+  height: 1px;
+  opacity: 0.32;
+}
+
+.traceLH3 {
+  top: 140px;
+  left: 0;
+  width: 100px;
+  height: 1px;
+  opacity: 0.38;
+}
+
+.traceLH4 {
+  top: 220px;
+  left: 0;
+  width: 160px;
+  height: 1px;
+  opacity: 0.28;
+}
+
+.traceLH5 {
+  top: 310px;
+  left: 0;
+  width: 120px;
+  height: 1px;
+  opacity: 0.35;
+}
+
+/* Left circuit — vertical runs */
+.traceLV1 {
+  top: 0;
+  left: 140px;
+  width: 1px;
+  height: 60px;
+  opacity: 0.42;
+}
+
+.traceLV2 {
+  top: 60px;
+  left: 60px;
+  width: 1px;
+  height: 80px;
+  opacity: 0.32;
+}
+
+.traceLV3 {
+  top: 140px;
+  left: 100px;
+  width: 1px;
+  height: 80px;
+  opacity: 0.38;
+}
+
+.traceLV4 {
+  top: 220px;
+  left: 160px;
+  width: 1px;
+  height: 90px;
+  opacity: 0.28;
+}
+
+/* Left circuit — junction dots (small solid squares) */
+.traceNode {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+}
+
+.nodeL1 {
+  top: -2px;
+  left: 138px;
+  opacity: 0.58;
+}
+
+.nodeL2 {
+  top: 58px;
+  left: 58px;
+  opacity: 0.48;
+}
+
+.nodeL3 {
+  top: 138px;
+  left: 98px;
+  opacity: 0.54;
+}
+
+.nodeL4 {
+  top: 218px;
+  left: 158px;
+  opacity: 0.44;
+}
+
+.nodeL5 {
+  top: 308px;
+  left: 118px;
+  opacity: 0.52;
+}
+
+/* Right circuit — horizontal runs (mirrored) */
+.traceRH1 {
+  top: 0;
+  right: 0;
+  width: 130px;
+  height: 1px;
+  opacity: 0.38;
+}
+
+.traceRH2 {
+  top: 70px;
+  right: 0;
+  width: 170px;
+  height: 1px;
+  opacity: 0.3;
+}
+
+.traceRH3 {
+  top: 160px;
+  right: 0;
+  width: 110px;
+  height: 1px;
+  opacity: 0.35;
+}
+
+.traceRH4 {
+  top: 250px;
+  right: 0;
+  width: 150px;
+  height: 1px;
+  opacity: 0.28;
+}
+
+.traceRH5 {
+  top: 340px;
+  right: 0;
+  width: 90px;
+  height: 1px;
+  opacity: 0.38;
+}
+
+/* Right circuit — vertical runs */
+.traceRV1 {
+  top: 0;
+  right: 130px;
+  width: 1px;
+  height: 70px;
+  opacity: 0.38;
+}
+
+.traceRV2 {
+  top: 70px;
+  right: 80px;
+  width: 1px;
+  height: 90px;
+  opacity: 0.3;
+}
+
+.traceRV3 {
+  top: 160px;
+  right: 110px;
+  width: 1px;
+  height: 90px;
+  opacity: 0.35;
+}
+
+.traceRV4 {
+  top: 250px;
+  right: 150px;
+  width: 1px;
+  height: 90px;
+  opacity: 0.28;
+}
+
+/* Right circuit — junction dots */
+.nodeR1 {
+  top: -2px;
+  right: 128px;
+  opacity: 0.54;
+}
+
+.nodeR2 {
+  top: 68px;
+  right: 78px;
+  opacity: 0.44;
+}
+
+.nodeR3 {
+  top: 158px;
+  right: 108px;
+  opacity: 0.5;
+}
+
+.nodeR4 {
+  top: 248px;
+  right: 148px;
+  opacity: 0.4;
+}
+
+.nodeR5 {
+  top: 338px;
+  right: 88px;
+  opacity: 0.48;
+}
+
+/* ── Layer 5: Floating geometry ── */
+.floatingGeo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* Shared floating shape base */
+.geoShape {
+  position: absolute;
+  border: 1.5px solid var(--color-primary);
+}
+
+/* Triangle (top-left area) — CSS triangle via borders */
+.geoTriangle {
+  top: 16%;
+  left: 14%;
+  width: 0;
+  height: 0;
+  border: 0 solid transparent;
+  border-left: 18px solid transparent;
+  border-right: 18px solid transparent;
+  border-bottom: 31px solid transparent;
+  /* Outline triangle via drop-shadow-free approach: nested spans in Svelte */
+  opacity: 0.18;
+  animation: geoDrift1 18s ease-in-out infinite alternate;
+}
+
+/* Triangle drawn with clip-path for clean Flat & Bright outline */
+.geoTriangleInner {
+  position: absolute;
+  top: 14%;
+  left: 12%;
+  width: 36px;
+  height: 32px;
+  border: 1.5px solid var(--color-primary);
+  opacity: 0.4;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  animation: geoDrift1 18s ease-in-out infinite alternate;
+}
+
+/* Circle (top-right area) */
+.geoCircle {
+  top: 20%;
+  right: 10%;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  opacity: 0.34;
+  animation: geoDrift2 22s ease-in-out infinite alternate;
+}
+
+/* Square (bottom-left area) */
+.geoSquare {
+  bottom: 28%;
+  left: 8%;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  opacity: 0.32;
+  animation: geoDrift3 20s ease-in-out infinite alternate;
+}
+
+/* Diamond (mid-right area) */
+.geoDiamond {
+  top: 52%;
+  right: 16%;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  opacity: 0.36;
+  animation: geoDrift4 16s ease-in-out infinite alternate;
+}
+
+/* Small circle (center-left) */
+.geoCircleSm {
+  top: 42%;
+  left: 20%;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  opacity: 0.28;
+  animation: geoDrift2 24s ease-in-out infinite alternate-reverse;
+}
+
+/* Small square (upper-right) */
+.geoSquareSm {
+  top: 30%;
+  right: 22%;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  opacity: 0.3;
+  animation: geoDrift3 19s ease-in-out infinite alternate-reverse;
+}
+
+/* Extra triangle (bottom-right) */
+.geoTriangle2 {
+  bottom: 22%;
+  right: 12%;
+  width: 30px;
+  height: 26px;
+  border: 1.5px solid var(--color-primary);
+  opacity: 0.32;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  animation: geoDrift1 21s ease-in-out infinite alternate-reverse;
+}
+
+/* Cross mark (center-top area) */
+.geoCross {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  opacity: 0.3;
+  transform: translateX(-50%);
+  animation: geoDrift4 25s ease-in-out infinite alternate;
+}
+
+.geoCross::before,
+.geoCross::after {
+  content: '';
+  position: absolute;
+  background: var(--color-primary);
+}
+
+.geoCross::before {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  transform: translateY(-50%);
+}
+
+.geoCross::after {
+  top: 0;
+  left: 50%;
+  width: 1.5px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+@keyframes geoDrift1 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(12px, -18px) rotate(8deg);
+  }
+}
+
+@keyframes geoDrift2 {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(-10px, 14px);
+  }
+}
+
+@keyframes geoDrift3 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(8px, 10px) rotate(-6deg);
+  }
+}
+
+@keyframes geoDrift4 {
+  0% {
+    transform: translate(0, 0) rotate(45deg);
+  }
+
+  100% {
+    transform: translate(-14px, -8px) rotate(53deg);
+  }
+}
+
+/* ── Layer 6: Data stream (edge typography) ── */
+.dataStream {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.22;
+}
+
+/* Inner track — two identical copies stacked; scroll one full copy height */
+.dataStreamTrack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* animation drives translateY(-50%) so the two copies loop seamlessly */
+}
+
+.dataStreamCopy {
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  line-height: 18px;
+  color: var(--color-primary);
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dataStreamLeft {
+  left: var(--spacing-md);
+}
+
+.dataStreamLeft .dataStreamTrack {
+  animation: dataScroll 30s linear infinite;
+}
+
+.dataStreamRight {
+  right: var(--spacing-md);
+}
+
+.dataStreamRight .dataStreamTrack {
+  animation: dataScroll 36s linear infinite reverse;
+}
+
+@keyframes dataScroll {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+/* ── Layer 7: Top decoration lines ── */
+.topLines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, black 0%, transparent 100%);
+}
+
+.topLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-primary);
+}
+
+.topLine1 {
+  top: 20px;
+  opacity: 0.22;
+}
+
+.topLine2 {
+  top: 48px;
+  opacity: 0.14;
+}
+
+.topLine3 {
+  top: 78px;
+  opacity: 0.08;
+}
+
+/* ── Layer 8: Concentric rings (behind text) ── */
+.concentricRings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 600px;
+  height: 600px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ring {
+  position: absolute;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  top: 50%;
+  left: 50%;
+}
+
+.ring1 {
+  width: 300px;
+  height: 300px;
+  transform: translate(-50%, -50%);
+  opacity: 0.12;
+  animation: ringPulse 12s ease-in-out infinite alternate;
+}
+
+.ring2 {
+  width: 440px;
+  height: 440px;
+  transform: translate(-50%, -50%);
+  opacity: 0.08;
+  animation: ringPulse 12s ease-in-out 2s infinite alternate;
+}
+
+.ring3 {
+  width: 580px;
+  height: 580px;
+  transform: translate(-50%, -50%);
+  opacity: 0.06;
+  animation: ringPulse 12s ease-in-out 4s infinite alternate;
+}
+
+@keyframes ringPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.06;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(1.06);
+    opacity: 0.16;
+  }
+}
+
+/* ── Corner brackets (tech accent) ── */
+.cornerDecor {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-color: var(--color-primary);
+  border-style: solid;
+  border-width: 0;
+  opacity: 0.38;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.cornerTL {
+  top: var(--spacing-2xl);
+  left: var(--spacing-2xl);
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-top-left-radius: var(--radius-sm);
+}
+
+.cornerTR {
+  top: var(--spacing-2xl);
+  right: var(--spacing-2xl);
+  border-top-width: 2px;
+  border-right-width: 2px;
+  border-top-right-radius: var(--radius-sm);
+}
+
+.cornerBL {
+  bottom: var(--spacing-2xl);
+  left: var(--spacing-2xl);
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.cornerBR {
+  bottom: var(--spacing-2xl);
+  right: var(--spacing-2xl);
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* ── Content layer ── */
+.content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  max-width: 960px;
+}
+
+/* ── Title: hero text ── */
+.title {
+  font-family: var(--font-family-sans);
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  font-weight: var(--font-weight-black);
+  line-height: var(--line-height-tight);
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0;
+  transition: color var(--transition-normal);
+}
+
+/* ── Word group: prevents bad mid-word breaks ── */
+.wordGroup {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+/* ── Each character ── */
+.char {
+  display: inline-block;
+  /*
+   * 2-phase animation:
+   *   1. charReveal — one-shot entrance (slide up + fade in), staggered per char
+   *   2. float      — infinite idle bob, starts after entrance completes
+   *
+   * Total entrance window = 14 chars × 60ms stagger + 500ms duration ≈ 1340ms
+   * float delay is offset so it begins exactly when charReveal ends per char.
+   */
+  --reveal-duration: 520ms;
+  --reveal-stagger: 60ms;
+  --reveal-delay: calc(var(--char-index) * var(--reveal-stagger));
+  --float-start: calc(var(--reveal-delay) + var(--reveal-duration));
+
+  animation:
+    charReveal var(--reveal-duration) cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay) both,
+    float 3s ease-in-out var(--float-start) infinite alternate;
+  transition: color var(--transition-bounce);
+}
+
+.char:hover {
+  color: var(--color-primary);
+  transform: scale(1.15);
+}
+
+/* ── Accent characters (brand-color highlight) ── */
+.accent {
+  color: var(--color-primary);
+}
+
+@keyframes charReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(0.55em) scaleY(0.8);
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(-6px);
+  }
+}
+
+/* ── Decorative line under text ── */
+.underline {
+  display: block;
+  width: 80px;
+  height: 4px;
+  margin: var(--spacing-xl) auto 0;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  /*
+   * Appears after all chars have entered:
+   *   13 chars × 60ms + 520ms ≈ 1300ms → start at 1.3s
+   */
+  animation:
+    underlineReveal 480ms cubic-bezier(0.22, 1, 0.36, 1) 1300ms both,
+    pulse 2s ease-in-out 1800ms infinite alternate;
+}
+
+@keyframes underlineReveal {
+  0% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.4;
+    transform: scaleX(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scaleX(1.3);
+  }
+}
+
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .title {
+    font-size: clamp(2rem, 7vw, 3.5rem);
+  }
+
+  .signalField {
+    height: min(36vh, 300px);
+  }
+
+  .signalGlow {
+    width: min(82vw, 640px);
+    height: 140px;
+    bottom: 20%;
+  }
+
+  .signalHorizon {
+    right: 14%;
+    bottom: 38%;
+    left: 14%;
+  }
+
+  .signalPlane {
+    right: -18%;
+    bottom: -12%;
+    left: -18%;
+    height: 68%;
+    background-image:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 60px,
+        var(--color-primary) 60px,
+        var(--color-primary) 61px
+      ),
+      repeating-linear-gradient(
+        180deg,
+        transparent 0,
+        transparent 32px,
+        var(--color-primary) 32px,
+        var(--color-primary) 33px
+      );
+  }
+
+  .root::before {
+    background-size: 32px 32px;
+  }
+
+  .cornerDecor {
+    width: 40px;
+    height: 40px;
+  }
+
+  .cornerTL,
+  .cornerBL {
+    left: var(--spacing-lg);
+  }
+
+  .cornerTR,
+  .cornerBR {
+    right: var(--spacing-lg);
+  }
+
+  /* Circuit traces — shrink on tablet */
+  .circuitLeft,
+  .circuitRight {
+    width: 140px;
+    height: 260px;
+  }
+
+  .traceLH1 {
+    width: 90px;
+  }
+  .traceLH2 {
+    width: 120px;
+    top: 50px;
+  }
+  .traceLH3 {
+    width: 70px;
+    top: 110px;
+  }
+  .traceLH4 {
+    width: 100px;
+    top: 170px;
+  }
+  .traceLH5 {
+    width: 80px;
+    top: 230px;
+  }
+
+  .traceLV1 {
+    left: 90px;
+    height: 50px;
+  }
+  .traceLV2 {
+    left: 40px;
+    top: 50px;
+    height: 60px;
+  }
+  .traceLV3 {
+    left: 70px;
+    top: 110px;
+    height: 60px;
+  }
+  .traceLV4 {
+    left: 100px;
+    top: 170px;
+    height: 60px;
+  }
+
+  .traceRH1 {
+    width: 80px;
+  }
+  .traceRH2 {
+    width: 110px;
+    top: 50px;
+  }
+  .traceRH3 {
+    width: 70px;
+    top: 110px;
+  }
+  .traceRH4 {
+    width: 100px;
+    top: 170px;
+  }
+  .traceRH5 {
+    width: 60px;
+    top: 230px;
+  }
+
+  .traceRV1 {
+    right: 80px;
+    height: 50px;
+  }
+  .traceRV2 {
+    right: 50px;
+    top: 50px;
+    height: 60px;
+  }
+  .traceRV3 {
+    right: 70px;
+    top: 110px;
+    height: 60px;
+  }
+  .traceRV4 {
+    right: 100px;
+    top: 170px;
+    height: 60px;
+  }
+
+  /* Geometry — smaller and tighter */
+  .geoTriangleInner {
+    width: 28px;
+    height: 24px;
+  }
+  .geoCircle {
+    width: 22px;
+    height: 22px;
+  }
+  .geoSquare {
+    width: 18px;
+    height: 18px;
+  }
+  .geoDiamond {
+    width: 16px;
+    height: 16px;
+  }
+  .geoTriangle2 {
+    width: 24px;
+    height: 20px;
+  }
+
+  /* Concentric rings */
+  .concentricRings {
+    width: 440px;
+    height: 440px;
+  }
+
+  .ring1 {
+    width: 220px;
+    height: 220px;
+  }
+  .ring2 {
+    width: 330px;
+    height: 330px;
+  }
+  .ring3 {
+    width: 430px;
+    height: 430px;
+  }
+}
+
+@media (max-width: 600px) {
+  .title {
+    font-size: clamp(1.75rem, 9vw, 2.5rem);
+  }
+
+  .content {
+    padding: var(--spacing-lg) var(--spacing-md);
+  }
+
+  .signalField {
+    height: min(32vh, 220px);
+  }
+
+  .signalGlow {
+    width: 88vw;
+    height: 100px;
+    bottom: 24%;
+  }
+
+  .signalHorizon {
+    right: 10%;
+    bottom: 42%;
+    left: 10%;
+  }
+
+  .signalPlane {
+    right: -22%;
+    bottom: -16%;
+    left: -22%;
+    height: 64%;
+    transform: perspective(760px) rotateX(79deg);
+    opacity: 0.14;
+    background-image:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 48px,
+        var(--color-primary) 48px,
+        var(--color-primary) 49px
+      ),
+      repeating-linear-gradient(
+        180deg,
+        transparent 0,
+        transparent 26px,
+        var(--color-primary) 26px,
+        var(--color-primary) 27px
+      );
+  }
+
+  .root::before {
+    background-size: 28px 28px;
+    opacity: 0.28;
+  }
+
+  .cornerDecor {
+    width: 40px;
+    height: 40px;
+  }
+
+  .cornerTL,
+  .cornerBL {
+    left: var(--spacing-md);
+  }
+
+  .cornerTR,
+  .cornerBR {
+    right: var(--spacing-md);
+  }
+
+  .cornerTL,
+  .cornerTR {
+    top: var(--spacing-lg);
+  }
+
+  .cornerBL,
+  .cornerBR {
+    bottom: var(--spacing-lg);
+  }
+
+  .underline {
+    width: 60px;
+    height: 3px;
+  }
+
+  /* Circuit traces — hide on mobile (too narrow) */
+  .circuitLeft,
+  .circuitRight {
+    display: none;
+  }
+
+  /* Data streams — hide on mobile */
+  .dataStreamLeft,
+  .dataStreamRight {
+    display: none;
+  }
+
+  /* Geometry — reduce further */
+  .geoTriangleInner {
+    width: 22px;
+    height: 19px;
+    left: 8%;
+  }
+  .geoCircle {
+    width: 18px;
+    height: 18px;
+    right: 6%;
+  }
+  .geoSquare {
+    width: 14px;
+    height: 14px;
+  }
+  .geoDiamond {
+    width: 14px;
+    height: 14px;
+  }
+  .geoCircleSm,
+  .geoSquareSm,
+  .geoTriangle2 {
+    display: none;
+  }
+
+  .geoCross {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Concentric rings — smaller */
+  .concentricRings {
+    width: 320px;
+    height: 320px;
+  }
+
+  .ring1 {
+    width: 160px;
+    height: 160px;
+  }
+  .ring2 {
+    width: 240px;
+    height: 240px;
+  }
+  .ring3 {
+    width: 310px;
+    height: 310px;
+  }
+
+  /* Top lines — reduce height */
+  .topLines {
+    height: 80px;
+  }
+}

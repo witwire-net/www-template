@@ -5,7 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./theme": "./src/theme.ts"
+    "./theme": "./src/theme.ts",
+    "./components": "./src/components/index.ts",
+    "./components/*": "./src/components/*",
+    "./assets": "./src/assets/index.ts",
+    "./assets/*": "./src/assets/*",
+    "./layouts": "./src/layouts/index.ts",
+    "./layouts/*": "./src/layouts/*",
+    "./styles": "./src/styles/index.ts",
+    "./styles/*": "./src/styles/*"
   },
   "svelte": "./src/index.ts",
   "scripts": {
