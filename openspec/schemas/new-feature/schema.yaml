@@ -174,15 +174,13 @@ artifacts:
       - Keep diagrams minimal but accurate.
 
       UI Wireframes (conditional):
-      - If this change includes UI implementation/modification and the wireframe conveys meaningful screen structure, interaction flow, or state design, you MUST:
-         - Create one or more responsive HTML wireframes named `wireflame_<screen>.html` under the change root (same level as `design.md`). Create one file per screen.
-         - Treat every `wireflame_<screen>.html` as a low-fidelity wireframe artifact, not a design mock. Use simplified structure and interaction/state expression rather than polished visual design.
-         - Ensure each `wireflame_<screen>.html` supports responsive layouts across the breakpoints that matter for that screen.
+      - Wireframes are produced separately using the `wireframe` skill (`.opencode/skills/wireframe/SKILL.md`).
+        The skill outputs `{name}.wireframe.html` under a directory chosen at generation time.
+      - If one or more `{name}.wireframe.html` files have been generated for this change:
          - Add a `## UI Wireframes` section in design.md.
-         - Embed each wireframe in design.md with `<iframe>` using relative paths (e.g., `<iframe src="wireflame_signup.html"></iframe>`).
-         - For each wireframe, include iframe variants for each breakpoint threshold/version that should be reviewed (for example mobile/tablet/desktop), and label the threshold used for each iframe.
-         - Include wireframe files in **Directory Tree** and **New / Changed Files**.
-      - If this change has no UI work, or the change is limited to runtime/package/infrastructure replacement without meaningful screen design decisions, keep the `## UI Wireframes` section and write `N/A` with a brief reason.
+         - For each wireframe HTML file, embed it with a relative-path `<iframe>` and label the screen it represents.
+         - Include the wireframe HTML files in **Directory Tree** and **New / Changed Files**.
+      - If no wireframe HTML files exist yet (skill has not been run), keep the `## UI Wireframes` section and write `N/A — wireframe not yet generated`.
 
       Design boundary rules:
       - design.md explains HOW the approved specs will be implemented.

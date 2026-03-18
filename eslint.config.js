@@ -545,6 +545,81 @@ const frontendSvelte5Plugin = {
   },
 };
 
+const frontendAppPrimitiveUiPlugin = {
+  rules: {
+    'no-primitive-tags': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          forbidden:
+            'packages/frontend/app では `<{{tag}}>` を直書きしないでください。まず `@www-template-frontend/ui/components` の既存 component を使い、足りなければ `packages/frontend/ui` を発展させてから app で compose してください。',
+        },
+      },
+      create(context) {
+        const ignoredRangePatterns = [
+          /<script\b[\S\s]*?<\/script>/gi,
+          /<style\b[\S\s]*?<\/style>/gi,
+          /<!--[\S\s]*?-->/g,
+        ];
+
+        const forbiddenTagPattern = /<(?!!--)\s*(button|input|select|textarea|table)\b/g;
+
+        const collectIgnoredRanges = (sourceText) => {
+          const ranges = [];
+
+          for (const pattern of ignoredRangePatterns) {
+            for (const match of sourceText.matchAll(pattern)) {
+              if (match.index === undefined) {
+                continue;
+              }
+
+              ranges.push({
+                start: match.index,
+                end: match.index + match[0].length,
+              });
+            }
+          }
+
+          return ranges;
+        };
+
+        const isIgnoredIndex = (index, ranges) =>
+          ranges.some((range) => index >= range.start && index < range.end);
+
+        return {
+          'Program:exit'(node) {
+            const sourceText = context.getSourceCode().text;
+            const ignoredRanges = collectIgnoredRanges(sourceText);
+
+            for (const match of sourceText.matchAll(forbiddenTagPattern)) {
+              if (match.index === undefined || isIgnoredIndex(match.index, ignoredRanges)) {
+                continue;
+              }
+
+              const tag = match[1]?.toLowerCase();
+
+              if (!tag) {
+                continue;
+              }
+
+              const start = context.getSourceCode().getLocFromIndex(match.index);
+              const end = context.getSourceCode().getLocFromIndex(match.index + match[0].length);
+
+              context.report({
+                node,
+                loc: { start, end },
+                messageId: 'forbidden',
+                data: { tag },
+              });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 const isImportMetaEnvChain = (node) => {
   if (!node || node.type !== 'MemberExpression' || node.computed) {
     return false;
@@ -653,6 +728,20 @@ export default tseslint.config(
       'svelte/no-navigation-without-resolve': 'off',
       'svelte/no-at-html-tags': 'error',
       'svelte/prefer-writable-derived': 'off',
+    },
+  },
+
+  {
+    files: [
+      'packages/frontend/app/src/routes/**/*.svelte',
+      'packages/frontend/app/src/components/**/*.svelte',
+      'packages/frontend/app/src/lib/**/*.svelte',
+    ],
+    plugins: {
+      'frontend-app-primitive-ui': frontendAppPrimitiveUiPlugin,
+    },
+    rules: {
+      'frontend-app-primitive-ui/no-primitive-tags': 'error',
     },
   },
 

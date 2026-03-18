@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { useStatus } from '@www-template-frontend/domain/hooks/status/useStatus';
+  import { useStatus } from '@www-template-frontend/domain';
+  import { Button } from '@www-template-frontend/ui/components';
 
   const status = useStatus();
   const statusState = status.data.state;
@@ -38,15 +39,14 @@
     {/if}
   </div>
 
-  <button
-    class="action"
+  <Button
     type="button"
     onclick={() => {
       void status.actions.refresh();
     }}
   >
     公開 API を再取得
-  </button>
+  </Button>
 </section>
 
 <style>
@@ -115,16 +115,5 @@
   .error {
     color: #b91c1c;
     font-weight: 600;
-  }
-
-  .action {
-    width: fit-content;
-    padding: 0.8rem 1.1rem;
-    border: none;
-    border-radius: 999px;
-    background: linear-gradient(135deg, #0f766e, #0f172a);
-    color: white;
-    font: inherit;
-    cursor: pointer;
   }
 </style>

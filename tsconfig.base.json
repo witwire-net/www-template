@@ -7,9 +7,11 @@
     "baseUrl": ".",
     "paths": {
       "@www-template-frontend/app/*": ["packages/frontend/app/src/*"],
+      "@www-template-frontend/domain": ["packages/frontend/domain/src/index.ts"],
       "@www-template-frontend/domain/*": ["packages/frontend/domain/src/*"],
       "@www-template-frontend/api/*": ["packages/frontend/api/src/*"],
       "@www-template-frontend/api": ["packages/frontend/api/src/index.ts"],
+      "@www-template-frontend/ui/components": ["packages/frontend/ui/src/components/index.ts"],
       "@www-template-frontend/ui/*": ["packages/frontend/ui/src/*"],
       "@www-template-frontend/ui": ["packages/frontend/ui/src/index.ts"]
     },

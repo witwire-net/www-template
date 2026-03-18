@@ -65,6 +65,8 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 - Do not use the `task` tool (no delegation and no self-calls)
 - Do not overclaim. If references are insufficient, say what is missing and what to inspect next
 - Call out deviations from existing conventions and structure (directories, naming, boundaries, generated artifacts) with evidence references
+- Treat `Check items (required)` as especially important violation checks; they are not limited to UI-specific issues
+- Treat reimplementation in `packages/frontend/app` as `blocker` when an equivalent or near-equivalent component already exists in `packages/frontend/ui`, unless the caller explicitly required a one-off exception and the implementation justifies it with evidence
 - Assign severity (blocker/major/minor/nit) and propose concrete fixes when possible
 - Always include an overall verdict (Approve / Request changes / Needs clarification)
 

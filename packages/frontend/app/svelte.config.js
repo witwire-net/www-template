@@ -6,6 +6,17 @@ const config = {
   kit: {
     adapter: adapter(),
     alias: {
+      '@www-template-frontend/api': '../api/src/index.ts',
+      '@www-template-frontend/api/*': '../api/src/*',
+      '@www-template-frontend/domain': '../domain/src/index.ts',
+      '@www-template-frontend/domain/*': '../domain/src/*',
+      '@www-template-frontend/ui': '../ui/src/index.ts',
+      '@www-template-frontend/ui/components': '../ui/src/components/index.ts',
+      '@www-template-frontend/ui/*': '../ui/src/*',
+      '@': '../ui/src',
+      '@/*': '../ui/src/*',
+      '@ui': '../ui/src',
+      '@ui/*': '../ui/src/*',
       types: '../domain/src/types',
     },
   },
