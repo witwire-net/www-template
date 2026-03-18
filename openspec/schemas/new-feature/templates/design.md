@@ -70,11 +70,42 @@ sequenceDiagram
 <!-- TODO: If this change has no UI work, write N/A and briefly explain why. -->
 <!-- If the change is runtime/package/infrastructure oriented and no screen structure or interaction design is being decided, write N/A. -->
 
-<!-- TODO: If this change includes UI implementation/modification, add one or more Draw.io wireframes exported as .drawio.svg under wireframes/. -->
+<!-- TODO: If this change includes UI implementation/modification, create one responsive `wireflame_<screen>.html` per screen under the change root. -->
+<!-- Each HTML file is a wireframe artifact, not a design mock. Keep it low-fidelity and focused on structure, state, and interaction flow. -->
 
-![<!-- TODO: Wireframe title -->](wireframes/<!-- TODO: wireframe.drawio.svg -->)
+### <!-- TODO: Screen / Flow name -->
 
-<!-- TODO: Notes: key states (default/loading/empty/error), user actions, and mapping to Scenario IDs. -->
+- Wireframe File: `wireflame_<!-- TODO: screen -->.html`
+- Purpose: <!-- TODO: What user task or scenario this screen explains. -->
+- Responsive Thresholds: <!-- TODO: List breakpoint labels and widths, e.g. mobile 390px / tablet 768px / desktop 1280px. -->
+- Notes: <!-- TODO: Key states (default/loading/empty/error), user actions, and mapping to Scenario IDs. -->
+
+#### <!-- TODO: Breakpoint label -->
+
+<iframe
+  src="wireflame_<!-- TODO: screen -->.html"
+  title="<!-- TODO: Screen name --> - <!-- TODO: breakpoint label -->"
+  width="<!-- TODO: iframe width in px -->"
+  height="<!-- TODO: iframe height in px -->"
+></iframe>
+
+#### <!-- TODO: Breakpoint label -->
+
+<iframe
+  src="wireflame_<!-- TODO: screen -->.html"
+  title="<!-- TODO: Screen name --> - <!-- TODO: breakpoint label -->"
+  width="<!-- TODO: iframe width in px -->"
+  height="<!-- TODO: iframe height in px -->"
+></iframe>
+
+#### <!-- TODO: Breakpoint label -->
+
+<iframe
+  src="wireflame_<!-- TODO: screen -->.html"
+  title="<!-- TODO: Screen name --> - <!-- TODO: breakpoint label -->"
+  width="<!-- TODO: iframe width in px -->"
+  height="<!-- TODO: iframe height in px -->"
+></iframe>
 
 ## Domain Model Diagram
 

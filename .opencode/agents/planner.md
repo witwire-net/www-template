@@ -2,7 +2,7 @@
 description: Agent that produces work plans and detailed designs
 mode: subagent
 hidden: true
-model: openai/gpt-5.4
+model: github-copilot/gpt-5.4
 reasoningEffort: 'high'
 temperature: 0.1
 permission:

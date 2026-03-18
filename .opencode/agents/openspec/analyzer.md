@@ -1,7 +1,7 @@
 ---
 description: Analyze an OpenSpec change read-only; report artifact/workflow inconsistencies and suggested fixes.
 mode: subagent
-model: openai/gpt-5.4
+model: github-copilot/gpt-5.4
 reasoningEffort: 'high'
 temperature: 0.1
 permission:
