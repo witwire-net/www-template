@@ -7,7 +7,7 @@
 - Node.js 24 と pnpm
 - Go 1.26.1 以上
 - `gopls` `goimports` `dlv` `golangci-lint` `air`
-- `wrangler` `golang-migrate` `oapi-codegen` `opencode`
+- `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode`
 - Playwright 実行に必要な Linux 依存
 - PostgreSQL Valkey OpenSearch MinIO Mailpit のローカルサービス
 - `docker` と `docker compose` をコンテナ内から利用可能
