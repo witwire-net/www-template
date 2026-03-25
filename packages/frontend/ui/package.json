@@ -3,17 +3,58 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./theme": "./src/theme.ts",
-    "./components": "./src/components/index.ts",
-    "./components/*": "./src/components/*",
-    "./assets": "./src/assets/index.ts",
-    "./assets/*": "./src/assets/*",
-    "./layouts": "./src/layouts/index.ts",
-    "./layouts/*": "./src/layouts/*",
-    "./styles": "./src/styles/index.ts",
-    "./styles/*": "./src/styles/*"
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./theme": {
+      "types": "./src/theme.ts",
+      "svelte": "./src/theme.ts",
+      "default": "./src/theme.ts"
+    },
+    "./components": {
+      "types": "./src/components/index.ts",
+      "svelte": "./src/components/index.ts",
+      "default": "./src/components/index.ts"
+    },
+    "./components/*": {
+      "types": "./src/components/*",
+      "svelte": "./src/components/*",
+      "default": "./src/components/*"
+    },
+    "./assets": {
+      "types": "./src/assets/index.ts",
+      "svelte": "./src/assets/index.ts",
+      "default": "./src/assets/index.ts"
+    },
+    "./assets/*": {
+      "types": "./src/assets/*",
+      "svelte": "./src/assets/*",
+      "default": "./src/assets/*"
+    },
+    "./layouts": {
+      "types": "./src/layouts/index.ts",
+      "svelte": "./src/layouts/index.ts",
+      "default": "./src/layouts/index.ts"
+    },
+    "./layouts/*": {
+      "types": "./src/layouts/*",
+      "svelte": "./src/layouts/*",
+      "default": "./src/layouts/*"
+    },
+    "./styles": {
+      "types": "./src/styles/index.ts",
+      "svelte": "./src/styles/index.ts",
+      "default": "./src/styles/index.ts"
+    },
+    "./styles/*": {
+      "types": "./src/styles/*",
+      "svelte": "./src/styles/*",
+      "default": "./src/styles/*"
+    }
   },
   "svelte": "./src/index.ts",
   "scripts": {
@@ -26,10 +67,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@fontsource/ibm-plex-sans-jp": "^5.2.8",
-    "@fontsource/oxanium": "^5.2.8",
-    "@fontsource/zen-kaku-gothic-new": "^5.2.7",
+    "@fontsource/m-plus-1": "^5.2.8",
+    "@fontsource/noto-sans-jp": "^5.2.9",
     "@tabler/icons-svelte": "^3.40.0",
+    "@tanstack/svelte-virtual": "^3.13.23",
     "dompurify": "^3.3.1"
   },
   "peerDependencies": {

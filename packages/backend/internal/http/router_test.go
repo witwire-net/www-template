@@ -11,9 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"witwire.net/www-template/packages/backend/internal/domain"
-	"witwire.net/www-template/packages/backend/internal/types"
-	"witwire.net/www-template/packages/backend/internal/usecases"
+	"www-template/packages/backend/internal/domain"
+	"www-template/packages/backend/internal/types"
+	"www-template/packages/backend/internal/usecases"
 )
 
 func TestHealthRoute(t *testing.T) {
@@ -139,9 +139,14 @@ func TestRoutePolicy(t *testing.T) {
 
 	router := newTestRouter(t)
 	allowedPublicRoutes := map[string]struct{}{
-		"/api/v1/status":       {},
-		"/api/v1/profiles":     {},
-		"/api/v1/profiles/:id": {},
+		"/api/v1/status":                {},
+		"/api/v1/profiles":              {},
+		"/api/v1/profiles/:id":          {},
+		"/api/v1/auth/passkey/start":    {},
+		"/api/v1/auth/passkey/finish":   {},
+		"/api/v1/auth/passkey/register": {},
+		"/api/v1/auth/recovery":         {},
+		"/api/v1/auth/recovery/consume": {},
 	}
 
 	for _, route := range router.Routes() {
@@ -177,7 +182,7 @@ func newTestRouter(t *testing.T) *gin.Engine {
 
 func testConfig() types.Config {
 	return types.Config{
-		AllowedOrigins: []string{"http://localhost:5173"},
+		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Port:           "8080",
 		ProfileStore:   "memory",

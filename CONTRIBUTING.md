@@ -19,6 +19,8 @@
 ## API 契約
 
 - 正は `packages/typespec/main.tsp`
+- `packages/frontend/web/wrangler.toml` と `packages/frontend/app/wrangler.toml` は配備設定であり、API contract の canonical source ではない
+- OpenAPI path は `/api/v1/*` と `/api/v1/app/*` だけを許可する
 - 生成物は手編集しない
   - `packages/typespec/openapi/openapi.json`
   - `packages/frontend/api/src/generated/client.ts`
@@ -28,6 +30,7 @@
 ## Go backend ルール
 
 - public surface は `/api/v1/*`
+- runtime public surface baseline は `/api/v1/status`, `/api/v1/profiles`, `/api/v1/profiles/{id}`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`
 - app surface は `/api/v1/app/*`
 - app surface は `Authorization: Bearer <token>` 境界を必須にする
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` を必須にする

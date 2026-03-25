@@ -18,7 +18,7 @@
     "@www-template-frontend/ui": "workspace:*"
   },
   "devDependencies": {
-    "@sveltejs/adapter-cloudflare": "^7.1.0",
+    "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.48.4",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@testing-library/jest-dom": "^6.9.1",

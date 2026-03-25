@@ -34,7 +34,7 @@
    * Data stream characters — monospace ticker for edge decoration.
    * Repeated twice for seamless scrolling loop.
    */
-  const dataChars = '01001110 WitWire 11010011 SNS 00101101 BaaS 10110010 API 01011010 ';
+  const dataChars = '01001110 WWWTemplate 11010011 AUTH 00101101 API 10110010 APP 01011010 ';
   // 1コピー分を十分な長さにする（2コピー縦並びでシームレスループ）
   const dataStreamText = dataChars.repeat(6);
 </script>

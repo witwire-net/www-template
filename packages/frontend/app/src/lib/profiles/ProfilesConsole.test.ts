@@ -7,8 +7,8 @@ describe('ProfilesConsole', () => {
   it('renders app api guidance', async () => {
     render(ProfilesConsole);
 
-    expect(await screen.findByText('プロフィール画面プレースホルダー')).toBeInTheDocument();
-    expect(screen.getByText(/専用の `\/api\/v1\/app\/\*` endpoint が有効/)).toBeInTheDocument();
+    expect(await screen.findByText('プロフィール画面サンプル')).toBeInTheDocument();
+    expect(screen.getByText(/認証済み画面の最小サンプルです/)).toBeInTheDocument();
   });
 
   it('explains bearer token auth boundary', async () => {

@@ -77,7 +77,7 @@
   </SiteHeader>
 {/if}
 
-<div style="padding: 1rem 1.5rem; color: #666;">Last action: {lastAction}</div>
+<div style="padding: 1rem 1.5rem; color: var(--color-text-muted);">Last action: {lastAction}</div>
 <div id="overview" style="padding: 0 1.5rem 2rem;">Overview section</div>
 <div id="analytics" style="padding: 0 1.5rem 2rem;">Analytics section</div>
 <div id="settings" style="padding: 0 1.5rem 2rem;">Settings section</div>

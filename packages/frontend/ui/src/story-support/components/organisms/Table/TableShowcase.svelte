@@ -56,7 +56,7 @@
 {/snippet}
 
 {#snippet dateCell(row: TableRow)}
-  <span style="color: #71717a;">{row.date}</span>
+  <span style="color: var(--color-text-muted);">{row.date}</span>
 {/snippet}
 
 {#snippet statusCell(row: TableRow)}

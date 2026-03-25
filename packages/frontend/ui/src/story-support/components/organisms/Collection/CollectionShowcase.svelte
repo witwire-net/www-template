@@ -38,7 +38,7 @@
 
 {#snippet card(item: CollectionItem, index: number)}
   <article
-    style={`padding: 20px; border-radius: 16px; border: 1px solid color-mix(in srgb, ${item.tone} 20%, #d4d4d8); background: linear-gradient(180deg, color-mix(in srgb, ${item.tone} 10%, white), white); display: grid; gap: 10px; min-height: 164px;`}
+    style={`padding: 20px; border-radius: 16px; border: 1px solid color-mix(in srgb, ${item.tone} 20%, var(--palette-neutral-300)); background: linear-gradient(180deg, color-mix(in srgb, ${item.tone} 10%, white), white); display: grid; gap: 10px; min-height: 164px;`}
   >
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
       <strong style="font-size: 1rem;">{item.title}</strong>
@@ -48,7 +48,7 @@
         {index + 1}
       </span>
     </div>
-    <p style="margin: 0; color: #52525b; line-height: 1.6;">{item.details}</p>
+    <p style="margin: 0; color: var(--color-text-secondary); line-height: 1.6;">{item.details}</p>
   </article>
 {/snippet}
 

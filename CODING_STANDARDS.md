@@ -42,11 +42,11 @@
 - NG例: `packages/typespec/main.tsp` に構文エラーを入れたまま push する
 - OK例: `pnpm --filter @www-template/typespec format` の後に `pnpm check` を通す
 
-### OpenAPI path は `/api/v1/*` か `/api/v1/app/*` だけ
+### OpenAPI path は `/api/v1/*` または `/api/v1/app/*` だけ
 
 - forbidden: OpenAPI path を `/api/v1/*` と `/api/v1/app/*` の外に置かない
 - Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`; `pnpm lint` -> `package.json`
-- NG例: `/profiles`
+- NG例: `/profiles` / `/health` / `/admin/users`
 - OK例: `/api/v1/profiles` / `/api/v1/app/profiles`
 
 ### app endpoint は BearerAuth を宣言する
@@ -207,10 +207,10 @@
 
 ### route mode は公開面と認証面で固定する
 
-- required: 公開 route module では `ssr` export を再定義せず、`packages/frontend/app/src/routes/app/+layout.ts` では `export const ssr = false` と `export const csr = true` を必須にし、`app/**` 配下では `ssr` / `csr` / `prerender` を再定義しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`; actual file `packages/frontend/app/src/routes/app/+layout.ts`
-- NG例: `packages/frontend/app/src/routes/+page.ts` で `export const ssr = false` を足す / `packages/frontend/app/src/routes/app/profile/+page.ts` で `export const prerender = true` を足す
-- OK例: route mode は `packages/frontend/app/src/routes/app/+layout.ts` だけで管理する
+- required: 公開 route module では `ssr` export を再定義せず、`packages/frontend/app/src/routes/+layout.ts` では `export const ssr = false` と `export const csr = true` を必須にし、app 配下の他 route module では `ssr` / `csr` / `prerender` を再定義しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`; actual file `packages/frontend/app/src/routes/+layout.ts`
+- NG例: `packages/frontend/app/src/routes/login/+layout.ts` で `export const ssr = false` を足す / `packages/frontend/app/src/routes/(protected)/profiles/+page.ts` で `export const prerender = true` を足す
+- OK例: route mode は `packages/frontend/app/src/routes/+layout.ts` だけで管理する
 
 ### Svelte 5 の書き方を使う
 
@@ -288,7 +288,7 @@
 
 ### runtime route policy をテストで守る
 
-- required: router に登録される public route は `/api/v1/status`, `/api/v1/profiles`, `/api/v1/profiles/:id` だけにし、それ以外の custom route は `/health` または `/api/v1/app/*` に収める
+- required: router に登録される public route は `/api/v1/status`, `/api/v1/profiles`, `/api/v1/profiles/:id`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume` に限定し、それ以外の custom route は `/health` または `/api/v1/app/*` に収める
 - Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go`
 - NG例: runtime route に `/api/v1/admin/users` を増やす
 - OK例: app surface の custom route は `/api/v1/app/*` に置く
@@ -339,7 +339,7 @@
 
 ### Go は `gofmt` と `goimports` clean にする
 
-- required: 変更した `*.go` は `gofmt` と `goimports -local witwire.net/www-template` を通す
+- required: 変更した `*.go` は `gofmt` と `goimports -local www-template` を通す
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/format-check.sh`; `pnpm format:check` -> `package.json` -> `scripts/go/format-check.sh`; hook `.husky/pre-commit` -> `.lintstagedrc.json` -> `scripts/hooks/format-staged-go.sh`
 - NG例: import 順や空白が崩れたまま commit する
 - OK例: `gofmt -w` と `goimports -w` 後の状態で commit する

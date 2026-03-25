@@ -4,6 +4,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "outDir": "./dist",
     "baseUrl": "./src",
+    "paths": {
+      "types": ["./types/index.ts"],
+      "types/*": ["./types/*"]
+    },
     "types": ["svelte"]
   },
   "include": ["src/**/*"]

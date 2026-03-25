@@ -4,7 +4,7 @@ import "@typespec/openapi";
 using Http;
 using TypeSpec.OpenAPI;
 
-namespace WwwTemplate.ApiV1;
+namespace WWWTemplate.ApiV1;
 
 @tag("profiles")
 @summary("List sample profiles")
@@ -13,7 +13,7 @@ namespace WwwTemplate.ApiV1;
 @route("/profiles")
 op listProfiles(): {
   @statusCode statusCode: 200;
-  @body body: WwwTemplate.Profile[];
+  @body body: WWWTemplate.Profile[];
 };
 
 @tag("profiles")
@@ -21,12 +21,12 @@ op listProfiles(): {
 @operationId("createProfile")
 @post
 @route("/profiles")
-op createProfile(@body body: WwwTemplate.CreateProfileInput): {
+op createProfile(@body body: WWWTemplate.CreateProfileInput): {
   @statusCode statusCode: 201;
-  @body body: WwwTemplate.Profile;
+  @body body: WWWTemplate.Profile;
 } | {
   @statusCode statusCode: 400;
-  @body body: WwwTemplate.ErrorResponse;
+  @body body: WWWTemplate.ErrorResponse;
 };
 
 @tag("profiles")
@@ -36,11 +36,11 @@ op createProfile(@body body: WwwTemplate.CreateProfileInput): {
 @route("/profiles/{id}")
 op getProfile(@path id: int64): {
   @statusCode statusCode: 200;
-  @body body: WwwTemplate.Profile;
+  @body body: WWWTemplate.Profile;
 } | {
   @statusCode statusCode: 400;
-  @body body: WwwTemplate.ErrorResponse;
+  @body body: WWWTemplate.ErrorResponse;
 } | {
   @statusCode statusCode: 404;
-  @body body: WwwTemplate.ErrorResponse;
+  @body body: WWWTemplate.ErrorResponse;
 };

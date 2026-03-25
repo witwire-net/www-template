@@ -4,6 +4,35 @@
  * www-template API
  * OpenAPI spec version: 1.0.0
  */
+export type AuthFailureClassification =
+  (typeof AuthFailureClassification)[keyof typeof AuthFailureClassification];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AuthFailureClassification = {
+  unauthenticated: 'unauthenticated',
+  'session-expired': 'session-expired',
+  'internal-error': 'internal-error',
+} as const;
+
+export interface AuthFailureResponse {
+  requestId: UlidId;
+  error: AuthFailureClassification;
+}
+
+export interface AuthOperationErrorResponse {
+  requestId: UlidId;
+  error: string;
+}
+
+export interface AuthSessionResponse {
+  requestId: UlidId;
+  accountId: UlidId;
+  passkeyCredentialId: UlidId;
+  sessionId: UlidId;
+  sessionToken: string;
+  expiresAt: string;
+}
+
 export interface CreateProfileInput {
   name: string;
   email: string;
@@ -13,6 +42,34 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface InvitationPasskeyRegisterRequest {
+  invitation_session: UlidId;
+  credential: string;
+}
+
+export interface LogoutResponse {
+  requestId: UlidId;
+  revoked: boolean;
+}
+
+export interface PasskeyFinishRequest {
+  credential: string;
+}
+
+export type PasskeyRegisterRequest =
+  | RecoveryPasskeyRegisterRequest
+  | InvitationPasskeyRegisterRequest;
+
+export interface PasskeyStartRequest {
+  identifier: string;
+}
+
+export interface PasskeyStartResponse {
+  requestId: UlidId;
+  challenge: string;
+  rpId: string;
+}
+
 export interface Profile {
   id: number;
   name: string;
@@ -20,10 +77,84 @@ export interface Profile {
   createdAt: string;
 }
 
+export interface RecoveryAcceptedResponse {
+  requestId: UlidId;
+  accepted: boolean;
+}
+
+export interface RecoveryConsumeRequest {
+  token: string;
+}
+
+export interface RecoveryConsumeResponse {
+  requestId: UlidId;
+  recoveryTokenId: UlidId;
+  recoverySessionId: UlidId;
+  recovery_session: UlidId;
+  expiresAt: string;
+}
+
+export interface RecoveryPasskeyRegisterRequest {
+  recovery_session: UlidId;
+  credential: string;
+}
+
+export interface RecoveryRequest {
+  email: string;
+}
+
 export interface StatusResponse {
   message: string;
   timestamp: string;
 }
+
+/**
+ * Canonical ULID string used for auth-owned resource and correlation identifiers.
+ */
+export type UlidId = string;
+
+/**
+ * @summary Revokes the current bearer session
+ */
+export type logoutResponse200 = {
+  data: LogoutResponse;
+  status: 200;
+};
+
+export type logoutResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type logoutResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type logoutResponseSuccess = logoutResponse200 & {
+  headers: Headers;
+};
+export type logoutResponseError = (logoutResponse401 | logoutResponse503) & {
+  headers: Headers;
+};
+
+export type logoutResponse = logoutResponseSuccess | logoutResponseError;
+
+export const getLogoutUrl = () => {
+  return `/api/v1/app/auth/logout`;
+};
+
+export const logout = async (options?: RequestInit): Promise<logoutResponse> => {
+  const res = await fetch(getLogoutUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: logoutResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as logoutResponse;
+};
 
 /**
  * @summary List authenticated sample profiles
@@ -107,6 +238,269 @@ export const getAppProfile = async (
 
   const data: getAppProfileResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as getAppProfileResponse;
+};
+
+/**
+ * @summary Finishes passkey authentication and returns a bearer session
+ */
+export type finishPasskeyAuthenticationResponse200 = {
+  data: AuthSessionResponse;
+  status: 200;
+};
+
+export type finishPasskeyAuthenticationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type finishPasskeyAuthenticationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type finishPasskeyAuthenticationResponseSuccess = finishPasskeyAuthenticationResponse200 & {
+  headers: Headers;
+};
+export type finishPasskeyAuthenticationResponseError = (
+  | finishPasskeyAuthenticationResponse400
+  | finishPasskeyAuthenticationResponse503
+) & {
+  headers: Headers;
+};
+
+export type finishPasskeyAuthenticationResponse =
+  | finishPasskeyAuthenticationResponseSuccess
+  | finishPasskeyAuthenticationResponseError;
+
+export const getFinishPasskeyAuthenticationUrl = () => {
+  return `/api/v1/auth/passkey/finish`;
+};
+
+export const finishPasskeyAuthentication = async (
+  passkeyFinishRequest: PasskeyFinishRequest,
+  options?: RequestInit
+): Promise<finishPasskeyAuthenticationResponse> => {
+  const res = await fetch(getFinishPasskeyAuthenticationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyFinishRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: finishPasskeyAuthenticationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as finishPasskeyAuthenticationResponse;
+};
+
+/**
+ * @summary Registers or re-registers a passkey from exactly one auth selector
+ */
+export type registerPasskeyResponse200 = {
+  data: AuthSessionResponse;
+  status: 200;
+};
+
+export type registerPasskeyResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type registerPasskeyResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type registerPasskeyResponseSuccess = registerPasskeyResponse200 & {
+  headers: Headers;
+};
+export type registerPasskeyResponseError = (
+  | registerPasskeyResponse400
+  | registerPasskeyResponse503
+) & {
+  headers: Headers;
+};
+
+export type registerPasskeyResponse = registerPasskeyResponseSuccess | registerPasskeyResponseError;
+
+export const getRegisterPasskeyUrl = () => {
+  return `/api/v1/auth/passkey/register`;
+};
+
+export const registerPasskey = async (
+  passkeyRegisterRequest: PasskeyRegisterRequest,
+  options?: RequestInit
+): Promise<registerPasskeyResponse> => {
+  const res = await fetch(getRegisterPasskeyUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyRegisterRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerPasskeyResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as registerPasskeyResponse;
+};
+
+/**
+ * @summary Starts a passkey authentication ceremony
+ */
+export type startPasskeyAuthenticationResponse200 = {
+  data: PasskeyStartResponse;
+  status: 200;
+};
+
+export type startPasskeyAuthenticationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type startPasskeyAuthenticationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type startPasskeyAuthenticationResponseSuccess = startPasskeyAuthenticationResponse200 & {
+  headers: Headers;
+};
+export type startPasskeyAuthenticationResponseError = (
+  | startPasskeyAuthenticationResponse400
+  | startPasskeyAuthenticationResponse503
+) & {
+  headers: Headers;
+};
+
+export type startPasskeyAuthenticationResponse =
+  | startPasskeyAuthenticationResponseSuccess
+  | startPasskeyAuthenticationResponseError;
+
+export const getStartPasskeyAuthenticationUrl = () => {
+  return `/api/v1/auth/passkey/start`;
+};
+
+export const startPasskeyAuthentication = async (
+  passkeyStartRequest: PasskeyStartRequest,
+  options?: RequestInit
+): Promise<startPasskeyAuthenticationResponse> => {
+  const res = await fetch(getStartPasskeyAuthenticationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyStartRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startPasskeyAuthenticationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startPasskeyAuthenticationResponse;
+};
+
+/**
+ * @summary Accepts a recovery request without revealing account existence
+ */
+export type requestPasskeyRecoveryResponse202 = {
+  data: RecoveryAcceptedResponse;
+  status: 202;
+};
+
+export type requestPasskeyRecoveryResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type requestPasskeyRecoveryResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type requestPasskeyRecoveryResponseSuccess = requestPasskeyRecoveryResponse202 & {
+  headers: Headers;
+};
+export type requestPasskeyRecoveryResponseError = (
+  | requestPasskeyRecoveryResponse400
+  | requestPasskeyRecoveryResponse503
+) & {
+  headers: Headers;
+};
+
+export type requestPasskeyRecoveryResponse =
+  | requestPasskeyRecoveryResponseSuccess
+  | requestPasskeyRecoveryResponseError;
+
+export const getRequestPasskeyRecoveryUrl = () => {
+  return `/api/v1/auth/recovery`;
+};
+
+export const requestPasskeyRecovery = async (
+  recoveryRequest: RecoveryRequest,
+  options?: RequestInit
+): Promise<requestPasskeyRecoveryResponse> => {
+  const res = await fetch(getRequestPasskeyRecoveryUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(recoveryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: requestPasskeyRecoveryResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as requestPasskeyRecoveryResponse;
+};
+
+/**
+ * @summary Consumes a recovery token and issues a recovery session
+ */
+export type consumeRecoveryTokenResponse200 = {
+  data: RecoveryConsumeResponse;
+  status: 200;
+};
+
+export type consumeRecoveryTokenResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type consumeRecoveryTokenResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type consumeRecoveryTokenResponseSuccess = consumeRecoveryTokenResponse200 & {
+  headers: Headers;
+};
+export type consumeRecoveryTokenResponseError = (
+  | consumeRecoveryTokenResponse400
+  | consumeRecoveryTokenResponse503
+) & {
+  headers: Headers;
+};
+
+export type consumeRecoveryTokenResponse =
+  | consumeRecoveryTokenResponseSuccess
+  | consumeRecoveryTokenResponseError;
+
+export const getConsumeRecoveryTokenUrl = () => {
+  return `/api/v1/auth/recovery/consume`;
+};
+
+export const consumeRecoveryToken = async (
+  recoveryConsumeRequest: RecoveryConsumeRequest,
+  options?: RequestInit
+): Promise<consumeRecoveryTokenResponse> => {
+  const res = await fetch(getConsumeRecoveryTokenUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(recoveryConsumeRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: consumeRecoveryTokenResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as consumeRecoveryTokenResponse;
 };
 
 /**

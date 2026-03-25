@@ -8,7 +8,9 @@ temperature: 0.1
 permission:
   edit: deny
   webfetch: deny
-  task: deny
+  task:
+    '*': deny
+    'researcher': allow
   read: allow
   glob: allow
   grep: allow
@@ -59,7 +61,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 
 ## Rules
 
-- Do not use the `task` tool (no delegation and no self-calls)
+- Do not use the `task` tool except to call `.opencode/agents/researcher.md` (runtime alias: `researcher`); no other delegation and no self-calls
 - Do not overclaim. If references are insufficient, say what is missing and what to inspect next
 - Call out deviations from existing conventions and structure (directories, naming, boundaries, generated artifacts) with evidence references
 - Assign severity (blocker/major/minor/nit) and propose concrete fixes when possible

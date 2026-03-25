@@ -83,7 +83,7 @@
 {/snippet}
 
 {#snippet dateCell(row: ActivityRow)}
-  <span style="color: #666;">{row.date}</span>
+  <span style="color: var(--color-text-muted);">{row.date}</span>
 {/snippet}
 
 {#snippet statusCell(row: ActivityRow)}
@@ -125,10 +125,10 @@
     <div
       style="padding: 0.75rem; background: var(--color-surface-hover); border-radius: var(--radius-md); display: flex; align-items: center; gap: 8px;"
     >
-      <div style="width: 32px; height: 32px; border-radius: 999px; background: #ccc;"></div>
+      <div style="width: 32px; height: 32px; border-radius: 999px; background: var(--color-border);"></div>
       <div style="overflow: hidden;">
         <div style="font-size: 0.875rem; font-weight: 700;">John Doe</div>
-        <div style="font-size: 0.75rem; color: #666;">Admin</div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted);">Admin</div>
       </div>
     </div>
     <Button
@@ -167,7 +167,7 @@
 
   <div style="padding: 2rem;">
     {#if rich}
-      <div style="padding: 0 0 1rem; color: #666;">Last action: {lastAction}</div>
+      <div style="padding: 0 0 1rem; color: var(--color-text-muted);">Last action: {lastAction}</div>
     {/if}
 
     <h1 style="margin-bottom: 2rem; font-size: 1.5rem; font-weight: 700;">Dashboard Overview</h1>
@@ -178,7 +178,7 @@
       {#each statCards as stat (stat.label)}
         <Card>
           <CardBody>
-            <div style="margin-bottom: 0.5rem; font-size: 0.875rem; color: #666;">{stat.label}</div>
+            <div style="margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--color-text-muted);">{stat.label}</div>
             <div style="font-size: 1.5rem; font-weight: 700;">{stat.value}</div>
           </CardBody>
         </Card>
@@ -186,7 +186,7 @@
     </div>
 
     <div
-      style="background: white; border: 1px solid #eee; border-radius: 1rem; padding: 1.5rem;"
+      style="background: white; border: 1px solid var(--color-border-subtle); border-radius: 1rem; padding: 1.5rem;"
     >
       <h2 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 700;">Recent Activity</h2>
       <Table columns={tableColumns} data={activityRows} getRowKey={(row) => row.id} />

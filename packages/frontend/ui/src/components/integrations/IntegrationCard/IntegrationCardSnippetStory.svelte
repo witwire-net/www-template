@@ -20,7 +20,7 @@
 
 {#snippet iconContent()}
   <span
-    style="display: inline-flex; height: 40px; width: 40px; align-items: center; justify-content: center; border-radius: 12px; background: #111827; color: white; font-size: 0.875rem; font-weight: 700;"
+    style="display: inline-flex; height: 40px; width: 40px; align-items: center; justify-content: center; border-radius: 12px; background: var(--color-text); color: white; font-size: 0.875rem; font-weight: 700;"
   >
     LN
   </span>

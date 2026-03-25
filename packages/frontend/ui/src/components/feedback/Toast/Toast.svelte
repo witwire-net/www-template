@@ -9,7 +9,7 @@
     isSnippet,
     joinClassNames,
     type Renderable,
-  } from '@ui/components/shared/renderable';
+  } from '@ui/components/shared';
 
   import styles from './Toast.module.scss';
 

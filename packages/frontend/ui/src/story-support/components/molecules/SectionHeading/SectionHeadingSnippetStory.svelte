@@ -22,7 +22,7 @@
 {#snippet eyebrowContent()}
   <span style="display: inline-flex; align-items: center; gap: 8px;">
     <span
-      style="display: inline-flex; min-width: 28px; align-items: center; justify-content: center; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 0.75rem; font-weight: 700; padding: 4px 8px;"
+      style="display: inline-flex; min-width: 28px; align-items: center; justify-content: center; border-radius: 999px; background: color-mix(in srgb, var(--color-info) 15%, var(--color-surface)); color: var(--color-info); font-size: 0.75rem; font-weight: 700; padding: 4px 8px;"
     >
       New
     </span>

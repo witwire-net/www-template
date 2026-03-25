@@ -4,8 +4,8 @@ import (
 	"context"
 	stdhttp "net/http"
 
-	backendhttp "witwire.net/www-template/packages/backend/internal/http"
-	"witwire.net/www-template/packages/backend/internal/types"
+	backendhttp "www-template/packages/backend/internal/http"
+	"www-template/packages/backend/internal/types"
 )
 
 type Runtime struct {
@@ -28,7 +28,7 @@ func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, erro
 		return nil, err
 	}
 
-	handler := backendhttp.NewRouter(cfg, backendhttp.Dependencies{Profiles: container.Profiles})
+	handler := backendhttp.NewRouter(cfg, backendhttp.Dependencies{Auth: container.Auth, Profiles: container.Profiles})
 	server := &stdhttp.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,

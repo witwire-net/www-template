@@ -6,6 +6,9 @@
   },
   "tags": [
     {
+      "name": "auth"
+    },
+    {
       "name": "status"
     },
     {
@@ -13,9 +16,84 @@
     },
     {
       "name": "app-profiles"
+    },
+    {
+      "name": "app-auth"
     }
   ],
   "paths": {
+    "/api/v1/app/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Revokes the current bearer session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["app-auth"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/app/profiles": {
       "get": {
         "operationId": "listAppProfiles",
@@ -107,6 +185,391 @@
             "BearerAuth": []
           }
         ]
+      }
+    },
+    "/api/v1/auth/passkey/finish": {
+      "post": {
+        "operationId": "finishPasskeyAuthentication",
+        "summary": "Finishes passkey authentication and returns a bearer session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyFinishRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/register": {
+      "post": {
+        "operationId": "registerPasskey",
+        "summary": "Registers or re-registers a passkey from exactly one auth selector",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegisterRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/start": {
+      "post": {
+        "operationId": "startPasskeyAuthentication",
+        "summary": "Starts a passkey authentication ceremony",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyStartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyStartRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/recovery": {
+      "post": {
+        "operationId": "requestPasskeyRecovery",
+        "summary": "Accepts a recovery request without revealing account existence",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "The request has been accepted for processing, but processing has not yet completed.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/recovery/consume": {
+      "post": {
+        "operationId": "consumeRecoveryToken",
+        "summary": "Consumes a recovery token and issues a recovery session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryConsumeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryConsumeRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/profiles": {
@@ -243,6 +706,66 @@
   },
   "components": {
     "schemas": {
+      "AuthFailureClassification": {
+        "type": "string",
+        "enum": ["unauthenticated", "session-expired", "internal-error"]
+      },
+      "AuthFailureResponse": {
+        "type": "object",
+        "required": ["requestId", "error"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "error": {
+            "$ref": "#/components/schemas/AuthFailureClassification"
+          }
+        }
+      },
+      "AuthOperationErrorResponse": {
+        "type": "object",
+        "required": ["requestId", "error"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthSessionResponse": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "accountId",
+          "passkeyCredentialId",
+          "sessionId",
+          "sessionToken",
+          "expiresAt"
+        ],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "passkeyCredentialId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "sessionToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CreateProfileInput": {
         "type": "object",
         "required": ["name", "email"],
@@ -261,6 +784,74 @@
         "required": ["error"],
         "properties": {
           "error": {
+            "type": "string"
+          }
+        }
+      },
+      "InvitationPasskeyRegisterRequest": {
+        "type": "object",
+        "required": ["invitation_session", "credential"],
+        "properties": {
+          "invitation_session": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "credential": {
+            "type": "string"
+          }
+        }
+      },
+      "LogoutResponse": {
+        "type": "object",
+        "required": ["requestId", "revoked"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "revoked": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
+      "PasskeyFinishRequest": {
+        "type": "object",
+        "required": ["credential"],
+        "properties": {
+          "credential": {
+            "type": "string"
+          }
+        }
+      },
+      "PasskeyRegisterRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RecoveryPasskeyRegisterRequest"
+          },
+          {
+            "$ref": "#/components/schemas/InvitationPasskeyRegisterRequest"
+          }
+        ]
+      },
+      "PasskeyStartRequest": {
+        "type": "object",
+        "required": ["identifier"],
+        "properties": {
+          "identifier": {
+            "type": "string"
+          }
+        }
+      },
+      "PasskeyStartResponse": {
+        "type": "object",
+        "required": ["requestId", "challenge", "rpId"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "challenge": {
+            "type": "string"
+          },
+          "rpId": {
             "type": "string"
           }
         }
@@ -286,6 +877,78 @@
           }
         }
       },
+      "RecoveryAcceptedResponse": {
+        "type": "object",
+        "required": ["requestId", "accepted"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "accepted": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
+      "RecoveryConsumeRequest": {
+        "type": "object",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "RecoveryConsumeResponse": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "recoveryTokenId",
+          "recoverySessionId",
+          "recovery_session",
+          "expiresAt"
+        ],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "recoveryTokenId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "recoverySessionId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "recovery_session": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RecoveryPasskeyRegisterRequest": {
+        "type": "object",
+        "required": ["recovery_session", "credential"],
+        "properties": {
+          "recovery_session": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "credential": {
+            "type": "string"
+          }
+        }
+      },
+      "RecoveryRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
       "StatusResponse": {
         "type": "object",
         "required": ["message", "timestamp"],
@@ -298,6 +961,10 @@
             "format": "date-time"
           }
         }
+      },
+      "UlidId": {
+        "type": "string",
+        "description": "Canonical ULID string used for auth-owned resource and correlation identifiers."
       }
     },
     "securitySchemes": {

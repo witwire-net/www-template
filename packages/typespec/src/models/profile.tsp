@@ -2,7 +2,7 @@ import "@typespec/openapi";
 
 using TypeSpec.OpenAPI;
 
-namespace WwwTemplate;
+namespace WWWTemplate;
 
 model Profile {
   id: int64;

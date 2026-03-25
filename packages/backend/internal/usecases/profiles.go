@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"witwire.net/www-template/packages/backend/internal/domain"
+	"www-template/packages/backend/internal/domain"
 )
 
 var (

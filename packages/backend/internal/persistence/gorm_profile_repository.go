@@ -10,7 +10,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"witwire.net/www-template/packages/backend/internal/domain"
+	"www-template/packages/backend/internal/domain"
 )
 
 type gormProfileRecord struct {

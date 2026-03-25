@@ -1,5 +1,4 @@
 ---
-name: backend-engineer
 description: Backend implementation specialist. Loads coding-guardian and orchestration-playbook skills to implement, fix, investigate, and iterate on Go backend code until reviewer approval, then returns results to the caller.
 mode: subagent
 hidden: true
@@ -11,6 +10,7 @@ permission:
   task:
     '*': deny
     'unit/backend/reviewer': allow
+    'researcher': allow
   read: allow
   glob: allow
   grep: allow
@@ -55,7 +55,7 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 
 ## Rules
 
-- Do not use the `task` tool except to call `unit/backend/reviewer`; no other delegation and no self-calls
+- Do not use the `task` tool except to call `unit/backend/reviewer` or `.opencode/agents/researcher.md` (runtime alias: `researcher`); no other delegation and no self-calls
 - Do not stage or commit changes (`git add`, `git commit`, `git push` are denied)
 - Follow all guardrails enforced by `coding-guardian`
 - Stop and report before crossing any Ask-first boundary

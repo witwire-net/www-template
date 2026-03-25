@@ -24,5 +24,5 @@
       </Button>
     {/snippet}
   </EmptyState>
-  <p style="margin: 0; color: #666;">Status: {status}</p>
+  <p style="margin: 0; color: var(--color-text-muted);">Status: {status}</p>
 </div>

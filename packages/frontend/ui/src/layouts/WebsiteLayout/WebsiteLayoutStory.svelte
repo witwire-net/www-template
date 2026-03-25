@@ -85,7 +85,7 @@
 
   <section
     id="hero"
-    style="padding: 5rem 0; background: linear-gradient(135deg, #f0f4f8 0%, #fff 100%);"
+    style="padding: 5rem 0; background: linear-gradient(135deg, var(--color-background) 0%, #fff 100%);"
   >
     <Container>
       <div style="max-width: 800px; margin: 0 auto; text-align: center;">
@@ -93,7 +93,7 @@
         <h1 style="margin-bottom: 1.5rem; font-size: 3rem; font-weight: 900; line-height: 1.2;">
           Build Beautiful Interfaces with www-template UI
         </h1>
-        <p style="margin-bottom: 2.5rem; font-size: 1.25rem; color: #666;">
+        <p style="margin-bottom: 2.5rem; font-size: 1.25rem; color: var(--color-text-muted);">
           A complete design system for modern web applications. Fast, accessible, and stunningly beautiful.
         </p>
         <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
@@ -127,7 +127,7 @@
             <CardBody>
               <div style="margin-bottom: 1rem; font-size: 2rem;">⚡️</div>
               <h2 style="margin-bottom: 0.75rem; font-size: 1.25rem;">Fast Performance</h2>
-              <p style="color: #666;">Optimized for speed and efficiency.</p>
+              <p style="color: var(--color-text-muted);">Optimized for speed and efficiency.</p>
             </CardBody>
           </Card>
         </Col>
@@ -136,7 +136,7 @@
             <CardBody>
               <div style="margin-bottom: 1rem; font-size: 2rem;">🎨</div>
               <h2 style="margin-bottom: 0.75rem; font-size: 1.25rem;">Modern Design</h2>
-              <p style="color: #666;">Clean aesthetics that fit any brand.</p>
+              <p style="color: var(--color-text-muted);">Clean aesthetics that fit any brand.</p>
             </CardBody>
           </Card>
         </Col>
@@ -145,7 +145,7 @@
             <CardBody>
               <div style="margin-bottom: 1rem; font-size: 2rem;">📱</div>
               <h2 style="margin-bottom: 0.75rem; font-size: 1.25rem;">Responsive</h2>
-              <p style="color: #666;">Looks great on any device, anywhere.</p>
+              <p style="color: var(--color-text-muted);">Looks great on any device, anywhere.</p>
             </CardBody>
           </Card>
         </Col>

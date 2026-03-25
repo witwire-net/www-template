@@ -1,4 +1,4 @@
-title = "cfreact-template"
+title = "www-template"
 
 [[allowlists]]
 description = "Ignore dependency and generated directories"

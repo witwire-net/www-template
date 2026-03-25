@@ -19,7 +19,7 @@ Read these files before applying `coding-guardian` in this repository.
 
 ## Frontend enforcement
 
-- `eslint.config.js`: frontend boundaries, SvelteKit restrictions, TSDoc, hooks rules, Svelte 5 rules
+- `eslint.config.js`: frontend boundaries for `web`/`app`/`domain`/`ui`, SvelteKit restrictions for `web`, SSR-disabled SPA restrictions for `app`, TSDoc, hooks rules, Svelte 5 rules
 
 ## Contract enforcement
 

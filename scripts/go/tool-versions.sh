@@ -2,7 +2,7 @@
 
 readonly GOIMPORTS_PKG='golang.org/x/tools/cmd/goimports@v0.38.0'
 readonly GOLANGCI_LINT_PKG='github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8'
-readonly GO_LOCAL_PREFIX='witwire.net/www-template'
+readonly GO_LOCAL_PREFIX='www-template'
 readonly OAPI_CODEGEN_PKG='github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1'
 readonly MIGRATE_PKG='github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3'
 readonly GOVULNCHECK_PKG='golang.org/x/vuln/cmd/govulncheck@v1.1.4'

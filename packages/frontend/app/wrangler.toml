@@ -1,8 +1,9 @@
-name = "cfreact-template-frontend-app"
-main = ".svelte-kit/cloudflare/_worker.js"
+name = "www-template-frontend-app"
 compatibility_date = "2025-11-13"
 compatibility_flags = ["nodejs_compat"]
 
+# SvelteKit adapter-static emits the SPA shell as dist/index.html.
+# Cloudflare Workers Assets serves that file for unmatched /app/* requests.
 [assets]
-directory = ".svelte-kit/cloudflare"
-binding = "ASSETS"
+directory = "./dist"
+not_found_handling = "single-page-application"

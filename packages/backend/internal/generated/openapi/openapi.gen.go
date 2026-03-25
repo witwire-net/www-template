@@ -20,6 +20,59 @@ const (
 	BearerAuthScopes = "BearerAuth.Scopes"
 )
 
+// Defines values for AuthFailureClassification.
+const (
+	InternalError   AuthFailureClassification = "internal-error"
+	SessionExpired  AuthFailureClassification = "session-expired"
+	Unauthenticated AuthFailureClassification = "unauthenticated"
+)
+
+// Defines values for LogoutResponseRevoked.
+const (
+	LogoutResponseRevokedTrue LogoutResponseRevoked = true
+)
+
+// Defines values for RecoveryAcceptedResponseAccepted.
+const (
+	RecoveryAcceptedResponseAcceptedTrue RecoveryAcceptedResponseAccepted = true
+)
+
+// AuthFailureClassification defines model for AuthFailureClassification.
+type AuthFailureClassification string
+
+// AuthFailureResponse defines model for AuthFailureResponse.
+type AuthFailureResponse struct {
+	Error AuthFailureClassification `json:"error"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// AuthOperationErrorResponse defines model for AuthOperationErrorResponse.
+type AuthOperationErrorResponse struct {
+	Error string `json:"error"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// AuthSessionResponse defines model for AuthSessionResponse.
+type AuthSessionResponse struct {
+	// AccountId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	AccountId UlidId    `json:"accountId"`
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// PasskeyCredentialId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	PasskeyCredentialId UlidId `json:"passkeyCredentialId"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	SessionId    UlidId `json:"sessionId"`
+	SessionToken string `json:"sessionToken"`
+}
+
 // CreateProfileInput defines model for CreateProfileInput.
 type CreateProfileInput struct {
 	Email openapi_types.Email `json:"email"`
@@ -31,6 +84,48 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// InvitationPasskeyRegisterRequest defines model for InvitationPasskeyRegisterRequest.
+type InvitationPasskeyRegisterRequest struct {
+	Credential string `json:"credential"`
+
+	// InvitationSession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	InvitationSession UlidId `json:"invitation_session"`
+}
+
+// LogoutResponse defines model for LogoutResponse.
+type LogoutResponse struct {
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId                `json:"requestId"`
+	Revoked   LogoutResponseRevoked `json:"revoked"`
+}
+
+// LogoutResponseRevoked defines model for LogoutResponse.Revoked.
+type LogoutResponseRevoked bool
+
+// PasskeyFinishRequest defines model for PasskeyFinishRequest.
+type PasskeyFinishRequest struct {
+	Credential string `json:"credential"`
+}
+
+// PasskeyRegisterRequest defines model for PasskeyRegisterRequest.
+type PasskeyRegisterRequest struct {
+	union json.RawMessage
+}
+
+// PasskeyStartRequest defines model for PasskeyStartRequest.
+type PasskeyStartRequest struct {
+	Identifier string `json:"identifier"`
+}
+
+// PasskeyStartResponse defines model for PasskeyStartResponse.
+type PasskeyStartResponse struct {
+	Challenge string `json:"challenge"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+	RpId      string `json:"rpId"`
+}
+
 // Profile defines model for Profile.
 type Profile struct {
 	CreatedAt time.Time           `json:"createdAt"`
@@ -39,23 +134,167 @@ type Profile struct {
 	Name      string              `json:"name"`
 }
 
+// RecoveryAcceptedResponse defines model for RecoveryAcceptedResponse.
+type RecoveryAcceptedResponse struct {
+	Accepted RecoveryAcceptedResponseAccepted `json:"accepted"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// RecoveryAcceptedResponseAccepted defines model for RecoveryAcceptedResponse.Accepted.
+type RecoveryAcceptedResponseAccepted bool
+
+// RecoveryConsumeRequest defines model for RecoveryConsumeRequest.
+type RecoveryConsumeRequest struct {
+	Token string `json:"token"`
+}
+
+// RecoveryConsumeResponse defines model for RecoveryConsumeResponse.
+type RecoveryConsumeResponse struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RecoverySessionId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RecoverySessionId UlidId `json:"recoverySessionId"`
+
+	// RecoveryTokenId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RecoveryTokenId UlidId `json:"recoveryTokenId"`
+
+	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RecoverySession UlidId `json:"recovery_session"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// RecoveryPasskeyRegisterRequest defines model for RecoveryPasskeyRegisterRequest.
+type RecoveryPasskeyRegisterRequest struct {
+	Credential string `json:"credential"`
+
+	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RecoverySession UlidId `json:"recovery_session"`
+}
+
+// RecoveryRequest defines model for RecoveryRequest.
+type RecoveryRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
 // StatusResponse defines model for StatusResponse.
 type StatusResponse struct {
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// UlidId Canonical ULID string used for auth-owned resource and correlation identifiers.
+type UlidId = string
+
+// FinishPasskeyAuthenticationJSONRequestBody defines body for FinishPasskeyAuthentication for application/json ContentType.
+type FinishPasskeyAuthenticationJSONRequestBody = PasskeyFinishRequest
+
+// RegisterPasskeyJSONRequestBody defines body for RegisterPasskey for application/json ContentType.
+type RegisterPasskeyJSONRequestBody = PasskeyRegisterRequest
+
+// StartPasskeyAuthenticationJSONRequestBody defines body for StartPasskeyAuthentication for application/json ContentType.
+type StartPasskeyAuthenticationJSONRequestBody = PasskeyStartRequest
+
+// RequestPasskeyRecoveryJSONRequestBody defines body for RequestPasskeyRecovery for application/json ContentType.
+type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
+
+// ConsumeRecoveryTokenJSONRequestBody defines body for ConsumeRecoveryToken for application/json ContentType.
+type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
+
 // CreateProfileJSONRequestBody defines body for CreateProfile for application/json ContentType.
 type CreateProfileJSONRequestBody = CreateProfileInput
 
+// AsRecoveryPasskeyRegisterRequest returns the union data inside the PasskeyRegisterRequest as a RecoveryPasskeyRegisterRequest
+func (t PasskeyRegisterRequest) AsRecoveryPasskeyRegisterRequest() (RecoveryPasskeyRegisterRequest, error) {
+	var body RecoveryPasskeyRegisterRequest
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRecoveryPasskeyRegisterRequest overwrites any union data inside the PasskeyRegisterRequest as the provided RecoveryPasskeyRegisterRequest
+func (t *PasskeyRegisterRequest) FromRecoveryPasskeyRegisterRequest(v RecoveryPasskeyRegisterRequest) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRecoveryPasskeyRegisterRequest performs a merge with any union data inside the PasskeyRegisterRequest, using the provided RecoveryPasskeyRegisterRequest
+func (t *PasskeyRegisterRequest) MergeRecoveryPasskeyRegisterRequest(v RecoveryPasskeyRegisterRequest) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvitationPasskeyRegisterRequest returns the union data inside the PasskeyRegisterRequest as a InvitationPasskeyRegisterRequest
+func (t PasskeyRegisterRequest) AsInvitationPasskeyRegisterRequest() (InvitationPasskeyRegisterRequest, error) {
+	var body InvitationPasskeyRegisterRequest
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvitationPasskeyRegisterRequest overwrites any union data inside the PasskeyRegisterRequest as the provided InvitationPasskeyRegisterRequest
+func (t *PasskeyRegisterRequest) FromInvitationPasskeyRegisterRequest(v InvitationPasskeyRegisterRequest) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvitationPasskeyRegisterRequest performs a merge with any union data inside the PasskeyRegisterRequest, using the provided InvitationPasskeyRegisterRequest
+func (t *PasskeyRegisterRequest) MergeInvitationPasskeyRegisterRequest(v InvitationPasskeyRegisterRequest) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t PasskeyRegisterRequest) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *PasskeyRegisterRequest) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Revokes the current bearer session
+	// (POST /api/v1/app/auth/logout)
+	Logout(c *gin.Context)
 	// List authenticated sample profiles
 	// (GET /api/v1/app/profiles)
 	ListAppProfiles(c *gin.Context)
 	// Get an authenticated sample profile by id
 	// (GET /api/v1/app/profiles/{id})
 	GetAppProfile(c *gin.Context, id int64)
+	// Finishes passkey authentication and returns a bearer session
+	// (POST /api/v1/auth/passkey/finish)
+	FinishPasskeyAuthentication(c *gin.Context)
+	// Registers or re-registers a passkey from exactly one auth selector
+	// (POST /api/v1/auth/passkey/register)
+	RegisterPasskey(c *gin.Context)
+	// Starts a passkey authentication ceremony
+	// (POST /api/v1/auth/passkey/start)
+	StartPasskeyAuthentication(c *gin.Context)
+	// Accepts a recovery request without revealing account existence
+	// (POST /api/v1/auth/recovery)
+	RequestPasskeyRecovery(c *gin.Context)
+	// Consumes a recovery token and issues a recovery session
+	// (POST /api/v1/auth/recovery/consume)
+	ConsumeRecoveryToken(c *gin.Context)
 	// List sample profiles
 	// (GET /api/v1/profiles)
 	ListProfiles(c *gin.Context)
@@ -78,6 +317,21 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(c *gin.Context)
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.Logout(c)
+}
 
 // ListAppProfiles operation middleware
 func (siw *ServerInterfaceWrapper) ListAppProfiles(c *gin.Context) {
@@ -118,6 +372,71 @@ func (siw *ServerInterfaceWrapper) GetAppProfile(c *gin.Context) {
 	}
 
 	siw.Handler.GetAppProfile(c, id)
+}
+
+// FinishPasskeyAuthentication operation middleware
+func (siw *ServerInterfaceWrapper) FinishPasskeyAuthentication(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.FinishPasskeyAuthentication(c)
+}
+
+// RegisterPasskey operation middleware
+func (siw *ServerInterfaceWrapper) RegisterPasskey(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RegisterPasskey(c)
+}
+
+// StartPasskeyAuthentication operation middleware
+func (siw *ServerInterfaceWrapper) StartPasskeyAuthentication(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartPasskeyAuthentication(c)
+}
+
+// RequestPasskeyRecovery operation middleware
+func (siw *ServerInterfaceWrapper) RequestPasskeyRecovery(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RequestPasskeyRecovery(c)
+}
+
+// ConsumeRecoveryToken operation middleware
+func (siw *ServerInterfaceWrapper) ConsumeRecoveryToken(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ConsumeRecoveryToken(c)
 }
 
 // ListProfiles operation middleware
@@ -210,12 +529,76 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
+	router.POST(options.BaseURL+"/api/v1/app/auth/logout", wrapper.Logout)
 	router.GET(options.BaseURL+"/api/v1/app/profiles", wrapper.ListAppProfiles)
 	router.GET(options.BaseURL+"/api/v1/app/profiles/:id", wrapper.GetAppProfile)
+	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishPasskeyAuthentication)
+	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
+	router.POST(options.BaseURL+"/api/v1/auth/passkey/start", wrapper.StartPasskeyAuthentication)
+	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
+	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
 	router.GET(options.BaseURL+"/api/v1/profiles", wrapper.ListProfiles)
 	router.POST(options.BaseURL+"/api/v1/profiles", wrapper.CreateProfile)
 	router.GET(options.BaseURL+"/api/v1/profiles/:id", wrapper.GetProfile)
 	router.GET(options.BaseURL+"/api/v1/status", wrapper.GetStatus)
+}
+
+type LogoutRequestObject struct {
+}
+
+type LogoutResponseObject interface {
+	VisitLogoutResponse(w http.ResponseWriter) error
+}
+
+type Logout200ResponseHeaders struct {
+	CacheControl string
+}
+
+type Logout200JSONResponse struct {
+	Body    LogoutResponse
+	Headers Logout200ResponseHeaders
+}
+
+func (response Logout200JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type Logout401ResponseHeaders struct {
+	CacheControl string
+}
+
+type Logout401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers Logout401ResponseHeaders
+}
+
+func (response Logout401JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type Logout503ResponseHeaders struct {
+	CacheControl string
+}
+
+type Logout503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers Logout503ResponseHeaders
+}
+
+func (response Logout503JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAppProfilesRequestObject struct {
@@ -276,6 +659,301 @@ func (response GetAppProfile404JSONResponse) VisitGetAppProfileResponse(w http.R
 	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
+}
+
+type FinishPasskeyAuthenticationRequestObject struct {
+	Body *FinishPasskeyAuthenticationJSONRequestBody
+}
+
+type FinishPasskeyAuthenticationResponseObject interface {
+	VisitFinishPasskeyAuthenticationResponse(w http.ResponseWriter) error
+}
+
+type FinishPasskeyAuthentication200ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAuthentication200JSONResponse struct {
+	Body    AuthSessionResponse
+	Headers FinishPasskeyAuthentication200ResponseHeaders
+}
+
+func (response FinishPasskeyAuthentication200JSONResponse) VisitFinishPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAuthentication400ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAuthentication400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers FinishPasskeyAuthentication400ResponseHeaders
+}
+
+func (response FinishPasskeyAuthentication400JSONResponse) VisitFinishPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAuthentication503ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAuthentication503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishPasskeyAuthentication503ResponseHeaders
+}
+
+func (response FinishPasskeyAuthentication503JSONResponse) VisitFinishPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RegisterPasskeyRequestObject struct {
+	Body *RegisterPasskeyJSONRequestBody
+}
+
+type RegisterPasskeyResponseObject interface {
+	VisitRegisterPasskeyResponse(w http.ResponseWriter) error
+}
+
+type RegisterPasskey200ResponseHeaders struct {
+	CacheControl string
+}
+
+type RegisterPasskey200JSONResponse struct {
+	Body    AuthSessionResponse
+	Headers RegisterPasskey200ResponseHeaders
+}
+
+func (response RegisterPasskey200JSONResponse) VisitRegisterPasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RegisterPasskey400ResponseHeaders struct {
+	CacheControl string
+}
+
+type RegisterPasskey400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers RegisterPasskey400ResponseHeaders
+}
+
+func (response RegisterPasskey400JSONResponse) VisitRegisterPasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RegisterPasskey503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RegisterPasskey503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RegisterPasskey503ResponseHeaders
+}
+
+func (response RegisterPasskey503JSONResponse) VisitRegisterPasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAuthenticationRequestObject struct {
+	Body *StartPasskeyAuthenticationJSONRequestBody
+}
+
+type StartPasskeyAuthenticationResponseObject interface {
+	VisitStartPasskeyAuthenticationResponse(w http.ResponseWriter) error
+}
+
+type StartPasskeyAuthentication200ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAuthentication200JSONResponse struct {
+	Body    PasskeyStartResponse
+	Headers StartPasskeyAuthentication200ResponseHeaders
+}
+
+func (response StartPasskeyAuthentication200JSONResponse) VisitStartPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAuthentication400ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAuthentication400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers StartPasskeyAuthentication400ResponseHeaders
+}
+
+func (response StartPasskeyAuthentication400JSONResponse) VisitStartPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAuthentication503ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAuthentication503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartPasskeyAuthentication503ResponseHeaders
+}
+
+func (response StartPasskeyAuthentication503JSONResponse) VisitStartPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RequestPasskeyRecoveryRequestObject struct {
+	Body *RequestPasskeyRecoveryJSONRequestBody
+}
+
+type RequestPasskeyRecoveryResponseObject interface {
+	VisitRequestPasskeyRecoveryResponse(w http.ResponseWriter) error
+}
+
+type RequestPasskeyRecovery202ResponseHeaders struct {
+	CacheControl string
+}
+
+type RequestPasskeyRecovery202JSONResponse struct {
+	Body    RecoveryAcceptedResponse
+	Headers RequestPasskeyRecovery202ResponseHeaders
+}
+
+func (response RequestPasskeyRecovery202JSONResponse) VisitRequestPasskeyRecoveryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RequestPasskeyRecovery400ResponseHeaders struct {
+	CacheControl string
+}
+
+type RequestPasskeyRecovery400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers RequestPasskeyRecovery400ResponseHeaders
+}
+
+func (response RequestPasskeyRecovery400JSONResponse) VisitRequestPasskeyRecoveryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RequestPasskeyRecovery503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RequestPasskeyRecovery503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RequestPasskeyRecovery503ResponseHeaders
+}
+
+func (response RequestPasskeyRecovery503JSONResponse) VisitRequestPasskeyRecoveryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConsumeRecoveryTokenRequestObject struct {
+	Body *ConsumeRecoveryTokenJSONRequestBody
+}
+
+type ConsumeRecoveryTokenResponseObject interface {
+	VisitConsumeRecoveryTokenResponse(w http.ResponseWriter) error
+}
+
+type ConsumeRecoveryToken200ResponseHeaders struct {
+	CacheControl string
+}
+
+type ConsumeRecoveryToken200JSONResponse struct {
+	Body    RecoveryConsumeResponse
+	Headers ConsumeRecoveryToken200ResponseHeaders
+}
+
+func (response ConsumeRecoveryToken200JSONResponse) VisitConsumeRecoveryTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConsumeRecoveryToken400ResponseHeaders struct {
+	CacheControl string
+}
+
+type ConsumeRecoveryToken400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers ConsumeRecoveryToken400ResponseHeaders
+}
+
+func (response ConsumeRecoveryToken400JSONResponse) VisitConsumeRecoveryTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConsumeRecoveryToken503ResponseHeaders struct {
+	CacheControl string
+}
+
+type ConsumeRecoveryToken503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ConsumeRecoveryToken503ResponseHeaders
+}
+
+func (response ConsumeRecoveryToken503JSONResponse) VisitConsumeRecoveryTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProfilesRequestObject struct {
@@ -373,12 +1051,30 @@ func (response GetStatus200JSONResponse) VisitGetStatusResponse(w http.ResponseW
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Revokes the current bearer session
+	// (POST /api/v1/app/auth/logout)
+	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
 	// List authenticated sample profiles
 	// (GET /api/v1/app/profiles)
 	ListAppProfiles(ctx context.Context, request ListAppProfilesRequestObject) (ListAppProfilesResponseObject, error)
 	// Get an authenticated sample profile by id
 	// (GET /api/v1/app/profiles/{id})
 	GetAppProfile(ctx context.Context, request GetAppProfileRequestObject) (GetAppProfileResponseObject, error)
+	// Finishes passkey authentication and returns a bearer session
+	// (POST /api/v1/auth/passkey/finish)
+	FinishPasskeyAuthentication(ctx context.Context, request FinishPasskeyAuthenticationRequestObject) (FinishPasskeyAuthenticationResponseObject, error)
+	// Registers or re-registers a passkey from exactly one auth selector
+	// (POST /api/v1/auth/passkey/register)
+	RegisterPasskey(ctx context.Context, request RegisterPasskeyRequestObject) (RegisterPasskeyResponseObject, error)
+	// Starts a passkey authentication ceremony
+	// (POST /api/v1/auth/passkey/start)
+	StartPasskeyAuthentication(ctx context.Context, request StartPasskeyAuthenticationRequestObject) (StartPasskeyAuthenticationResponseObject, error)
+	// Accepts a recovery request without revealing account existence
+	// (POST /api/v1/auth/recovery)
+	RequestPasskeyRecovery(ctx context.Context, request RequestPasskeyRecoveryRequestObject) (RequestPasskeyRecoveryResponseObject, error)
+	// Consumes a recovery token and issues a recovery session
+	// (POST /api/v1/auth/recovery/consume)
+	ConsumeRecoveryToken(ctx context.Context, request ConsumeRecoveryTokenRequestObject) (ConsumeRecoveryTokenResponseObject, error)
 	// List sample profiles
 	// (GET /api/v1/profiles)
 	ListProfiles(ctx context.Context, request ListProfilesRequestObject) (ListProfilesResponseObject, error)
@@ -403,6 +1099,31 @@ func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareF
 type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
+}
+
+// Logout operation middleware
+func (sh *strictHandler) Logout(ctx *gin.Context) {
+	var request LogoutRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Logout")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(LogoutResponseObject); ok {
+		if err := validResponse.VisitLogoutResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListAppProfiles operation middleware
@@ -450,6 +1171,171 @@ func (sh *strictHandler) GetAppProfile(ctx *gin.Context, id int64) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(GetAppProfileResponseObject); ok {
 		if err := validResponse.VisitGetAppProfileResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// FinishPasskeyAuthentication operation middleware
+func (sh *strictHandler) FinishPasskeyAuthentication(ctx *gin.Context) {
+	var request FinishPasskeyAuthenticationRequestObject
+
+	var body FinishPasskeyAuthenticationJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.FinishPasskeyAuthentication(ctx, request.(FinishPasskeyAuthenticationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FinishPasskeyAuthentication")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(FinishPasskeyAuthenticationResponseObject); ok {
+		if err := validResponse.VisitFinishPasskeyAuthenticationResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RegisterPasskey operation middleware
+func (sh *strictHandler) RegisterPasskey(ctx *gin.Context) {
+	var request RegisterPasskeyRequestObject
+
+	var body RegisterPasskeyJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RegisterPasskey(ctx, request.(RegisterPasskeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RegisterPasskey")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RegisterPasskeyResponseObject); ok {
+		if err := validResponse.VisitRegisterPasskeyResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartPasskeyAuthentication operation middleware
+func (sh *strictHandler) StartPasskeyAuthentication(ctx *gin.Context) {
+	var request StartPasskeyAuthenticationRequestObject
+
+	var body StartPasskeyAuthenticationJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.StartPasskeyAuthentication(ctx, request.(StartPasskeyAuthenticationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartPasskeyAuthentication")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(StartPasskeyAuthenticationResponseObject); ok {
+		if err := validResponse.VisitStartPasskeyAuthenticationResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RequestPasskeyRecovery operation middleware
+func (sh *strictHandler) RequestPasskeyRecovery(ctx *gin.Context) {
+	var request RequestPasskeyRecoveryRequestObject
+
+	var body RequestPasskeyRecoveryJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestPasskeyRecovery(ctx, request.(RequestPasskeyRecoveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestPasskeyRecovery")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RequestPasskeyRecoveryResponseObject); ok {
+		if err := validResponse.VisitRequestPasskeyRecoveryResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConsumeRecoveryToken operation middleware
+func (sh *strictHandler) ConsumeRecoveryToken(ctx *gin.Context) {
+	var request ConsumeRecoveryTokenRequestObject
+
+	var body ConsumeRecoveryTokenJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ConsumeRecoveryToken(ctx, request.(ConsumeRecoveryTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConsumeRecoveryToken")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(ConsumeRecoveryTokenResponseObject); ok {
+		if err := validResponse.VisitConsumeRecoveryTokenResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

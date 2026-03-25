@@ -10,14 +10,14 @@
   <header class="console-header">
     <div>
       <div class="eyebrow">AUTH CSR SHELL</div>
-      <h1>プロフィール画面プレースホルダー</h1>
+      <h1>プロフィール画面サンプル</h1>
     </div>
   </header>
 
   <div class="placeholder-card">
     <p class="lead">
-      `/app/profiles` は認証 shell の配置先として残しつつ、backend では専用の `/api/v1/app/*`
-      endpoint が有効になりました。
+      `/app/profiles` は認証済み画面の最小サンプルです。backend では専用の `/api/v1/app/*`
+      endpoint を使い、公開面と app 面の境界を分けています。
     </p>
 
     <div class="boundary-list">
@@ -29,7 +29,7 @@
     </div>
 
     <p class="muted">
-      次の差分では、この token 境界を frontend の domain facade と接続して CSR から実データを描画できます。
+      bearer token の境界、公開 API との差分、認証済み CSR の配置を確認するためのサンプルとして使えます。
     </p>
   </div>
 </section>
@@ -37,43 +37,45 @@
 <style>
   .console-shell {
     display: grid;
-    gap: 1.5rem;
+    gap: var(--spacing-lg);
   }
 
   .console-header {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1rem;
+    gap: var(--spacing-md);
   }
 
   .eyebrow {
     margin-bottom: 0.35rem;
-    font-size: 0.72rem;
-    font-weight: 700;
+    font-family: var(--font-family-display);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
     letter-spacing: 0.2em;
-    color: #c2410c;
+    color: var(--color-primary-active);
   }
 
   h1 {
     margin: 0;
+    font-family: var(--font-family-display);
     font-size: clamp(1.8rem, 4vw, 2.6rem);
-    color: #111827;
+    color: var(--color-text);
   }
 
   .placeholder-card {
     display: grid;
-    gap: 1rem;
+    gap: var(--spacing-md);
     padding: 1.25rem;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    border-radius: 1.25rem;
-    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-surface) 78%, transparent);
   }
 
   .lead {
     margin: 0;
-    color: #334155;
-    line-height: 1.7;
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-relaxed);
   }
 
   .boundary-list {
@@ -82,20 +84,20 @@
   }
 
   article {
-    padding: 1rem 1.1rem;
-    border-radius: 1rem;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: linear-gradient(135deg, rgba(255, 247, 237, 0.94), rgba(255, 255, 255, 0.98));
+    padding: var(--spacing-md) 1.1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: linear-gradient(135deg, var(--color-background), var(--color-surface));
   }
 
   h2 {
     margin: 0;
-    font-size: 1rem;
-    color: #7c2d12;
+    font-size: var(--font-size-base);
+    color: var(--color-text);
   }
 
   .muted {
     margin: 0;
-    color: #64748b;
+    color: var(--color-text-muted);
   }
 </style>

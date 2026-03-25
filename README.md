@@ -108,10 +108,39 @@ OpenAPI には Spectral lint を掛けています。
 - `GET /api/v1/profiles`
 - `POST /api/v1/profiles`
 - `GET /api/v1/profiles/{id}`
+- `POST /api/v1/auth/passkey/start`
+- `POST /api/v1/auth/passkey/finish`
+- `POST /api/v1/auth/recovery`
+- `POST /api/v1/auth/recovery/consume`
+- `POST /api/v1/auth/passkey/register`
 - `GET /api/v1/app/profiles`
 - `GET /api/v1/app/profiles/{id}`
+- `POST /api/v1/app/auth/logout`
 
 `/api/v1/app/*` は bearer token が必須です。
+
+## Auth surface
+
+- `/app/login` は passkey-only の認証面です
+- `/app/login/recovery`, `/app/login/recovery/sent`, `/app/login/recovery/consume`, `/app/login/recovery/register` は既存アカウント向けの recovery-only 導線です
+- `/app/logout` は utility route ですが、logout 実行は canonical な `POST /api/v1/app/auth/logout` を使います
+- auth routes (`/app/login*`, `/app/logout`) と auth endpoints は no-store 前提で扱います
+
+bearer session contract:
+
+- login / recovery register 成功後、client は `Authorization: Bearer <session token>` で `/api/v1/app/*` を利用します
+- bearer token は frontend の in-memory state にのみ保持し、永続 storage に復元しません
+- missing session は通常の `/app/login` 導線へ戻し、expired / revoked session は `/app/session-expired` へ分岐します
+
+auth-owned identifier policy:
+
+- `accountId`, `sessionId`, `passkeyCredentialId`, `recoveryTokenId`, `recoverySessionId`, `requestId` などの system-owned ID は canonical ULID string を使います
+- 例外として、opaque bearer token、recovery link token、rate-limit bucket key、WebAuthn RP ID は ULID 対象外です
+
+auth runtime dependencies:
+
+- 短命 auth state は Valkey を第一実装として扱います
+- recovery mail delivery は SMTP 設定を利用します
 
 ## 環境変数
 
@@ -121,13 +150,33 @@ OpenAPI には Spectral lint を掛けています。
 - `APP_BEARER_TOKEN` - app API 用 token。`APP_ENV=development` かつ未設定のときだけ既定値 `dev-app-auth`
 - `APP_PROFILE_STORE` - 既定値は `memory`。DB を使うときは `gorm`
 - `DATABASE_URL` - `APP_PROFILE_STORE=gorm` や migration 実行時に必要
-- `ALLOWED_ORIGINS` - 既定値は `http://localhost:5173,http://127.0.0.1:5173`
+- `ALLOWED_ORIGINS` - 既定値は `http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174`
 - `PORT` - backend listen port。既定値は `8080`
+- `VALKEY_URL` - shared Valkey の接続先。短命 state の共有に使います
+- `VALKEY_KEY_PREFIX` - shared Valkey key prefix。既定値は `www-template`
+- `WEBAUTHN_RP_ID` - passkey/WebAuthn の RP ID。既定値は `localhost`
+- `ACCOUNT_RECOVERY_URL_BASE` - account recovery link の base URL。既定値は `http://localhost:5173/app/login/recovery/consume`
+- `SMTP_HOST` - shared SMTP host
+- `SMTP_PORT` - shared SMTP port。既定値は `587`
+- `SMTP_USERNAME` - shared SMTP username
+- `SMTP_PASSWORD` - shared SMTP password
+- `MAIL_FROM_ADDRESS` - mail の From address
 
 重要:
 
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定のまま起動できません
 - `APP_PROFILE_STORE=gorm` のときは `DATABASE_URL` が必要です
+
+auth config defaults:
+
+- challenge TTL: 5 minutes
+- recovery token TTL: 30 minutes
+- recovery session TTL: 15 minutes
+- session idle TTL: 12 hours
+- session absolute TTL: 14 days
+- passkey start throttle: 5 requests / 5 minutes
+- recovery throttle: 3 requests / hour per email, 10 requests / hour per IP
+- finish / consume / register failure lock: 10 failures / 15 minutes -> 15 minute lock
 
 ## PostgreSQL を使う場合
 

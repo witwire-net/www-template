@@ -30,22 +30,29 @@ linters-settings:
           - cmd/api/*.go
         allow:
           - $gostd
-          - witwire.net/www-template/packages/backend/internal/app
+          - www-template/packages/backend/internal/app
       domain:
         files:
           - internal/domain/*.go
         allow:
           - $gostd
-          - witwire.net/www-template/packages/backend/internal/domain
-          - witwire.net/www-template/packages/backend/internal/types
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/types
+      types:
+        files:
+          - internal/types/*.go
+        allow:
+          - $gostd
+          - github.com/oklog/ulid/v2
+          - www-template/packages/backend/internal/types
       usecases:
         files:
           - internal/usecases/*.go
         allow:
           - $gostd
-          - witwire.net/www-template/packages/backend/internal/domain
-          - witwire.net/www-template/packages/backend/internal/types
-          - witwire.net/www-template/packages/backend/internal/usecases
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/types
+          - www-template/packages/backend/internal/usecases
       http:
         files:
           - internal/http/*.go
@@ -54,37 +61,39 @@ linters-settings:
           - github.com/gin-contrib/cors
           - github.com/gin-gonic/gin
           - github.com/oapi-codegen/runtime/types
-          - witwire.net/www-template/packages/backend/internal/domain
-          - witwire.net/www-template/packages/backend/internal/generated/openapi
-          - witwire.net/www-template/packages/backend/internal/http
-          - witwire.net/www-template/packages/backend/internal/types
-          - witwire.net/www-template/packages/backend/internal/usecases
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/generated/openapi
+          - www-template/packages/backend/internal/http
+          - www-template/packages/backend/internal/types
+          - www-template/packages/backend/internal/usecases
       persistence:
         files:
           - internal/persistence/*.go
         allow:
           - $gostd
+          - github.com/redis/go-redis/v9
           - gorm.io/driver/postgres
           - gorm.io/gorm
-          - witwire.net/www-template/packages/backend/internal/domain
-          - witwire.net/www-template/packages/backend/internal/persistence
-          - witwire.net/www-template/packages/backend/internal/types
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/persistence
+          - www-template/packages/backend/internal/types
       app:
         files:
           - internal/app/*.go
         allow:
           - $gostd
-          - witwire.net/www-template/packages/backend/internal/app
-          - witwire.net/www-template/packages/backend/internal/domain
-          - witwire.net/www-template/packages/backend/internal/http
-          - witwire.net/www-template/packages/backend/internal/persistence
-          - witwire.net/www-template/packages/backend/internal/types
-          - witwire.net/www-template/packages/backend/internal/usecases
+          - github.com/oklog/ulid/v2
+          - www-template/packages/backend/internal/app
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/http
+          - www-template/packages/backend/internal/persistence
+          - www-template/packages/backend/internal/types
+          - www-template/packages/backend/internal/usecases
   funlen:
     lines: 100
     statements: 60
   goimports:
-    local-prefixes: witwire.net/www-template
+    local-prefixes: www-template
   nolintlint:
     require-explanation: true
     require-specific: true

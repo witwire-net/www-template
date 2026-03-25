@@ -7,10 +7,31 @@
     "baseUrl": ".",
     "paths": {
       "@www-template-frontend/app/*": ["packages/frontend/app/src/*"],
+      "@www-template-frontend/web/*": ["packages/frontend/web/src/*"],
       "@www-template-frontend/domain": ["packages/frontend/domain/src/index.ts"],
+      "@www-template-frontend/domain/hooks/auth/useAuthSession": [
+        "packages/frontend/domain/src/hooks/auth/useAuthSession.svelte.ts"
+      ],
+      "@www-template-frontend/domain/hooks/auth/usePasskeyLogin": [
+        "packages/frontend/domain/src/hooks/auth/usePasskeyLogin.svelte.ts"
+      ],
+      "@www-template-frontend/domain/hooks/auth/useRecoveryFlow": [
+        "packages/frontend/domain/src/hooks/auth/useRecoveryFlow.svelte.ts"
+      ],
+      "@www-template-frontend/domain/hooks/auth/useSessionGuard": [
+        "packages/frontend/domain/src/hooks/auth/useSessionGuard.svelte.ts"
+      ],
+      "@www-template-frontend/domain/hooks/status/useStatus": [
+        "packages/frontend/domain/src/hooks/status/useStatus.svelte.ts"
+      ],
       "@www-template-frontend/domain/*": ["packages/frontend/domain/src/*"],
       "@www-template-frontend/api/*": ["packages/frontend/api/src/*"],
       "@www-template-frontend/api": ["packages/frontend/api/src/index.ts"],
+      "types": ["packages/frontend/domain/src/types/index.ts"],
+      "types/*": ["packages/frontend/domain/src/types/*"],
+      "@www-template-frontend/ui/styles": ["packages/frontend/ui/src/styles/index.ts"],
+      "@ui": ["packages/frontend/ui/src"],
+      "@ui/*": ["packages/frontend/ui/src/*"],
       "@www-template-frontend/ui/components": ["packages/frontend/ui/src/components/index.ts"],
       "@www-template-frontend/ui/*": ["packages/frontend/ui/src/*"],
       "@www-template-frontend/ui": ["packages/frontend/ui/src/index.ts"]

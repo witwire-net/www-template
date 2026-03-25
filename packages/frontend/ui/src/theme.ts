@@ -56,8 +56,9 @@ const spacing = {
 
 const typography = {
   families: {
+    display: "'M PLUS 1', system-ui, -apple-system, sans-serif",
     mono: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    sans: "'IBM Plex Sans', 'IBM Plex Sans JP', system-ui, -apple-system, sans-serif",
+    sans: "'Noto Sans JP', system-ui, -apple-system, sans-serif",
   },
   lineHeights: {
     normal: 1.5,

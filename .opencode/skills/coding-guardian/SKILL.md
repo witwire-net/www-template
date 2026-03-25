@@ -35,13 +35,13 @@ description: Enforce this repository's actual coding rules and verification flow
 ### 2) Classify the change before editing
 
 - Contract / codegen: `packages/typespec/**`, `packages/frontend/api/src/generated/**`, `packages/backend/internal/generated/**`
-- Frontend: `packages/frontend/app/**`, `packages/frontend/domain/**`, `packages/frontend/ui/**`
+- Frontend: `packages/frontend/web/**`, `packages/frontend/app/**`, `packages/frontend/domain/**`, `packages/frontend/ui/**`
 - Backend: `packages/backend/**`
 - Tooling / workflow: root config, scripts, hooks, CI, `.opencode/**`
 
 固定の依存方向:
 
-- Client: `packages/frontend/app -> packages/frontend/domain -> packages/frontend/api`
+- Client: `packages/frontend/web -> packages/frontend/domain -> packages/frontend/api` and `packages/frontend/app -> packages/frontend/domain -> packages/frontend/api`
 - Server: `packages/backend/cmd/api -> packages/backend/internal/app -> (packages/backend/internal/http | packages/backend/internal/persistence | packages/backend/internal/usecases) -> packages/backend/internal/domain -> packages/backend/internal/types`
 - `packages/backend/internal/generated/openapi` を非 generated code から import できるのは `packages/backend/internal/http` だけ
 
@@ -49,12 +49,12 @@ description: Enforce this repository's actual coding rules and verification flow
 
 - Contract を変えるときは `packages/typespec/main.tsp` を直し、`pnpm gen` と `pnpm check:codegen` で整合を取る
 - `packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go` は手で直さない
-- Frontend app / domain で `fetch`, `globalThis.fetch`, `axios`, `cross-fetch` を直接使わない
-- Frontend app から `@www-template-frontend/api` を直 import しない。domain hook を経由する
+- Frontend web / app / domain で `fetch`, `globalThis.fetch`, `axios`, `cross-fetch` を直接使わない
+- Frontend web / app から `@www-template-frontend/api` を直 import しない。domain hook を経由する
 - Active frontend source に React / TSX を持ち込まない
 - Domain hooks は `use*` export、`{ data, actions }` 戻り値、stateful 実装は `.svelte.ts`
-- Frontend app に SvelteKit server route / server hook / server-only lib を作らない
-- Auth route mode は `packages/frontend/app/src/routes/app/+layout.ts` の `ssr = false` / `csr = true` に固定する
+- Frontend app は SvelteKit SPA（SSR 無効）として保ち、server route / server hook / server-only lib を持ち込まない
+- Frontend web の SvelteKit route/server 制約と、`/app/*` auth surface を担う frontend app の分離を維持する
 - Go file は `packages/backend/cmd/api`, `packages/backend/internal/*`, `packages/backend/tools/analyzers` の許可 layer にだけ置く
 - GORM は `packages/backend/internal/persistence/**` だけ、`AutoMigrate` は禁止、migration は `packages/backend/db/migrations/*.sql`
 - Non-generated Gin route は `/health` または `/api/v1/app/*` の string literal だけにする
@@ -85,10 +85,10 @@ Changed-file 向けの軽量チェック:
 ## Common violations to prevent
 
 - generated file の手編集
-- `packages/frontend/app` から `@www-template-frontend/api` の直 import
-- frontend app / domain での `fetch` / `axios` / `cross-fetch`
+- `packages/frontend/web` または `packages/frontend/app` から `@www-template-frontend/api` の直 import
+- frontend web / app / domain での `fetch` / `axios` / `cross-fetch`
 - active frontend source での React / TSX
-- `packages/frontend/app` での SvelteKit server route / server hook / form action
+- `packages/frontend/app` への SvelteKit route / server hook / form action の持ち込み
 - GORM の layer 逸脱、`AutoMigrate`、migration pair 破れ
 - `packages/backend/internal/http` から `packages/backend/internal/persistence` の直 import
 - backend code での `fmt.Print*` や host-derived URL composition

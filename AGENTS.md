@@ -1,6 +1,8 @@
 ## Primary Rules
 
-- Think in English; respond and output in Japanese.
+- Think in English; MUST respond in **Japanese**.
+- Before calling `task` for any subagent, you MUST read the target agent definition and verify both `permission.task` and any self-call prohibition such as `Do not self-call.`.
+- You MUST doubt your assumptions, verify factual claims against available evidence, and MUST NOT present unsupported statements as facts.
 
 ## Commands
 
@@ -8,7 +10,9 @@
 - Generate all contracts: `pnpm gen`
 - Dev (all): `pnpm dev:all`
 - Dev (server): `pnpm dev:server` (Go API on `http://localhost:8080`)
-- Dev (client): `pnpm dev:client` (Vite on `http://localhost:5173`)
+- Dev (client entry): `pnpm dev:client` (alias of `pnpm dev:web`, Vite on `http://localhost:5173`)
+- Dev (web): `pnpm dev:web` (SvelteKit public site on `http://localhost:5173`)
+- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://localhost:5174/app`)
 
 ## API Contract (TypeSpec)
 
@@ -27,7 +31,7 @@
 
 ## Architecture Notes
 
-- Client dependency direction: `frontend/app -> frontend/domain -> frontend/api`
+- Client dependency direction: `frontend/web -> frontend/domain -> frontend/api` and `frontend/app -> frontend/domain -> frontend/api`
 - Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/http|backend/internal/persistence|backend/internal/usecases) -> backend/internal/domain -> backend/internal/types`
 - API contract direction: implementation must follow TypeSpec; do not generate OpenAPI from server routes for SDK input.
 

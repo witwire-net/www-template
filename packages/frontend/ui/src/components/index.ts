@@ -30,6 +30,7 @@ export { default as Row } from './atoms/Grid/Row.svelte';
 export { default as Skeleton } from './atoms/Skeleton/Skeleton.svelte';
 export { default as Spacer } from './atoms/Spacer/Spacer.svelte';
 export { default as Stack } from './atoms/Stack/Stack.svelte';
+export { default as StatusIcon } from './atoms/StatusIcon/StatusIcon.svelte';
 export { default as Tag } from './atoms/Tag/Tag.svelte';
 export { default as Textarea } from './atoms/Textarea/Textarea.svelte';
 export { default as Typography } from './atoms/Typography/Typography.svelte';
@@ -111,4 +112,15 @@ export { default as Tabs } from './navigation/Tabs/Tabs.svelte';
 export { default as Collection } from './organisms/Collection/Collection.svelte';
 export { default as Table } from './organisms/Table/Table.svelte';
 
-export { getTextContent, isSnippet, joinClassNames, type Renderable } from './shared/renderable';
+export {
+  DEFAULT_HEIGHT,
+  DEFAULT_OVERSCAN,
+  getTextContent,
+  isSnippet,
+  joinClassNames,
+  type Renderable,
+  type VirtualItem,
+  type VirtualItemKey,
+  type VirtualizeOptions,
+  VirtualList,
+} from './shared';

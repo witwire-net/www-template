@@ -4,7 +4,7 @@ import "@typespec/openapi";
 using Http;
 using TypeSpec.OpenAPI;
 
-namespace WwwTemplate.ApiV1App;
+namespace WWWTemplate.ApiV1App;
 
 @tag("app-profiles")
 @summary("List authenticated sample profiles")
@@ -13,10 +13,10 @@ namespace WwwTemplate.ApiV1App;
 @route("/profiles")
 op listAppProfiles(): {
   @statusCode statusCode: 200;
-  @body body: WwwTemplate.Profile[];
+  @body body: WWWTemplate.Profile[];
 } | {
   @statusCode statusCode: 401;
-  @body body: WwwTemplate.ErrorResponse;
+  @body body: WWWTemplate.ErrorResponse;
 };
 
 @tag("app-profiles")
@@ -26,11 +26,11 @@ op listAppProfiles(): {
 @route("/profiles/{id}")
 op getAppProfile(@path id: int64): {
   @statusCode statusCode: 200;
-  @body body: WwwTemplate.Profile;
+  @body body: WWWTemplate.Profile;
 } | {
   @statusCode statusCode: 401;
-  @body body: WwwTemplate.ErrorResponse;
+  @body body: WWWTemplate.ErrorResponse;
 } | {
   @statusCode statusCode: 404;
-  @body body: WwwTemplate.ErrorResponse;
+  @body body: WWWTemplate.ErrorResponse;
 };

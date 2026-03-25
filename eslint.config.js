@@ -22,6 +22,13 @@ const frontendAppSourceFiles = [
   'packages/frontend/app/src/**/*.svelte.js',
 ];
 
+const frontendWebSourceFiles = [
+  'packages/frontend/web/src/**/*.{ts,js}',
+  'packages/frontend/web/src/**/*.svelte',
+  'packages/frontend/web/src/**/*.svelte.ts',
+  'packages/frontend/web/src/**/*.svelte.js',
+];
+
 const frontendDomainSourceFiles = [
   'packages/frontend/domain/src/**/*.ts',
   'packages/frontend/domain/src/**/*.svelte.ts',
@@ -41,13 +48,20 @@ const frontendSvelteFiles = [
   'packages/frontend/**/*.svelte.js',
 ];
 
-const frontendAppPageFiles = ['packages/frontend/app/src/routes/**/*.svelte'];
+const frontendRoutePageFiles = [
+  'packages/frontend/app/src/routes/**/*.svelte',
+  'packages/frontend/web/src/routes/**/*.svelte',
+];
 
-const frontendAppComponentFiles = [
+const frontendComponentFiles = [
   'packages/frontend/app/src/components/**/*.{ts,js}',
   'packages/frontend/app/src/components/**/*.svelte',
   'packages/frontend/app/src/lib/**/*.{ts,js}',
   'packages/frontend/app/src/lib/**/*.svelte',
+  'packages/frontend/web/src/components/**/*.{ts,js}',
+  'packages/frontend/web/src/components/**/*.svelte',
+  'packages/frontend/web/src/lib/**/*.{ts,js}',
+  'packages/frontend/web/src/lib/**/*.svelte',
 ];
 
 const frontendDomainHookFiles = ['packages/frontend/domain/src/hooks/**/*.ts'];
@@ -61,8 +75,15 @@ const frontendDomainPlainTsFiles = ['packages/frontend/domain/src/**/*.ts'];
 
 const frontendNonReactSourceFiles = [
   ...frontendAppSourceFiles,
+  ...frontendWebSourceFiles,
   ...frontendDomainSourceFiles,
   ...frontendUiSourceFiles,
+];
+
+const frontendWebSvelteKitImportFiles = [
+  ...frontendWebSourceFiles,
+  'packages/frontend/web/src/**/*.svelte.ts',
+  'packages/frontend/web/src/**/*.svelte.js',
 ];
 
 const frontendAppSvelteKitImportFiles = [
@@ -71,9 +92,20 @@ const frontendAppSvelteKitImportFiles = [
   'packages/frontend/app/src/**/*.svelte.js',
 ];
 
+const frontendWebSvelteKitRouteModuleFiles = [
+  'packages/frontend/web/src/routes/**/+page.{ts,js}',
+  'packages/frontend/web/src/routes/**/+layout.{ts,js}',
+];
+
 const frontendAppSvelteKitRouteModuleFiles = [
   'packages/frontend/app/src/routes/**/+page.{ts,js}',
   'packages/frontend/app/src/routes/**/+layout.{ts,js}',
+];
+
+const frontendWebSvelteKitHookModuleFiles = [
+  'packages/frontend/web/src/hooks.{ts,js}',
+  'packages/frontend/web/src/hooks.client.{ts,js}',
+  'packages/frontend/web/src/hooks.server.{ts,js}',
 ];
 
 const frontendAppSvelteKitHookModuleFiles = [
@@ -82,11 +114,22 @@ const frontendAppSvelteKitHookModuleFiles = [
   'packages/frontend/app/src/hooks.server.{ts,js}',
 ];
 
+const frontendWebSvelteKitPageServerModuleFiles = [
+  'packages/frontend/web/src/routes/**/+page.server.{ts,js}',
+];
+
 const frontendAppSvelteKitPageServerModuleFiles = [
   'packages/frontend/app/src/routes/**/+page.server.{ts,js}',
 ];
 
-const frontendAppAuthRouteModuleFiles = ['packages/frontend/app/src/routes/app/**/+*.{ts,js}'];
+const frontendAppSvelteKitServerOnlyFiles = [
+  'packages/frontend/app/src/routes/**/+server.{ts,js}',
+  'packages/frontend/app/src/routes/**/+page.server.{ts,js}',
+  'packages/frontend/app/src/routes/**/+layout.server.{ts,js}',
+  'packages/frontend/app/src/hooks.server.{ts,js}',
+  'packages/frontend/app/src/lib/server/**/*.{ts,js,svelte}',
+  'packages/frontend/app/src/lib/server/**/*.svelte.{ts,js}',
+];
 
 const exportTsdocPlugin = {
   rules: {
@@ -767,6 +810,7 @@ export default tseslint.config(
       'import/resolver': {
         typescript: {
           alwaysTryTypes: true,
+          noWarnOnMultipleProjects: true,
           project: ['./tsconfig.base.json', './packages/*/*/tsconfig.json'],
         },
       },
@@ -779,6 +823,7 @@ export default tseslint.config(
         { type: 'frontend-api', pattern: 'packages/frontend/api/src/**/*', mode: 'full' },
         { type: 'frontend-domain', pattern: 'packages/frontend/domain/src/**/*', mode: 'full' },
         { type: 'frontend-app', pattern: 'packages/frontend/app/src/**/*', mode: 'full' },
+        { type: 'frontend-web', pattern: 'packages/frontend/web/src/**/*', mode: 'full' },
         { type: 'ui', pattern: 'packages/frontend/ui/src/**/*', mode: 'full' },
       ],
     },
@@ -908,6 +953,10 @@ export default tseslint.config(
               allow: ['frontend-app', 'frontend-domain', 'ui'],
             },
             {
+              from: ['frontend-web'],
+              allow: ['frontend-web', 'frontend-domain', 'ui'],
+            },
+            {
               from: ['ui'],
               allow: ['ui'],
             },
@@ -974,7 +1023,12 @@ export default tseslint.config(
 
   // Boundaries: 層定義外のファイルや依存を禁止
   {
-    files: [...frontendAppSourceFiles, ...frontendDomainSourceFiles, ...frontendUiSourceFiles],
+    files: [
+      ...frontendAppSourceFiles,
+      ...frontendWebSourceFiles,
+      ...frontendDomainSourceFiles,
+      ...frontendUiSourceFiles,
+    ],
     rules: {
       'boundaries/no-unknown-files': 'error',
       'boundaries/no-unknown': 'error',
@@ -1050,9 +1104,9 @@ export default tseslint.config(
     },
   },
 
-  // App 層から API パッケージを直接参照しない
+  // Presentation 層から API パッケージを直接参照しない
   {
-    files: frontendAppSourceFiles,
+    files: [...frontendAppSourceFiles, ...frontendWebSourceFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -1061,14 +1115,14 @@ export default tseslint.config(
             {
               name: '@www-template-frontend/api',
               message:
-                'App 層では API パッケージを直接 import せず、domain hooks を経由してください。',
+                'frontend presentation 層では API パッケージを直接 import せず、domain hooks を経由してください。',
             },
           ],
           patterns: [
             {
               group: ['@www-template-frontend/api/**'],
               message:
-                'App 層では API パッケージを直接 import せず、domain hooks を経由してください。',
+                'frontend presentation 層では API パッケージを直接 import せず、domain hooks を経由してください。',
             },
           ],
         },
@@ -1112,9 +1166,23 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/consistent-type-definitions': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-unnecessary-type-conversion': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
       '@typescript-eslint/strict-boolean-expressions': 'off',
       '@typescript-eslint/no-misused-spread': 'off',
       '@typescript-eslint/restrict-template-expressions': 'off',
+      'eslint-comments/no-use': 'off',
+      'eslint-comments/require-description': 'off',
+      'import/order': 'off',
+      'max-lines': 'off',
+      'max-lines-per-function': 'off',
+      'no-restricted-syntax': 'off',
+      'unicorn/no-array-for-each': 'off',
     },
   },
 
@@ -1680,7 +1748,7 @@ export default tseslint.config(
 
   // client 全体で直接 fetch しない（共通 API 経由）
   {
-    files: [...frontendAppSourceFiles, ...frontendDomainSourceFiles],
+    files: [...frontendAppSourceFiles, ...frontendWebSourceFiles, ...frontendDomainSourceFiles],
     ignores: [
       'packages/frontend/app/src/**/*.test.ts',
       'packages/frontend/app/src/**/*.test.tsx',
@@ -1688,6 +1756,12 @@ export default tseslint.config(
       'packages/frontend/app/src/**/*.spec.ts',
       'packages/frontend/app/src/**/*.spec.tsx',
       'packages/frontend/app/src/**/*.spec.svelte',
+      'packages/frontend/web/src/**/*.test.ts',
+      'packages/frontend/web/src/**/*.test.tsx',
+      'packages/frontend/web/src/**/*.test.svelte',
+      'packages/frontend/web/src/**/*.spec.ts',
+      'packages/frontend/web/src/**/*.spec.tsx',
+      'packages/frontend/web/src/**/*.spec.svelte',
       'packages/frontend/domain/src/**/*.test.ts',
       'packages/frontend/domain/src/**/*.test.tsx',
       'packages/frontend/domain/src/**/*.test.svelte.ts',
@@ -1731,7 +1805,7 @@ export default tseslint.config(
     },
   },
   {
-    files: [...frontendAppPageFiles, ...frontendAppComponentFiles],
+    files: [...frontendRoutePageFiles, ...frontendComponentFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -1748,7 +1822,10 @@ export default tseslint.config(
           ],
           patterns: [
             {
-              group: ['@www-template-frontend/app/src/components/**'],
+              group: [
+                '@www-template-frontend/app/src/components/**',
+                '@www-template-frontend/web/src/components/**',
+              ],
               message: 'components 同士の循環参照を避け、必要なら hooks 経由にしてください。',
             },
           ],
@@ -1798,7 +1875,7 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendAppPageFiles,
+    files: frontendRoutePageFiles,
     rules: {
       'no-restricted-imports': [
         'error',
@@ -1829,7 +1906,7 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendAppComponentFiles,
+    files: frontendComponentFiles,
     rules: {
       'no-restricted-imports': [
         'error',
@@ -1839,7 +1916,7 @@ export default tseslint.config(
               name: 'svelte',
               importNames: ['onMount', 'beforeUpdate', 'afterUpdate', 'tick'],
               message:
-                'app UI component の副作用は domain composable に委譲してください。Svelte lifecycle は `src/components` と `src/lib` では使わないでください。',
+                'frontend UI component の副作用は domain composable に委譲してください。Svelte lifecycle は `src/components` と `src/lib` では使わないでください。',
             },
           ],
         },
@@ -1849,12 +1926,12 @@ export default tseslint.config(
         {
           selector: "CallExpression[callee.name='$effect']",
           message:
-            'app UI component の副作用は domain composable に集約してください。局所 UI state だけで済まない処理は domain に移してください。',
+            'frontend UI component の副作用は domain composable に集約してください。局所 UI state だけで済まない処理は domain に移してください。',
         },
         {
           selector: "CallExpression[callee.object.name='$effect'][callee.property.name='pre']",
           message:
-            'app UI component の副作用は domain composable に集約してください。$effect.pre は `src/components` と `src/lib` では使用禁止です。',
+            'frontend UI component の副作用は domain composable に集約してください。$effect.pre は `src/components` と `src/lib` では使用禁止です。',
         },
       ],
     },
@@ -1870,7 +1947,7 @@ export default tseslint.config(
   },
   {
     files: frontendAppSvelteKitRouteModuleFiles,
-    ignores: ['packages/frontend/app/src/routes/app/**'],
+    ignores: ['packages/frontend/app/src/routes/+layout.ts'],
     plugins: {
       'sveltekit-app-policy': sveltekitAppPolicyPlugin,
     },
@@ -1878,11 +1955,28 @@ export default tseslint.config(
       'sveltekit-app-policy/no-export-names': [
         'error',
         {
-          names: ['ssr'],
+          names: ['ssr', 'csr', 'prerender'],
           message:
-            '公開 route module では `ssr` export を禁止します。公開面は Cloudflare Workers 上の SvelteKit SSR default を維持してください。',
+            'frontend app の route mode は `src/routes/+layout.ts` だけで管理してください（`{{name}}` export 禁止）。',
         },
       ],
+    },
+  },
+  {
+    files: ['packages/frontend/app/src/routes/+layout.ts'],
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['prerender'],
+          message:
+            'frontend app の root layout では `prerender` を export せず、`ssr = false` / `csr = true` だけで route mode を固定してください。',
+        },
+      ],
+      'sveltekit-app-policy/require-auth-layout-mode': 'error',
     },
   },
   {
@@ -1912,6 +2006,76 @@ export default tseslint.config(
         {
           names: ['handle', 'handleFetch'],
           message:
+            'frontend app では SvelteKit の hook export（`{{name}}`）を禁止します。server 面は backend と SPA route 境界に集約してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: frontendAppSvelteKitServerOnlyFiles,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message:
+            'packages/frontend/app では SvelteKit の server route / server hook / server-only lib を禁止します。API は backend に集約してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: frontendWebSvelteKitImportFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-forbidden-imports': 'error',
+    },
+  },
+  {
+    files: frontendWebSvelteKitRouteModuleFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['ssr'],
+          message:
+            '公開 route module では `ssr` export を禁止します。公開面は Cloudflare Workers 上の SvelteKit SSR default を維持してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: frontendWebSvelteKitPageServerModuleFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['actions'],
+          message:
+            'frontend app では SvelteKit の form action export（`{{name}}`）を禁止します。API は backend に集約してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: frontendWebSvelteKitHookModuleFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['handle', 'handleFetch'],
+          message:
             'frontend app では SvelteKit の hook export（`{{name}}`）を禁止します。server 面は backend と CSR route 境界に集約してください。',
         },
       ],
@@ -1919,13 +2083,12 @@ export default tseslint.config(
   },
   {
     files: [
-      'packages/frontend/app/src/routes/**/+server.{ts,js}',
-      'packages/frontend/app/src/routes/**/+page.server.{ts,js}',
-      'packages/frontend/app/src/routes/**/+layout.server.{ts,js}',
-      'packages/frontend/app/src/hooks.server.{ts,js}',
-      'packages/frontend/app/src/routes/app/+layout.js',
-      'packages/frontend/app/src/lib/server/**/*.{ts,js,svelte}',
-      'packages/frontend/app/src/lib/server/**/*.svelte.{ts,js}',
+      'packages/frontend/web/src/routes/**/+server.{ts,js}',
+      'packages/frontend/web/src/routes/**/+page.server.{ts,js}',
+      'packages/frontend/web/src/routes/**/+layout.server.{ts,js}',
+      'packages/frontend/web/src/hooks.server.{ts,js}',
+      'packages/frontend/web/src/lib/server/**/*.{ts,js,svelte}',
+      'packages/frontend/web/src/lib/server/**/*.svelte.{ts,js}',
     ],
     rules: {
       'no-restricted-syntax': [
@@ -1933,43 +2096,9 @@ export default tseslint.config(
         {
           selector: 'Program',
           message:
-            'packages/frontend/app では SvelteKit の server route / server hook / server-only lib を禁止します。API は backend に集約し、認証 route は CSR で構成してください。',
+            'packages/frontend/web では SvelteKit の server route / server hook / server-only lib を禁止します。API は backend に集約してください。',
         },
       ],
-    },
-  },
-  {
-    files: frontendAppAuthRouteModuleFiles,
-    ignores: ['packages/frontend/app/src/routes/app/+layout.ts'],
-    plugins: {
-      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
-    },
-    rules: {
-      'sveltekit-app-policy/no-export-names': [
-        'error',
-        {
-          names: ['ssr', 'csr', 'prerender'],
-          message:
-            '認証 route 配下では route mode を再定義しないでください。`src/routes/app/+layout.ts` の `ssr = false` / `csr = true` を唯一の定義にしてください（`{{name}}` export 禁止）。',
-        },
-      ],
-    },
-  },
-  {
-    files: ['packages/frontend/app/src/routes/app/+layout.ts'],
-    plugins: {
-      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
-    },
-    rules: {
-      'sveltekit-app-policy/no-export-names': [
-        'error',
-        {
-          names: ['prerender'],
-          message:
-            '認証 route の親 layout では `prerender` を export せず、`ssr = false` / `csr = true` だけで route mode を固定してください。',
-        },
-      ],
-      'sveltekit-app-policy/require-auth-layout-mode': 'error',
     },
   },
   {
@@ -2023,6 +2152,8 @@ export default tseslint.config(
     files: [
       'packages/frontend/app/src/tests/**/*.{ts,tsx}',
       'packages/frontend/app/src/tests/**/*.svelte',
+      'packages/frontend/web/src/tests/**/*.{ts,tsx}',
+      'packages/frontend/web/src/tests/**/*.svelte',
     ],
     rules: {
       'no-restricted-imports': 'off',

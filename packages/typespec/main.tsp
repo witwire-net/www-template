@@ -4,6 +4,7 @@ import "@typespec/openapi3";
 
 // Shared models
 import "./src/common/errors.tsp";
+import "./src/models/auth.tsp";
 import "./src/models/status.tsp";
 import "./src/models/profile.tsp";
 
@@ -11,6 +12,7 @@ import "./src/models/profile.tsp";
 import "./src/routes/v1/_namespace.tsp";
 import "./src/routes/v1/app_namespace.tsp";
 import "./src/routes/v1/app-profiles.tsp";
+import "./src/routes/v1/auth.tsp";
 import "./src/routes/v1/status.tsp";
 import "./src/routes/v1/profiles.tsp";
 
@@ -20,4 +22,4 @@ using TypeSpec.OpenAPI;
 @service(#{ title: "www-template API" })
 @info(#{ version: "1.0.0" })
 @server("/", "Default server")
-namespace WwwTemplate;
+namespace WWWTemplate;

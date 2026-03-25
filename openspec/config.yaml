@@ -1,12 +1,24 @@
 schema: new-feature
 
 context: |
-  Repository: cfreact-template
-  Tech stack: TypeScript, React, Cloudflare Workers, Hono, Drizzle ORM
-  Testing: Vitest (unit/integration), Playwright (e2e)
+  Repository: www-template
+  Tech stack: TypeScript, SvelteKit, Cloudflare Workers, Go, TypeSpec, Vite
+  Frontend packages: packages/frontend/app (SvelteKit app on Cloudflare Workers), packages/frontend/domain (shared domain logic), packages/frontend/api (API client), packages/frontend/ui (UI primitives)
+  Backend packages: packages/backend/cmd and packages/backend/internal/* (Go API)
+  API contract: packages/typespec/main.tsp is the source of truth; pnpm gen regenerates OpenAPI, frontend SDK, and Go bindings
+  Testing: Vitest (unit/component/integration), Playwright (e2e), Go tests
+
+  Architecture:
+  - frontend/app -> frontend/domain -> frontend/api
+  - backend/cmd -> backend/internal/app -> backend/internal/http|persistence|usecases -> backend/internal/domain -> backend/internal/types
+  - public routes use api/v1/*; app routes use api/v1/app/*
+  - GORM imports are allowed only under packages/backend/internal/persistence/**
+  - AutoMigrate is banned; use packages/backend/db/migrations/** with golang-migrate
+  - OpenSpec is archived and not part of the default lint/CI loop
 
   Spec -> Test contract:
-  - Specs live at openspec/specs/**/spec.md (source of truth)
+  - Change-local specs live under openspec/changes/**/specs/**/spec.md
+  - Canonical main specs live at openspec/specs/**/spec.md
   - Every Scenario heading MUST end with a stable Scenario ID in parentheses:
     - Example: #### Scenario: Create a user (USER-MGMT-FE-S001)
   - Scenario ID format: ^[A-Z0-9]+(?:-[A-Z0-9]+)*-S\d{3,}$
@@ -19,6 +31,7 @@ context: |
     - Spec Unit = <domain>-<layer>
     - <domain>: kebab-case (e.g., user-mgmt)
     - <layer>: fe | be
+    - Change spec path: openspec/changes/<change>/specs/<domain>-<layer>/spec.md
     - Main spec path: openspec/specs/<domain>-<layer>/spec.md
 
 rules:

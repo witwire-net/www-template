@@ -7,11 +7,11 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   /* テストを並列実行 */
-  fullyParallel: true,
+  fullyParallel: false,
   /* CI環境でのリトライ設定 */
   retries: process.env.CI !== undefined ? 2 : 0,
   /* CI環境でのワーカー数 */
-  workers: process.env.CI !== undefined ? 1 : undefined,
+  workers: 1,
   /* レポーター設定 */
   reporter: 'html',
   /* 共通設定 */
@@ -29,8 +29,14 @@ export default defineConfig({
   /* テスト前にサーバーを起動 */
   webServer: [
     {
-      command: 'pnpm --filter @www-template-frontend/app dev',
+      command: 'pnpm --filter @www-template-frontend/web dev',
       url: 'http://localhost:5173',
+      reuseExistingServer: process.env.CI === undefined,
+      timeout: 120 * 1000,
+    },
+    {
+      command: 'pnpm --filter @www-template-frontend/app dev',
+      url: 'http://localhost:5174/app',
       reuseExistingServer: process.env.CI === undefined,
       timeout: 120 * 1000,
     },

@@ -11,7 +11,7 @@ import (
 
 	"log"
 
-	"witwire.net/www-template/packages/backend/internal/app"
+	"www-template/packages/backend/internal/app"
 )
 
 func main() {

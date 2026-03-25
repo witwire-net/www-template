@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-const modulePath = "witwire.net/www-template/packages/backend"
+const modulePath = "www-template/packages/backend"
 
 var migrationFilePattern = regexp.MustCompile(`^\d{6}_[a-z0-9_]+\.(up|down)\.sql$`)
 
@@ -32,7 +32,8 @@ var allowedInternalImports = map[string][]string{
 
 var allowedExternalImports = map[string][]string{
 	"http":        {"github.com/gin-contrib/cors", "github.com/gin-gonic/gin", "github.com/oapi-codegen/runtime/types"},
-	"persistence": {"gorm.io/driver/postgres", "gorm.io/gorm"},
+	"persistence": {"github.com/redis/go-redis/v9", "gorm.io/driver/postgres", "gorm.io/gorm"},
+	"types":       {"github.com/oklog/ulid/v2"},
 }
 
 var routeSelectors = map[string]struct{}{

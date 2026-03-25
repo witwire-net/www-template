@@ -81,7 +81,7 @@
   </AppHeader>
 {/if}
 
-<div style="padding: 1rem 1.5rem; color: #666;">
+<div style="padding: 1rem 1.5rem; color: var(--color-text-muted);">
   Menu clicked: {menuClickCount} times
   <br />
   Last action: {lastAction}
