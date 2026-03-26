@@ -12,6 +12,9 @@ type openAPIContract struct {
 		Get struct {
 			Security []map[string][]string `json:"security"`
 		} `json:"get"`
+		Post struct {
+			Security []map[string][]string `json:"security"`
+		} `json:"post"`
 	} `json:"paths"`
 	Components struct {
 		SecuritySchemes map[string]struct {
@@ -42,11 +45,10 @@ func TestAppOpenAPIDeclaresBearerSecurity(t *testing.T) {
 		t.Fatalf("unexpected BearerAuth scheme: type=%s scheme=%s", bearerAuth.Type, bearerAuth.Scheme)
 	}
 
-	assertBearerSecurity(t, contract, "/api/v1/app/profiles")
-	assertBearerSecurity(t, contract, "/api/v1/app/profiles/{id}")
+	assertBearerSecurity(t, contract, "/api/v1/app/auth/logout", "post")
 }
 
-func assertBearerSecurity(t *testing.T, contract openAPIContract, path string) {
+func assertBearerSecurity(t *testing.T, contract openAPIContract, path string, method string) {
 	t.Helper()
 
 	item, ok := contract.Paths[path]
@@ -54,7 +56,12 @@ func assertBearerSecurity(t *testing.T, contract openAPIContract, path string) {
 		t.Fatalf("path %s not found", path)
 	}
 
-	for _, entry := range item.Get.Security {
+	security := item.Get.Security
+	if method == "post" {
+		security = item.Post.Security
+	}
+
+	for _, entry := range security {
 		if _, ok := entry["BearerAuth"]; ok {
 			return
 		}

@@ -136,3 +136,14 @@ func mapAuthAccountError(err error) error {
 
 	return err
 }
+
+func emptyAuthAccount() domain.AuthAccount {
+	account, _ := domain.NewAuthAccount(
+		"01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		"placeholder@example.com",
+		"placeholder@example.com",
+		"01ARZ3NDEKTSV4RRFFQ69G5FAW",
+		"placeholder-credential",
+	)
+	return account
+}

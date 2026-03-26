@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-
   import type { RecoveryReadySnapshot } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
 
   import { useRecoveryFlow } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
@@ -14,7 +12,7 @@
     const result = await actions.registerRecoveryPasskey();
     if (result === '/app') {
       sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-      await goto('/app');
+      window.location.href = '/app';
     }
   }
 

@@ -20,11 +20,13 @@ services:
       GOPATH: /go
       GOMODCACHE: /go/pkg/mod
       GOCACHE: /home/node/.cache/go-build
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_REGION: us-east-1
-      MINIO_SECRET_KEY: minioadmin
       OPENSEARCH_URL: http://opensearch:9200
+      R2_ACCESS_KEY_ID: minioadmin
+      R2_BUCKET: template
+      R2_ENDPOINT: http://minio:9000
+      R2_REGION: us-east-1
+      R2_SECRET_ACCESS_KEY: minioadmin
+      R2_USE_PATH_STYLE: 'true'
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       TOOLCHAIN_GO_VERSION: 1.26.1
       TOOLCHAIN_PNPM_VERSION: 10.32.1
@@ -33,6 +35,7 @@ services:
       TOOLCHAIN_OAPI_CODEGEN_VERSION: 2.4.1
       TOOLCHAIN_TYPESPEC_VERSION: 1.8.0
       TOOLCHAIN_OPENSPEC_VERSION: 1.2.0
+      MAIL_FROM_ADDRESS: noreply@example.com
       SMTP_HOST: mailpit
       SMTP_PORT: '1025'
       VALKEY_URL: redis://valkey:6379/0

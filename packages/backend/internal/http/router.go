@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	stdhttp "net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"www-template/packages/backend/internal/generated/openapi"
 	"www-template/packages/backend/internal/types"
@@ -17,13 +15,11 @@ import (
 )
 
 type Dependencies struct {
-	Auth     *usecases.AuthService
-	Profiles *usecases.ProfilesService
+	Auth *usecases.AuthService
 }
 
 type StrictServer struct {
-	auth     *usecases.AuthService
-	profiles *usecases.ProfilesService
+	auth *usecases.AuthService
 }
 
 func NewRouter(cfg types.Config, dependencies Dependencies) *gin.Engine {
@@ -64,76 +60,14 @@ func NewRouter(cfg types.Config, dependencies Dependencies) *gin.Engine {
 }
 
 func NewStrictServer(dependencies Dependencies) *StrictServer {
-	return &StrictServer{auth: dependencies.Auth, profiles: dependencies.Profiles}
+	return &StrictServer{auth: dependencies.Auth}
 }
 
 func (s *StrictServer) GetStatus(ctx context.Context, _ openapi.GetStatusRequestObject) (openapi.GetStatusResponseObject, error) {
-	status := s.profiles.GetStatus(ctx)
 	return openapi.GetStatus200JSONResponse{
-		Message:   status.Message,
-		Timestamp: status.Timestamp,
+		Message:   "API status ok",
+		Timestamp: time.Now().UTC(),
 	}, nil
-}
-
-func (s *StrictServer) ListProfiles(ctx context.Context, _ openapi.ListProfilesRequestObject) (openapi.ListProfilesResponseObject, error) {
-	profiles, err := s.profiles.ListProfiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	response := make([]openapi.Profile, 0, len(profiles))
-	for _, profile := range profiles {
-		response = append(response, toOpenAPIProfile(profile))
-	}
-
-	return openapi.ListProfiles200JSONResponse(response), nil
-}
-
-func (s *StrictServer) CreateProfile(ctx context.Context, request openapi.CreateProfileRequestObject) (openapi.CreateProfileResponseObject, error) {
-	if request.Body == nil {
-		return openapi.CreateProfile400JSONResponse{Error: "request body is required"}, nil
-	}
-
-	createdProfile, err := s.profiles.CreateProfile(ctx, usecases.CreateProfileInput{
-		Email: string(request.Body.Email),
-		Name:  request.Body.Name,
-	})
-	if err != nil {
-		if errors.Is(err, usecases.ErrInvalidProfileEmail) || errors.Is(err, usecases.ErrInvalidProfileName) {
-			return openapi.CreateProfile400JSONResponse{Error: err.Error()}, nil
-		}
-
-		return nil, err
-	}
-
-	return openapi.CreateProfile201JSONResponse(toOpenAPIProfile(createdProfile)), nil
-}
-
-func (s *StrictServer) GetProfile(ctx context.Context, request openapi.GetProfileRequestObject) (openapi.GetProfileResponseObject, error) {
-	profile, err := s.profiles.GetProfile(ctx, request.Id)
-	if err != nil {
-		if errors.Is(err, usecases.ErrProfileNotFound) {
-			return openapi.GetProfile404JSONResponse{Error: err.Error()}, nil
-		}
-
-		return nil, err
-	}
-
-	return openapi.GetProfile200JSONResponse(toOpenAPIProfile(profile)), nil
-}
-
-func (s *StrictServer) ListAppProfiles(ctx context.Context, _ openapi.ListAppProfilesRequestObject) (openapi.ListAppProfilesResponseObject, error) {
-	profiles, err := s.profiles.ListProfiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	response := make([]openapi.Profile, 0, len(profiles))
-	for _, profile := range profiles {
-		response = append(response, toOpenAPIProfile(profile))
-	}
-
-	return openapi.ListAppProfiles200JSONResponse(response), nil
 }
 
 func (s *StrictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
@@ -257,30 +191,8 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 	}, nil
 }
 
-func (s *StrictServer) GetAppProfile(ctx context.Context, request openapi.GetAppProfileRequestObject) (openapi.GetAppProfileResponseObject, error) {
-	profile, err := s.profiles.GetProfile(ctx, request.Id)
-	if err != nil {
-		if errors.Is(err, usecases.ErrProfileNotFound) {
-			return openapi.GetAppProfile404JSONResponse{Error: err.Error()}, nil
-		}
-
-		return nil, err
-	}
-
-	return openapi.GetAppProfile200JSONResponse(toOpenAPIProfile(profile)), nil
-}
-
-func toOpenAPIProfile(profile usecases.Profile) openapi.Profile {
-	return openapi.Profile{
-		CreatedAt: profile.CreatedAt,
-		Email:     openapi_types.Email(profile.Email),
-		Name:      profile.Name,
-		Id:        profile.ID,
-	}
-}
-
 func chooseCredential(primary string, secondary string) string {
-	if strings.TrimSpace(primary) != "" {
+	if primary != "" {
 		return primary
 	}
 	return secondary

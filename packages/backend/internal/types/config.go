@@ -12,11 +12,11 @@ const (
 	defaultPort           = "8080"
 	defaultAllowedOrigins = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
 	defaultAppAuthValue   = "dev-app-auth"
-	defaultProfileStore   = "memory"
 	defaultWebAuthnRPID   = "localhost"
 	defaultValkeyPrefix   = "www-template"
 	defaultRecoveryBase   = "http://localhost:5173/app/login/recovery/consume"
 	defaultSMTPPort       = 587
+	defaultR2UsePathStyle = false
 )
 
 type ValkeyConfig struct {
@@ -35,10 +35,30 @@ type MailConfig struct {
 	FromAddress string
 }
 
+type DatabaseConfig struct {
+	URL string
+}
+
+type OpenSearchConfig struct {
+	URL string
+}
+
+type ObjectStorageConfig struct {
+	Endpoint        string
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
+	UsePathStyle    bool
+}
+
 type InfraConfig struct {
-	Valkey ValkeyConfig
-	SMTP   SMTPConfig
-	Mail   MailConfig
+	Database      DatabaseConfig
+	Mail          MailConfig
+	ObjectStorage ObjectStorageConfig
+	OpenSearch    OpenSearchConfig
+	SMTP          SMTPConfig
+	Valkey        ValkeyConfig
 }
 
 type AuthConfig struct {
@@ -64,11 +84,9 @@ type Config struct {
 	AllowedOrigins []string
 	AppBearerToken string
 	Auth           AuthConfig
-	DatabaseURL    string
 	Environment    string
 	Infra          InfraConfig
 	Port           string
-	ProfileStore   string
 }
 
 func LoadConfig() Config {
@@ -91,11 +109,9 @@ func LoadConfig() Config {
 		AllowedOrigins: allowedOrigins,
 		AppBearerToken: appBearerToken,
 		Auth:           loadAuthConfig(),
-		DatabaseURL:    strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		Environment:    environment,
 		Infra:          loadInfraConfig(),
 		Port:           getEnv("PORT", defaultPort),
-		ProfileStore:   getEnv("APP_PROFILE_STORE", defaultProfileStore),
 	}
 }
 
@@ -104,8 +120,45 @@ func (c Config) AppAuthorizationValue() string {
 }
 
 func (c Config) Validate() error {
+	missing := make([]string, 0)
 	if c.Environment != "development" && strings.TrimSpace(c.AppBearerToken) == "" {
-		return errors.New("APP_BEARER_TOKEN is required when APP_ENV is not development")
+		missing = append(missing, "APP_BEARER_TOKEN")
+	}
+	if strings.TrimSpace(c.Infra.Database.URL) == "" {
+		missing = append(missing, "DATABASE_URL")
+	}
+	if strings.TrimSpace(c.Infra.Valkey.URL) == "" {
+		missing = append(missing, "VALKEY_URL")
+	}
+	if strings.TrimSpace(c.Infra.SMTP.Host) == "" {
+		missing = append(missing, "SMTP_HOST")
+	}
+	if strings.TrimSpace(c.Infra.OpenSearch.URL) == "" {
+		missing = append(missing, "OPENSEARCH_URL")
+	}
+	if strings.TrimSpace(c.Infra.ObjectStorage.Endpoint) == "" {
+		missing = append(missing, "R2_ENDPOINT")
+	}
+	if strings.TrimSpace(c.Infra.ObjectStorage.Region) == "" {
+		missing = append(missing, "R2_REGION")
+	}
+	if strings.TrimSpace(c.Infra.ObjectStorage.Bucket) == "" {
+		missing = append(missing, "R2_BUCKET")
+	}
+	if strings.TrimSpace(c.Infra.ObjectStorage.AccessKeyID) == "" {
+		missing = append(missing, "R2_ACCESS_KEY_ID")
+	}
+	if strings.TrimSpace(c.Infra.ObjectStorage.SecretAccessKey) == "" {
+		missing = append(missing, "R2_SECRET_ACCESS_KEY")
+	}
+	if strings.TrimSpace(c.Infra.SMTP.Host) == "" {
+		missing = append(missing, "SMTP_HOST")
+	}
+	if strings.TrimSpace(c.Infra.Mail.FromAddress) == "" {
+		missing = append(missing, "MAIL_FROM_ADDRESS")
+	}
+	if len(missing) > 0 {
+		return errors.New(strings.Join(missing, ", ") + " is required")
 	}
 
 	return nil
@@ -136,6 +189,23 @@ func (c Config) AuthRuntime() AuthConfig {
 
 func loadInfraConfig() InfraConfig {
 	return InfraConfig{
+		Database: DatabaseConfig{
+			URL: strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		},
+		Mail: MailConfig{
+			FromAddress: strings.TrimSpace(os.Getenv("MAIL_FROM_ADDRESS")),
+		},
+		ObjectStorage: ObjectStorageConfig{
+			Endpoint:        strings.TrimSpace(os.Getenv("R2_ENDPOINT")),
+			Region:          strings.TrimSpace(os.Getenv("R2_REGION")),
+			Bucket:          strings.TrimSpace(os.Getenv("R2_BUCKET")),
+			AccessKeyID:     strings.TrimSpace(os.Getenv("R2_ACCESS_KEY_ID")),
+			SecretAccessKey: strings.TrimSpace(os.Getenv("R2_SECRET_ACCESS_KEY")),
+			UsePathStyle:    getEnvBool("R2_USE_PATH_STYLE", defaultR2UsePathStyle),
+		},
+		OpenSearch: OpenSearchConfig{
+			URL: strings.TrimSpace(os.Getenv("OPENSEARCH_URL")),
+		},
 		Valkey: ValkeyConfig{
 			URL:       strings.TrimSpace(os.Getenv("VALKEY_URL")),
 			KeyPrefix: getEnv("VALKEY_KEY_PREFIX", defaultValkeyPrefix),
@@ -145,9 +215,6 @@ func loadInfraConfig() InfraConfig {
 			Port:     getEnvInt("SMTP_PORT", defaultSMTPPort),
 			Username: strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
 			Password: strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
-		},
-		Mail: MailConfig{
-			FromAddress: strings.TrimSpace(os.Getenv("MAIL_FROM_ADDRESS")),
 		},
 	}
 }
@@ -212,6 +279,20 @@ func getEnvInt(key string, fallback int) int {
 	}
 
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}

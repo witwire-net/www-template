@@ -1,16 +1,12 @@
 import {
   consumeRecoveryToken,
-  createProfile,
   finishPasskeyAuthentication,
   getStatus,
-  getProfile,
-  listProfiles,
   logout,
   registerPasskey,
   requestPasskeyRecovery,
   startPasskeyAuthentication,
   type consumeRecoveryTokenResponse,
-  type CreateProfileInput,
   type finishPasskeyAuthenticationResponse,
   type getStatusResponse,
   type logoutResponse,
@@ -29,24 +25,19 @@ export type {
   AuthFailureResponse,
   AuthOperationErrorResponse,
   AuthSessionResponse,
-  CreateProfileInput,
   PasskeyFinishRequest,
   PasskeyRegisterRequest,
   PasskeyStartRequest,
   PasskeyStartResponse,
   ErrorResponse,
-  Profile,
   RecoveryAcceptedResponse,
   RecoveryConsumeRequest,
   RecoveryConsumeResponse,
   RecoveryRequest,
   StatusResponse,
   consumeRecoveryTokenResponse,
-  createProfileResponse,
   finishPasskeyAuthenticationResponse,
   getStatusResponse,
-  getProfileResponse,
-  listProfilesResponse,
   logoutResponse,
   registerPasskeyResponse,
   requestPasskeyRecoveryResponse,
@@ -81,12 +72,6 @@ interface AuthSdk {
     payload: PasskeyRegisterRequest,
     options?: RequestInit
   ) => Promise<registerPasskeyResponse>;
-}
-
-interface ProfilesSdk {
-  list: (options?: RequestInit) => ReturnType<typeof listProfiles>;
-  create: (payload: CreateProfileInput, options?: RequestInit) => ReturnType<typeof createProfile>;
-  get: (id: number, options?: RequestInit) => ReturnType<typeof getProfile>;
 }
 
 const toHeaderObject = (headers?: HeadersInit): Record<string, string> => {
@@ -124,13 +109,6 @@ const withJsonInit = (options: RequestInit | undefined, defaultInit: RequestInit
     defaultInit
   );
 
-const createProfilesSdk = (defaultInit: RequestInit | undefined): ProfilesSdk => ({
-  list: (options?: RequestInit) => listProfiles(withDefaultInit(options, defaultInit)),
-  create: (payload: CreateProfileInput, options?: RequestInit) =>
-    createProfile(payload, withJsonInit(options, defaultInit)),
-  get: (id: number, options?: RequestInit) => getProfile(id, withDefaultInit(options, defaultInit)),
-});
-
 const createAuthSdk = (defaultInit: RequestInit | undefined): AuthSdk => ({
   logout: (options?: RequestInit) => logout(withDefaultInit(options, defaultInit)),
   startPasskeyAuthentication: (payload: PasskeyStartRequest, options?: RequestInit) =>
@@ -155,7 +133,6 @@ const createApiSdk = (config?: ApiSdkConfig) => {
       get: (options?: RequestInit): Promise<getStatusResponse> =>
         getStatus(withDefaultInit(options, defaultInit)),
     },
-    profiles: createProfilesSdk(defaultInit),
     auth: createAuthSdk(defaultInit),
   };
 };

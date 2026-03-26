@@ -73,12 +73,6 @@ type AuthSessionResponse struct {
 	SessionToken string `json:"sessionToken"`
 }
 
-// CreateProfileInput defines model for CreateProfileInput.
-type CreateProfileInput struct {
-	Email openapi_types.Email `json:"email"`
-	Name  string              `json:"name"`
-}
-
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -124,14 +118,6 @@ type PasskeyStartResponse struct {
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
 	RpId      string `json:"rpId"`
-}
-
-// Profile defines model for Profile.
-type Profile struct {
-	CreatedAt time.Time           `json:"createdAt"`
-	Email     openapi_types.Email `json:"email"`
-	Id        int64               `json:"id"`
-	Name      string              `json:"name"`
 }
 
 // RecoveryAcceptedResponse defines model for RecoveryAcceptedResponse.
@@ -204,9 +190,6 @@ type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
 // ConsumeRecoveryTokenJSONRequestBody defines body for ConsumeRecoveryToken for application/json ContentType.
 type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
 
-// CreateProfileJSONRequestBody defines body for CreateProfile for application/json ContentType.
-type CreateProfileJSONRequestBody = CreateProfileInput
-
 // AsRecoveryPasskeyRegisterRequest returns the union data inside the PasskeyRegisterRequest as a RecoveryPasskeyRegisterRequest
 func (t PasskeyRegisterRequest) AsRecoveryPasskeyRegisterRequest() (RecoveryPasskeyRegisterRequest, error) {
 	var body RecoveryPasskeyRegisterRequest
@@ -274,12 +257,6 @@ type ServerInterface interface {
 	// Revokes the current bearer session
 	// (POST /api/v1/app/auth/logout)
 	Logout(c *gin.Context)
-	// List authenticated sample profiles
-	// (GET /api/v1/app/profiles)
-	ListAppProfiles(c *gin.Context)
-	// Get an authenticated sample profile by id
-	// (GET /api/v1/app/profiles/{id})
-	GetAppProfile(c *gin.Context, id int64)
 	// Finishes passkey authentication and returns a bearer session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(c *gin.Context)
@@ -295,16 +272,7 @@ type ServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(c *gin.Context)
-	// List sample profiles
-	// (GET /api/v1/profiles)
-	ListProfiles(c *gin.Context)
-	// Create a sample profile
-	// (POST /api/v1/profiles)
-	CreateProfile(c *gin.Context)
-	// Get a sample profile by id
-	// (GET /api/v1/profiles/{id})
-	GetProfile(c *gin.Context, id int64)
-	// Returns sample status
+	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(c *gin.Context)
 }
@@ -331,47 +299,6 @@ func (siw *ServerInterfaceWrapper) Logout(c *gin.Context) {
 	}
 
 	siw.Handler.Logout(c)
-}
-
-// ListAppProfiles operation middleware
-func (siw *ServerInterfaceWrapper) ListAppProfiles(c *gin.Context) {
-
-	c.Set(BearerAuthScopes, []string{})
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.ListAppProfiles(c)
-}
-
-// GetAppProfile operation middleware
-func (siw *ServerInterfaceWrapper) GetAppProfile(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	c.Set(BearerAuthScopes, []string{})
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.GetAppProfile(c, id)
 }
 
 // FinishPasskeyAuthentication operation middleware
@@ -439,56 +366,6 @@ func (siw *ServerInterfaceWrapper) ConsumeRecoveryToken(c *gin.Context) {
 	siw.Handler.ConsumeRecoveryToken(c)
 }
 
-// ListProfiles operation middleware
-func (siw *ServerInterfaceWrapper) ListProfiles(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.ListProfiles(c)
-}
-
-// CreateProfile operation middleware
-func (siw *ServerInterfaceWrapper) CreateProfile(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.CreateProfile(c)
-}
-
-// GetProfile operation middleware
-func (siw *ServerInterfaceWrapper) GetProfile(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.GetProfile(c, id)
-}
-
 // GetStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetStatus(c *gin.Context) {
 
@@ -530,16 +407,11 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.POST(options.BaseURL+"/api/v1/app/auth/logout", wrapper.Logout)
-	router.GET(options.BaseURL+"/api/v1/app/profiles", wrapper.ListAppProfiles)
-	router.GET(options.BaseURL+"/api/v1/app/profiles/:id", wrapper.GetAppProfile)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/start", wrapper.StartPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
-	router.GET(options.BaseURL+"/api/v1/profiles", wrapper.ListProfiles)
-	router.POST(options.BaseURL+"/api/v1/profiles", wrapper.CreateProfile)
-	router.GET(options.BaseURL+"/api/v1/profiles/:id", wrapper.GetProfile)
 	router.GET(options.BaseURL+"/api/v1/status", wrapper.GetStatus)
 }
 
@@ -599,66 +471,6 @@ func (response Logout503JSONResponse) VisitLogoutResponse(w http.ResponseWriter)
 	w.WriteHeader(503)
 
 	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type ListAppProfilesRequestObject struct {
-}
-
-type ListAppProfilesResponseObject interface {
-	VisitListAppProfilesResponse(w http.ResponseWriter) error
-}
-
-type ListAppProfiles200JSONResponse []Profile
-
-func (response ListAppProfiles200JSONResponse) VisitListAppProfilesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListAppProfiles401JSONResponse ErrorResponse
-
-func (response ListAppProfiles401JSONResponse) VisitListAppProfilesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAppProfileRequestObject struct {
-	Id int64 `json:"id"`
-}
-
-type GetAppProfileResponseObject interface {
-	VisitGetAppProfileResponse(w http.ResponseWriter) error
-}
-
-type GetAppProfile200JSONResponse Profile
-
-func (response GetAppProfile200JSONResponse) VisitGetAppProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAppProfile401JSONResponse ErrorResponse
-
-func (response GetAppProfile401JSONResponse) VisitGetAppProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAppProfile404JSONResponse ErrorResponse
-
-func (response GetAppProfile404JSONResponse) VisitGetAppProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
 }
 
 type FinishPasskeyAuthenticationRequestObject struct {
@@ -956,83 +768,6 @@ func (response ConsumeRecoveryToken503JSONResponse) VisitConsumeRecoveryTokenRes
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type ListProfilesRequestObject struct {
-}
-
-type ListProfilesResponseObject interface {
-	VisitListProfilesResponse(w http.ResponseWriter) error
-}
-
-type ListProfiles200JSONResponse []Profile
-
-func (response ListProfiles200JSONResponse) VisitListProfilesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreateProfileRequestObject struct {
-	Body *CreateProfileJSONRequestBody
-}
-
-type CreateProfileResponseObject interface {
-	VisitCreateProfileResponse(w http.ResponseWriter) error
-}
-
-type CreateProfile201JSONResponse Profile
-
-func (response CreateProfile201JSONResponse) VisitCreateProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreateProfile400JSONResponse ErrorResponse
-
-func (response CreateProfile400JSONResponse) VisitCreateProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProfileRequestObject struct {
-	Id int64 `json:"id"`
-}
-
-type GetProfileResponseObject interface {
-	VisitGetProfileResponse(w http.ResponseWriter) error
-}
-
-type GetProfile200JSONResponse Profile
-
-func (response GetProfile200JSONResponse) VisitGetProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProfile400JSONResponse ErrorResponse
-
-func (response GetProfile400JSONResponse) VisitGetProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProfile404JSONResponse ErrorResponse
-
-func (response GetProfile404JSONResponse) VisitGetProfileResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 type GetStatusRequestObject struct {
 }
 
@@ -1054,12 +789,6 @@ type StrictServerInterface interface {
 	// Revokes the current bearer session
 	// (POST /api/v1/app/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
-	// List authenticated sample profiles
-	// (GET /api/v1/app/profiles)
-	ListAppProfiles(ctx context.Context, request ListAppProfilesRequestObject) (ListAppProfilesResponseObject, error)
-	// Get an authenticated sample profile by id
-	// (GET /api/v1/app/profiles/{id})
-	GetAppProfile(ctx context.Context, request GetAppProfileRequestObject) (GetAppProfileResponseObject, error)
 	// Finishes passkey authentication and returns a bearer session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(ctx context.Context, request FinishPasskeyAuthenticationRequestObject) (FinishPasskeyAuthenticationResponseObject, error)
@@ -1075,16 +804,7 @@ type StrictServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(ctx context.Context, request ConsumeRecoveryTokenRequestObject) (ConsumeRecoveryTokenResponseObject, error)
-	// List sample profiles
-	// (GET /api/v1/profiles)
-	ListProfiles(ctx context.Context, request ListProfilesRequestObject) (ListProfilesResponseObject, error)
-	// Create a sample profile
-	// (POST /api/v1/profiles)
-	CreateProfile(ctx context.Context, request CreateProfileRequestObject) (CreateProfileResponseObject, error)
-	// Get a sample profile by id
-	// (GET /api/v1/profiles/{id})
-	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
-	// Returns sample status
+	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(ctx context.Context, request GetStatusRequestObject) (GetStatusResponseObject, error)
 }
@@ -1119,58 +839,6 @@ func (sh *strictHandler) Logout(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(LogoutResponseObject); ok {
 		if err := validResponse.VisitLogoutResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListAppProfiles operation middleware
-func (sh *strictHandler) ListAppProfiles(ctx *gin.Context) {
-	var request ListAppProfilesRequestObject
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.ListAppProfiles(ctx, request.(ListAppProfilesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListAppProfiles")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(ListAppProfilesResponseObject); ok {
-		if err := validResponse.VisitListAppProfilesResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetAppProfile operation middleware
-func (sh *strictHandler) GetAppProfile(ctx *gin.Context, id int64) {
-	var request GetAppProfileRequestObject
-
-	request.Id = id
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.GetAppProfile(ctx, request.(GetAppProfileRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetAppProfile")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(GetAppProfileResponseObject); ok {
-		if err := validResponse.VisitGetAppProfileResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -1336,91 +1004,6 @@ func (sh *strictHandler) ConsumeRecoveryToken(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(ConsumeRecoveryTokenResponseObject); ok {
 		if err := validResponse.VisitConsumeRecoveryTokenResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListProfiles operation middleware
-func (sh *strictHandler) ListProfiles(ctx *gin.Context) {
-	var request ListProfilesRequestObject
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.ListProfiles(ctx, request.(ListProfilesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListProfiles")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(ListProfilesResponseObject); ok {
-		if err := validResponse.VisitListProfilesResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateProfile operation middleware
-func (sh *strictHandler) CreateProfile(ctx *gin.Context) {
-	var request CreateProfileRequestObject
-
-	var body CreateProfileJSONRequestBody
-	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.Status(http.StatusBadRequest)
-		ctx.Error(err)
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateProfile(ctx, request.(CreateProfileRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateProfile")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(CreateProfileResponseObject); ok {
-		if err := validResponse.VisitCreateProfileResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetProfile operation middleware
-func (sh *strictHandler) GetProfile(ctx *gin.Context, id int64) {
-	var request GetProfileRequestObject
-
-	request.Id = id
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.GetProfile(ctx, request.(GetProfileRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetProfile")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(GetProfileResponseObject); ok {
-		if err := validResponse.VisitGetProfileResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

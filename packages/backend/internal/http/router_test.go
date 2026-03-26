@@ -1,8 +1,6 @@
 package http
 
 import (
-	"context"
-	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/types"
 	"www-template/packages/backend/internal/usecases"
 )
@@ -30,48 +27,16 @@ func TestHealthRoute(t *testing.T) {
 	}
 }
 
-func TestProfilesRoutes(t *testing.T) {
-	t.Parallel()
-
-	router := newTestRouter(t)
-
-	createRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/profiles", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
-	createRequest.Header.Set("Content-Type", "application/json")
-	createRecorder := httptest.NewRecorder()
-	router.ServeHTTP(createRecorder, createRequest)
-	if createRecorder.Code != stdhttp.StatusCreated {
-		t.Fatalf("expected status 201, got %d", createRecorder.Code)
-	}
-
-	listRequest := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/profiles", nil)
-	listRecorder := httptest.NewRecorder()
-	router.ServeHTTP(listRecorder, listRequest)
-	if listRecorder.Code != stdhttp.StatusOK {
-		t.Fatalf("expected status 200, got %d", listRecorder.Code)
-	}
-
-	var listed []map[string]any
-	if err := json.Unmarshal(listRecorder.Body.Bytes(), &listed); err != nil {
-		t.Fatalf("unmarshal list response: %v", err)
-	}
-	if len(listed) != 1 {
-		t.Fatalf("expected 1 profile, got %d", len(listed))
-	}
-
-	getRequest := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/profiles/1", nil)
-	getRecorder := httptest.NewRecorder()
-	router.ServeHTTP(getRecorder, getRequest)
-	if getRecorder.Code != stdhttp.StatusOK {
-		t.Fatalf("expected status 200, got %d", getRecorder.Code)
-	}
-}
-
 func TestAppSurfaceFallsBackToNotFound(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
 	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/app/unknown", nil)
-	request.Header.Set("Authorization", testConfig().AppAuthorizationValue())
+	challengeRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
+	challenge := decodeJSONBody(t, challengeRecorder)
+	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	finishBody := decodeJSONBody(t, finishRecorder)
+	request.Header.Set("Authorization", "Bearer "+finishBody["sessionToken"].(string))
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, request)
@@ -81,11 +46,11 @@ func TestAppSurfaceFallsBackToNotFound(t *testing.T) {
 	}
 }
 
-func TestAppProfilesRequireAuthorization(t *testing.T) {
+func TestAppAuthEndpointRequiresAuthorization(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
-	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/app/profiles", nil)
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/app/auth/logout", nil)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, request)
@@ -95,42 +60,30 @@ func TestAppProfilesRequireAuthorization(t *testing.T) {
 	}
 }
 
-func TestAppProfilesSucceedWithBearerToken(t *testing.T) {
+func TestAppAuthEndpointSucceedsWithBearerToken(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
-	createRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/profiles", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
-	createRequest.Header.Set("Content-Type", "application/json")
-	createRecorder := httptest.NewRecorder()
-	router.ServeHTTP(createRecorder, createRequest)
-
-	listRequest := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/app/profiles", nil)
-	listRequest.Header.Set("Authorization", testConfig().AppAuthorizationValue())
-	listRecorder := httptest.NewRecorder()
-	router.ServeHTTP(listRecorder, listRequest)
-
-	if listRecorder.Code != stdhttp.StatusOK {
-		t.Fatalf("expected status 200, got %d", listRecorder.Code)
+	challengeRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
+	if challengeRecorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected status 200, got %d", challengeRecorder.Code)
 	}
-}
+	challenge := decodeJSONBody(t, challengeRecorder)
 
-func TestAppProfileByIDRequiresBearerToken(t *testing.T) {
-	t.Parallel()
+	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	if finishRecorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", finishRecorder.Code, finishRecorder.Body.String())
+	}
 
-	router := newTestRouter(t)
-	createRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/profiles", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
-	createRequest.Header.Set("Content-Type", "application/json")
-	createRecorder := httptest.NewRecorder()
-	router.ServeHTTP(createRecorder, createRequest)
+	finishBody := decodeJSONBody(t, finishRecorder)
+	bearer, ok := finishBody["sessionToken"].(string)
+	if !ok || bearer == "" {
+		t.Fatalf("expected sessionToken in response, got %v", finishBody["sessionToken"])
+	}
+	logoutRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, bearer)
 
-	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/app/profiles/1", nil)
-	request.Header.Set("Authorization", testConfig().AppAuthorizationValue())
-	recorder := httptest.NewRecorder()
-
-	router.ServeHTTP(recorder, request)
-
-	if recorder.Code != stdhttp.StatusOK {
-		t.Fatalf("expected status 200, got %d", recorder.Code)
+	if logoutRecorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected status 200, got %d", logoutRecorder.Code)
 	}
 }
 
@@ -140,8 +93,6 @@ func TestRoutePolicy(t *testing.T) {
 	router := newTestRouter(t)
 	allowedPublicRoutes := map[string]struct{}{
 		"/api/v1/status":                {},
-		"/api/v1/profiles":              {},
-		"/api/v1/profiles/:id":          {},
 		"/api/v1/auth/passkey/start":    {},
 		"/api/v1/auth/passkey/finish":   {},
 		"/api/v1/auth/passkey/register": {},
@@ -168,16 +119,12 @@ func TestRoutePolicy(t *testing.T) {
 
 func newTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
+	clock := func() time.Time {
+		return time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)
+	}
+	auth := usecases.NewAuthService(newStubAuthStateRepository(clock), stubAuthAccountRepositoryWithMember(), nil, nil, clock, newSequentialPolicy(), testConfig().AuthRuntime())
 
-	repository := &stubProfileRepository{profiles: make(map[int64]domain.Profile), nextID: 1}
-	profiles := usecases.NewProfilesService(repository, func() time.Time {
-		return time.Now().UTC()
-	})
-
-	return NewRouter(
-		testConfig(),
-		Dependencies{Profiles: profiles},
-	)
+	return NewRouter(testConfig(), Dependencies{Auth: auth})
 }
 
 func testConfig() types.Config {
@@ -185,45 +132,5 @@ func testConfig() types.Config {
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Port:           "8080",
-		ProfileStore:   "memory",
 	}
-}
-
-type stubProfileRepository struct {
-	nextID   int64
-	profiles map[int64]domain.Profile
-}
-
-func (r *stubProfileRepository) Create(_ context.Context, input domain.CreateProfileInput) (domain.Profile, error) {
-	profile, err := domain.NewProfile(r.nextID, time.Now().UTC(), input)
-	if err != nil {
-		var empty domain.Profile
-		return empty, err
-	}
-
-	r.profiles[profile.ID()] = profile
-	r.nextID++
-	return profile, nil
-}
-
-func (r *stubProfileRepository) GetByID(_ context.Context, id int64) (domain.Profile, error) {
-	profile, ok := r.profiles[id]
-	if !ok {
-		var empty domain.Profile
-		return empty, domain.ErrProfileNotFound
-	}
-
-	return profile, nil
-}
-
-func (r *stubProfileRepository) List(context.Context) ([]domain.Profile, error) {
-	profiles := make([]domain.Profile, 0, len(r.profiles))
-	for id := int64(1); id < r.nextID; id++ {
-		profile, ok := r.profiles[id]
-		if ok {
-			profiles = append(profiles, profile)
-		}
-	}
-
-	return profiles, nil
 }

@@ -7,7 +7,7 @@ using TypeSpec.OpenAPI;
 namespace WWWTemplate.ApiV1;
 
 @tag("status")
-@summary("Returns sample status")
+@summary("Returns API status")
 @operationId("getStatus")
 @get
 @route("/status")

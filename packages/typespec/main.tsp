@@ -6,15 +6,12 @@ import "@typespec/openapi3";
 import "./src/common/errors.tsp";
 import "./src/models/auth.tsp";
 import "./src/models/status.tsp";
-import "./src/models/profile.tsp";
 
 // Versioned API routes
 import "./src/routes/v1/_namespace.tsp";
 import "./src/routes/v1/app_namespace.tsp";
-import "./src/routes/v1/app-profiles.tsp";
 import "./src/routes/v1/auth.tsp";
 import "./src/routes/v1/status.tsp";
-import "./src/routes/v1/profiles.tsp";
 
 using Http;
 using TypeSpec.OpenAPI;

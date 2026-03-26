@@ -23,7 +23,7 @@ packages/
 │   ├── db/migrations/                   # golang-migrate SQL
 │   ├── internal/app/                    # runtime / container
 │   ├── internal/http/                   # Gin + generated handler adapter
-│   ├── internal/persistence/            # GORM / memory repository
+│   ├── internal/persistence/            # GORM / memor repository
 │   ├── internal/usecases/               # application services
 │   ├── internal/domain/                 # domain model / invariants
 │   ├── internal/types/                  # config / shared backend types
@@ -65,7 +65,7 @@ pnpm check             # TypeSpec check + frontend type check + Go build
 pnpm test:run          # frontend app + frontend ui + Go unit tests
 pnpm build             # Go backend と frontend app を build
 pnpm test:e2e          # Playwright E2E
-pnpm db:migrate:create add_profiles
+pnpm db:migrate:create add_auth_tables
 pnpm db:migrate:up
 pnpm db:migrate:down
 ```
@@ -105,16 +105,11 @@ OpenAPI には Spectral lint を掛けています。
 
 - `GET /health`
 - `GET /api/v1/status`
-- `GET /api/v1/profiles`
-- `POST /api/v1/profiles`
-- `GET /api/v1/profiles/{id}`
 - `POST /api/v1/auth/passkey/start`
 - `POST /api/v1/auth/passkey/finish`
 - `POST /api/v1/auth/recovery`
 - `POST /api/v1/auth/recovery/consume`
 - `POST /api/v1/auth/passkey/register`
-- `GET /api/v1/app/profiles`
-- `GET /api/v1/app/profiles/{id}`
 - `POST /api/v1/app/auth/logout`
 
 `/api/v1/app/*` は bearer token が必須です。
@@ -148,24 +143,31 @@ auth runtime dependencies:
 
 - `APP_ENV` - 既定値は `development`
 - `APP_BEARER_TOKEN` - app API 用 token。`APP_ENV=development` かつ未設定のときだけ既定値 `dev-app-auth`
-- `APP_PROFILE_STORE` - 既定値は `memory`。DB を使うときは `gorm`
-- `DATABASE_URL` - `APP_PROFILE_STORE=gorm` や migration 実行時に必要
+- `DATABASE_URL` - PostgreSQL 接続先。backend 起動と migration 実行に必須
 - `ALLOWED_ORIGINS` - 既定値は `http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174`
 - `PORT` - backend listen port。既定値は `8080`
-- `VALKEY_URL` - shared Valkey の接続先。短命 state の共有に使います
+- `VALKEY_URL` - Valkey 接続先。backend 起動に必須
 - `VALKEY_KEY_PREFIX` - shared Valkey key prefix。既定値は `www-template`
+- `OPENSEARCH_URL` - OpenSearch 接続先。backend 起動に必須
+- `R2_ENDPOINT` - R2/S3 互換 object storage endpoint。backend 起動に必須
+- `R2_REGION` - object storage region。backend 起動に必須
+- `R2_BUCKET` - object storage bucket 名。backend 起動に必須
+- `R2_ACCESS_KEY_ID` - object storage access key。backend 起動に必須
+- `R2_SECRET_ACCESS_KEY` - object storage secret key。backend 起動に必須
+- `R2_USE_PATH_STYLE` - MinIO 等の path-style endpoint を使う場合に `true`
 - `WEBAUTHN_RP_ID` - passkey/WebAuthn の RP ID。既定値は `localhost`
 - `ACCOUNT_RECOVERY_URL_BASE` - account recovery link の base URL。既定値は `http://localhost:5173/app/login/recovery/consume`
-- `SMTP_HOST` - shared SMTP host
+- `SMTP_HOST` - shared SMTP host。backend 起動に必須
 - `SMTP_PORT` - shared SMTP port。既定値は `587`
 - `SMTP_USERNAME` - shared SMTP username
 - `SMTP_PASSWORD` - shared SMTP password
-- `MAIL_FROM_ADDRESS` - mail の From address
+- `MAIL_FROM_ADDRESS` - mail の From address。backend 起動に必須
 
 重要:
 
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定のまま起動できません
-- `APP_PROFILE_STORE=gorm` のときは `DATABASE_URL` が必要です
+- backend は PostgreSQL / Valkey / OpenSearch / object storage の設定が揃っていないと起動しません
+- backend 起動時に PostgreSQL / Valkey / OpenSearch / object storage の疎通確認を行い、失敗したら起動しません
 
 auth config defaults:
 
@@ -181,8 +183,15 @@ auth config defaults:
 ## PostgreSQL を使う場合
 
 ```bash
-export APP_PROFILE_STORE=gorm
 export DATABASE_URL='postgres://user:pass@localhost:5432/app?sslmode=disable'
+export VALKEY_URL='redis://localhost:6379/0'
+export OPENSEARCH_URL='http://localhost:9200'
+export R2_ENDPOINT='http://localhost:9000'
+export R2_REGION='us-east-1'
+export R2_BUCKET='template'
+export R2_ACCESS_KEY_ID='minioadmin'
+export R2_SECRET_ACCESS_KEY='minioadmin'
+export R2_USE_PATH_STYLE='true'
 pnpm db:migrate:up
 pnpm dev:server
 ```

@@ -12,12 +12,6 @@
       "name": "status"
     },
     {
-      "name": "profiles"
-    },
-    {
-      "name": "app-profiles"
-    },
-    {
       "name": "app-auth"
     }
   ],
@@ -87,99 +81,6 @@
           }
         },
         "tags": ["app-auth"],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/app/profiles": {
-      "get": {
-        "operationId": "listAppProfiles",
-        "summary": "List authenticated sample profiles",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Profile"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Access is unauthorized.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["app-profiles"],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/app/profiles/{id}": {
-      "get": {
-        "operationId": "getAppProfile",
-        "summary": "Get an authenticated sample profile by id",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Profile"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Access is unauthorized.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The server cannot find the requested resource.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["app-profiles"],
         "security": [
           {
             "BearerAuth": []
@@ -572,121 +473,10 @@
         }
       }
     },
-    "/api/v1/profiles": {
-      "get": {
-        "operationId": "listProfiles",
-        "summary": "List sample profiles",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Profile"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": ["profiles"]
-      },
-      "post": {
-        "operationId": "createProfile",
-        "summary": "Create a sample profile",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": "The request has succeeded and a new resource has been created as a result.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Profile"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The server could not understand the request due to invalid syntax.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["profiles"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateProfileInput"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/profiles/{id}": {
-      "get": {
-        "operationId": "getProfile",
-        "summary": "Get a sample profile by id",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Profile"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The server could not understand the request due to invalid syntax.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The server cannot find the requested resource.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["profiles"]
-      }
-    },
     "/api/v1/status": {
       "get": {
         "operationId": "getStatus",
-        "summary": "Returns sample status",
+        "summary": "Returns API status",
         "parameters": [],
         "responses": {
           "200": {
@@ -766,19 +556,6 @@
           }
         }
       },
-      "CreateProfileInput": {
-        "type": "object",
-        "required": ["name", "email"],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          }
-        }
-      },
       "ErrorResponse": {
         "type": "object",
         "required": ["error"],
@@ -853,27 +630,6 @@
           },
           "rpId": {
             "type": "string"
-          }
-        }
-      },
-      "Profile": {
-        "type": "object",
-        "required": ["id", "name", "email", "createdAt"],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },

@@ -33,8 +33,14 @@
 - `DATABASE_URL=postgres://template:template@postgres:5432/template?sslmode=disable`
 - `VALKEY_URL=redis://valkey:6379/0`
 - `OPENSEARCH_URL=http://opensearch:9200`
-- `MINIO_ENDPOINT=http://minio:9000`
+- `R2_ENDPOINT=http://minio:9000`
+- `R2_REGION=us-east-1`
+- `R2_BUCKET=template`
+- `R2_ACCESS_KEY_ID=minioadmin`
+- `R2_SECRET_ACCESS_KEY=minioadmin`
+- `R2_USE_PATH_STYLE=true`
 - `SMTP_HOST=mailpit`
+- `MAIL_FROM_ADDRESS=noreply@example.com`
 - `SMTP_PORT=1025`
 
 ## メモ

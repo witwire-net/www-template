@@ -22,7 +22,6 @@
       </div>
       <div class="links">
         <a href="/app">Overview</a>
-        <a href="/app/profiles">Profiles</a>
         <a href="/">Public site</a>
         <a href="/app/logout">ログアウト</a>
       </div>

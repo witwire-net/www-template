@@ -141,7 +141,7 @@ test.describe('auth api contract', () => {
   });
 
   test('session を持たない app endpoint は unauthenticated を返す', async ({ request }) => {
-    const response = await request.get('/api/v1/app/profiles');
+    const response = await request.post('/api/v1/app/auth/logout');
 
     expect(response.status()).toBe(401);
     expectNoStore(response.headers()['cache-control'] ?? null);
@@ -162,7 +162,7 @@ test.describe('auth api contract', () => {
     expect(logoutResponse.status()).toBe(200);
     expectNoStore(logoutResponse.headers()['cache-control'] ?? null);
 
-    const expiredResponse = await request.get('/api/v1/app/profiles', {
+    const expiredResponse = await request.post('/api/v1/app/auth/logout', {
       headers: {
         Authorization: `Bearer ${finishBody.sessionToken}`,
       },

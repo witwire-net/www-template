@@ -21,7 +21,7 @@ const fallbackAuthRequestID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 func appAuthMiddleware(cfg types.Config, auth *usecases.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !strings.HasPrefix(c.Request.URL.Path, "/api/v1/app") || c.Request.URL.Path == "/api/v1/app/auth/logout" {
+		if !strings.HasPrefix(c.Request.URL.Path, "/api/v1/app") {
 			c.Next()
 			return
 		}

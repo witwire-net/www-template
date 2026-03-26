@@ -35,7 +35,7 @@ func TestAuthPasskeyFinishIssuesSession(t *testing.T) {
 	assertULIDField(t, session, "passkeyCredentialId")
 	assertULIDField(t, session, "sessionId")
 
-	appResponse := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, session["sessionToken"].(string))
+	appResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, session["sessionToken"].(string))
 	assertStatus(t, appResponse, stdhttp.StatusOK)
 }
 
@@ -50,7 +50,7 @@ func TestAuthInactiveSessionRejected(t *testing.T) {
 	decodeJSON(t, finishResponse, &session)
 	env.advance(15 * 24 * time.Hour)
 
-	response := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, session["sessionToken"].(string))
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, session["sessionToken"].(string))
 	assertStatus(t, response, stdhttp.StatusUnauthorized)
 	assertNoStore(t, response)
 	assertFailureCode(t, response, "session-expired")
@@ -70,7 +70,7 @@ func TestAuthLogoutRevokesSession(t *testing.T) {
 	assertStatus(t, logoutResponse, stdhttp.StatusOK)
 	assertNoStore(t, logoutResponse)
 
-	appResponse := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, session["sessionToken"].(string))
+	appResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, session["sessionToken"].(string))
 	assertStatus(t, appResponse, stdhttp.StatusUnauthorized)
 	assertFailureCode(t, appResponse, "session-expired")
 }
@@ -91,7 +91,7 @@ func TestAuthRecoveryRequestGenericAccepted(t *testing.T) {
 func TestAuthMissingSessionUnauthenticated(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
-	response := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, "")
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, "")
 	assertStatus(t, response, stdhttp.StatusUnauthorized)
 	assertNoStore(t, response)
 	assertFailureCode(t, response, "unauthenticated")
@@ -100,7 +100,7 @@ func TestAuthMissingSessionUnauthenticated(t *testing.T) {
 func TestAuthStoreOutageFailsClosed(t *testing.T) {
 	t.Parallel()
 	env := newFailClosedAuthEnv(t)
-	response := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, "opaque-token")
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, "opaque-token")
 	assertStatus(t, response, stdhttp.StatusServiceUnavailable)
 	assertNoStore(t, response)
 	assertFailureCode(t, response, "internal-error")
@@ -121,11 +121,11 @@ func TestAuthPasskeyStartUsesConfiguredWebAuthnRPID(t *testing.T) {
 	t.Parallel()
 	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
 	stateRepo := newStubAuthStateRepository(clock.Now)
-	accountRepo := newStubAuthAccountRepository()
+	accountRepo := stubAuthAccountRepositoryWithMember()
 	cfg := testConfig()
 	cfg.Auth.WebAuthnRPID = "www-template"
 	auth := usecases.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), cfg.AuthRuntime())
-	router := NewRouter(cfg, Dependencies{Auth: auth, Profiles: usecases.NewProfilesService(&stubProfileRepository{profiles: make(map[int64]domain.Profile), nextID: 1}, clock.Now)})
+	router := NewRouter(cfg, Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
 
@@ -196,8 +196,8 @@ func TestAuthInvalidJSONReturnsTypedNoStoreError(t *testing.T) {
 func TestAuthFailureResponsesIssueDistinctRequestIDs(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
-	first := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, "")
-	second := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/app/profiles", nil, "")
+	first := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, "")
+	second := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, "")
 	assertStatus(t, first, stdhttp.StatusUnauthorized)
 	assertStatus(t, second, stdhttp.StatusUnauthorized)
 	assertNoStore(t, first)
@@ -261,10 +261,10 @@ func TestAuthRecoverySendFailurePersistsOriginalTokenExpiryAUTHBES011(t *testing
 	t.Parallel()
 	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
 	stateRepo := newStubAuthStateRepository(clock.Now)
-	accountRepo := newStubAuthAccountRepository()
+	accountRepo := stubAuthAccountRepositoryWithMember()
 	sender := advancingFailingAccountRecoverySender{advance: func() { clock.Advance(2 * time.Minute) }, err: errors.New("smtp delayed failure")}
 	auth := usecases.NewAuthService(stateRepo, accountRepo, sender, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	router := NewRouter(testConfig(), Dependencies{Auth: auth, Profiles: usecases.NewProfilesService(&stubProfileRepository{profiles: make(map[int64]domain.Profile), nextID: 1}, clock.Now)})
+	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/recovery", map[string]string{"email": "member@example.com"}, "")
 
@@ -387,12 +387,12 @@ func newAuthTestEnvWithSender(t *testing.T, sender usecases.AccountRecoverySende
 	t.Helper()
 	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
 	stateRepo := newStubAuthStateRepository(clock.Now)
-	accountRepo := newStubAuthAccountRepository()
+	accountRepo := stubAuthAccountRepositoryWithMember()
 	invite := &stubInvitationPasskeyRegistrar{}
 	auth := usecases.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
 	capturingSender, _ := sender.(*capturingAccountRecoverySender)
 	return authTestEnv{
-		router:    NewRouter(testConfig(), Dependencies{Auth: auth, Profiles: usecases.NewProfilesService(&stubProfileRepository{profiles: make(map[int64]domain.Profile), nextID: 1}, clock.Now)}),
+		router:    NewRouter(testConfig(), Dependencies{Auth: auth}),
 		stateRepo: stateRepo,
 		sender:    capturingSender,
 		invite:    invite,
@@ -404,8 +404,8 @@ func newAuthTestEnvWithSender(t *testing.T, sender usecases.AccountRecoverySende
 func newFailClosedAuthEnv(t *testing.T) authTestEnv {
 	t.Helper()
 	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
-	auth := usecases.NewAuthService(failingAuthStateRepository{}, newStubAuthAccountRepository(), nil, nil, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	return authTestEnv{router: NewRouter(testConfig(), Dependencies{Auth: auth, Profiles: usecases.NewProfilesService(&stubProfileRepository{profiles: make(map[int64]domain.Profile), nextID: 1}, clock.Now)})}
+	auth := usecases.NewAuthService(failingAuthStateRepository{}, stubAuthAccountRepositoryWithMember(), nil, nil, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	return authTestEnv{router: NewRouter(testConfig(), Dependencies{Auth: auth})}
 }
 
 type mutableClock struct{ current time.Time }
@@ -733,7 +733,7 @@ type stubAuthAccountRepository struct {
 	account domain.AuthAccount
 }
 
-func newStubAuthAccountRepository() *stubAuthAccountRepository {
+func stubAuthAccountRepositoryWithMember() *stubAuthAccountRepository {
 	account, _ := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "member@example.com", "member@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential")
 	return &stubAuthAccountRepository{account: account}
 }

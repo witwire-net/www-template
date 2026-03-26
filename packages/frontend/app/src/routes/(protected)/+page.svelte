@@ -2,10 +2,10 @@
   <div class="eyebrow">AUTH ENTRY</div>
   <h2>認証済みアプリのエントリー</h2>
   <p>
-    `www-template` では `/app/*` を bearer session 付きの CSR 領域として扱い、サンプル画面として
-    `/app/profiles` を含めています。
+    `www-template` では `/app/*` を bearer session 付きの CSR 領域として扱い、認証済みフローの
+    入口として運用します。
   </p>
-  <a href="/app/profiles">/app/profiles を開く</a>
+  <a href="/app/logout">/app/logout を開く</a>
 </section>
 
 <style>

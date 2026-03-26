@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -14,23 +15,37 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	t.Parallel()
 	called := false
 	fakeRepo := fakeAuthStateRepository{}
-	_, err := buildContainer(context.Background(), types.Config{AppBearerToken: "dev-app-auth", ProfileStore: "memory", Infra: types.InfraConfig{Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}}, func(types.ValkeyConfig) (usecases.AuthStateRepository, error) {
-		called = true
-		return fakeRepo, nil
-	})
+	_, err := buildContainer(
+		context.Background(),
+		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
+		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
+		},
+		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+			called = true
+			return fakeRepo, func(context.Context) error { return nil }, nil
+		},
+	)
 	if err != nil {
 		t.Fatalf("build container: %v", err)
 	}
 	if !called {
-		t.Fatal("expected valkey factory to be called before error")
+		t.Fatal("expected valkey factory to be called")
 	}
 }
 
 func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) {
 	t.Parallel()
-	container, err := buildContainer(context.Background(), types.Config{AppBearerToken: "dev-app-auth", ProfileStore: "memory", Auth: types.AuthConfig{WebAuthnRPID: "www-template"}}, func(types.ValkeyConfig) (usecases.AuthStateRepository, error) {
-		return fakeAuthStateRepository{}, nil
-	})
+	container, err := buildContainer(
+		context.Background(),
+		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}}, Auth: types.AuthConfig{WebAuthnRPID: "www-template"}},
+		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
+		},
+		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+			return fakeAuthStateRepository{}, func(context.Context) error { return nil }, nil
+		},
+	)
 	if err != nil {
 		t.Fatalf("build container: %v", err)
 	}
@@ -42,6 +57,49 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	if challenge.WebAuthnRPID != "www-template" {
 		t.Fatalf("expected RP ID wiring to preserve config, got %q", challenge.WebAuthnRPID)
 	}
+}
+
+func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testing.T) {
+	t.Parallel()
+
+	closed := false
+	_, err := buildContainer(
+		context.Background(),
+		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
+		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+			return stubAuthAccountRepository{}, func(context.Context) error {
+				closed = true
+				return nil
+			}, nil
+		},
+		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+			return nil, nil, errors.New("valkey unavailable")
+		},
+	)
+	if err == nil {
+		t.Fatal("expected state repository error")
+	}
+	if !closed {
+		t.Fatal("expected account repository closer to be invoked")
+	}
+}
+
+type stubAuthAccountRepository struct{}
+
+func (stubAuthAccountRepository) FindByIdentifier(context.Context, string) (domain.AuthAccount, error) {
+	return emptyAuthAccountForContainerTest(), nil
+}
+
+func (stubAuthAccountRepository) FindByCredential(context.Context, string) (domain.AuthAccount, error) {
+	return emptyAuthAccountForContainerTest(), nil
+}
+
+func (stubAuthAccountRepository) FindByEmail(context.Context, string) (domain.AuthAccount, error) {
+	return emptyAuthAccountForContainerTest(), nil
+}
+
+func (stubAuthAccountRepository) ReplacePasskey(context.Context, string, string, string) (domain.AuthAccount, error) {
+	return emptyAuthAccountForContainerTest(), nil
 }
 
 type fakeAuthStateRepository struct{}
@@ -113,4 +171,9 @@ func emptyRecoveryTokenForContainerTest() domain.RecoveryToken {
 func emptyRecoverySessionForContainerTest() domain.RecoverySession {
 	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
 	return session
+}
+
+func emptyAuthAccountForContainerTest() domain.AuthAccount {
+	account, _ := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "member@example.com", "member@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential")
+	return account
 }
