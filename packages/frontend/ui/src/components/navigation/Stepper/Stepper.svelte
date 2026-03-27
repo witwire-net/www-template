@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { joinClassNames } from '@ui/components/navigation/shared';
 
@@ -10,10 +12,19 @@
 
   type Props = {
     activeStep?: number;
+    /** ステッパーの向き（デフォルト: 'horizontal'） */
+    orientation?: 'horizontal' | 'vertical';
     steps: StepItem[];
   };
 
-  let { steps, activeStep = 0 }: Props = $props();
+  let { steps, activeStep = 0, orientation = 'horizontal' }: Props = $props();
+
+  const rootClassName = $derived(
+    joinClassNames(
+      styles.stepper ?? '',
+      orientation === 'vertical' ? (styles.vertical ?? '') : undefined
+    )
+  );
 
   function hasDescription(description?: string): description is string {
     return description !== undefined && description !== '';
@@ -31,9 +42,9 @@
   }
 </script>
 
-<div class={styles.stepper ?? ''}>
+<div class={rootClassName} role="list" aria-label="Steps">
   {#each steps as step, index (step.label)}
-    <div class={getStatusClassName(index)}>
+    <div class={getStatusClassName(index)} role="listitem">
       <div class={styles.marker ?? ''}>{index + 1}</div>
       <div class={styles.text ?? ''}>
         <div class={styles.label ?? ''}>{step.label}</div>

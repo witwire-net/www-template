@@ -12,6 +12,8 @@
   };
 
   type Props = {
+    /** グループ全体の accessible label */
+    ariaLabel?: string;
     className?: string;
     defaultValue?: string;
     items: SegmentedItem[];
@@ -25,6 +27,7 @@
     defaultValue = undefined,
     onChange = undefined,
     className = undefined,
+    ariaLabel = undefined,
   }: Props = $props();
 
   let internalValue = $state('');
@@ -55,7 +58,7 @@
   });
 </script>
 
-<div class={rootClassName}>
+<div class={rootClassName} role="group" aria-label={ariaLabel}>
   {#each items as item (item.value)}
     <button
       type="button"
@@ -64,6 +67,7 @@
         activeValue === item.value ? (styles.active ?? '') : undefined,
         item.disabled === true ? (styles.disabled ?? '') : undefined
       )}
+      aria-pressed={activeValue === item.value}
       onclick={() => {
         handleSelect(item.value, item.disabled);
       }}

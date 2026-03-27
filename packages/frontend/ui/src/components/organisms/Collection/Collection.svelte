@@ -25,12 +25,13 @@
     return values.filter((value) => value !== undefined && value !== '').join(' ');
   };
 
-  let rootClassName = $derived(joinClassNames(styles.grid, className));
+  let rootClassName = $derived(
+    joinClassNames(styles.grid, styles[`columns${String(columns)}`], className)
+  );
   let itemClass = $derived(joinClassNames(styles.item, itemClassName));
-  let rootStyle = $derived(`--_columns: ${String(columns)};`);
 </script>
 
-<div class={rootClassName} style={rootStyle}>
+<div class={rootClassName}>
   {#each items as item, index (getKey(item, index))}
     <div class={itemClass}>
       {@render renderItem(item, index)}

@@ -12,13 +12,23 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+const defaultSteps = [
+  { label: 'Details', description: 'Add basic info' },
+  { label: 'Billing', description: 'Choose plan' },
+  { label: 'Launch', description: 'Go live' },
+];
+
 export const Default: Story = {
   args: {
-    steps: [
-      { label: 'Details', description: 'Add basic info' },
-      { label: 'Billing', description: 'Choose plan' },
-      { label: 'Launch', description: 'Go live' },
-    ],
+    steps: defaultSteps,
     activeStep: 1,
+  },
+};
+
+export const Vertical: Story = {
+  args: {
+    steps: defaultSteps,
+    activeStep: 1,
+    orientation: 'vertical',
   },
 };

@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import SideNav from '@ui/components/navigation/SideNav/SideNav.svelte';
+  import AppSidebar from '@ui/components/navigation/AppSidebar/AppSidebar.svelte';
 
   import AppShell from './AppShell.svelte';
 
@@ -18,7 +18,7 @@
 
 <AppShell>
   {#snippet sidebar()}
-    <SideNav header="Workspace" {items} />
+    <AppSidebar variant="inline" header="Workspace" {items} />
   {/snippet}
 
   {#snippet header()}

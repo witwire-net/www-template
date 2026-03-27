@@ -10,7 +10,7 @@
 
   let { customIcon = false }: { customIcon?: boolean } = $props();
 
-  const links = [
+  const items = [
     { label: 'Overview', href: '/dashboard/overview', active: true },
     { label: 'Analytics', href: '/dashboard/analytics' },
     { label: 'Customers', href: '/dashboard/customers' },
@@ -32,11 +32,11 @@
 </div>
 
 {#if customIcon}
-  <AppSidebar logo="www-template UI" {links} footer="© 2024 www-template UI" isOpen={open} onClose={() => (open = false)}>
+  <AppSidebar header="www-template UI" {items} footer="© 2024 www-template UI" isOpen={open} onClose={() => (open = false)}>
     {#snippet closeIcon()}
       <Icon icon={IconBolt} size={24} title="Close sidebar" />
     {/snippet}
   </AppSidebar>
 {:else}
-  <AppSidebar logo="www-template UI" {links} footer="© 2024 www-template UI" isOpen={open} onClose={() => (open = false)} />
+  <AppSidebar header="www-template UI" {items} footer="© 2024 www-template UI" isOpen={open} onClose={() => (open = false)} />
 {/if}

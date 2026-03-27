@@ -1,6 +1,8 @@
 <script lang="ts">
   import Collection from '@ui/components/organisms/Collection/Collection.svelte';
 
+  import styles from './CollectionShowcase.module.scss';
+
   type CollectionItem = {
     id: string;
     title: string;
@@ -13,45 +15,41 @@
       id: 'analytics',
       title: 'Analytics',
       details: 'Weekly funnel snapshots and conversion deltas.',
-      tone: '#f97316',
+      tone: 'var(--color-warning)',
     },
     {
       id: 'ops',
       title: 'Operations',
       details: 'Runbooks, alerts, and deployment health in one place.',
-      tone: '#0f766e',
+      tone: 'var(--color-success)',
     },
     {
       id: 'billing',
       title: 'Billing',
       details: 'Invoice recovery, plan changes, and payment follow-up.',
-      tone: '#2563eb',
+      tone: 'var(--color-info)',
     },
     {
       id: 'eng',
       title: 'Engineering',
       details: 'Release notes, backlog triage, and QA sign-off.',
-      tone: '#7c3aed',
+      tone: 'var(--color-primary)',
     },
   ];
 </script>
 
 {#snippet card(item: CollectionItem, index: number)}
-  <article
-    style={`padding: 20px; border-radius: 16px; border: 1px solid color-mix(in srgb, ${item.tone} 20%, var(--palette-neutral-300)); background: linear-gradient(180deg, color-mix(in srgb, ${item.tone} 10%, white), white); display: grid; gap: 10px; min-height: 164px;`}
-  >
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-      <strong style="font-size: 1rem;">{item.title}</strong>
-      <span
-        style={`display: inline-flex; min-width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 999px; background: ${item.tone}; color: white; font-size: 0.75rem; font-weight: 700;`}
-      >
+  <article class={styles.panel} style={`--_tone: ${item.tone};`}>
+    <div class={styles.header}>
+      <strong class={styles.title}>{item.title}</strong>
+      <span class={styles.badge}>
         {index + 1}
       </span>
     </div>
-    <p style="margin: 0; color: var(--color-text-secondary); line-height: 1.6;">{item.details}</p>
+    <p class={styles.details}>{item.details}</p>
   </article>
 {/snippet}
 
-<div style="width: min(100%, 960px);">
+<div class={styles.frame}>
   <Collection items={items} columns={2} getKey={(item) => item.id} renderItem={card} />
 </div>

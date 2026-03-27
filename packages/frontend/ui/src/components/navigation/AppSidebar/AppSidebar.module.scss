@@ -1,7 +1,20 @@
+/* ─── ベース ─── */
+
 .sidebar {
+  display: flex;
+  flex-direction: column;
+  /* gap は使わず各エリアで間隔を管理する（nav が flex:1 でスクロールするため） */
+  padding: var(--spacing-lg);
+  box-sizing: border-box;
+  /* 子要素がはみ出さないよう高さを明示的に制御 */
+  overflow: hidden;
+}
+
+/* ─── fixed variant（デフォルト・旧 AppSidebar） ─── */
+
+.fixed {
   composes: drawerBase from '@/styles/shared/drawer.module.scss';
 
-  /* Layout specific overrides */
   height: calc(100vh - (var(--spacing-md) * 2));
   margin: var(--spacing-md) 0 var(--spacing-md) var(--spacing-md);
   border-radius: var(--radius-xl);
@@ -9,12 +22,12 @@
   left: 0;
   top: 0;
   transition: transform var(--transition-normal);
-  overflow: visible;
+  /* overflow: visible を削除 — スクロールは .nav が担う */
 }
 
-/* Mobile styles */
+/* Mobile styles（fixed のみ） */
 @media (max-width: 768px) {
-  .sidebar {
+  .fixed {
     transform: translateX(-120%);
     visibility: hidden;
     height: 100vh;
@@ -22,13 +35,29 @@
     border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
   }
 
-  .sidebar.open {
+  .fixed.open {
     transform: translateX(0);
     visibility: visible;
   }
 }
 
-/* Overlay only on mobile */
+[data-theme='dark'] .fixed {
+  background: var(--color-surface-floating);
+  border-color: var(--color-border-subtle);
+}
+
+/* ─── inline variant（旧 SideNav 相当） ─── */
+
+.inline {
+  background: var(--color-surface-floating);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  /* 親が高さを持つ場合に内部スクロールが効くよう overflow を制御 */
+  overflow: hidden;
+}
+
+/* ─── Overlay（fixed のみ、mobile でのみ表示） ─── */
+
 .overlay {
   composes: backdropBase from '@/styles/shared/drawer.module.scss';
   display: none;
@@ -47,15 +76,30 @@
   }
 }
 
-[data-theme='dark'] .sidebar {
-  background: var(--color-surface-floating);
-  border-color: var(--color-border-subtle);
+/* ─── ヘッダーエリア ─── */
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding-bottom: var(--spacing-lg);
 }
 
+/* fixed: ロゴ表示 */
 .logo {
   composes: logoBase from '@/styles/shared/drawer.module.scss';
-  /* Override specific to AppSidebar if needed, but keeping common is best */
+  /* logoBase の margin-bottom は sidebarHeader の padding-bottom で代替するため上書き */
+  margin-bottom: 0;
 }
+
+/* inline: 見出し表示（旧 SideNav の .header に相当） */
+.inlineHeader {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+}
+
+/* ─── 閉じるボタン（fixed・mobile のみ表示） ─── */
 
 .closeParams {
   display: none;
@@ -79,25 +123,151 @@
   }
 }
 
+/* ─── Nav エリア ─── */
+
 .nav {
   composes: navBase from '@/styles/shared/drawer.module.scss';
 }
 
-/* .navItem.active changed to .active for composition */
+/* ─── 共通アイテムスタイル ─── */
+
+.navItem {
+  composes: navPill from '@/styles/shared/navPill.module.scss';
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 .active {
   composes: navPillActive from '@/styles/shared/navPill.module.scss';
 }
 
-.navItem {
-  composes: navPill from '@/styles/shared/navPill.module.scss';
+.navIcon {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
-.navIcon {
-  margin-right: 8px;
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trailing {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.itemButton {
+  width: 100%;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  background: none;
+}
+
+.itemStatic {
+  cursor: default;
+}
+
+/* ─── グループ（折りたたみ付き階層ナビ） ─── */
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupTrigger {
+  width: 100%;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  background: none;
+}
+
+.groupTriggerOpen {
+  color: var(--color-primary);
+}
+
+.groupLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Chevron インジケーター */
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.chevron::before {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--transition-fast);
+}
+
+.chevronOpen::before {
+  transform: rotate(-135deg) translateY(-2px);
+}
+
+/* CSS Grid trick: スムーズなサブメニュー展開 */
+.groupPanel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--transition-normal);
+  overflow: hidden;
+}
+
+.groupPanelOpen {
+  grid-template-rows: 1fr;
+}
+
+.groupPanelInner {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+}
+
+/* サブアイテム：左インデント */
+.childItem {
+  composes: navPill from '@/styles/shared/navPill.module.scss';
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-left: calc(var(--spacing-md) + var(--spacing-lg));
+  font-size: var(--font-size-sm);
+}
+
+.childLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .footer {
-  margin-top: auto;
+  flex-shrink: 0;
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--color-border-subtle);
   font-size: var(--font-size-xs);

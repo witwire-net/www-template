@@ -9,6 +9,8 @@
     children?: Renderable;
     className?: string;
     header?: Renderable;
+    /** `<main>` の id。スキップナビのリンク先と一致させる（デフォルト: 'main-content'） */
+    mainId?: string;
     sidebar?: Renderable;
   };
 
@@ -16,11 +18,15 @@
     children = undefined,
     className = undefined,
     header = undefined,
+    mainId = 'main-content',
     sidebar = undefined,
   }: Props = $props();
 
   const layoutClassName = $derived(joinClassNames(styles.layout ?? '', className));
 </script>
+
+<!-- スキップナビゲーション（キーボード・スクリーンリーダー対応） -->
+<a href={`#${mainId}`} class={styles.skipNav ?? ''}>Skip to main content</a>
 
 <div class={layoutClassName}>
   {#if sidebar !== undefined && sidebar !== null}
@@ -32,17 +38,17 @@
   {/if}
 
   <div class={styles.mainWrapper ?? ''}>
-    <div class={styles.headerWrapper ?? ''}>
-      {#if header !== undefined && header !== null}
+    {#if header !== undefined && header !== null}
+      <div class={styles.headerWrapper ?? ''}>
         {#if isSnippet(header)}
           {@render header()}
         {:else}
           {getTextContent(header)}
         {/if}
-      {/if}
-    </div>
+      </div>
+    {/if}
 
-    <main class={styles.content ?? ''}>
+    <main id={mainId} tabindex="-1" class={styles.content ?? ''}>
       {#if children !== undefined && children !== null}
         {#if isSnippet(children)}
           {@render children()}

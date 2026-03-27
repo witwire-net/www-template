@@ -159,8 +159,8 @@
     <AppSidebar
       footer={rich ? sidebarFooter : '© 2024 www-template UI'}
       isOpen={isSidebarOpen}
-      links={dashboardLinks}
-      logo={rich ? sidebarLogo : 'www-template UI'}
+      items={dashboardLinks}
+      header={rich ? sidebarLogo : 'www-template UI'}
       onClose={() => (isSidebarOpen = false)}
     />
   {/snippet}

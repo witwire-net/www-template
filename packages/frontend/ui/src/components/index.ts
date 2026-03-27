@@ -57,6 +57,8 @@ export { default as Stat } from './data/Stat/Stat.svelte';
 export { default as StatGrid } from './data/StatGrid/StatGrid.svelte';
 export { default as Timeline } from './data/Timeline/Timeline.svelte';
 
+export { default as Collapsible } from './disclosure/Collapsible/Collapsible.svelte';
+
 export { default as Accordion } from './feedback/Accordion/Accordion.svelte';
 export { default as Alert } from './feedback/Alert/Alert.svelte';
 export { default as Confirm } from './feedback/Confirm/Confirm.svelte';
@@ -104,7 +106,6 @@ export { default as Header } from './navigation/Header/Header.svelte';
 export { default as MenuButton } from './navigation/Header/MenuButton.svelte';
 export { default as Pagination } from './navigation/Pagination/Pagination.svelte';
 export { default as SegmentedControl } from './navigation/SegmentedControl/SegmentedControl.svelte';
-export { default as SideNav } from './navigation/SideNav/SideNav.svelte';
 export { default as SiteHeader } from './navigation/Header/SiteHeader.svelte';
 export { default as Stepper } from './navigation/Stepper/Stepper.svelte';
 export { default as Tabs } from './navigation/Tabs/Tabs.svelte';

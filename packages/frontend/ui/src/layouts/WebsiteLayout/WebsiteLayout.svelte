@@ -10,6 +10,12 @@
     className?: string;
     footer?: Renderable;
     header?: Renderable;
+    /** `<main>` の id。スキップナビのリンク先と一致させる（デフォルト: 'main-content'） */
+    mainId?: string;
+    /**
+     * true のとき header を fixed 配置にし、コンテンツ上に重ねる。
+     * ヒーローセクションがヘッダーを透過させたい場合に使用する。
+     */
     overlayHeader?: boolean;
   };
 
@@ -18,6 +24,7 @@
     className = undefined,
     footer = undefined,
     header = undefined,
+    mainId = 'main-content',
     overlayHeader = false,
   }: Props = $props();
 
@@ -25,7 +32,13 @@
   const headerClassName = $derived(
     joinClassNames(styles.headerWrapper ?? '', overlayHeader ? (styles.overlay ?? '') : undefined)
   );
+  const contentClassName = $derived(
+    joinClassNames(styles.content ?? '', overlayHeader ? (styles.contentWithOverlay ?? '') : undefined)
+  );
 </script>
+
+<!-- スキップナビゲーション（キーボード・スクリーンリーダー対応） -->
+<a href={`#${mainId}`} class={styles.skipNav ?? ''}>Skip to main content</a>
 
 <div class={layoutClassName}>
   <div class={headerClassName}>
@@ -38,7 +51,7 @@
     {/if}
   </div>
 
-  <main class={styles.content ?? ''}>
+  <main id={mainId} tabindex="-1" class={contentClassName}>
     {#if children !== undefined && children !== null}
       {#if isSnippet(children)}
         {@render children()}
