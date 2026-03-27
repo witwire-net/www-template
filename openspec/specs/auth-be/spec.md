@@ -1,6 +1,6 @@
 ## Purpose
 
-Auth core backend requirements for Phase 3, covering bearer-compatible passkey authentication, recovery lifecycle, shared register selector boundaries, no-store auth responses, Valkey-backed auth state, SES-backed recovery delivery, and ULID identifier policy.
+Auth core backend requirements, covering bearer-compatible passkey authentication, recovery lifecycle, shared register selector boundaries, no-store auth responses, Valkey-backed auth state, SES-backed recovery delivery, and ULID identifier policy.
 
 ## Requirements
 

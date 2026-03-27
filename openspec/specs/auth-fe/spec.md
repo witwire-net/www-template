@@ -1,6 +1,6 @@
 ## Purpose
 
-Auth core frontend requirements for Phase 3, covering low-emphasis login handoff, passkey-only login, recovery-only routes, no-store auth routes, logout and session-expiry routing, brand constraints, and ULID identifier policy.
+Auth core frontend requirements, covering low-emphasis login handoff, passkey-only login, recovery-only routes, no-store auth routes, logout and session-expiry routing, brand constraints, and ULID identifier policy.
 
 ## Requirements
 
