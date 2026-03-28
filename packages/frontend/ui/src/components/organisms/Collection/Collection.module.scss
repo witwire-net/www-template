@@ -1,3 +1,5 @@
+@use '@/styles/shared/breakpoints' as bp;
+
 .grid {
   width: 100%;
   display: grid;
@@ -36,7 +38,7 @@
   height: 100%;
 }
 
-@media (max-width: 960px) {
+@include bp.fold-3xl-down {
   .columns4,
   .columns5,
   .columns6 {
@@ -44,7 +46,7 @@
   }
 }
 
-@media (max-width: 720px) {
+@include bp.fold-xl-down {
   .grid {
     row-gap: var(--spacing-md);
   }
@@ -58,7 +60,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@include bp.fold-md-down {
   .grid {
     column-gap: var(--spacing-sm);
   }

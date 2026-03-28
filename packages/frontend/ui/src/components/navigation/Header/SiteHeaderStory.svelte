@@ -6,7 +6,7 @@
   import Button from '@ui/components/atoms/Button/Button.svelte';
   import Icon from '@ui/components/atoms/Icon/Icon.svelte';
 
-  import SiteHeader from './SiteHeader.svelte';
+  import Header from './Header.svelte';
 
   let { customIcon = false, customLabels = false }: { customIcon?: boolean; customLabels?: boolean } = $props();
 
@@ -20,7 +20,7 @@
 </script>
 
 {#if customIcon}
-  <SiteHeader logo="www-template UI" {links}>
+  <Header variant="site" logo="www-template UI" {links}>
     {#snippet menuIcon()}
       <Icon icon={IconBolt} size={24} title="Open menu" />
     {/snippet}
@@ -43,9 +43,10 @@
         Get Started
       </Button>
     {/snippet}
-  </SiteHeader>
+  </Header>
 {:else}
-  <SiteHeader
+  <Header
+    variant="site"
     logo="www-template UI"
     {links}
     navigationAriaLabel={customLabels ? 'Primary site navigation' : undefined}
@@ -74,7 +75,7 @@
         Get Started
       </Button>
     {/snippet}
-  </SiteHeader>
+  </Header>
 {/if}
 
 <div style="padding: 1rem 1.5rem; color: var(--color-text-muted);">Last action: {lastAction}</div>

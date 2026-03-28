@@ -8,7 +8,7 @@
   import Card from '@ui/components/molecules/Card/Card.svelte';
   import CardBody from '@ui/components/molecules/Card/CardBody.svelte';
   import Footer from '@ui/components/navigation/Footer/Footer.svelte';
-  import SiteHeader from '@ui/components/navigation/Header/SiteHeader.svelte';
+  import Header from '@ui/components/navigation/Header/Header.svelte';
 
   import WebsiteLayout from './WebsiteLayout.svelte';
 
@@ -67,7 +67,8 @@
 
 <WebsiteLayout overlayHeader={true}>
   {#snippet header()}
-    <SiteHeader
+    <Header
+      variant="site"
       actions={rich ? headerActions : undefined}
       links={rich ? richLinks : defaultLinks}
       logo={rich ? richBrand : undefined}

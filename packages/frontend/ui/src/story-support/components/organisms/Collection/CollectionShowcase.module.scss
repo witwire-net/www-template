@@ -1,3 +1,5 @@
+@use '@/styles/shared/breakpoints' as bp;
+
 .frame {
   width: min(100%, 60rem);
 }
@@ -49,7 +51,7 @@
   line-height: var(--line-height-relaxed);
 }
 
-@media (max-width: 560px) {
+@include bp.fold-md-down {
   .panel {
     padding: var(--spacing-md);
   }

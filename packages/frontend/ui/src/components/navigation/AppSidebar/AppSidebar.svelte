@@ -10,6 +10,7 @@
   import Icon from '@ui/components/atoms/Icon/Icon.svelte';
 
   import { getTextContent, isSnippet, joinClassNames, type Renderable } from '@ui/components/navigation/shared';
+  import { useBreakpoint } from '@ui/hooks/useBreakpoint.svelte';
 
   import styles from './AppSidebar.module.scss';
 
@@ -82,11 +83,9 @@
 
   $effect(() => {
     const map: Record<number, boolean> = {};
-
     for (const [index, item] of items.entries()) {
       map[index] = shouldInitExpanded(item);
     }
-
     expandedMap = map;
   });
 
@@ -97,6 +96,8 @@
   const isFixed = $derived(variant === 'fixed');
   const canClose = $derived(onClose !== undefined && isFixed);
 
+  const bp = useBreakpoint();
+
   const sidebarClassName = $derived(
     joinClassNames(
       styles.sidebar ?? '',
@@ -106,13 +107,11 @@
     )
   );
 
-  let isMobileViewport = $state(false);
-
   const overlayClassName = $derived(
     joinClassNames(styles.overlay ?? '', isOpen ? (styles.open ?? '') : undefined)
   );
-  const isMobileSidebarHidden = $derived(isFixed && isMobileViewport && !isOpen);
-  const showMobileOverlay = $derived(isFixed && isMobileViewport && isOpen);
+  const isMobileSidebarHidden = $derived(isFixed && bp.isMobile && !isOpen);
+  const showMobileOverlay = $derived(isFixed && bp.isMobile && isOpen);
 
   function handleClose(): void {
     onClose?.();
@@ -128,25 +127,6 @@
       handleClose();
     }
   }
-
-  $effect(() => {
-    if (!isFixed || typeof window === 'undefined') {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia('(max-width: 768px)');
-
-    const updateViewport = (): void => {
-      isMobileViewport = mediaQuery.matches;
-    };
-
-    updateViewport();
-    mediaQuery.addEventListener('change', updateViewport);
-
-    return () => {
-      mediaQuery.removeEventListener('change', updateViewport);
-    };
-  });
 
   $effect(() => {
     if (!isFixed || typeof document === 'undefined' || !isOpen) {

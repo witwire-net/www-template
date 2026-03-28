@@ -1,0 +1,113 @@
+// _breakpoints.scss — Single source of truth for all breakpoints.
+// Must stay in sync with BREAKPOINTS in useBreakpoint.svelte.ts.
+
+// ── Device tiers ──────────────────────────────────────────────────────────────
+$mobile-max: 767px;
+$tablet-min: 768px;
+$tablet-max: 1023px;
+$desktop-min: 1024px;
+
+// ── Grid tiers (Bootstrap-compatible) ────────────────────────────────────────
+$grid-sm: 576px;
+$grid-md: 768px;
+$grid-lg: 992px;
+$grid-xl: 1200px;
+$grid-2xl: 1400px;
+
+// ── Content fold points (component-level wrapping thresholds) ─────────────────
+$fold-xs: 360px; // very small modals / compact widgets
+$fold-sm: 520px; // small modal max-width
+$fold-md: 560px; // collection 1-col / story-showcase stack threshold
+$fold-lg: 640px; // inline-form stack threshold
+$fold-xl: 720px; // 2-col threshold (invoices, webhooks, collection)
+$fold-2xl: 860px; // hero section mid breakpoint
+$fold-2xl-sm: 600px; // hero section small breakpoint
+$fold-3xl: 960px; // large modal / collection 3-col threshold
+
+// ── Convenience mixins ────────────────────────────────────────────────────────
+
+// Device tier mixins
+@mixin mobile-only {
+  @media (max-width: #{$mobile-max}) {
+    @content;
+  }
+}
+@mixin tablet-only {
+  @media (min-width: #{$tablet-min}) and (max-width: #{$tablet-max}) {
+    @content;
+  }
+}
+@mixin desktop-only {
+  @media (min-width: #{$desktop-min}) {
+    @content;
+  }
+}
+@mixin tablet-up {
+  @media (min-width: #{$tablet-min}) {
+    @content;
+  }
+}
+@mixin desktop-up {
+  @media (min-width: #{$desktop-min}) {
+    @content;
+  }
+}
+
+// Grid tier mixins
+@mixin sm-up {
+  @media (min-width: #{$grid-sm}) {
+    @content;
+  }
+}
+@mixin md-up {
+  @media (min-width: #{$grid-md}) {
+    @content;
+  }
+}
+@mixin lg-up {
+  @media (min-width: #{$grid-lg}) {
+    @content;
+  }
+}
+@mixin xl-up {
+  @media (min-width: #{$grid-xl}) {
+    @content;
+  }
+}
+@mixin xxl-up {
+  @media (min-width: #{$grid-2xl}) {
+    @content;
+  }
+}
+
+// Content fold mixins (max-width, component-level)
+@mixin fold-md-down {
+  @media (max-width: #{$fold-md}) {
+    @content;
+  }
+}
+@mixin fold-lg-down {
+  @media (max-width: #{$fold-lg}) {
+    @content;
+  }
+}
+@mixin fold-xl-down {
+  @media (max-width: #{$fold-xl}) {
+    @content;
+  }
+}
+@mixin fold-2xl-sm-down {
+  @media (max-width: #{$fold-2xl-sm}) {
+    @content;
+  }
+}
+@mixin fold-2xl-down {
+  @media (max-width: #{$fold-2xl}) {
+    @content;
+  }
+}
+@mixin fold-3xl-down {
+  @media (max-width: #{$fold-3xl}) {
+    @content;
+  }
+}

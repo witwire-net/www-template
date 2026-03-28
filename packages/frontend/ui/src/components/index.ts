@@ -98,15 +98,12 @@ export { default as InfoCard } from './molecules/InfoCard/InfoCard.svelte';
 export { default as SectionHeading } from './molecules/SectionHeading/SectionHeading.svelte';
 export { default as TrustBadge } from './molecules/TrustBadge/TrustBadge.svelte';
 
-export { default as AppHeader } from './navigation/Header/AppHeader.svelte';
 export { default as AppSidebar } from './navigation/AppSidebar/AppSidebar.svelte';
 export { default as Breadcrumb } from './navigation/Breadcrumb/Breadcrumb.svelte';
 export { default as Footer } from './navigation/Footer/Footer.svelte';
 export { default as Header } from './navigation/Header/Header.svelte';
-export { default as MenuButton } from './navigation/Header/MenuButton.svelte';
 export { default as Pagination } from './navigation/Pagination/Pagination.svelte';
 export { default as SegmentedControl } from './navigation/SegmentedControl/SegmentedControl.svelte';
-export { default as SiteHeader } from './navigation/Header/SiteHeader.svelte';
 export { default as Stepper } from './navigation/Stepper/Stepper.svelte';
 export { default as Tabs } from './navigation/Tabs/Tabs.svelte';
 

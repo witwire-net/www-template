@@ -5,7 +5,7 @@
   import Card from '@ui/components/molecules/Card/Card.svelte';
   import CardBody from '@ui/components/molecules/Card/CardBody.svelte';
   import AppSidebar from '@ui/components/navigation/AppSidebar/AppSidebar.svelte';
-  import AppHeader from '@ui/components/navigation/Header/AppHeader.svelte';
+  import Header from '@ui/components/navigation/Header/Header.svelte';
   import Table from '@ui/components/organisms/Table/Table.svelte';
 
   import DashboardLayout from './DashboardLayout.svelte';
@@ -146,7 +146,8 @@
 
 <DashboardLayout>
   {#snippet header()}
-    <AppHeader
+    <Header
+      variant="app"
       actions={rich ? headerActions : undefined}
       links={[]}
       onMenuClick={() => {

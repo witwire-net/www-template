@@ -6,7 +6,7 @@
   import Button from '@ui/components/atoms/Button/Button.svelte';
   import Icon from '@ui/components/atoms/Icon/Icon.svelte';
 
-  import AppHeader from './AppHeader.svelte';
+  import Header from './Header.svelte';
 
   let { customIcon = false }: { customIcon?: boolean } = $props();
 
@@ -21,7 +21,8 @@
 </script>
 
 {#if customIcon}
-  <AppHeader
+  <Header
+    variant="app"
     logo="www-template UI"
     {links}
     onMenuClick={() => {
@@ -50,9 +51,10 @@
         Get Started
       </Button>
     {/snippet}
-  </AppHeader>
+  </Header>
 {:else}
-  <AppHeader
+  <Header
+    variant="app"
     logo="www-template UI"
     {links}
     onMenuClick={() => {
@@ -78,7 +80,7 @@
         Get Started
       </Button>
     {/snippet}
-  </AppHeader>
+  </Header>
 {/if}
 
 <div style="padding: 1rem 1.5rem; color: var(--color-text-muted);">

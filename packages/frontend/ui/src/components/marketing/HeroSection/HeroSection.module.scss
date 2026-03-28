@@ -4,6 +4,8 @@
    WitWire Flat & Bright — no blur, no glow, no shadow
    ==================================== */
 
+@use '@/styles/shared/breakpoints' as bp;
+
 .root {
   position: relative;
   display: flex;
@@ -886,7 +888,7 @@
 }
 
 /* ── Responsive ── */
-@media (max-width: 860px) {
+@include bp.fold-2xl-down {
   .title {
     font-size: clamp(2rem, 7vw, 3.5rem);
   }
@@ -1077,7 +1079,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@include bp.fold-2xl-sm-down {
   .title {
     font-size: clamp(1.75rem, 9vw, 2.5rem);
   }

@@ -1,3 +1,5 @@
+@use '@/styles/shared/breakpoints' as bp;
+
 .list {
   display: flex;
   flex-direction: column;
@@ -57,7 +59,7 @@
   align-self: center;
 }
 
-@media (max-width: 720px) {
+@include bp.fold-xl-down {
   .row {
     grid-template-columns: 1fr;
   }
