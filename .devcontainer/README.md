@@ -9,7 +9,7 @@
 - `gopls` `goimports` `dlv` `golangci-lint` `air`
 - `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode`
 - Playwright 実行に必要な Linux 依存
-- PostgreSQL Valkey OpenSearch MinIO Mailpit のローカルサービス
+- PostgreSQL 18 Valkey 9 OpenSearch 3 MinIO Mailpit のローカルサービス
 - `docker` と `docker compose` をコンテナ内から利用可能
 
 ## コンテナ起動後の状態
@@ -47,3 +47,4 @@
 
 - frontend と Go API 向けの主要ポートを forward しています
 - 今後の Go API や OpenNext アプリ向けに `3000` `3001` `8080` `8081` も forward しています
+- PostgreSQL と OpenSearch は major 更新時のローカルデータ衝突を避けるため versioned named volume を使っています
