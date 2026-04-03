@@ -2,7 +2,7 @@ ARG NODE_VERSION=24.12.0
 FROM node:${NODE_VERSION}-bookworm
 
 ARG GO_VERSION=1.26.1
-ARG PNPM_VERSION=10.32.1
+ARG PNPM_VERSION=10.33.0
 ARG TYPESPEC_VERSION=1.8.0
 ARG GORM_VERSION=1.31.0
 ARG GOLANG_MIGRATE_VERSION=4.18.3
@@ -95,7 +95,7 @@ RUN chmod +x /root/.local/bin/uv /root/.local/bin/uvx \
     && cp /root/.local/bin/uvx /usr/local/bin/uvx \
     && chmod 755 /usr/local/bin/uv /usr/local/bin/uvx
 
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+RUN corepack enable
 
 RUN mkdir -p \
     /go/pkg/mod \
@@ -103,15 +103,15 @@ RUN mkdir -p \
     /home/node/.cache/go-build \
     /home/node/.local/bin \
     /home/node/.local/share/pnpm \
+    /home/node/.local/share/pnpm/store \
     /home/node/.npm-global \
     && chown -R node:node \
     /go \
     /ms-playwright \
     /home/node/.cache \
     /home/node/.local \
-    /home/node/.npm-global
-
-RUN printf '%s\n' \
+    /home/node/.npm-global \
+    && printf '%s\n' \
     'export NPM_CONFIG_PREFIX="/home/node/.npm-global"' \
     'export PNPM_HOME="/home/node/.local/share/pnpm"' \
     'export GOPATH="/go"' \
@@ -122,6 +122,8 @@ RUN printf '%s\n' \
     > /etc/profile.d/99-template-paths.sh
 
 USER node
+
+RUN corepack prepare pnpm@${PNPM_VERSION} --activate
 
 ENV GOBIN=/home/node/.local/bin
 

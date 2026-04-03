@@ -1,13 +1,14 @@
 import { fileURLToPath, URL } from 'node:url';
 
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 const svelteRuntimeChunkPattern =
   /[/\\]svelte[/\\]src[/\\](?:internal[/\\]client[/\\]runtime|index-client)\.js$/;
 
 export default defineConfig({
-  plugins: [sveltekit()],
+  plugins: [tailwindcss(), sveltekit()],
   build: {
     rollupOptions: {
       output: {
@@ -23,6 +24,10 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      {
+        find: '@www-template-frontend/ui/styles',
+        replacement: fileURLToPath(new URL('../ui/src/styles/index.ts', import.meta.url)),
+      },
       {
         find: '@www-template-frontend/ui/components',
         replacement: fileURLToPath(new URL('../ui/src/components/index.ts', import.meta.url)),

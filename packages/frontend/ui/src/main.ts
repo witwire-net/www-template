@@ -1,7 +1,7 @@
 import { mount } from 'svelte';
 
 import App from './App.svelte';
-import './styles/base/global.scss';
+import './styles/index';
 
 const rootElement = document.getElementById('root');
 

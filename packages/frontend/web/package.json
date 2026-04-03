@@ -18,6 +18,7 @@
     "@www-template-frontend/ui": "workspace:*"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
     "@sveltejs/adapter-cloudflare": "^7.1.0",
     "@sveltejs/kit": "^2.48.4",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
@@ -29,6 +30,7 @@
     "msw": "^2.12.7",
     "svelte": "^5.53.9",
     "svelte-check": "^4.4.5",
+    "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^3.2.4"

@@ -22,6 +22,7 @@ const config = {
       '@www-template-frontend/domain/*': '../domain/src/*',
       '@www-template-frontend/ui': '../ui/src/index.ts',
       '@www-template-frontend/ui/components': '../ui/src/components/index.ts',
+      '@www-template-frontend/ui/styles': '../ui/src/styles/index.ts',
       '@www-template-frontend/ui/*': '../ui/src/*',
       '@': '../ui/src',
       '@/*': '../ui/src/*',

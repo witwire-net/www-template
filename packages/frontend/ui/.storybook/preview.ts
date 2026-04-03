@@ -1,4 +1,4 @@
-import '../src/styles/base/global.scss';
+import '../src/styles/index';
 
 import type { Preview } from '@storybook/svelte-vite';
 
