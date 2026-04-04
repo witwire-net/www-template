@@ -1,5 +1,5 @@
 {
-  "name": "@www-template-frontend/api",
+  "name": "@www-template/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",

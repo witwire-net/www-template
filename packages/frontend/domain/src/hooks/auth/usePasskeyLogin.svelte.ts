@@ -1,4 +1,4 @@
-import { authApi } from '@www-template-frontend/api';
+import { authApi } from '@www-template/api';
 
 import { createPasskeyLoginInitialState, toPasskeyErrorMessage } from '../../auth/passkeyState';
 

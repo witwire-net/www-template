@@ -1,5 +1,5 @@
 {
-  "name": "@www-template-frontend/web",
+  "name": "@www-template/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@www-template-frontend/ui": "workspace:*"
+    "@www-template/ui": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",

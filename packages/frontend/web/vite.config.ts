@@ -25,15 +25,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@www-template-frontend/ui/styles',
+        find: '@www-template/ui/styles',
         replacement: fileURLToPath(new URL('../ui/src/styles/index.ts', import.meta.url)),
       },
       {
-        find: '@www-template-frontend/ui/components',
+        find: '@www-template/ui/components',
         replacement: fileURLToPath(new URL('../ui/src/components/index.ts', import.meta.url)),
       },
       {
-        find: '@www-template-frontend/ui',
+        find: '@www-template/ui',
         replacement: fileURLToPath(new URL('../ui/src/index.ts', import.meta.url)),
       },
       {
@@ -45,7 +45,7 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('../ui/src', import.meta.url)),
       },
       {
-        find: /^@www-template-frontend\/ui\/(.*)$/,
+        find: /^@www-template\/ui\/(.*)$/,
         replacement: `${fileURLToPath(new URL('../ui/src/', import.meta.url))}$1`,
       },
       {
@@ -57,11 +57,11 @@ export default defineConfig({
         replacement: `${fileURLToPath(new URL('../ui/src/', import.meta.url))}$1`,
       },
       {
-        find: '@www-template-frontend/api',
+        find: '@www-template/api',
         replacement: fileURLToPath(new URL('../api/src/index.ts', import.meta.url)),
       },
       {
-        find: /^@www-template-frontend\/api\/(.*)$/,
+        find: /^@www-template\/api\/(.*)$/,
         replacement: `${fileURLToPath(new URL('../api/src/', import.meta.url))}$1`,
       },
     ],
