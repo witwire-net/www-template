@@ -2,8 +2,7 @@
 description: Frontend implementation specialist. Loads gpt-ux, coding-guardian, and orchestration-playbook skills to implement, fix, investigate, and iterate on SvelteKit web, SvelteKit SPA app, and domain code, while preparing designer-ready frontend surfaces and converging changes until reviewer approval.
 mode: subagent
 hidden: true
-model: github-copilot/gpt-5.4
-reasoningEffort: 'medium'
+model: github-copilot/claude-sonnet-4.6
 temperature: 0.1
 permission:
   edit: allow
@@ -68,7 +67,7 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - Enforce frontend dependency direction: `web -> domain -> api` and `app -> domain -> api`
 - Keep engineer-authored style in `packages/frontend/app` and `packages/frontend/web` to the absolute minimum needed to prepare designer-ready shells. Presentation styling belongs in the designer pass.
 - Do not add significant presentation styling yourself when the designer can own the DOM and style implementation.
-- Never import `@www-template-frontend/api` directly from `app`; always go through a domain hook
+- Never import `@www-template/api` directly from `app`; always go through a domain hook
 - Never use `fetch`, `axios`, or `cross-fetch` directly
 - Keep `packages/frontend/app` as the `/app`-served CSR surface and keep auth routes under that app without reintroducing SvelteKit-only route behavior there
 - Never hand-edit generated files (`openapi.json`, `client.ts`, `openapi.gen.go`)

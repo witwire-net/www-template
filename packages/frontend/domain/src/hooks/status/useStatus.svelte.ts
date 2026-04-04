@@ -1,4 +1,4 @@
-import { statusApi } from '@www-template-frontend/api';
+import { statusApi } from '@www-template/api';
 
 import { createStatusInitialState, toStatusErrorMessage } from '../../status/statusState';
 

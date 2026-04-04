@@ -2,11 +2,11 @@
   <title>www-template</title>
   <meta
     name="description"
-    content="www-template の公開 SSR ルートを提供し、認証付き `/app/*` は別CSRアプリへ委譲する SvelteKit フロントエンド"
+    content="www-template の公開 SSR ルートを提供する SvelteKit フロントエンド"
   />
 </svelte:head>
 <script lang="ts">
-  import '@www-template-frontend/ui/styles';
+  import '@www-template/ui/styles';
   import type { Snippet } from 'svelte';
 
   type NavLink = {
@@ -18,8 +18,6 @@
 
   const links: NavLink[] = [
     { href: '/', label: 'Home' },
-    { href: '/app/login', label: 'Login' },
-    { href: '/app', label: 'App' },
   ];
 </script>
 
@@ -36,10 +34,6 @@
   <main class="content">
     {@render children()}
   </main>
-
-  <footer class="site-footer">
-    <a class="footer-link" href="/app/login" aria-label="ログイン">ログイン</a>
-  </footer>
 </div>
 
 <style>
@@ -102,30 +96,5 @@
     width: min(1120px, calc(100vw - 2rem));
     margin: 0 auto;
     padding: clamp(1.25rem, 4vw, 3rem) 0 4rem;
-  }
-
-  .site-footer {
-    display: flex;
-    justify-content: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md);
-    border-top: 1px solid var(--color-border-subtle);
-  }
-
-  .footer-link {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-regular);
-    color: var(--color-text-muted);
-    text-decoration: none;
-  }
-
-  .footer-link:hover {
-    color: var(--color-text-secondary);
-  }
-
-  .footer-link:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-    border-radius: 0.25rem;
   }
 </style>

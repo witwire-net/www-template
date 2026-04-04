@@ -17,7 +17,7 @@ function createAuthSessionInitialState(): AuthSessionState {
   return {
     phase: 'anonymous',
     session: null,
-    routeIntent: '/app/login',
+    routeIntent: '/login',
     lastFailure: null,
     lastError: null,
     lastCacheControl: null,
@@ -32,7 +32,7 @@ function applyAuthenticatedSession(
 ): void {
   state.phase = 'authenticated';
   state.session = session;
-  state.routeIntent = '/app/login';
+  state.routeIntent = '/login';
   state.lastFailure = null;
   state.lastError = null;
   state.lastCacheControl = cacheControl;
@@ -45,7 +45,7 @@ function applyMissingSession(
 ): AuthRouteIntent {
   state.phase = 'anonymous';
   state.session = null;
-  state.routeIntent = '/app/login';
+  state.routeIntent = '/login';
   state.lastFailure = 'unauthenticated';
   state.lastError = null;
   state.lastCacheControl = cacheControl;
@@ -59,7 +59,7 @@ function applyExpiredSession(
 ): AuthRouteIntent {
   state.phase = 'session-expired';
   state.session = null;
-  state.routeIntent = '/app/session-expired';
+  state.routeIntent = '/session-expired';
   state.lastFailure = 'session-expired';
   state.lastError = null;
   state.lastCacheControl = cacheControl;
@@ -84,7 +84,7 @@ function clearAuthSession(
 ): AuthRouteIntent {
   state.phase = 'anonymous';
   state.session = null;
-  state.routeIntent = '/app/login';
+  state.routeIntent = '/login';
   state.lastFailure = null;
   state.lastError = null;
   state.lastCacheControl = cacheControl;

@@ -2,7 +2,7 @@
 description: Backend implementation specialist. Loads coding-guardian and orchestration-playbook skills to implement, fix, investigate, and iterate on Go backend code until reviewer approval, then returns results to the caller.
 mode: subagent
 hidden: true
-model: github-copilot/gpt-5.4
+model: github-copilot/claude-sonnet-4.6
 temperature: 0.1
 permission:
   edit: allow

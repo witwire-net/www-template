@@ -30,11 +30,9 @@ interface RecoveryReadySnapshot {
 
 interface RecoveryFlowActions {
   setEmail: (email: string) => void;
-  submitRecoveryRequest: () => Promise<'/app/login/recovery/sent' | null>;
-  consumeToken: (
-    token: string
-  ) => Promise<'/app/login/recovery/register' | '/app/login/recovery' | null>;
-  registerRecoveryPasskey: (credential?: string) => Promise<'/app' | null>;
+  submitRecoveryRequest: () => Promise<'/login/recovery/sent' | null>;
+  consumeToken: (token: string) => Promise<'/login/recovery/register' | '/login/recovery' | null>;
+  registerRecoveryPasskey: (credential?: string) => Promise<null>;
   /** ready state の snapshot を取得する。フルリロード遷移前に app 層が永続化に使う。 */
   getReadySnapshot: () => RecoveryReadySnapshot | null;
   /** app 層が永続化から復元した snapshot で ready state を再構成する。 */
@@ -44,7 +42,7 @@ interface RecoveryFlowActions {
 
 const createSubmitRecoveryRequestAction =
   (state: RecoveryFlowState, authSession: ReturnType<typeof useAuthSession>) =>
-  async (): Promise<'/app/login/recovery/sent' | null> => {
+  async (): Promise<'/login/recovery/sent' | null> => {
     state.phase = 'submitting';
     state.error = null;
 
@@ -58,7 +56,7 @@ const createSubmitRecoveryRequestAction =
           response.data.requestId,
           response.headers.get(CACHE_CONTROL_HEADER)
         );
-        return '/app/login/recovery/sent';
+        return '/login/recovery/sent';
       }
 
       if (response.status === 401 || response.status === 503) {
@@ -79,7 +77,7 @@ const createSubmitRecoveryRequestAction =
 
 const createConsumeTokenAction =
   (state: RecoveryFlowState, authSession: ReturnType<typeof useAuthSession>) =>
-  async (token: string): Promise<'/app/login/recovery/register' | '/app/login/recovery' | null> => {
+  async (token: string): Promise<'/login/recovery/register' | '/login/recovery' | null> => {
     state.phase = 'consuming';
     state.error = null;
 
@@ -99,7 +97,7 @@ const createConsumeTokenAction =
           },
           response.headers.get(CACHE_CONTROL_HEADER)
         );
-        return '/app/login/recovery/register';
+        return '/login/recovery/register';
       }
 
       if (response.status === 400) {
@@ -108,7 +106,7 @@ const createConsumeTokenAction =
           '復旧リンクを確認できませんでした。再度復旧をお試しください。',
           response.headers.get(CACHE_CONTROL_HEADER)
         );
-        return '/app/login/recovery';
+        return '/login/recovery';
       }
 
       if (response.status === 503) {
@@ -119,13 +117,13 @@ const createConsumeTokenAction =
       return null;
     } catch (error: unknown) {
       applyInvalidRecoveryToken(state, toRecoveryErrorMessage(error), state.lastCacheControl);
-      return '/app/login/recovery';
+      return '/login/recovery';
     }
   };
 
 const createRegisterRecoveryPasskeyAction =
   (state: RecoveryFlowState, authSession: ReturnType<typeof useAuthSession>) =>
-  async (credential?: string): Promise<'/app' | null> => {
+  async (credential?: string): Promise<null> => {
     if (state.recoverySession === null) {
       applyInvalidRecoveryToken(
         state,
@@ -152,7 +150,7 @@ const createRegisterRecoveryPasskeyAction =
           response.headers.get(CACHE_CONTROL_HEADER)
         );
         clearRecoveryState(state);
-        return '/app';
+        return null;
       }
 
       if (response.status === 400) {

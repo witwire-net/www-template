@@ -109,10 +109,10 @@ importers:
 
   packages/frontend/app:
     dependencies:
-      '@www-template-frontend/domain':
+      '@www-template/domain':
         specifier: workspace:*
         version: link:../domain
-      '@www-template-frontend/ui':
+      '@www-template/ui':
         specifier: workspace:*
         version: link:../ui
     devDependencies:
@@ -167,7 +167,7 @@ importers:
 
   packages/frontend/domain:
     dependencies:
-      '@www-template-frontend/api':
+      '@www-template/api':
         specifier: workspace:*
         version: link:../api
     devDependencies:
@@ -298,10 +298,7 @@ importers:
 
   packages/frontend/web:
     dependencies:
-      '@www-template-frontend/domain':
-        specifier: workspace:*
-        version: link:../domain
-      '@www-template-frontend/ui':
+      '@www-template/ui':
         specifier: workspace:*
         version: link:../ui
     devDependencies:

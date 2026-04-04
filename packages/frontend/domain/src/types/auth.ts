@@ -1,5 +1,5 @@
 /** 認証導線が選択する route intent。 */
-export type AuthRouteIntent = '/app/login' | '/app/session-expired';
+export type AuthRouteIntent = '/login' | '/session-expired';
 
 /** auth failure の安定分類。 */
 export type AuthFailureState = 'unauthenticated' | 'session-expired' | 'internal-error';

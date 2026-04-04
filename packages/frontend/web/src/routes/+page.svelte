@@ -1,11 +1,7 @@
 <script lang="ts">
-  import StatusCard from '../lib/status/StatusCard.svelte';
-
   const highlights = [
-    'public route は SSR のまま `/app/*` の外に維持',
-    '認証 UI は `/app/*` の CSR アプリとして分離',
-    'passkey / recovery を含む認証 API を TypeSpec と Go backend で共有',
-    '画面から API へ直接触れず domain hook を経由',
+    'public route は SSR の SvelteKit として運用',
+    '認証 UI は別ドメインの CSR アプリとして分離',
   ];
 </script>
 
@@ -14,22 +10,15 @@
     <div class="eyebrow">SvelteKit + Cloudflare Workers</div>
     <h1>公開面と認証面を再利用しやすい構成でまとめています。</h1>
     <p>
-      `packages/frontend/web` は公開ルートの SSR を担い、`packages/frontend/app` は `/app/*` の
-      SvelteKit SPA を担います。
+      `packages/frontend/web` は公開ルートの SSR を担い、`packages/frontend/app` は
+      別ドメインの SvelteKit SPA を担います。
     </p>
-    <div class="cta-row">
-      <a class="primary" href="/app/login">ログインを試す</a>
-      <a class="secondary" href="/app">認証アプリを開く</a>
-    </div>
-
     <ul>
       {#each highlights as item (item)}
         <li>{item}</li>
       {/each}
     </ul>
   </div>
-
-  <StatusCard />
 </section>
 
 <style>
@@ -69,32 +58,6 @@
   li {
     color: var(--color-text-secondary);
     line-height: var(--line-height-relaxed);
-  }
-
-  .cta-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.8rem;
-  }
-
-  .primary,
-  .secondary {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.85rem 1.15rem;
-    border-radius: var(--radius-full);
-    font-weight: var(--font-weight-bold);
-  }
-
-  .primary {
-    background: var(--gradient-primary);
-    color: var(--color-text-on-brand);
-  }
-
-  .secondary {
-    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
   }
 
   ul {

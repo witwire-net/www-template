@@ -13,17 +13,16 @@ interface SessionGuardActions {
 interface SessionGuardOptions {
   readPathname: () => string;
   redirectTo: (intent: AuthRouteIntent) => void;
-  sessionExpiredPath?: Extract<AuthRouteIntent, '/app/session-expired'>;
+  sessionExpiredPath?: Extract<AuthRouteIntent, '/session-expired'>;
 }
 
-const SESSION_EXPIRED_PATH: Extract<AuthRouteIntent, '/app/session-expired'> =
-  '/app/session-expired';
+const SESSION_EXPIRED_PATH: Extract<AuthRouteIntent, '/session-expired'> = '/session-expired';
 
 const resolveSessionGuardIntent = (
   pathname: string,
   state: SessionGuardData['state'],
   authSessionActions: ReturnType<typeof useAuthSession>['actions'],
-  sessionExpiredPath: Extract<AuthRouteIntent, '/app/session-expired'>
+  sessionExpiredPath: Extract<AuthRouteIntent, '/session-expired'>
 ): AuthRouteIntent | null => {
   if (pathname === sessionExpiredPath) {
     return null;
@@ -44,7 +43,7 @@ const resolveSessionGuardIntent = (
  * auth session phase を監視し、必要な route へ fail-close redirect する。
  *
  * - redirect 実行は app 層 callback に委譲し、domain は intent 判定に集中する。
- * - `/app/session-expired` 上では redirect を抑止してループを防ぐ。
+ * - `/session-expired` 上では redirect を抑止してループを防ぐ。
  */
 function useSessionGuard(options: SessionGuardOptions): {
   data: SessionGuardData;

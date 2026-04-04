@@ -34,9 +34,6 @@ const config = {
       '@ui/*': '../ui/src/*',
       types: '../domain/src/types',
     },
-    paths: {
-      base: '/app',
-    },
   },
 };
 

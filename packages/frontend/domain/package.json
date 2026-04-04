@@ -1,5 +1,5 @@
 {
-  "name": "@www-template-frontend/domain",
+  "name": "@www-template/domain",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "./types": "./src/types/index.ts"
   },
   "dependencies": {
-    "@www-template-frontend/api": "workspace:*"
+    "@www-template/api": "workspace:*"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

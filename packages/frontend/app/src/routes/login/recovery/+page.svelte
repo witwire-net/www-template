@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { useRecoveryFlow } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
-  import { Button, Card, Divider, Input, Link, Typography } from '@www-template-frontend/ui/components';
+  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { Button, Card, CardContent, Input, Label, Separator } from '@www-template/ui/components';
 
   const { data, actions } = useRecoveryFlow();
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    if ((await actions.submitRecoveryRequest()) === '/app/login/recovery/sent') {
-      window.location.href = '/app/login/recovery/sent';
+    if ((await actions.submitRecoveryRequest()) === '/login/recovery/sent') {
+      window.location.href = '/login/recovery/sent';
     }
   }
 
@@ -19,67 +19,66 @@
 
 <div class="auth-shell">
   <header class="auth-header">
-    <Link variant="ghost" href="/" aria-label="www-template トップページ">
-      <Typography variant="body" weight="bold" className="auth-logo">www-template</Typography>
-    </Link>
+    <a href="/" class="site-link" aria-label="www-template トップページ">
+      <span class="logo-text">www-template</span>
+    </a>
   </header>
 
-  <Divider />
+  <Separator />
 
   <main class="auth-main">
-    <Card padding="xl" className="auth-card">
-      <div class="auth-card-content">
-        <Typography variant="h1" weight="bold" align="center">パスキー復旧</Typography>
-        <Typography variant="body-sm" color="secondary" align="center">
-          登録済みのメールアドレスを入力してください。復旧用のリンクをお送りします。
-        </Typography>
+    <Card class="w-full">
+      <CardContent>
+        <div class="auth-card-content">
+          <h1 class="auth-title">パスキー復旧</h1>
+          <p class="auth-desc">
+            登録済みのメールアドレスを入力してください。復旧用のリンクをお送りします。
+          </p>
 
-        {#if data.state.error}
-          <Typography variant="body-sm" className="auth-error" role="alert">
-            {data.state.error}
-          </Typography>
-        {/if}
+          {#if data.state.error}
+            <p class="auth-error" role="alert">{data.state.error}</p>
+          {/if}
 
-        <form class="auth-form" onsubmit={handleSubmit}>
-          <Input
-            id="recovery-email"
-            label="メールアドレス"
-            type="email"
-            autocomplete="email"
-            required
-            placeholder="you@example.com"
-            value={data.state.email}
-            oninput={handleEmailInput}
-            disabled={data.state.phase === 'submitting'}
-            fullWidth
-          />
+          <form class="auth-form" onsubmit={handleSubmit}>
+            <div class="input-field">
+              <Label for="recovery-email">メールアドレス</Label>
+              <Input
+                id="recovery-email"
+                type="email"
+                autocomplete="email"
+                required
+                placeholder="you@example.com"
+                value={data.state.email}
+                oninput={handleEmailInput}
+                disabled={data.state.phase === 'submitting'}
+              />
+            </div>
 
-          <Button
-            variant="primary"
-            fullWidth
-            type="submit"
-            disabled={data.state.phase === 'submitting' || data.state.email.trim() === ''}
-            isLoading={data.state.phase === 'submitting'}
-          >
-            {#if data.state.phase === 'submitting'}
-              送信中…
-            {:else}
-              復旧メールを送信
-            {/if}
-          </Button>
-        </form>
+            <Button
+              class="w-full"
+              type="submit"
+              disabled={data.state.phase === 'submitting' || data.state.email.trim() === ''}
+            >
+              {#if data.state.phase === 'submitting'}
+                送信中…
+              {:else}
+                復旧メールを送信
+              {/if}
+            </Button>
+          </form>
 
-        <Divider />
+          <Separator />
 
-        <Link variant="muted" href="/app/login">ログインに戻る</Link>
-      </div>
+          <a href="/login" class="link-muted">ログインに戻る</a>
+        </div>
+      </CardContent>
     </Card>
   </main>
 
-  <Divider />
+  <Separator />
 
   <footer class="auth-footer">
-    <Link variant="muted" href="/">公開サイトに戻る</Link>
+    <a href="/" class="link-muted">公開サイトに戻る</a>
   </footer>
 </div>
 
@@ -101,7 +100,13 @@
     padding: var(--spacing-md) 0;
   }
 
-  :global(.auth-logo) {
+  .site-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-text {
+    font-weight: bold;
     letter-spacing: 0.08em;
   }
 
@@ -115,15 +120,25 @@
     padding: var(--spacing-xl) 0;
   }
 
-  :global(.auth-card) {
-    width: 100%;
-  }
-
   .auth-card-content {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--spacing-md);
+    text-align: center;
+  }
+
+  .auth-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .auth-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
     text-align: center;
   }
 
@@ -134,13 +149,32 @@
     gap: var(--spacing-sm);
   }
 
-  :global(.auth-error) {
-    color: var(--color-error);
+  .input-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    text-align: left;
+  }
+
+  .auth-error {
+    color: var(--destructive);
+    font-size: 0.875rem;
+    margin: 0;
   }
 
   .auth-footer {
     display: flex;
     justify-content: center;
     padding: var(--spacing-md) 0;
+  }
+
+  .link-muted {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .link-muted:hover {
+    text-decoration: underline;
   }
 </style>

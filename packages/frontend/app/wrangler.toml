@@ -1,9 +1,9 @@
-name = "www-template-frontend-app"
+name = "www-template-app"
 compatibility_date = "2025-11-13"
 compatibility_flags = ["nodejs_compat"]
 
 # SvelteKit adapter-static emits the SPA shell as dist/index.html.
-# Cloudflare Workers Assets serves that file for unmatched /app/* requests.
+# Cloudflare Workers Assets serves that file for unmatched /* requests.
 [assets]
 directory = "./dist"
 not_found_handling = "single-page-application"

@@ -14,10 +14,10 @@ describe('authSessionState', () => {
     const missingState = createAuthSessionInitialState();
     const expiredState = createAuthSessionInitialState();
 
-    expect(applyMissingSession(missingState, 'no-store')).toBe('/app/login');
-    expect(applyExpiredSession(expiredState, 'no-store')).toBe('/app/session-expired');
-    expect(missingState.routeIntent).toBe('/app/login');
-    expect(expiredState.routeIntent).toBe('/app/session-expired');
+    expect(applyMissingSession(missingState, 'no-store')).toBe('/login');
+    expect(applyExpiredSession(expiredState, 'no-store')).toBe('/session-expired');
+    expect(missingState.routeIntent).toBe('/login');
+    expect(expiredState.routeIntent).toBe('/session-expired');
   });
 
   it('[AUTH-FE-S009] treats no-store cache metadata as the auth route contract', () => {

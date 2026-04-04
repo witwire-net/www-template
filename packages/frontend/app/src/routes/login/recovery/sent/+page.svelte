@@ -1,44 +1,45 @@
 <script lang="ts">
-  import { useRecoveryFlow } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
-  import { Card, Divider, Link, StatusIcon, Typography } from '@www-template-frontend/ui/components';
+  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { Card, CardContent, Separator } from '@www-template/ui/components';
 
   const { data } = useRecoveryFlow();
 </script>
 
 <div class="auth-shell">
   <header class="auth-header">
-    <Link variant="ghost" href="/" aria-label="www-template トップページ">
-      <Typography variant="body" weight="bold" className="auth-logo">www-template</Typography>
-    </Link>
+    <a href="/" class="site-link" aria-label="www-template トップページ">
+      <span class="logo-text">www-template</span>
+    </a>
   </header>
 
-  <Divider />
+  <Separator />
 
   <main class="auth-main">
-    <Card padding="xl" className="auth-card">
-      <div class="auth-card-content">
-        <StatusIcon variant="success" size="md" style="outlined" />
-        <Typography variant="h1" weight="bold" align="center">
-          {data.state.sentView.title}
-        </Typography>
-        <Typography variant="body-sm" color="secondary" align="center">
-          {data.state.sentView.description}
-        </Typography>
-        <Typography variant="caption" color="muted" align="center">
-          {data.state.sentView.helper}
-        </Typography>
+    <Card class="w-full">
+      <CardContent>
+        <div class="auth-card-content">
+          <span class="status-icon status-icon--success" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <path d="m9 11 3 3L22 4"/>
+            </svg>
+          </span>
+          <h1 class="auth-title">{data.state.sentView.title}</h1>
+          <p class="auth-desc">{data.state.sentView.description}</p>
+          <p class="auth-caption">{data.state.sentView.helper}</p>
 
-        <Divider />
+          <Separator />
 
-        <Link variant="muted" href="/app/login">ログインに戻る</Link>
-      </div>
+          <a href="/login" class="link-muted">ログインに戻る</a>
+        </div>
+      </CardContent>
     </Card>
   </main>
 
-  <Divider />
+  <Separator />
 
   <footer class="auth-footer">
-    <Link variant="muted" href="/">公開サイトに戻る</Link>
+    <a href="/" class="link-muted">公開サイトに戻る</a>
   </footer>
 </div>
 
@@ -60,7 +61,13 @@
     padding: var(--spacing-md) 0;
   }
 
-  :global(.auth-logo) {
+  .site-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-text {
+    font-weight: bold;
     letter-spacing: 0.08em;
   }
 
@@ -74,10 +81,6 @@
     padding: var(--spacing-xl) 0;
   }
 
-  :global(.auth-card) {
-    width: 100%;
-  }
-
   .auth-card-content {
     display: flex;
     flex-direction: column;
@@ -86,9 +89,44 @@
     text-align: center;
   }
 
+  .status-icon--success {
+    color: var(--color-success, #22c55e);
+  }
+
+  .auth-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .auth-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
+  .auth-caption {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
   .auth-footer {
     display: flex;
     justify-content: center;
     padding: var(--spacing-md) 0;
+  }
+
+  .link-muted {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .link-muted:hover {
+    text-decoration: underline;
   }
 </style>

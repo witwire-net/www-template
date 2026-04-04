@@ -68,212 +68,219 @@
 ### 依存方向は `app -> domain -> api` と `app -> ui` に固定する
 
 - required: `packages/frontend/app` は `packages/frontend/domain` と `packages/frontend/ui` だけを参照し、`packages/frontend/domain` は `packages/frontend/api` を経由して API を使う
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
-- NG例: `packages/frontend/app/src/routes/+page.svelte` から `@www-template-frontend/api` を直接 import する
-- OK例: page / component は domain hook と shared UI component を import し、hook 側が `@www-template-frontend/api` を使う
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`boundaries/element-types`)
+- NG例: `packages/frontend/app/src/routes/+page.svelte` から `@www-template/api` を直接 import する
+- OK例: page / component は domain hook と shared UI component を import し、hook 側が `@www-template/api` を使う
 
 ### frontend layer 定義外の file / import を作らない
 
 - required: `packages/frontend/app/src/**`、`packages/frontend/domain/src/**`、`packages/frontend/ui/src/**` は boundaries 定義に入る場所に置く
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`boundaries/no-unknown-files`, `boundaries/no-unknown`, `boundaries/no-ignored`)
 - NG例: `packages/frontend/domain/scripts/tmp.ts` のような層定義外ファイルを作る
 - OK例: source file は各 package の `src/**` 配下に置く
 
 ### App 層は API package を直接 import しない
 
-- forbidden: `packages/frontend/app/src/**` から `@www-template-frontend/api` を直接 import しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
-- NG例: route で `import { statusApi } from '@www-template-frontend/api'`
+- forbidden: `packages/frontend/app/src/**` および `packages/frontend/web/src/**` から `@www-template/api` を直接 import しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`)
+- NG例: route で `import { statusApi } from '@www-template/api'`
 - OK例: route / component では個別 domain hook を import する
 
 ### Pages / Components / hooks は `fetch` / `axios` / `cross-fetch` を直接使わない
 
-- forbidden: `packages/frontend/app/src/**` と `packages/frontend/domain/src/**` で `fetch`、`globalThis.fetch`、`axios`、`cross-fetch` を直接使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/app/src/**`、`packages/frontend/web/src/**`、`packages/frontend/domain/src/**` で `fetch`、`globalThis.fetch`、`axios`、`cross-fetch` を直接使わない（テストファイルは除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-syntax`, `no-restricted-imports`)
 - NG例: component で `await fetch('/api/v1/status')` を呼ぶ
 - OK例: shared API client か domain hook を経由して通信する
 
 ### pure な frontend domain module は runtime env と API SDK に依存しない
 
-- forbidden: `packages/frontend/domain/src/**` の hook 以外では `import.meta.env` と `@www-template-frontend/api` を直接使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/domain/src/**` の hook 以外では `import.meta.env` と `@www-template/api` を直接使わない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`frontend-domain-purity/no-runtime-env`, `no-restricted-imports`)
 - NG例: `packages/frontend/domain/src/status/statusState.ts` で `import.meta.env.DEV` を見る
 - OK例: runtime 条件分岐や API 呼び出しは hook / adapter に寄せる
 
 ### domain hooks は `use*` export と `{ data, actions }` にそろえる
 
 - required: `packages/frontend/domain/src/hooks/**` の値 export は `use*` だけにし、hook は `{ data, actions }` を返し、型注釈は `*Data` / `*Actions` を使う
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`hooks-domain/require-domain-structure`, `no-restricted-syntax`)
 - NG例: `export const profiles = apiClient` / `return apiClient`
 - OK例: `export function useProfiles(): { data: ProfilesData; actions: ProfilesActions } { return { data, actions }; }`
 
 ### domain hooks/composable は UI・DOM・manual fetch・React に依存しない
 
-- forbidden: `packages/frontend/domain/src/hooks/**` で app/ui import、DOM globals、Svelte component import、React、`svelte/store`、Svelte lifecycle/context API を使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/domain/src/hooks/**` で app/ui import、DOM globals (`window`, `document`, `localStorage`, `sessionStorage`)、Svelte component import、React、`svelte/store`、Svelte lifecycle/context API (`onMount`, `beforeUpdate`, `afterUpdate`, `tick`, `setContext`, `getContext`) を使わない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-globals`, `no-restricted-syntax`)
 - NG例: hook で `window.localStorage` を読む / `import { onMount } from 'svelte'` を使う
 - OK例: hook は Svelte 5 の state API と shared API client だけで状態と操作をまとめる
 
 ### stateful domain composable は `.svelte.ts` に置く
 
-- required: `packages/frontend/domain/src/**/*.ts` で `$state`, `$derived`, `$effect`, `$effect.pre` を使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- required: `packages/frontend/domain/src/**/*.ts` で `$state`, `$derived`, `$effect`, `$effect.pre` を使わない（hooks ファイルおよび `.svelte.ts` を除く）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-syntax`)
 - NG例: `useProfiles.ts` で `$state([])` を使う
 - OK例: stateful hook は `useProfiles.svelte.ts` に置く
 
 ### hooks の型 import は `types` alias 経由にする
 
 - required: `packages/frontend/domain/src/hooks/**` の型 import は `types` / `types/*` だけを使う
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-syntax`)
 - NG例: `import type { StatusState } from '../../types/status'`
 - OK例: `import type { StatusState } from 'types'`
 
 ### Pages / Components は domain composable に副作用を寄せる
 
-- forbidden: `packages/frontend/app/src/routes/**/*.svelte` と `packages/frontend/app/src/components/**`, `packages/frontend/app/src/lib/**` では `onMount` / `beforeUpdate` / `afterUpdate` / `tick` と `$effect` / `$effect.pre` による I/O を書かない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/app/src/routes/**/*.svelte`、`packages/frontend/app/src/components/**`、`packages/frontend/app/src/lib/**` では `onMount` / `beforeUpdate` / `afterUpdate` / `tick` と `$effect` / `$effect.pre` による I/O を書かない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-syntax`)
 - NG例: page で `onMount(async () => ...)` を書く
 - OK例: page / component は hook の `actions` を呼ぶだけにする
 
 ### app では primitive UI tag を直書きしない
 
-- forbidden: `packages/frontend/app/src/**/*.svelte` で `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>` を直接書かない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/app/src/**/*.svelte` で `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>` を直接書かない（`<script>` / `<style>` / コメント内は除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`frontend-app-primitive-ui/no-primitive-tags`)
 - NG例: page で `<button class="primary">保存</button>` を書く
-- OK例: `@www-template-frontend/ui/components` の既存 component を使う
+- OK例: `@www-template/ui/components` の既存 component を使う
 
 ### active frontend source に React / TSX を持ち込まない
 
 - forbidden: `packages/frontend/app/src/**` と `packages/frontend/domain/src/**` に `*.tsx` / `*.jsx` を置かず、active source で `react`, `react-dom`, `@tanstack/react-query` を import しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-syntax`)
 - NG例: `packages/frontend/app/src/routes/app/dashboard.tsx` を追加する
 - OK例: `packages/frontend/app/src/routes/app/dashboard.svelte` を追加する
 
 ### export には TSDoc を付ける
 
-- required: `packages/**/src/**/*.{ts,tsx}` の export には直前の `/** ... */` を付ける
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js`
+- required: `packages/**/src/**/*.{ts,tsx}` の export には直前の `/** ... */` を付ける（生成コード・テストは除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js` (`export-tsdoc/require-export-tsdoc`)
 - NG例: `export function createClient() {}`
 - OK例: `/** API client を作る */ export function createClient() {}`
 
 ### `index.ts` は re-export 専用にする
 
 - required: `packages/**/index.ts` で実装や default export を書かない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js` (`no-restricted-syntax`)
 - NG例: `packages/frontend/domain/index.ts` に関数本体を書く
 - OK例: `index.ts` では `export * from './src/index';` のような re-export だけを書く
 
 ### `src` 配下の import は各ディレクトリの `index.ts` に統一する
 
-- required: `packages/**/src/**` では末端 file への直接 import を避け、各ディレクトリの `index.ts` 経由に寄せる
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js`
+- required: `packages/**/src/**` では末端 file への直接 import を避け、各ディレクトリの `index.ts` 経由に寄せる（生成コード・テストは除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js` (`no-restricted-imports`)
 - NG例: `import { foo } from '../profiles/useProfiles'`
 - OK例: `import { foo } from '../profiles'`
 
 ### packages 配下の import で `.js` / `.mjs` / `.cjs` 拡張子を付けない
 
-- forbidden: `packages/**/*.{ts,tsx}` と `packages/**/*.svelte.ts`, `packages/**/*.svelte.js` で `.js` / `.mjs` / `.cjs` 拡張子 import をしない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js`
+- forbidden: `packages/**/*.{ts,tsx}` と `packages/**/*.svelte.ts`, `packages/**/*.svelte.js` で `.js` / `.mjs` / `.cjs` 拡張子 import をしない（生成コードは除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js` (`import/extensions`, `no-restricted-imports`)
 - NG例: `import { foo } from './util.js'`
 - OK例: `import { foo } from './util'`
 
 ### frontend ui package では親 directory を `../` でたどらない
 
 - required: `packages/frontend/ui/src/**` の package 内参照は `@ui` alias を使う
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:ui`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:ui`) -> `eslint.config.js` (`no-restricted-imports`)
 - NG例: `import Card from '../molecules/Card/Card.svelte'`
 - OK例: `import Card from '@ui/components/molecules/Card/Card.svelte'`
 
 ### file / function の長さ制約を守る
 
-- required: `packages/**/*.{ts,tsx}` と `packages/**/src/**/*.svelte.ts`, `packages/**/src/**/*.svelte.js` は 500 行以内、関数は 100 行以内に保つ（test と一部例外を除く）
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js`, `.eslintrc-maxlines.json`
+- required: `packages/**/src/**/*.{ts,tsx}` と `packages/**/src/**/*.svelte.ts`, `.svelte.js` は 500 行以内、関数は 100 行以内に保つ（テスト・生成コード・`theme.ts` を除く）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js` (`max-lines`, `max-lines-per-function`)
 - NG例: 700 行の util file や 150 行の関数を 1 つの file に置く
 - OK例: 責務ごとに file / function を分割する
 
-### frontend app に SvelteKit の server 面を作らない
+### frontend app / web に SvelteKit の server 面を作らない
 
-- forbidden: `packages/frontend/app` で `$app/server` / private env / `$lib/server` / `*.server.*` を import せず、`+server.ts`, `+page.server.ts`, `+layout.server.ts`, `hooks.server.ts`, `src/lib/server/**` も作らない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/app` と `packages/frontend/web` で `$app/server` / private env / `$lib/server` / `*.server.*` を import せず、`+server.ts`, `+page.server.ts`, `+layout.server.ts`, `hooks.server.ts`, `src/lib/server/**` も作らない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`sveltekit-app-policy/no-forbidden-imports`, `no-restricted-syntax`)
 - NG例: `packages/frontend/app/src/routes/profile/+server.ts` を追加する
-- OK例: API は `packages/backend` に実装し、frontend app は client-facing route に保つ
+- OK例: API は `packages/backend` に実装し、frontend は client-facing route に保つ
 
-### frontend app では SvelteKit form action / hook export を使わない
+### frontend app / web では SvelteKit form action / hook export を使わない
 
-- forbidden: `packages/frontend/app` で `actions`, `handle`, `handleFetch` を export しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`
+- forbidden: `packages/frontend/app` と `packages/frontend/web` で `actions`, `handle`, `handleFetch` を export しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`sveltekit-app-policy/no-export-names`)
 - NG例: `+page.server.ts` で `export const actions = { ... }`
 - OK例: form submit や認証処理は backend API と CSR route 境界へ寄せる
 
 ### route mode は公開面と認証面で固定する
 
-- required: 公開 route module では `ssr` export を再定義せず、`packages/frontend/app/src/routes/+layout.ts` では `export const ssr = false` と `export const csr = true` を必須にし、app 配下の他 route module では `ssr` / `csr` / `prerender` を再定義しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js`; actual file `packages/frontend/app/src/routes/+layout.ts`
-- NG例: `packages/frontend/app/src/routes/login/+layout.ts` で `export const ssr = false` を足す / `packages/frontend/app/src/routes/(protected)/profiles/+page.ts` で `export const prerender = true` を足す
-- OK例: route mode は `packages/frontend/app/src/routes/+layout.ts` だけで管理する
+- required: `packages/frontend/app/src/routes/+layout.ts` では `export const ssr = false` と `export const csr = true` を必須にし、それ以外の app route module では `ssr` / `csr` / `prerender` を再定義しない; 公開面 (`packages/frontend/web`) の route module では `ssr` export を禁止する
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`sveltekit-app-policy/require-auth-layout-mode`, `sveltekit-app-policy/no-export-names`)
+- NG例: `packages/frontend/app/src/routes/login/+layout.ts` で `export const ssr = false` を足す / `packages/frontend/web/src/routes/about/+page.ts` で `export const ssr = true` を足す
+- OK例: app route mode は `packages/frontend/app/src/routes/+layout.ts` だけで管理する
 
 ### Svelte 5 の書き方を使う
 
 - forbidden: `on:click`, `<slot>`, `$$slots`, `$$restProps`, `export let`, `$:`, `createEventDispatcher` を使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js`
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`frontend-svelte5/no-legacy-syntax`)
 - NG例: `<button on:click={save}>`
 - OK例: `<button onclick={save}>`
+
+### ESLint disable コメントは全面禁止
+
+- forbidden: `// eslint-disable*` コメントをすべての package source に書かない（`eslint-comments/no-use: error`）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint`) -> `eslint.config.js` (`eslint-comments/no-use`)
+- NG例: `// eslint-disable-next-line @typescript-eslint/no-explicit-any`
+- OK例: 型を正しく付けて lint を通す / 設計上の例外は `eslint.config.js` に追加する
 
 ## 4. バックエンド構造と依存
 
 ### Go file は許可された backend layer にだけ置く
 
 - must live under ...: `packages/backend/**/*.go` は `cmd/api`, `internal/app`, `internal/http`, `internal/persistence`, `internal/usecases`, `internal/domain`, `internal/types`, `internal/generated`, `tools/analyzers` のどれかに置く
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`verifyGoFilePlacement`)
 - NG例: `packages/backend/pkg/http/server.go`
 - OK例: `packages/backend/internal/http/router.go`
 
 ### backend の内部依存方向を守る
 
 - required: `cmd/api -> internal/app`; `internal/app -> internal/http|internal/persistence|internal/usecases|internal/domain|internal/types`; `internal/http -> internal/usecases|internal/domain|internal/types|internal/generated/openapi`; `internal/persistence -> internal/domain|internal/types|internal/persistence`; `internal/usecases -> internal/domain|internal/types|internal/usecases`
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml`; `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
 - NG例: `internal/persistence` から `internal/usecases` を import する / `cmd/api` から `internal/http` を直接 import する
 - OK例: `cmd/api` は `internal/app` を起点にし、handler は usecase を呼ぶ
 
 ### layer ごとの外部依存を守る
 
-- required: Gin / CORS / oapi runtime は `internal/http` だけ、GORM / Postgres driver は `internal/persistence` だけ、他 layer は stdlib と許可された internal package を使う
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml`; `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- required: Gin / CORS / oapi runtime は `internal/http` だけ、GORM / Postgres driver / Redis は `internal/persistence` だけ、`types` は `github.com/oklog/ulid/v2` のみ、他 layer は stdlib と許可された internal package を使う
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
 - NG例: `internal/domain` で `github.com/gin-gonic/gin` を import する
 - OK例: `internal/domain` は stdlib と domain/types に閉じる
 
 ### http は domain の entity / command / error に直接依存しない
 
-- forbidden: `packages/backend/internal/http/**` で `domain.<entity|input|Err*>` を直接使わず、transport DTO は usecase DTO に変換する
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- forbidden: `packages/backend/internal/http/**` で `domain.<entity|input|Err*>` を直接使わず、transport DTO は usecase DTO に変換する（Repository / Port 型は例外）
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkHTTPDomainBoundary`)
 - NG例: handler で `domain.CreateProfileInput{...}` を組み立てる
 - OK例: handler は `usecases.CreateProfileInput` を作る
 
 ### exported usecase API は usecase DTO を公開する
 
-- required: `packages/backend/internal/usecases/**` の exported API は `domain.Profile` や `domain.*Input` を引数・戻り値に出さない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- required: `packages/backend/internal/usecases/**` の exported API は `domain.Profile` や `domain.*Input` を引数・戻り値に出さない（`New*` コンストラクタは除外）
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkUsecaseExportedAPIBoundary`)
 - NG例: `func (s *ProfilesService) CreateProfile(ctx context.Context, input domain.CreateProfileInput) (domain.Profile, error)`
 - OK例: `func (s *ProfilesService) CreateProfile(ctx context.Context, input CreateProfileInput) (Profile, error)`
 
 ### domain / usecases の port interface は transport / persistence 型を混ぜない
 
 - forbidden: `packages/backend/internal/domain/**` と `packages/backend/internal/usecases/**` の interface に `internal/http`, `internal/persistence`, `internal/generated`, Gin, oapi runtime, GORM 型を入れない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkPortPurity`)
 - NG例: `type ProfileRepository interface { Save(gin.Context, persistence.ProfileRecord) error }`
 - OK例: `type ProfileRepository interface { Save(context.Context, Profile) error }`
 
 ### domain entity は constructor / reconstitution helper 経由で作る
 
-- forbidden: `packages/backend/internal/domain/**` の外で `domain.Entity{...}` を直接組み立てない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- forbidden: `packages/backend/internal/domain/**` の外で `domain.Entity{...}` を直接組み立てない（テストは除外）
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkDomainCompositeLiterals`)
 - NG例: `profile := domain.Profile{ID: 1, Name: "Ada"}`
 - OK例: `profile, err := domain.NewProfile(...)` / `domain.ReconstituteProfile(...)`
 
 ### write usecase は domain を必ず通し、field validation を inline しない
 
 - required: `Create*`, `Update*`, `Change*`, `Rename*`, `Set*`, `Add*` で始まる exported usecase は本文で `internal/domain` を直接呼び、`strings.Trim*`, `regexp.*`, `== ""` などの入力検証を inline で書かない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkWriteUsecasesTouchDomain`, `checkUsecaseInlineBusinessValidation`)
 - NG例: usecase 内で `strings.TrimSpace(input.Name)` や `if input.Email == ""` を書く
 - OK例: usecase は `domain.NewCreateProfileInput(...)` や `domain.NewProfile(...)` に処理を委譲する
 
@@ -282,49 +289,49 @@
 ### non-generated Gin route は literal かつ `/health` か `/api/v1/app/*` だけにする
 
 - required: `internal/http` の non-generated route は string literal で書き、`/health` または `/api/v1/app/*` だけにする; custom Gin group も `/api/v1/app/*` 配下だけにする
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`; `pnpm test:run` -> `packages/backend/internal/http/router_test.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
 - NG例: `router.GET(basePath + "/profiles", ...)` / `router.Group("/admin")`
 - OK例: `router.GET("/health", ...)` / `router.Group("/api/v1/app/profiles")`
 
 ### runtime route policy をテストで守る
 
-- required: router に登録される public route は `/api/v1/status`, `/api/v1/profiles`, `/api/v1/profiles/:id`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume` に限定し、それ以外の custom route は `/health` または `/api/v1/app/*` に収める
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go`
+- required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume` に限定し、それ以外の custom route は `/health` または `/api/v1/app/*` に収める
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
 - NG例: runtime route に `/api/v1/admin/users` を増やす
 - OK例: app surface の custom route は `/api/v1/app/*` に置く
 
 ### app API は Bearer token 必須にする
 
 - required: `/api/v1/app/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go`, `packages/backend/internal/http/openapi_contract_test.go`; `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
 - NG例: `/api/v1/app/profiles` を認証なしで通す
 - OK例: bearer middleware で保護し、OpenAPI に `security: [{ BearerAuth: [] }]` を残す
 
 ### `APP_ENV!=development` では fail-close にする
 
 - required: `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定の runtime 生成を許さない
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/app/runtime_test.go`
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/app/runtime_test.go` (`TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment`)
 - NG例: `APP_ENV=production` なのに token 空で起動を許す
 - OK例: production / staging では `APP_BEARER_TOKEN` を必須にする
 
 ### GORM は `internal/persistence` に閉じ込める
 
 - required: `gorm.io/gorm` と `gorm.io/driver/postgres` の import は `packages/backend/internal/persistence/**` だけにする
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml`; `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
 - NG例: `internal/usecases/service.go` で GORM を import する
 - OK例: DB 実装は `internal/persistence` に置く
 
 ### `AutoMigrate` は禁止し、SQL migration を置く
 
 - forbidden: `AutoMigrate` を呼ばず、migration は `packages/backend/db/migrations/*.sql` に置く
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`; hook `.husky/pre-commit` -> `.lintstagedrc.json` -> `scripts/hooks/verify-staged-migrations.sh`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkAutoMigrate`); hook `.husky/pre-commit` -> `.lintstagedrc.json` -> `scripts/hooks/verify-staged-migrations.sh`
 - NG例: `db.AutoMigrate(&Profile{})`
 - OK例: `packages/backend/db/migrations/000123_add_profiles.up.sql` を追加する
 
 ### migration file 名と pair を守る
 
-- required: migration は nested directory 禁止、`000001_name.up.sql` / `000001_name.down.sql` の pair をそろえる
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`; hook `.husky/pre-commit` -> `.lintstagedrc.json` -> `scripts/hooks/verify-staged-migrations.sh`
+- required: migration は nested directory 禁止、`000001_name.up.sql` / `000001_name.down.sql` の pair をそろえる（6桁連番 + アンダースコア + lowercase英数字）
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`verifyMigrationFiles`); hook `.husky/pre-commit` -> `.lintstagedrc.json` -> `scripts/hooks/verify-staged-migrations.sh`
 - NG例: `packages/backend/db/migrations/add_profiles.sql` / `000123_add_profiles.up.sql` だけを追加する
 - OK例: `packages/backend/db/migrations/000123_add_profiles.up.sql` と `packages/backend/db/migrations/000123_add_profiles.down.sql` をセットで追加する
 
@@ -333,7 +340,7 @@
 ### Go module は readonly で検証する
 
 - required: `packages/backend/go.mod` と `packages/backend/go.sum` をそろえ、lint / build / test / security script は `-mod=readonly` で通す
-- Enforcement point: `scripts/go/verify-module.sh`, `scripts/go/lint.sh`, `scripts/go/build.sh`, `scripts/go/test.sh`, `scripts/security/govulncheck.sh`, `scripts/security/osv-scanner.sh`
+- Enforcement point: `scripts/go/verify-module.sh`, `scripts/go/lint.sh`, `scripts/security/govulncheck.sh`, `scripts/security/osv-scanner.sh`
 - NG例: `packages/backend/go.sum` が無い状態で lint する
 - OK例: `go.mod` / `go.sum` を commit した状態で各 script を実行する
 
@@ -346,57 +353,57 @@
 
 ### domain / usecases は time・env・logger・rand の副作用源を直に読まない
 
-- forbidden: `packages/backend/internal/domain/**` と `packages/backend/internal/usecases/**` で `time.Now`, `os.Getenv`, `os.LookupEnv`, `os.Environ`, `log`, `log/slog`, `math/rand`, `math/rand/v2` を直接使わない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- forbidden: `packages/backend/internal/domain/**` と `packages/backend/internal/usecases/**` で `time.Now`, `os.Getenv`, `os.LookupEnv`, `os.Environ`, `log`, `log/slog`, `math/rand`, `math/rand/v2` を直接使わない（テストは除外）
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkCoreSideEffects`)
 - NG例: usecase で `time.Now()` を呼ぶ / domain で `os.Getenv("APP_ENV")` を読む
 - OK例: clock や config を outer layer から渡す
 
 ### `err.Error()` の文字列比較で分岐しない
 
-- forbidden: `err.Error() == ...` や `strings.Contains(err.Error(), ...)` で分岐しない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- forbidden: `err.Error() == ...` や `strings.Contains(err.Error(), ...)` / `strings.HasPrefix(err.Error(), ...)` / `strings.HasSuffix(err.Error(), ...)` / `strings.EqualFold(err.Error(), ...)` で分岐しない
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkErrorStringMatching`)
 - NG例: `if err.Error() == "not found" { ... }`
 - OK例: `if errors.Is(err, ErrProfileNotFound) { ... }`
 
 ### unit test は `time.Sleep` と `net/http` 実通信を使わない
 
 - forbidden: `*_test.go` で `time.Sleep` と `net/http.Get|Head|Post|PostForm` を使わない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkUnitTestDeterminism`)
 - NG例: test で `time.Sleep(time.Second)` する / `http.Get("http://...")` を呼ぶ
 - OK例: `httptest` や deterministic な同期で置き換える
 
 ### `//nolint` は理由つきの個別指定だけにする
 
-- required: `//nolint` には対象 linter 名と説明を書く
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml`
+- required: `//nolint` には対象 linter 名と説明を書く (`nolintlint` の `require-explanation: true`, `require-specific: true`)
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`nolintlint`)
 - NG例: `//nolint`
 - OK例: `//nolint:funlen // test fixture setup is intentionally verbose`
 
 ### Go quality gate を通す
 
-- required: Go は `cyclop`, `funlen`, `errcheck`, `gocritic`, `gofmt`, `goimports`, `gosec`, `gosimple`, `govet`, `ineffassign`, `nolintlint`, `revive`, `staticcheck`, `unused` を通す
+- required: Go は `cyclop` (max-complexity 15)、`depguard`、`errcheck`、`funlen` (lines: 100 / statements: 60)、`gocritic`、`gofmt`、`goimports` (`local-prefixes: www-template`)、`gosec`、`gosimple`、`govet`、`ineffassign`、`nolintlint`、`revive`、`staticcheck`、`unused` を通す
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml`
-- NG例: エラー戻り値を無視する / 1 関数を 150 行にする
+- NG例: エラー戻り値を無視する / 1 関数を 150 行にする / cyclomatic complexity が 16 以上になる
 - OK例: エラーを処理し、処理を小さい関数に分割する
 
 ### `fmt.Print*` / `print` / `println` は使わない
 
 - forbidden: backend code に素朴な print を置かない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkForbiddenCalls`)
 - NG例: `fmt.Println("debug")`
 - OK例: error を返す / outer layer の logger を使う
 
 ### Host 由来の URL 合成をしない
 
-- forbidden: `Request.Host`, `URL.Host`, `Host` 系 header から URL を組み立てない
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go`
+- forbidden: `Request.Host`, `URL.Host`, `Host` / `X-Forwarded-Host` / `X-Original-Host` ヘッダーから URL を組み立てない
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkForbiddenHostUsage`)
 - NG例: `baseURL := "https://" + c.Request.Host`
 - OK例: 設定値や固定 origin を使う
 
 ### security scanner を全部通す
 
-- required: Go vulnerability, OSV, secrets scan をすべて通す
-- Enforcement point: `pnpm lint` -> `package.json` -> `scripts/security/lint-security.sh`, `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`; config `.gitleaks.toml`
+- required: Go vulnerability (`govulncheck`)、OSV (`osv-scanner`)、secrets scan (`gitleaks --no-git --config .gitleaks.toml`) をすべて通す
+- Enforcement point: `pnpm lint` -> `package.json` -> `scripts/security/lint-security.sh` -> `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`
 - NG例: API key を commit する / 既知脆弱性の dependency を残す
 - OK例: secret は入れず、脆弱性が出た dependency を更新する
 
@@ -404,7 +411,7 @@
 
 ### CI verify job の順番を前提にする
 
-- required: CI は `Checkout -> Setup pnpm -> Setup Node -> Setup Go -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
+- required: CI は `Checkout -> Setup pnpm (10.33.0) -> Setup Node (24) -> Setup Go (1.26.1) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
 - Enforcement point: `.github/workflows/ci.yml`
 - NG例: ローカルで `pnpm test:run` だけ通して `pnpm gen` や `pnpm check:codegen` を飛ばす
 - OK例: 変更に応じて少なくとも CI と同じ順番で確認する
@@ -418,17 +425,19 @@
 - NG例: generated file の drift を残したまま commit する
 - OK例: staged file を整形し、最後に `pnpm check:codegen` が通る状態で commit する
 
-`pnpm lint-staged` の実行内容は次のとおりです。
+`pnpm lint-staged` の実行内容は次のとおりです (`.lintstagedrc.json`)。
 
-- `*.{ts,tsx,js,jsx}` -> `eslint --fix --no-inline-config --max-warnings 0` の後に `prettier --write` (`.lintstagedrc.json`)
-- `*.{json,md,yml,yaml}` -> `prettier --write` (`.lintstagedrc.json`)
-- `*.go` -> `bash scripts/hooks/format-staged-go.sh` = `gofmt -w` + `go run "$GOIMPORTS_PKG" -local "$GO_LOCAL_PREFIX" -w` (`.lintstagedrc.json`, `scripts/hooks/format-staged-go.sh`)
-- `packages/backend/db/migrations/*.sql` -> `bash scripts/hooks/verify-staged-migrations.sh` = `bash scripts/go/guardrails.sh` (`.lintstagedrc.json`, `scripts/hooks/verify-staged-migrations.sh`)
+| 対象パターン                           | 実行内容                                                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `*.{ts,tsx,js,jsx}`                    | `eslint --fix --no-inline-config --max-warnings 0` → `prettier --write`                                               |
+| `*.{json,md,yml,yaml}`                 | `prettier --write`                                                                                                    |
+| `*.go`                                 | `bash scripts/hooks/format-staged-go.sh` = `gofmt -w` + `goimports -local www-template -w`                            |
+| `packages/backend/db/migrations/*.sql` | `bash scripts/hooks/verify-staged-migrations.sh` = `bash scripts/go/guardrails.sh` (migration filename / pair policy) |
 
 ### `commit-msg` は conventional commit を強制する
 
 - required: `commit-msg` は `pnpm commitlint --edit $1` を実行し、type は `feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert` のどれかにする
-- Enforcement point: `.husky/commit-msg`; `commitlint.config.js`
+- Enforcement point: `.husky/commit-msg`; `commitlint.config.js` (`@commitlint/config-conventional`)
 - NG例: `update stuff`
 - OK例: `fix: prevent write usecases from bypassing domain validation`
 

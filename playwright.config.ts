@@ -29,13 +29,13 @@ export default defineConfig({
   /* テスト前にサーバーを起動 */
   webServer: [
     {
-      command: 'pnpm --filter @www-template-frontend/web dev',
+      command: 'pnpm --filter @www-template/web dev',
       url: 'http://localhost:5173',
       reuseExistingServer: process.env.CI === undefined,
       timeout: 120 * 1000,
     },
     {
-      command: 'pnpm --filter @www-template-frontend/app dev',
+      command: 'pnpm --filter @www-template/app dev',
       url: 'http://localhost:5174/app',
       reuseExistingServer: process.env.CI === undefined,
       timeout: 120 * 1000,

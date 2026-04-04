@@ -33,6 +33,8 @@ permission:
     'openspec instructions*': allow
     'openspec show*': allow
     'openspec validate*': allow
+    'git add*': allow
+    'git commit*': allow
     'git diff*': allow
     'git status*': allow
     'git log*': allow

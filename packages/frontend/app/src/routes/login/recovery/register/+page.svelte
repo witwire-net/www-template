@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { RecoveryReadySnapshot } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
+  import type { RecoveryReadySnapshot } from '@www-template/domain/hooks/auth/useRecoveryFlow';
 
-  import { useRecoveryFlow } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
-  import { Button, Card, Divider, Link, Typography } from '@www-template-frontend/ui/components';
+  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
   const RECOVERY_SNAPSHOT_KEY = 'www-template:recovery-snapshot';
 
@@ -10,9 +10,9 @@
 
   async function handleRegisterPasskey() {
     const result = await actions.registerRecoveryPasskey();
-    if (result === '/app') {
+    if (result === null && data.state.phase !== 'registering' && data.state.error === null) {
       sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-      window.location.href = '/app';
+      window.location.href = '/';
     }
   }
 
@@ -47,68 +47,66 @@
           actions.restoreReadyState(parsed);
         } else {
           sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-          window.location.href = '/app/login/recovery';
+          window.location.href = '/login/recovery';
         }
       } catch {
         sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-        window.location.href = '/app/login/recovery';
+        window.location.href = '/login/recovery';
       }
       sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
     } else {
-      window.location.href = '/app/login/recovery';
+      window.location.href = '/login/recovery';
     }
   }
 </script>
 
 <div class="auth-shell">
   <header class="auth-header">
-    <Link variant="ghost" href="/" aria-label="www-template トップページ">
-      <Typography variant="body" weight="bold" className="auth-logo">www-template</Typography>
-    </Link>
+    <a href="/" class="site-link" aria-label="www-template トップページ">
+      <span class="logo-text">www-template</span>
+    </a>
   </header>
 
-  <Divider />
+  <Separator />
 
   <main class="auth-main">
-    <Card padding="xl" className="auth-card">
-      <div class="auth-card-content">
-        <Typography variant="h1" weight="bold" align="center">パスキー再登録</Typography>
-        <Typography variant="body-sm" color="secondary" align="center">
-          新しいパスキーを登録して、アカウントへのアクセスを回復してください。
-        </Typography>
+    <Card class="w-full">
+      <CardContent>
+        <div class="auth-card-content">
+          <h1 class="auth-title">パスキー再登録</h1>
+          <p class="auth-desc">
+            新しいパスキーを登録して、アカウントへのアクセスを回復してください。
+          </p>
 
-        {#if data.state.error}
-          <Typography variant="body-sm" className="auth-error" role="alert">
-            {data.state.error}
-          </Typography>
-        {/if}
-
-        <Button
-          variant="primary"
-          fullWidth
-          type="button"
-          disabled={data.state.phase === 'registering'}
-          isLoading={data.state.phase === 'registering'}
-          onclick={handleRegisterPasskey}
-        >
-          {#if data.state.phase === 'registering'}
-            登録中…
-          {:else}
-            新しいパスキーを登録
+          {#if data.state.error}
+            <p class="auth-error" role="alert">{data.state.error}</p>
           {/if}
-        </Button>
 
-        <Divider />
+          <Button
+            class="w-full"
+            type="button"
+            disabled={data.state.phase === 'registering'}
+            onclick={handleRegisterPasskey}
+          >
+            {#if data.state.phase === 'registering'}
+              登録中…
+            {:else}
+              新しいパスキーを登録
+            {/if}
+          </Button>
 
-        <Link variant="muted" href="/app/login/recovery">復旧をやり直す</Link>
-      </div>
+          <Separator />
+
+          <a href="/login/recovery" class="link-muted">復旧をやり直す</a>
+        </div>
+      </CardContent>
     </Card>
   </main>
 
-  <Divider />
+  <Separator />
 
   <footer class="auth-footer">
-    <Link variant="muted" href="/">公開サイトに戻る</Link>
+    <a href="/" class="link-muted">公開サイトに戻る</a>
   </footer>
 </div>
 
@@ -130,7 +128,13 @@
     padding: var(--spacing-md) 0;
   }
 
-  :global(.auth-logo) {
+  .site-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-text {
+    font-weight: bold;
     letter-spacing: 0.08em;
   }
 
@@ -144,10 +148,6 @@
     padding: var(--spacing-xl) 0;
   }
 
-  :global(.auth-card) {
-    width: 100%;
-  }
-
   .auth-card-content {
     display: flex;
     flex-direction: column;
@@ -156,13 +156,39 @@
     text-align: center;
   }
 
-  :global(.auth-error) {
-    color: var(--color-error);
+  .auth-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .auth-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
+  .auth-error {
+    color: var(--destructive);
+    font-size: 0.875rem;
+    margin: 0;
   }
 
   .auth-footer {
     display: flex;
     justify-content: center;
     padding: var(--spacing-md) 0;
+  }
+
+  .link-muted {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .link-muted:hover {
+    text-decoration: underline;
   }
 </style>

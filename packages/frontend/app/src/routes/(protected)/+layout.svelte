@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import { useSessionGuard } from '@www-template-frontend/domain/hooks/auth/useSessionGuard';
+  import { useSessionGuard } from '@www-template/domain/hooks/auth/useSessionGuard';
 
   let { children }: { children: Snippet } = $props();
 
@@ -18,12 +18,11 @@
     <div class="banner">
       <div>
         <div class="eyebrow">SVELTEKIT SPA SHELL</div>
-        <h1>/app/* は SvelteKit SPA として配信</h1>
+        <h1>認証済みアプリ</h1>
       </div>
       <div class="links">
-        <a href="/app">Overview</a>
-        <a href="/">Public site</a>
-        <a href="/app/logout">ログアウト</a>
+        <a href="/">Overview</a>
+        <a href="/logout">ログアウト</a>
       </div>
     </div>
 

@@ -1,66 +1,62 @@
 <script lang="ts">
-  import { usePasskeyLogin } from '@www-template-frontend/domain/hooks/auth/usePasskeyLogin';
-  import { Button, Card, Divider, Link, Typography } from '@www-template-frontend/ui/components';
+  import { usePasskeyLogin } from '@www-template/domain/hooks/auth/usePasskeyLogin';
+  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
   const { data, actions } = usePasskeyLogin();
 
   async function handlePasskeySignIn() {
     const result = await actions.signInWithPasskey();
-    if (result === '/app') {
-      window.location.href = '/app';
+    if (result === null && data.state.lastSession !== null) {
+      window.location.href = '/';
     }
   }
 </script>
 
 <div class="auth-shell">
   <header class="auth-header">
-    <Link variant="ghost" href="/" aria-label="www-template トップページ">
-      <Typography variant="body" weight="bold" className="auth-logo">www-template</Typography>
-    </Link>
+    <a href="/" class="site-link" aria-label="www-template トップページ">
+      <span class="logo-text">www-template</span>
+    </a>
   </header>
 
-  <Divider />
+  <Separator />
 
   <main class="auth-main">
-    <Card padding="xl" className="auth-card">
-      <div class="auth-card-content">
-        <Typography variant="h1" weight="bold" align="center">ログイン</Typography>
-        <Typography variant="body-sm" color="secondary" align="center">
-          パスキーを使ってサインインしてください。
-        </Typography>
+    <Card class="w-full">
+      <CardContent>
+        <div class="auth-card-content">
+          <h1 class="auth-title">ログイン</h1>
+          <p class="auth-desc">パスキーを使ってサインインしてください。</p>
 
-        {#if data.state.error}
-          <Typography variant="body-sm" color="primary" className="auth-error" role="alert">
-            {data.state.error}
-          </Typography>
-        {/if}
-
-        <Button
-          variant="primary"
-          fullWidth
-          type="button"
-          disabled={data.state.isSubmitting}
-          isLoading={data.state.isSubmitting}
-          onclick={handlePasskeySignIn}
-        >
-          {#if data.state.isSubmitting}
-            認証中…
-          {:else}
-            パスキーでログイン
+          {#if data.state.error}
+            <p class="auth-error" role="alert">{data.state.error}</p>
           {/if}
-        </Button>
 
-        <Divider />
+          <Button
+            class="w-full"
+            type="button"
+            disabled={data.state.isSubmitting}
+            onclick={handlePasskeySignIn}
+          >
+            {#if data.state.isSubmitting}
+              認証中…
+            {:else}
+              パスキーでログイン
+            {/if}
+          </Button>
 
-        <Link variant="muted" href="/app/login/recovery">パスキーを紛失した場合</Link>
-      </div>
+          <Separator />
+
+          <a href="/login/recovery" class="link-muted">パスキーを紛失した場合</a>
+        </div>
+      </CardContent>
     </Card>
   </main>
 
-  <Divider />
+  <Separator />
 
   <footer class="auth-footer">
-    <Link variant="muted" href="/">公開サイトに戻る</Link>
+    <a href="/" class="link-muted">公開サイトに戻る</a>
   </footer>
 </div>
 
@@ -82,7 +78,13 @@
     padding: var(--spacing-md) 0;
   }
 
-  :global(.auth-logo) {
+  .site-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-text {
+    font-weight: bold;
     letter-spacing: 0.08em;
   }
 
@@ -96,10 +98,6 @@
     padding: var(--spacing-xl) 0;
   }
 
-  :global(.auth-card) {
-    width: 100%;
-  }
-
   .auth-card-content {
     display: flex;
     flex-direction: column;
@@ -108,13 +106,39 @@
     text-align: center;
   }
 
-  :global(.auth-error) {
-    color: var(--color-error);
+  .auth-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .auth-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
+  .auth-error {
+    color: var(--destructive);
+    font-size: 0.875rem;
+    margin: 0;
   }
 
   .auth-footer {
     display: flex;
     justify-content: center;
     padding: var(--spacing-md) 0;
+  }
+
+  .link-muted {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .link-muted:hover {
+    text-decoration: underline;
   }
 </style>

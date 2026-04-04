@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { useRecoveryFlow } from '@www-template-frontend/domain/hooks/auth/useRecoveryFlow';
-  import { Card, Divider, Link, Typography } from '@www-template-frontend/ui/components';
+  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { Card, CardContent, Separator } from '@www-template/ui/components';
 
   const RECOVERY_SNAPSHOT_KEY = 'www-template:recovery-snapshot';
 
@@ -16,19 +16,19 @@
     const token = params.get('token');
 
     if (token === null || token === '') {
-      window.location.href = '/app/login/recovery';
+      window.location.href = '/login/recovery';
       return;
     }
 
     const result = await actions.consumeToken(token);
-    if (result === '/app/login/recovery/register') {
+    if (result === '/login/recovery/register') {
       /* フルリロード遷移で module state が消えるため sessionStorage に snapshot を保存 */
       const snapshot = actions.getReadySnapshot();
       if (snapshot !== null) {
         sessionStorage.setItem(RECOVERY_SNAPSHOT_KEY, JSON.stringify(snapshot));
       }
-      window.location.href = '/app/login/recovery/register';
-    } else if (result === '/app/login/recovery') {
+      window.location.href = '/login/recovery/register';
+    } else if (result === '/login/recovery') {
       /* 画面に retry guidance を表示するのでそのまま留まる */
     }
   }
@@ -39,40 +39,42 @@
 
 <div class="auth-shell">
   <header class="auth-header">
-    <Link variant="ghost" href="/" aria-label="www-template トップページ">
-      <Typography variant="body" weight="bold" className="auth-logo">www-template</Typography>
-    </Link>
+    <a href="/" class="site-link" aria-label="www-template トップページ">
+      <span class="logo-text">www-template</span>
+    </a>
   </header>
 
-  <Divider />
+  <Separator />
 
   <main class="auth-main">
-    <Card padding="xl" className="auth-card">
-      <div class="auth-card-content" role="region" aria-label="復旧リンク確認">
-        {#if data.state.phase === 'consuming'}
-          <Typography variant="h1" weight="bold" align="center">復旧リンクを確認中…</Typography>
-          <Typography variant="body-sm" color="secondary" align="center">しばらくお待ちください。</Typography>
-        {:else if data.state.phase === 'invalid'}
-          <Typography variant="h1" weight="bold" align="center">復旧リンクを確認できません</Typography>
-          <Typography variant="body-sm" color="secondary" align="center">
-            {data.state.error ?? '復旧リンクが無効または期限切れです。再度復旧をお試しください。'}
-          </Typography>
+    <Card class="w-full">
+      <CardContent>
+        <div class="auth-card-content" role="region" aria-label="復旧リンク確認">
+          {#if data.state.phase === 'consuming'}
+            <h1 class="auth-title">復旧リンクを確認中…</h1>
+            <p class="auth-desc">しばらくお待ちください。</p>
+          {:else if data.state.phase === 'invalid'}
+            <h1 class="auth-title">復旧リンクを確認できません</h1>
+            <p class="auth-desc">
+              {data.state.error ?? '復旧リンクが無効または期限切れです。再度復旧をお試しください。'}
+            </p>
 
-          <Divider />
+            <Separator />
 
-          <Link variant="muted" href="/app/login/recovery">復旧をやり直す</Link>
-        {:else}
-          <Typography variant="h1" weight="bold" align="center">復旧リンクを確認中…</Typography>
-          <Typography variant="body-sm" color="secondary" align="center">しばらくお待ちください。</Typography>
-        {/if}
-      </div>
+            <a href="/login/recovery" class="link-muted">復旧をやり直す</a>
+          {:else}
+            <h1 class="auth-title">復旧リンクを確認中…</h1>
+            <p class="auth-desc">しばらくお待ちください。</p>
+          {/if}
+        </div>
+      </CardContent>
     </Card>
   </main>
 
-  <Divider />
+  <Separator />
 
   <footer class="auth-footer">
-    <Link variant="muted" href="/">公開サイトに戻る</Link>
+    <a href="/" class="link-muted">公開サイトに戻る</a>
   </footer>
 </div>
 
@@ -94,7 +96,13 @@
     padding: var(--spacing-md) 0;
   }
 
-  :global(.auth-logo) {
+  .site-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-text {
+    font-weight: bold;
     letter-spacing: 0.08em;
   }
 
@@ -108,10 +116,6 @@
     padding: var(--spacing-xl) 0;
   }
 
-  :global(.auth-card) {
-    width: 100%;
-  }
-
   .auth-card-content {
     display: flex;
     flex-direction: column;
@@ -120,9 +124,33 @@
     text-align: center;
   }
 
+  .auth-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .auth-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
   .auth-footer {
     display: flex;
     justify-content: center;
     padding: var(--spacing-md) 0;
+  }
+
+  .link-muted {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .link-muted:hover {
+    text-decoration: underline;
   }
 </style>

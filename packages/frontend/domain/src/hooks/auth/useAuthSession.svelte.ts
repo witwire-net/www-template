@@ -64,7 +64,7 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
       }
 
       applyInternalError(state, message ?? '認証状態を確認できませんでした。');
-      return '/app/login';
+      return '/login';
     },
     handleMissingSession: () => applyMissingSession(state),
     clearInMemorySession: () => clearAuthSession(state),
@@ -86,11 +86,11 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
 
         if (response.data.error === 'session-expired') {
           clearAuthSession(state, response.headers.get('cache-control'));
-          return '/app/login';
+          return '/login';
         }
 
         clearAuthSession(state, response.headers.get('cache-control'));
-        return '/app/login';
+        return '/login';
       } catch (error: unknown) {
         applyInternalError(
           state,

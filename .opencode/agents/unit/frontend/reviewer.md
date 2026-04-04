@@ -24,6 +24,11 @@ permission:
     'git log*': allow
     'git show*': allow
     'git grep*': allow
+    'pnpm lint*': allow
+    'pnpm test*': allow
+    'pnpm gen*': allow
+    'pnpm build*': allow
+    'pnpm check*': allow
     'rm *': deny
 ---
 

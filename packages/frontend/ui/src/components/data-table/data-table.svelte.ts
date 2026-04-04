@@ -101,7 +101,9 @@ export function mergeObjects<Sources extends readonly MaybeThunk<object>[]>(
 
   const findSourceWithKey = (key: PropertyKey): object | undefined => {
     for (let i = sources.length - 1; i >= 0; i--) {
-      const obj = resolve(sources[i]);
+      const src = sources[i];
+      if (src === undefined) continue;
+      const obj = resolve(src);
       if (obj && key in obj) return obj;
     }
     return undefined;

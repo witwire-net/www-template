@@ -596,7 +596,7 @@ const frontendAppPrimitiveUiPlugin = {
         schema: [],
         messages: {
           forbidden:
-            'packages/frontend/app では `<{{tag}}>` を直書きしないでください。まず `@www-template-frontend/ui/components` の既存 component を使い、足りなければ `packages/frontend/ui` を発展させてから app で compose してください。',
+            'packages/frontend/app では `<{{tag}}>` を直書きしないでください。まず `@www-template/ui/components` の既存 component を使い、足りなければ `packages/frontend/ui` を発展させてから app で compose してください。',
         },
       },
       create(context) {
@@ -910,12 +910,12 @@ export default tseslint.config(
           },
           pathGroups: [
             {
-              pattern: '@www-template-frontend/**',
+              pattern: '@www-template/**',
               group: 'internal',
               position: 'after',
             },
             {
-              pattern: '@www-template-frontend/ui/**',
+              pattern: '@www-template/ui/**',
               group: 'internal',
               position: 'after',
             },
@@ -954,7 +954,7 @@ export default tseslint.config(
             },
             {
               from: ['frontend-web'],
-              allow: ['frontend-web', 'frontend-domain', 'ui'],
+              allow: ['frontend-web', 'frontend-domain', 'frontend-api', 'ui'],
             },
             {
               from: ['ui'],
@@ -1080,7 +1080,12 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: ['*.js', '*.mjs', '*.cjs', '**/*.js', '**/*.mjs', '**/*.cjs'],
+          patterns: [
+            {
+              group: ['*.js', '*.mjs', '*.cjs', '**/*.js', '**/*.mjs', '**/*.cjs'],
+              message: 'import パスに .js / .mjs / .cjs 拡張子を付けないでください。',
+            },
+          ],
         },
       ],
     },
@@ -1113,14 +1118,14 @@ export default tseslint.config(
         {
           paths: [
             {
-              name: '@www-template-frontend/api',
+              name: '@www-template/api',
               message:
                 'frontend presentation 層では API パッケージを直接 import せず、domain hooks を経由してください。',
             },
           ],
           patterns: [
             {
-              group: ['@www-template-frontend/api/**'],
+              group: ['@www-template/api/**'],
               message:
                 'frontend presentation 層では API パッケージを直接 import せず、domain hooks を経由してください。',
             },
@@ -1206,14 +1211,14 @@ export default tseslint.config(
         {
           paths: [
             {
-              name: '@www-template-frontend/api',
+              name: '@www-template/api',
               message:
                 'frontend domain の API import は hooks/adapters に限定してください。純粋な domain module から SDK を参照しないでください。',
             },
           ],
           patterns: [
             {
-              group: ['@www-template-frontend/api/**'],
+              group: ['@www-template/api/**'],
               message:
                 'frontend domain の API import は hooks/adapters に限定してください。純粋な domain module から SDK を参照しないでください。',
             },
@@ -1495,27 +1500,27 @@ export default tseslint.config(
         {
           paths: [
             {
-              name: '@www-template-frontend/app',
+              name: '@www-template/app',
               message: 'hooks では UI 層（app/pages/components）の import を禁止します。',
             },
             {
-              name: '@www-template-frontend/ui',
+              name: '@www-template/ui',
               message: 'hooks では UI 層（ui/components）の import を禁止します。',
             },
             {
               name: 'axios',
-              message: 'Use @www-template-frontend/api instead of axios.',
+              message: 'Use @www-template/api instead of axios.',
             },
             {
               name: 'cross-fetch',
-              message: 'Use @www-template-frontend/api instead of performing manual fetches.',
+              message: 'Use @www-template/api instead of performing manual fetches.',
             },
           ],
           patterns: [
             {
               group: [
-                '@www-template-frontend/app/**',
-                '@www-template-frontend/ui/**',
+                '@www-template/app/**',
+                '@www-template/ui/**',
                 '../app/**',
                 '../../app/**',
                 '../ui/**',
@@ -1558,20 +1563,20 @@ export default tseslint.config(
         {
           paths: [
             {
-              name: '@www-template-frontend/app',
+              name: '@www-template/app',
               message: 'hooks では UI 層（app/pages/components）の import を禁止します。',
             },
             {
-              name: '@www-template-frontend/ui',
+              name: '@www-template/ui',
               message: 'hooks では UI 層（ui/components）の import を禁止します。',
             },
             {
               name: 'axios',
-              message: 'Use @www-template-frontend/api instead of axios.',
+              message: 'Use @www-template/api instead of axios.',
             },
             {
               name: 'cross-fetch',
-              message: 'Use @www-template-frontend/api instead of performing manual fetches.',
+              message: 'Use @www-template/api instead of performing manual fetches.',
             },
             {
               name: 'react',
@@ -1608,8 +1613,8 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@www-template-frontend/app/**',
-                '@www-template-frontend/ui/**',
+                '@www-template/app/**',
+                '@www-template/ui/**',
                 '../app/**',
                 '../../app/**',
                 '../ui/**',
@@ -1793,11 +1798,11 @@ export default tseslint.config(
           paths: [
             {
               name: 'axios',
-              message: 'Use @www-template-frontend/api instead of axios.',
+              message: 'Use @www-template/api instead of axios.',
             },
             {
               name: 'cross-fetch',
-              message: 'Use @www-template-frontend/api instead of performing manual fetches.',
+              message: 'Use @www-template/api instead of performing manual fetches.',
             },
           ],
         },
@@ -1812,20 +1817,17 @@ export default tseslint.config(
         {
           paths: [
             {
-              name: '@www-template-frontend/api',
+              name: '@www-template/api',
               message: 'Pages/Components は Hooks 経由でAPIを呼び出してください。',
             },
             {
-              name: '@www-template-frontend/domain',
+              name: '@www-template/domain',
               message: 'hooks は個別フックを指し示すパスで import してください。',
             },
           ],
           patterns: [
             {
-              group: [
-                '@www-template-frontend/app/src/components/**',
-                '@www-template-frontend/web/src/components/**',
-              ],
+              group: ['@www-template/app/src/components/**', '@www-template/web/src/components/**'],
               message: 'components 同士の循環参照を避け、必要なら hooks 経由にしてください。',
             },
           ],
@@ -2203,7 +2205,6 @@ export default tseslint.config(
             {
               group: [
                 '**/src/**/!(*index)',
-                '@www-template-frontend/**/!(*index)',
                 '@www-template/**/!(*index)',
                 './**/!(*index)',
                 '../**/!(*index)',
@@ -2229,7 +2230,6 @@ export default tseslint.config(
             {
               group: [
                 '**/src/**/!(*index)',
-                '@www-template-frontend/**/!(*index)',
                 '@www-template/**/!(*index)',
                 './**/!(*index)',
                 '../**/!(*index)',

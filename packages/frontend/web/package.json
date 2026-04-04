@@ -14,7 +14,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@www-template-frontend/domain": "workspace:*",
     "@www-template-frontend/ui": "workspace:*"
   },
   "devDependencies": {

@@ -14,7 +14,7 @@ const (
 	defaultAppAuthValue   = "dev-app-auth"
 	defaultWebAuthnRPID   = "localhost"
 	defaultValkeyPrefix   = "www-template"
-	defaultRecoveryBase   = "http://localhost:5173/app/login/recovery/consume"
+	defaultRecoveryBase   = "http://localhost:5174/login/recovery/consume"
 	defaultSMTPPort       = 587
 	defaultR2UsePathStyle = false
 )

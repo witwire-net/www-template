@@ -88,7 +88,7 @@ If any are missing, do not start. Report the missing inputs and ask the caller a
 - If you believe a new file or additional file must be touched, stop and ask the caller agent to authorize that exact path first
 - If best-practice implementation would require changes outside `packages/frontend/app`, `packages/frontend/domain`, `packages/frontend/ui`, or `packages/frontend/web`, do not make them. Report the need to the caller agent instead.
 - Components in `packages/frontend/ui` should stay reusable where practical; move stateful or view-model logic into `packages/frontend/domain` when appropriate
-- Never import `@www-template-frontend/api` directly from `packages/frontend/ui` or `packages/frontend/web`/`packages/frontend/app` presentation code when a domain abstraction should own it
+- Never import `@www-template/api` directly from `packages/frontend/ui` or `packages/frontend/web`/`packages/frontend/app` presentation code when a domain abstraction should own it
 - Never use `fetch`, `axios`, or `cross-fetch` directly
 - Never hand-edit generated files (`openapi.json`, `client.ts`, `openapi.gen.go`)
 - Stop and report before crossing any Ask-first boundary

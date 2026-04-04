@@ -12,7 +12,7 @@ interface PasskeyLoginData {
 
 interface PasskeyLoginActions {
   setIdentifier: (identifier: string) => void;
-  signInWithPasskey: (credential?: string) => Promise<AuthRouteIntent | '/app' | null>;
+  signInWithPasskey: (credential?: string) => Promise<AuthRouteIntent | null>;
 }
 
 /** passkey start / finish と shared session 更新を扱う domain composable。 */
@@ -58,7 +58,7 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
           );
           state.lastSession = authSession.data.state.session;
           state.isSubmitting = false;
-          return '/app';
+          return null;
         }
 
         if (finishResponse.status === 503) {

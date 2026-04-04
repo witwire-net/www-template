@@ -1,32 +1,36 @@
 <script lang="ts">
-  import { Button, Card, Divider, Link, StatusIcon, Typography } from '@www-template-frontend/ui/components';
+  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 </script>
 
 <div class="session-expired-shell">
   <header class="session-expired-header">
-    <Link variant="ghost" href="/" aria-label="www-template トップページ">
-      <Typography variant="body" weight="bold" className="session-expired-logo">www-template</Typography>
-    </Link>
+    <a href="/" class="site-link" aria-label="www-template トップページ">
+      <span class="logo-text">www-template</span>
+    </a>
   </header>
 
-  <Divider />
+  <Separator />
 
   <main class="session-expired-main">
-    <Card padding="xl" className="session-expired-card">
-      <div class="session-expired-content">
-        <StatusIcon variant="warning" size="md" style="outlined" />
-        <Typography variant="h1" weight="bold" align="center">
-          セッションが切れました
-        </Typography>
-        <Typography variant="body-sm" color="secondary" align="center">
+    <Card class="w-full">
+      <CardContent class="session-expired-content">
+        <span class="status-icon status-icon--warning" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+            <path d="M12 9v4"/>
+            <path d="M12 17h.01"/>
+          </svg>
+        </span>
+        <h1 class="card-title">セッションが切れました</h1>
+        <p class="card-desc">
           セキュリティのため、セッションが終了しました。再度ログインしてください。
-        </Typography>
-        <Button variant="primary" fullWidth onclick={() => { window.location.href = '/app/login'; }}>
+        </p>
+        <Button class="w-full" onclick={() => { window.location.href = '/login'; }}>
           ログインへ
         </Button>
-        <Divider />
-        <Link variant="muted" href="/">公開サイトへ</Link>
-      </div>
+        <Separator />
+        <a href="/" class="link-muted">公開サイトへ</a>
+      </CardContent>
     </Card>
   </main>
 </div>
@@ -49,7 +53,13 @@
     padding: var(--spacing-md) 0;
   }
 
-  :global(.session-expired-logo) {
+  .site-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-text {
+    font-weight: bold;
     letter-spacing: 0.08em;
   }
 
@@ -63,15 +73,39 @@
     padding: var(--spacing-xl) 0;
   }
 
-  :global(.session-expired-card) {
-    width: 100%;
-  }
-
-  .session-expired-content {
+  :global(.session-expired-content) {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--spacing-md);
     text-align: center;
+  }
+
+  .status-icon--warning {
+    color: var(--color-warning, #f59e0b);
+  }
+
+  .card-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .card-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
+  .link-muted {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .link-muted:hover {
+    text-decoration: underline;
   }
 </style>
