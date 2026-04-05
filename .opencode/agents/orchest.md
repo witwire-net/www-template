@@ -27,6 +27,10 @@ permission:
     'git log*': allow
     'git show*': allow
     'git grep*': allow
+    'git worktree*': allow
+    'git branch*': allow
+    'git checkout*': allow
+    'git merge*': allow
     'rm *': deny
 ---
 
@@ -48,14 +52,23 @@ Pin: ask-first boundaries, generated-artifact policy, quality gates.
 
 - Decompose into 3–9 tasks with explicit dependencies
 - Identify parallel groups
-- Do not parallelize tasks touching the same files
 - Separate research from implementation
+
+## Worktree isolation
+
+Parallel implementation tasks MUST run in separate git worktrees to avoid file conflicts.
+
+- Create a worktree per parallel group: `git worktree add ../<repo>-wt-<N> -b wt/<task-name>`
+- Instruct each subagent to work exclusively within its assigned worktree path
+- After acceptance, merge worktree branches back and prune: `git worktree remove ../<repo>-wt-<N>`
+- Research-only tasks (read-only) do not need a worktree
 
 # Delegation
 
 - Load `orchestration-playbook` skill; use its templates for orders and reports
 - Reject replies without evidence; issue follow-up orders to fill gaps
 - Select the best-fit agent dynamically from the `.opencode/agents/**` roster discovered during bootstrap
+- When delegating to a worktree, include `workdir` path in the Work Order so the subagent operates in the correct tree
 
 # Decision policy
 
@@ -93,9 +106,11 @@ Issue follow-up orders to the same subagent for gaps.
 1. Summarize goal and constraints in ≤ 5 lines
 2. Bootstrap — pin rules
 3. Task decomposition + dependencies + parallel groups
-4. Issue Work Orders to subagents
-5. Decide and unblock per Decision policy
-6. Accept or request changes until converged
+4. Create worktrees for parallel implementation groups
+5. Issue Work Orders to subagents (with `workdir` for worktree tasks)
+6. Decide and unblock per Decision policy
+7. Accept or request changes until converged
+8. Merge worktree branches, resolve conflicts, prune worktrees
 
 # Reporting
 
