@@ -46,6 +46,14 @@ type RecoveryDelivery struct {
 	ExpiresAt       time.Time
 }
 
+// PasskeyCredentialDTO はユースケース層が公開するパスキー情報の DTO。
+type PasskeyCredentialDTO struct {
+	ID         string
+	AccountID  string
+	Identifier string
+	CreatedAt  time.Time
+}
+
 type StartPasskeyAuthenticationInput struct {
 	Identifier string
 	ClientIP   string
@@ -96,13 +104,24 @@ type AuthStateRepository interface {
 	IncrementThrottle(context.Context, string, time.Duration) (int, error)
 	SetLock(context.Context, string, time.Time, time.Duration) error
 	GetLock(context.Context, string) (domain.AuthLock, bool, error)
+	// SavePasskeyOtp は OTP → accountID のマッピングを TTL 付きで保存する。
+	SavePasskeyOtp(ctx context.Context, otpKey string, accountID string, ttl time.Duration) error
+	// ConsumePasskeyOtp は OTP を検証し accountID を取得する。TTL 切れ・存在しない場合は domain.ErrOtpNotFound を返す。
+	ConsumePasskeyOtp(ctx context.Context, otpKey string) (string, error)
+	// GetPasskeyOtp は OTP を消費せずに accountID を取得する。TTL 切れ・存在しない場合は domain.ErrOtpNotFound を返す。
+	GetPasskeyOtp(ctx context.Context, otpKey string) (string, error)
 }
 
 type AuthAccountRepository interface {
 	FindByIdentifier(context.Context, string) (domain.AuthAccount, error)
 	FindByCredential(context.Context, string) (domain.AuthAccount, error)
 	FindByEmail(context.Context, string) (domain.AuthAccount, error)
-	ReplacePasskey(context.Context, string, string, string) (domain.AuthAccount, error)
+	// AddPasskey は既存パスキーを保持したまま 1 件追加する。
+	AddPasskey(ctx context.Context, accountID string, credentialID string, handle string) (domain.AuthAccount, error)
+	// ListPasskeys は accountID に紐づく全 passkey credential を返す。
+	ListPasskeys(ctx context.Context, accountID string) ([]domain.PasskeyCredential, error)
+	// DeletePasskeyByID は account_id と credentialID で絞り込んで削除する。
+	DeletePasskeyByID(ctx context.Context, accountID string, credentialID string) error
 }
 
 type AccountRecoverySender interface {

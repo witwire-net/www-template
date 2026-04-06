@@ -5,7 +5,15 @@ export default function appSecurity(targetVal, _opts, context) {
 
   const results = [];
   for (const [pathKey, pathItem] of Object.entries(targetVal)) {
-    if (!pathKey.startsWith('/api/v1/app/')) {
+    // /api/v1/auth/* is public (no bearer required)
+    if (pathKey.startsWith('/api/v1/auth/')) {
+      continue;
+    }
+    // /api/v1/status is a public status endpoint
+    if (pathKey === '/api/v1/status') {
+      continue;
+    }
+    if (!pathKey.startsWith('/api/v1/')) {
       continue;
     }
 

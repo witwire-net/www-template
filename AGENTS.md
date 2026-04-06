@@ -12,7 +12,7 @@
 - Dev (server): `pnpm dev:server` (Go API on `http://localhost:8080`)
 - Dev (client entry): `pnpm dev:client` (alias of `pnpm dev:web`, Vite on `http://localhost:5173`)
 - Dev (web): `pnpm dev:web` (SvelteKit public site on `http://localhost:5173`)
-- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://localhost:5174/app`)
+- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://localhost:5174`)
 
 ## API Contract (TypeSpec)
 
@@ -37,7 +37,7 @@
 
 ## Backend Guardrails
 
-- API path policy: public routes use `api/v1/*`, app routes use `api/v1/app/*`
+- API path policy: all routes live under `api/v1/*`; public auth routes use `api/v1/auth/*`, bearer-protected routes use the remaining `api/v1/*` paths
 - GORM imports are allowed only under `packages/backend/internal/persistence/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow

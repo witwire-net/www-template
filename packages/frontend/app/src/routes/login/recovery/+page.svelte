@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+
   import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
   import { Button, Card, CardContent, Input, Label, Separator } from '@www-template/ui/components';
 
@@ -7,7 +9,7 @@
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
     if ((await actions.submitRecoveryRequest()) === '/login/recovery/sent') {
-      window.location.href = '/login/recovery/sent';
+      await goto('/login/recovery/sent');
     }
   }
 

@@ -98,8 +98,16 @@ func (stubAuthAccountRepository) FindByEmail(context.Context, string) (domain.Au
 	return emptyAuthAccountForContainerTest(), nil
 }
 
-func (stubAuthAccountRepository) ReplacePasskey(context.Context, string, string, string) (domain.AuthAccount, error) {
+func (stubAuthAccountRepository) AddPasskey(_ context.Context, _, _, _ string) (domain.AuthAccount, error) {
 	return emptyAuthAccountForContainerTest(), nil
+}
+
+func (stubAuthAccountRepository) ListPasskeys(_ context.Context, _ string) ([]domain.PasskeyCredential, error) {
+	return nil, nil
+}
+
+func (stubAuthAccountRepository) DeletePasskeyByID(_ context.Context, _, _ string) error {
+	return nil
 }
 
 type fakeAuthStateRepository struct{}
@@ -151,6 +159,15 @@ func (fakeAuthStateRepository) SetLock(context.Context, string, time.Time, time.
 }
 func (fakeAuthStateRepository) GetLock(context.Context, string) (domain.AuthLock, bool, error) {
 	return domain.NewAuthLock(time.Time{}), false, nil
+}
+func (fakeAuthStateRepository) SavePasskeyOtp(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (fakeAuthStateRepository) ConsumePasskeyOtp(context.Context, string) (string, error) {
+	return "", nil
+}
+func (fakeAuthStateRepository) GetPasskeyOtp(context.Context, string) (string, error) {
+	return "", nil
 }
 
 func emptyChallengeForContainerTest() domain.AuthChallenge {

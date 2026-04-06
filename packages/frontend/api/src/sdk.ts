@@ -1,15 +1,30 @@
 import {
   consumeRecoveryToken,
+  deletePasskey,
+  finishPasskeyAddition,
+  finishPasskeyAdditionByOtp,
   finishPasskeyAuthentication,
   getStatus,
+  issuePasskeyOtp,
+  listPasskeys,
   logout,
   registerPasskey,
   requestPasskeyRecovery,
+  startPasskeyAddition,
+  startPasskeyAdditionByOtp,
   startPasskeyAuthentication,
   type consumeRecoveryTokenResponse,
+  type deletePasskeyResponse,
+  type finishPasskeyAdditionByOtpResponse,
+  type finishPasskeyAdditionResponse,
   type finishPasskeyAuthenticationResponse,
   type getStatusResponse,
+  type issuePasskeyOtpResponse,
+  type listPasskeysResponse,
   type logoutResponse,
+  type PasskeyAddByOtpFinishRequest,
+  type PasskeyAddByOtpStartRequest,
+  type PasskeyAddFinishRequest,
   type PasskeyFinishRequest,
   type PasskeyRegisterRequest,
   type PasskeyStartRequest,
@@ -17,7 +32,10 @@ import {
   type RecoveryRequest,
   type registerPasskeyResponse,
   type requestPasskeyRecoveryResponse,
+  type startPasskeyAdditionByOtpResponse,
+  type startPasskeyAdditionResponse,
   type startPasskeyAuthenticationResponse,
+  type UlidId,
 } from './generated/client.js';
 
 export type {
@@ -25,7 +43,14 @@ export type {
   AuthFailureResponse,
   AuthOperationErrorResponse,
   AuthSessionResponse,
+  PasskeyAddByOtpFinishRequest,
+  PasskeyAddByOtpStartRequest,
+  PasskeyAddFinishRequest,
+  PasskeyAddStartResponse,
   PasskeyFinishRequest,
+  PasskeyItem,
+  PasskeyListResponse,
+  PasskeyOtpResponse,
   PasskeyRegisterRequest,
   PasskeyStartRequest,
   PasskeyStartResponse,
@@ -35,12 +60,20 @@ export type {
   RecoveryConsumeResponse,
   RecoveryRequest,
   StatusResponse,
+  UlidId,
   consumeRecoveryTokenResponse,
+  deletePasskeyResponse,
+  finishPasskeyAdditionByOtpResponse,
+  finishPasskeyAdditionResponse,
   finishPasskeyAuthenticationResponse,
   getStatusResponse,
+  issuePasskeyOtpResponse,
+  listPasskeysResponse,
   logoutResponse,
   registerPasskeyResponse,
   requestPasskeyRecoveryResponse,
+  startPasskeyAdditionByOtpResponse,
+  startPasskeyAdditionResponse,
   startPasskeyAuthenticationResponse,
 } from './generated/client.js';
 
@@ -72,6 +105,22 @@ interface AuthSdk {
     payload: PasskeyRegisterRequest,
     options?: RequestInit
   ) => Promise<registerPasskeyResponse>;
+  listPasskeys: (options?: RequestInit) => Promise<listPasskeysResponse>;
+  startPasskeyAddition: (options?: RequestInit) => Promise<startPasskeyAdditionResponse>;
+  finishPasskeyAddition: (
+    payload: PasskeyAddFinishRequest,
+    options?: RequestInit
+  ) => Promise<finishPasskeyAdditionResponse>;
+  deletePasskey: (id: UlidId, options?: RequestInit) => Promise<deletePasskeyResponse>;
+  issuePasskeyOtp: (options?: RequestInit) => Promise<issuePasskeyOtpResponse>;
+  startPasskeyAdditionByOtp: (
+    payload: PasskeyAddByOtpStartRequest,
+    options?: RequestInit
+  ) => Promise<startPasskeyAdditionByOtpResponse>;
+  finishPasskeyAdditionByOtp: (
+    payload: PasskeyAddByOtpFinishRequest,
+    options?: RequestInit
+  ) => Promise<finishPasskeyAdditionByOtpResponse>;
 }
 
 const toHeaderObject = (headers?: HeadersInit): Record<string, string> => {
@@ -121,6 +170,19 @@ const createAuthSdk = (defaultInit: RequestInit | undefined): AuthSdk => ({
     consumeRecoveryToken(payload, withJsonInit(options, defaultInit)),
   registerPasskey: (payload: PasskeyRegisterRequest, options?: RequestInit) =>
     registerPasskey(payload, withJsonInit(options, defaultInit)),
+  listPasskeys: (options?: RequestInit) => listPasskeys(withDefaultInit(options, defaultInit)),
+  startPasskeyAddition: (options?: RequestInit) =>
+    startPasskeyAddition(withDefaultInit(options, defaultInit)),
+  finishPasskeyAddition: (payload: PasskeyAddFinishRequest, options?: RequestInit) =>
+    finishPasskeyAddition(payload, withJsonInit(options, defaultInit)),
+  deletePasskey: (id: UlidId, options?: RequestInit) =>
+    deletePasskey(id, withDefaultInit(options, defaultInit)),
+  issuePasskeyOtp: (options?: RequestInit) =>
+    issuePasskeyOtp(withDefaultInit(options, defaultInit)),
+  startPasskeyAdditionByOtp: (payload: PasskeyAddByOtpStartRequest, options?: RequestInit) =>
+    startPasskeyAdditionByOtp(payload, withJsonInit(options, defaultInit)),
+  finishPasskeyAdditionByOtp: (payload: PasskeyAddByOtpFinishRequest, options?: RequestInit) =>
+    finishPasskeyAdditionByOtp(payload, withJsonInit(options, defaultInit)),
 });
 
 /** Create a typed API SDK wrapper with optional default request init. */

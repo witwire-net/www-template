@@ -4,7 +4,7 @@ export default function pathPolicy(targetVal, _opts, context) {
   }
 
   const results = [];
-  const allowedPathPattern = /^\/api\/v1(?:\/app)?\/.+/;
+  const allowedPathPattern = /^\/api\/v1\/.+/;
 
   for (const pathKey of Object.keys(targetVal)) {
     if (allowedPathPattern.test(pathKey)) {
@@ -12,7 +12,7 @@ export default function pathPolicy(targetVal, _opts, context) {
     }
 
     results.push({
-      message: `path \`${pathKey}\` is outside the allowed /api/v1/* or /api/v1/app/* policy`,
+      message: `path \`${pathKey}\` is outside the allowed /api/v1/* policy`,
       path: [...context.path, pathKey],
     });
   }

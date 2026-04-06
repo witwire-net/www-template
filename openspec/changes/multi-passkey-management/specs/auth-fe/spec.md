@@ -9,8 +9,8 @@
 **Requirement**
 
 - システムは認証済みアプリ内にパスキー管理ページを SHALL 提供し、登録済みのすべての passkey credential の識別子と登録日時を一覧表示しなければならない。
-- パスキー管理ページは新しいパスキーを追加する WebAuthn 登録フローを SHALL 提供しなければならない（`POST /api/v1/app/passkeys/start` → `POST /api/v1/app/passkeys/finish`）。
-- パスキー管理ページは指定したパスキーを削除するアクションを SHALL 提供しなければならない（`DELETE /api/v1/app/passkeys/{id}`）。
+- パスキー管理ページは新しいパスキーを追加する WebAuthn 登録フローを SHALL 提供しなければならない（`POST /api/v1/passkeys/start` → `POST /api/v1/passkeys/finish`）。
+- パスキー管理ページは指定したパスキーを削除するアクションを SHALL 提供しなければならない（`DELETE /api/v1/passkeys/{id}`）。
 - passkey credential が 1 件しかない場合、削除アクションは SHALL 無効化または非表示にしなければならない。
 - パスキー追加フローまたは削除フローでエラーが発生した場合は、エラーメッセージを SHALL 表示し、ページ状態を保持しなければならない。
 - 管理ページは bearer session を必須とする認証済み surface であり、未認証アクセスは SHALL 拒否されなければならない。
@@ -61,7 +61,7 @@
 
 **Requirement**
 
-- パスキー管理ページは「新しいデバイスにパスキーを追加」アクションを SHALL 提供し、`POST /api/v1/app/passkeys/otp` 経由で 6 桁の OTP を取得してユーザーに提示しなければならない。
+- パスキー管理ページは「新しいデバイスにパスキーを追加」アクションを SHALL 提供し、`POST /api/v1/passkeys/otp` 経由で 6 桁の OTP を取得してユーザーに提示しなければならない。
 - OTP は画面上に明示的に表示し、ユーザーが新端末へ手入力できる形式で SHALL 提供しなければならない。
 - 新端末向けパスキー登録ページ（`/passkeys/add`）は未認証 surface として SHALL 提供されなければならない。OTP 入力フォームを表示し、有効な OTP 入力後に WebAuthn 登録フローを完了しなければならない。
 - 新端末向け登録フローでエラーが発生した場合は、エラーメッセージを SHALL 表示しなければならない。

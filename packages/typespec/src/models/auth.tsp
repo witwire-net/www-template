@@ -40,6 +40,41 @@ model PasskeyFinishRequest {
   credential: string;
 }
 
+model PasskeyItem {
+  id: UlidId;
+  identifier: string;
+  createdAt: utcDateTime;
+}
+
+model PasskeyListResponse {
+  requestId: UlidId;
+  passkeys: PasskeyItem[];
+}
+
+model PasskeyAddStartResponse {
+  requestId: UlidId;
+  challenge: string;
+  rpId: string;
+}
+
+model PasskeyAddFinishRequest {
+  credential: string;
+}
+
+model PasskeyOtpResponse {
+  requestId: UlidId;
+  otp: string;
+}
+
+model PasskeyAddByOtpStartRequest {
+  otp: string;
+}
+
+model PasskeyAddByOtpFinishRequest {
+  otp: string;
+  credential: string;
+}
+
 model AuthSessionResponse {
   requestId: UlidId;
   accountId: UlidId;

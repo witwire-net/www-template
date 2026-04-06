@@ -42,18 +42,18 @@
 - NG例: `packages/typespec/main.tsp` に構文エラーを入れたまま push する
 - OK例: `pnpm --filter @www-template/typespec format` の後に `pnpm check` を通す
 
-### OpenAPI path は `/api/v1/*` または `/api/v1/app/*` だけ
+### OpenAPI path は `/api/v1/*` だけ
 
-- forbidden: OpenAPI path を `/api/v1/*` と `/api/v1/app/*` の外に置かない
+- forbidden: OpenAPI path を `/api/v1/*` の外に置かない
 - Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`; `pnpm lint` -> `package.json`
 - NG例: `/profiles` / `/health` / `/admin/users`
-- OK例: `/api/v1/profiles` / `/api/v1/app/profiles`
+- OK例: `/api/v1/profiles` / `/api/v1/passkeys`
 
 ### app endpoint は BearerAuth を宣言する
 
-- required: `/api/v1/app/*` の各 operation は `security: [{ BearerAuth: [] }]` を持つ
+- required: `/api/v1/auth/*` 以外の `/api/v1/*` 各 operation は `security: [{ BearerAuth: [] }]` を持つ
 - Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/app-security.js`; `pnpm test:run` -> `packages/backend/internal/http/openapi_contract_test.go`
-- NG例: `/api/v1/app/profiles` の `security` を消す
+- NG例: `/api/v1/passkeys` の `security` を消す
 - OK例: app endpoint ごとに `BearerAuth` を宣言する
 
 ### BearerAuth security scheme は `type=http` + `scheme=bearer` にする
@@ -286,25 +286,25 @@
 
 ## 5. バックエンドの API / 認証 / 永続化
 
-### non-generated Gin route は literal かつ `/health` か `/api/v1/app/*` だけにする
+### non-generated Gin route は literal かつ `/health` か `/api/v1/*` だけにする
 
-- required: `internal/http` の non-generated route は string literal で書き、`/health` または `/api/v1/app/*` だけにする; custom Gin group も `/api/v1/app/*` 配下だけにする
+- required: `internal/http` の non-generated route は string literal で書き、`/health` または `/api/v1/*` だけにする; custom Gin group も `/api/v1/*` 配下だけにする
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
 - NG例: `router.GET(basePath + "/profiles", ...)` / `router.Group("/admin")`
-- OK例: `router.GET("/health", ...)` / `router.Group("/api/v1/app/profiles")`
+- OK例: `router.GET("/health", ...)` / `router.Group("/api/v1/passkeys")`
 
 ### runtime route policy をテストで守る
 
-- required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume` に限定し、それ以外の custom route は `/health` または `/api/v1/app/*` に収める
+- required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume` に限定し、それ以外の custom route は `/health` または `/api/v1/*`（`/api/v1/auth/*` 除く）に収める
 - Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
 - NG例: runtime route に `/api/v1/admin/users` を増やす
-- OK例: app surface の custom route は `/api/v1/app/*` に置く
+- OK例: app surface の custom route は `/api/v1/passkeys/*` に置く
 
 ### app API は Bearer token 必須にする
 
-- required: `/api/v1/app/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する
+- required: `/api/v1/auth/*` 以外の `/api/v1/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する
 - Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
-- NG例: `/api/v1/app/profiles` を認証なしで通す
+- NG例: `/api/v1/passkeys` を認証なしで通す
 - OK例: bearer middleware で保護し、OpenAPI に `security: [{ BearerAuth: [] }]` を残す
 
 ### `APP_ENV!=development` では fail-close にする

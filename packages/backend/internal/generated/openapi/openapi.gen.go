@@ -96,9 +96,59 @@ type LogoutResponse struct {
 // LogoutResponseRevoked defines model for LogoutResponse.Revoked.
 type LogoutResponseRevoked bool
 
+// PasskeyAddByOtpFinishRequest defines model for PasskeyAddByOtpFinishRequest.
+type PasskeyAddByOtpFinishRequest struct {
+	Credential string `json:"credential"`
+	Otp        string `json:"otp"`
+}
+
+// PasskeyAddByOtpStartRequest defines model for PasskeyAddByOtpStartRequest.
+type PasskeyAddByOtpStartRequest struct {
+	Otp string `json:"otp"`
+}
+
+// PasskeyAddFinishRequest defines model for PasskeyAddFinishRequest.
+type PasskeyAddFinishRequest struct {
+	Credential string `json:"credential"`
+}
+
+// PasskeyAddStartResponse defines model for PasskeyAddStartResponse.
+type PasskeyAddStartResponse struct {
+	Challenge string `json:"challenge"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+	RpId      string `json:"rpId"`
+}
+
 // PasskeyFinishRequest defines model for PasskeyFinishRequest.
 type PasskeyFinishRequest struct {
 	Credential string `json:"credential"`
+}
+
+// PasskeyItem defines model for PasskeyItem.
+type PasskeyItem struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Id Canonical ULID string used for auth-owned resource and correlation identifiers.
+	Id         UlidId `json:"id"`
+	Identifier string `json:"identifier"`
+}
+
+// PasskeyListResponse defines model for PasskeyListResponse.
+type PasskeyListResponse struct {
+	Passkeys []PasskeyItem `json:"passkeys"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// PasskeyOtpResponse defines model for PasskeyOtpResponse.
+type PasskeyOtpResponse struct {
+	Otp string `json:"otp"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
 }
 
 // PasskeyRegisterRequest defines model for PasskeyRegisterRequest.
@@ -175,6 +225,12 @@ type StatusResponse struct {
 // UlidId Canonical ULID string used for auth-owned resource and correlation identifiers.
 type UlidId = string
 
+// FinishPasskeyAdditionByOtpJSONRequestBody defines body for FinishPasskeyAdditionByOtp for application/json ContentType.
+type FinishPasskeyAdditionByOtpJSONRequestBody = PasskeyAddByOtpFinishRequest
+
+// StartPasskeyAdditionByOtpJSONRequestBody defines body for StartPasskeyAdditionByOtp for application/json ContentType.
+type StartPasskeyAdditionByOtpJSONRequestBody = PasskeyAddByOtpStartRequest
+
 // FinishPasskeyAuthenticationJSONRequestBody defines body for FinishPasskeyAuthentication for application/json ContentType.
 type FinishPasskeyAuthenticationJSONRequestBody = PasskeyFinishRequest
 
@@ -189,6 +245,9 @@ type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
 
 // ConsumeRecoveryTokenJSONRequestBody defines body for ConsumeRecoveryToken for application/json ContentType.
 type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
+
+// FinishPasskeyAdditionJSONRequestBody defines body for FinishPasskeyAddition for application/json ContentType.
+type FinishPasskeyAdditionJSONRequestBody = PasskeyAddFinishRequest
 
 // AsRecoveryPasskeyRegisterRequest returns the union data inside the PasskeyRegisterRequest as a RecoveryPasskeyRegisterRequest
 func (t PasskeyRegisterRequest) AsRecoveryPasskeyRegisterRequest() (RecoveryPasskeyRegisterRequest, error) {
@@ -255,8 +314,14 @@ func (t *PasskeyRegisterRequest) UnmarshalJSON(b []byte) error {
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Revokes the current bearer session
-	// (POST /api/v1/app/auth/logout)
+	// (POST /api/v1/auth/logout)
 	Logout(c *gin.Context)
+	// Finishes adding a passkey on a new device by OTP handoff
+	// (POST /api/v1/auth/passkey/add/finish)
+	FinishPasskeyAdditionByOtp(c *gin.Context)
+	// Starts adding a passkey on a new device by OTP handoff
+	// (POST /api/v1/auth/passkey/add/start)
+	StartPasskeyAdditionByOtp(c *gin.Context)
 	// Finishes passkey authentication and returns a bearer session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(c *gin.Context)
@@ -272,6 +337,21 @@ type ServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(c *gin.Context)
+	// Lists registered passkeys for the current account
+	// (GET /api/v1/passkeys)
+	ListPasskeys(c *gin.Context)
+	// Finishes adding a passkey for the current account
+	// (POST /api/v1/passkeys/finish)
+	FinishPasskeyAddition(c *gin.Context)
+	// Issues a one-time password for adding a passkey on a new device
+	// (POST /api/v1/passkeys/otp)
+	IssuePasskeyOtp(c *gin.Context)
+	// Starts adding a passkey for the current account
+	// (POST /api/v1/passkeys/start)
+	StartPasskeyAddition(c *gin.Context)
+	// Deletes a registered passkey for the current account
+	// (DELETE /api/v1/passkeys/{id})
+	DeletePasskey(c *gin.Context, id UlidId)
 	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(c *gin.Context)
@@ -299,6 +379,32 @@ func (siw *ServerInterfaceWrapper) Logout(c *gin.Context) {
 	}
 
 	siw.Handler.Logout(c)
+}
+
+// FinishPasskeyAdditionByOtp operation middleware
+func (siw *ServerInterfaceWrapper) FinishPasskeyAdditionByOtp(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.FinishPasskeyAdditionByOtp(c)
+}
+
+// StartPasskeyAdditionByOtp operation middleware
+func (siw *ServerInterfaceWrapper) StartPasskeyAdditionByOtp(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartPasskeyAdditionByOtp(c)
 }
 
 // FinishPasskeyAuthentication operation middleware
@@ -366,6 +472,92 @@ func (siw *ServerInterfaceWrapper) ConsumeRecoveryToken(c *gin.Context) {
 	siw.Handler.ConsumeRecoveryToken(c)
 }
 
+// ListPasskeys operation middleware
+func (siw *ServerInterfaceWrapper) ListPasskeys(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListPasskeys(c)
+}
+
+// FinishPasskeyAddition operation middleware
+func (siw *ServerInterfaceWrapper) FinishPasskeyAddition(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.FinishPasskeyAddition(c)
+}
+
+// IssuePasskeyOtp operation middleware
+func (siw *ServerInterfaceWrapper) IssuePasskeyOtp(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.IssuePasskeyOtp(c)
+}
+
+// StartPasskeyAddition operation middleware
+func (siw *ServerInterfaceWrapper) StartPasskeyAddition(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartPasskeyAddition(c)
+}
+
+// DeletePasskey operation middleware
+func (siw *ServerInterfaceWrapper) DeletePasskey(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id UlidId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeletePasskey(c, id)
+}
+
 // GetStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetStatus(c *gin.Context) {
 
@@ -406,12 +598,19 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
-	router.POST(options.BaseURL+"/api/v1/app/auth/logout", wrapper.Logout)
+	router.POST(options.BaseURL+"/api/v1/auth/logout", wrapper.Logout)
+	router.POST(options.BaseURL+"/api/v1/auth/passkey/add/finish", wrapper.FinishPasskeyAdditionByOtp)
+	router.POST(options.BaseURL+"/api/v1/auth/passkey/add/start", wrapper.StartPasskeyAdditionByOtp)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/start", wrapper.StartPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
+	router.GET(options.BaseURL+"/api/v1/passkeys", wrapper.ListPasskeys)
+	router.POST(options.BaseURL+"/api/v1/passkeys/finish", wrapper.FinishPasskeyAddition)
+	router.POST(options.BaseURL+"/api/v1/passkeys/otp", wrapper.IssuePasskeyOtp)
+	router.POST(options.BaseURL+"/api/v1/passkeys/start", wrapper.StartPasskeyAddition)
+	router.DELETE(options.BaseURL+"/api/v1/passkeys/:id", wrapper.DeletePasskey)
 	router.GET(options.BaseURL+"/api/v1/status", wrapper.GetStatus)
 }
 
@@ -466,6 +665,121 @@ type Logout503JSONResponse struct {
 }
 
 func (response Logout503JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAdditionByOtpRequestObject struct {
+	Body *FinishPasskeyAdditionByOtpJSONRequestBody
+}
+
+type FinishPasskeyAdditionByOtpResponseObject interface {
+	VisitFinishPasskeyAdditionByOtpResponse(w http.ResponseWriter) error
+}
+
+type FinishPasskeyAdditionByOtp200ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAdditionByOtp200Response struct {
+	Headers FinishPasskeyAdditionByOtp200ResponseHeaders
+}
+
+func (response FinishPasskeyAdditionByOtp200Response) VisitFinishPasskeyAdditionByOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+	return nil
+}
+
+type FinishPasskeyAdditionByOtp400ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAdditionByOtp400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers FinishPasskeyAdditionByOtp400ResponseHeaders
+}
+
+func (response FinishPasskeyAdditionByOtp400JSONResponse) VisitFinishPasskeyAdditionByOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAdditionByOtp503ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAdditionByOtp503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishPasskeyAdditionByOtp503ResponseHeaders
+}
+
+func (response FinishPasskeyAdditionByOtp503JSONResponse) VisitFinishPasskeyAdditionByOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAdditionByOtpRequestObject struct {
+	Body *StartPasskeyAdditionByOtpJSONRequestBody
+}
+
+type StartPasskeyAdditionByOtpResponseObject interface {
+	VisitStartPasskeyAdditionByOtpResponse(w http.ResponseWriter) error
+}
+
+type StartPasskeyAdditionByOtp200ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAdditionByOtp200JSONResponse struct {
+	Body    PasskeyAddStartResponse
+	Headers StartPasskeyAdditionByOtp200ResponseHeaders
+}
+
+func (response StartPasskeyAdditionByOtp200JSONResponse) VisitStartPasskeyAdditionByOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAdditionByOtp400ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAdditionByOtp400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers StartPasskeyAdditionByOtp400ResponseHeaders
+}
+
+func (response StartPasskeyAdditionByOtp400JSONResponse) VisitStartPasskeyAdditionByOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAdditionByOtp503ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAdditionByOtp503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartPasskeyAdditionByOtp503ResponseHeaders
+}
+
+func (response StartPasskeyAdditionByOtp503JSONResponse) VisitStartPasskeyAdditionByOtpResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(503)
@@ -768,6 +1082,363 @@ func (response ConsumeRecoveryToken503JSONResponse) VisitConsumeRecoveryTokenRes
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListPasskeysRequestObject struct {
+}
+
+type ListPasskeysResponseObject interface {
+	VisitListPasskeysResponse(w http.ResponseWriter) error
+}
+
+type ListPasskeys200ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListPasskeys200JSONResponse struct {
+	Body    PasskeyListResponse
+	Headers ListPasskeys200ResponseHeaders
+}
+
+func (response ListPasskeys200JSONResponse) VisitListPasskeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPasskeys401ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListPasskeys401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ListPasskeys401ResponseHeaders
+}
+
+func (response ListPasskeys401JSONResponse) VisitListPasskeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPasskeys503ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListPasskeys503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ListPasskeys503ResponseHeaders
+}
+
+func (response ListPasskeys503JSONResponse) VisitListPasskeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAdditionRequestObject struct {
+	Body *FinishPasskeyAdditionJSONRequestBody
+}
+
+type FinishPasskeyAdditionResponseObject interface {
+	VisitFinishPasskeyAdditionResponse(w http.ResponseWriter) error
+}
+
+type FinishPasskeyAddition200ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAddition200JSONResponse struct {
+	Body    PasskeyListResponse
+	Headers FinishPasskeyAddition200ResponseHeaders
+}
+
+func (response FinishPasskeyAddition200JSONResponse) VisitFinishPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAddition400ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAddition400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers FinishPasskeyAddition400ResponseHeaders
+}
+
+func (response FinishPasskeyAddition400JSONResponse) VisitFinishPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAddition401ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAddition401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishPasskeyAddition401ResponseHeaders
+}
+
+func (response FinishPasskeyAddition401JSONResponse) VisitFinishPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAddition503ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAddition503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishPasskeyAddition503ResponseHeaders
+}
+
+func (response FinishPasskeyAddition503JSONResponse) VisitFinishPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssuePasskeyOtpRequestObject struct {
+}
+
+type IssuePasskeyOtpResponseObject interface {
+	VisitIssuePasskeyOtpResponse(w http.ResponseWriter) error
+}
+
+type IssuePasskeyOtp200ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssuePasskeyOtp200JSONResponse struct {
+	Body    PasskeyOtpResponse
+	Headers IssuePasskeyOtp200ResponseHeaders
+}
+
+func (response IssuePasskeyOtp200JSONResponse) VisitIssuePasskeyOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssuePasskeyOtp400ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssuePasskeyOtp400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers IssuePasskeyOtp400ResponseHeaders
+}
+
+func (response IssuePasskeyOtp400JSONResponse) VisitIssuePasskeyOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssuePasskeyOtp401ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssuePasskeyOtp401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers IssuePasskeyOtp401ResponseHeaders
+}
+
+func (response IssuePasskeyOtp401JSONResponse) VisitIssuePasskeyOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssuePasskeyOtp503ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssuePasskeyOtp503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers IssuePasskeyOtp503ResponseHeaders
+}
+
+func (response IssuePasskeyOtp503JSONResponse) VisitIssuePasskeyOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAdditionRequestObject struct {
+}
+
+type StartPasskeyAdditionResponseObject interface {
+	VisitStartPasskeyAdditionResponse(w http.ResponseWriter) error
+}
+
+type StartPasskeyAddition200ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAddition200JSONResponse struct {
+	Body    PasskeyAddStartResponse
+	Headers StartPasskeyAddition200ResponseHeaders
+}
+
+func (response StartPasskeyAddition200JSONResponse) VisitStartPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAddition401ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAddition401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartPasskeyAddition401ResponseHeaders
+}
+
+func (response StartPasskeyAddition401JSONResponse) VisitStartPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAddition503ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAddition503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartPasskeyAddition503ResponseHeaders
+}
+
+func (response StartPasskeyAddition503JSONResponse) VisitStartPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePasskeyRequestObject struct {
+	Id UlidId `json:"id"`
+}
+
+type DeletePasskeyResponseObject interface {
+	VisitDeletePasskeyResponse(w http.ResponseWriter) error
+}
+
+type DeletePasskey204ResponseHeaders struct {
+	CacheControl string
+}
+
+type DeletePasskey204Response struct {
+	Headers DeletePasskey204ResponseHeaders
+}
+
+func (response DeletePasskey204Response) VisitDeletePasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeletePasskey401ResponseHeaders struct {
+	CacheControl string
+}
+
+type DeletePasskey401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers DeletePasskey401ResponseHeaders
+}
+
+func (response DeletePasskey401JSONResponse) VisitDeletePasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePasskey403ResponseHeaders struct {
+	CacheControl string
+}
+
+type DeletePasskey403JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers DeletePasskey403ResponseHeaders
+}
+
+func (response DeletePasskey403JSONResponse) VisitDeletePasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePasskey409ResponseHeaders struct {
+	CacheControl string
+}
+
+type DeletePasskey409JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers DeletePasskey409ResponseHeaders
+}
+
+func (response DeletePasskey409JSONResponse) VisitDeletePasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePasskey503ResponseHeaders struct {
+	CacheControl string
+}
+
+type DeletePasskey503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers DeletePasskey503ResponseHeaders
+}
+
+func (response DeletePasskey503JSONResponse) VisitDeletePasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type GetStatusRequestObject struct {
 }
 
@@ -787,8 +1458,14 @@ func (response GetStatus200JSONResponse) VisitGetStatusResponse(w http.ResponseW
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Revokes the current bearer session
-	// (POST /api/v1/app/auth/logout)
+	// (POST /api/v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// Finishes adding a passkey on a new device by OTP handoff
+	// (POST /api/v1/auth/passkey/add/finish)
+	FinishPasskeyAdditionByOtp(ctx context.Context, request FinishPasskeyAdditionByOtpRequestObject) (FinishPasskeyAdditionByOtpResponseObject, error)
+	// Starts adding a passkey on a new device by OTP handoff
+	// (POST /api/v1/auth/passkey/add/start)
+	StartPasskeyAdditionByOtp(ctx context.Context, request StartPasskeyAdditionByOtpRequestObject) (StartPasskeyAdditionByOtpResponseObject, error)
 	// Finishes passkey authentication and returns a bearer session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(ctx context.Context, request FinishPasskeyAuthenticationRequestObject) (FinishPasskeyAuthenticationResponseObject, error)
@@ -804,6 +1481,21 @@ type StrictServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(ctx context.Context, request ConsumeRecoveryTokenRequestObject) (ConsumeRecoveryTokenResponseObject, error)
+	// Lists registered passkeys for the current account
+	// (GET /api/v1/passkeys)
+	ListPasskeys(ctx context.Context, request ListPasskeysRequestObject) (ListPasskeysResponseObject, error)
+	// Finishes adding a passkey for the current account
+	// (POST /api/v1/passkeys/finish)
+	FinishPasskeyAddition(ctx context.Context, request FinishPasskeyAdditionRequestObject) (FinishPasskeyAdditionResponseObject, error)
+	// Issues a one-time password for adding a passkey on a new device
+	// (POST /api/v1/passkeys/otp)
+	IssuePasskeyOtp(ctx context.Context, request IssuePasskeyOtpRequestObject) (IssuePasskeyOtpResponseObject, error)
+	// Starts adding a passkey for the current account
+	// (POST /api/v1/passkeys/start)
+	StartPasskeyAddition(ctx context.Context, request StartPasskeyAdditionRequestObject) (StartPasskeyAdditionResponseObject, error)
+	// Deletes a registered passkey for the current account
+	// (DELETE /api/v1/passkeys/{id})
+	DeletePasskey(ctx context.Context, request DeletePasskeyRequestObject) (DeletePasskeyResponseObject, error)
 	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(ctx context.Context, request GetStatusRequestObject) (GetStatusResponseObject, error)
@@ -839,6 +1531,72 @@ func (sh *strictHandler) Logout(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(LogoutResponseObject); ok {
 		if err := validResponse.VisitLogoutResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// FinishPasskeyAdditionByOtp operation middleware
+func (sh *strictHandler) FinishPasskeyAdditionByOtp(ctx *gin.Context) {
+	var request FinishPasskeyAdditionByOtpRequestObject
+
+	var body FinishPasskeyAdditionByOtpJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.FinishPasskeyAdditionByOtp(ctx, request.(FinishPasskeyAdditionByOtpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FinishPasskeyAdditionByOtp")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(FinishPasskeyAdditionByOtpResponseObject); ok {
+		if err := validResponse.VisitFinishPasskeyAdditionByOtpResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartPasskeyAdditionByOtp operation middleware
+func (sh *strictHandler) StartPasskeyAdditionByOtp(ctx *gin.Context) {
+	var request StartPasskeyAdditionByOtpRequestObject
+
+	var body StartPasskeyAdditionByOtpJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.StartPasskeyAdditionByOtp(ctx, request.(StartPasskeyAdditionByOtpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartPasskeyAdditionByOtp")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(StartPasskeyAdditionByOtpResponseObject); ok {
+		if err := validResponse.VisitStartPasskeyAdditionByOtpResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -1004,6 +1762,141 @@ func (sh *strictHandler) ConsumeRecoveryToken(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(ConsumeRecoveryTokenResponseObject); ok {
 		if err := validResponse.VisitConsumeRecoveryTokenResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPasskeys operation middleware
+func (sh *strictHandler) ListPasskeys(ctx *gin.Context) {
+	var request ListPasskeysRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPasskeys(ctx, request.(ListPasskeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPasskeys")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(ListPasskeysResponseObject); ok {
+		if err := validResponse.VisitListPasskeysResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// FinishPasskeyAddition operation middleware
+func (sh *strictHandler) FinishPasskeyAddition(ctx *gin.Context) {
+	var request FinishPasskeyAdditionRequestObject
+
+	var body FinishPasskeyAdditionJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.FinishPasskeyAddition(ctx, request.(FinishPasskeyAdditionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FinishPasskeyAddition")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(FinishPasskeyAdditionResponseObject); ok {
+		if err := validResponse.VisitFinishPasskeyAdditionResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IssuePasskeyOtp operation middleware
+func (sh *strictHandler) IssuePasskeyOtp(ctx *gin.Context) {
+	var request IssuePasskeyOtpRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.IssuePasskeyOtp(ctx, request.(IssuePasskeyOtpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IssuePasskeyOtp")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(IssuePasskeyOtpResponseObject); ok {
+		if err := validResponse.VisitIssuePasskeyOtpResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartPasskeyAddition operation middleware
+func (sh *strictHandler) StartPasskeyAddition(ctx *gin.Context) {
+	var request StartPasskeyAdditionRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.StartPasskeyAddition(ctx, request.(StartPasskeyAdditionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartPasskeyAddition")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(StartPasskeyAdditionResponseObject); ok {
+		if err := validResponse.VisitStartPasskeyAdditionResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeletePasskey operation middleware
+func (sh *strictHandler) DeletePasskey(ctx *gin.Context, id UlidId) {
+	var request DeletePasskeyRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.DeletePasskey(ctx, request.(DeletePasskeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeletePasskey")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(DeletePasskeyResponseObject); ok {
+		if err := validResponse.VisitDeletePasskeyResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

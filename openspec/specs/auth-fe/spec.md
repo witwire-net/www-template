@@ -17,7 +17,7 @@ Auth core frontend requirements, covering low-emphasis login handoff, passkey-on
 - The system SHALL keep the public-to-login handoff low emphasis and MUST present `/login` as a passkey-only sign-in surface.
 - public surface のログイン handoff は、補助ナビゲーションまたはフッターに留まる低強調導線を SHALL 保ち、主要 CTA や hero action に拡張してはならない。
 - `/login` route は、passkey sign-in action、`/login/recovery` への recovery link、公開面へ戻る導線を持つ passkey 専用 sign-in 画面を SHALL 表示する。
-- `/login` route で認証が成功した後の client auth state は、`Authorization: Bearer <session token>` で `/api/v1/app/*` を利用できる session 契約に SHALL 接続される。
+- `/login` route で認証が成功した後の client auth state は、`Authorization: Bearer <session token>` で `/api/v1/*` を利用できる session 契約に SHALL 接続される。
 - client が保持・表示・遷移判定に使う `accountId`、`sessionId`、`passkeyCredentialId`、`recoverySessionId`、および auth notification / audit / action correlation ID など system-owned resource ID が必要な箇所は ULID を SHALL 前提とする。
 - `/login` route は、password input、password reset copy、invite registration control、Guest onboarding copy を表示してはならない（MUST NOT）。
 - 認証導線の画面は、`WitWire` 表記、IBM Plex Sans / IBM Plex Sans JP、token-based color、8px grid、Flat & Bright、shadow / glow 禁止の brand system に SHALL 準拠する。
@@ -50,7 +50,7 @@ Auth core frontend requirements, covering low-emphasis login handoff, passkey-on
 - recovery request の結果表示は、アカウント有無、送信抑止、temporary lock を UI から判別できない共通の受理メッセージを SHALL 保つ。
 - `/login/recovery/consume` route は recovery token を検証し、`/login/recovery/register` へ進む recovery-ready state か、`/login/recovery` へ戻る retry guidance のいずれかに SHALL 分岐する。
 - `/login/recovery/register` route は recovery branch のみを使って、既存アカウントに対する passkey 再登録を SHALL 完了できる。
-- recovery 再登録の成功後の client auth state は、`Authorization: Bearer <session token>` で `/api/v1/app/*` を利用できる session 契約に SHALL 接続される。
+- recovery 再登録の成功後の client auth state は、`Authorization: Bearer <session token>` で `/api/v1/*` を利用できる session 契約に SHALL 接続される。
 - recovery request / consume / register の view model、route state、navigation payload、toast / notice / telemetry payload などで ID が必要な箇所は ULID を SHALL 用い、UUID 前提の copy / mock / sample を残してはならない。
 - `/login/recovery/*` routes は invitation token、invite consent、Guest onboarding copy、TermsConsent UI を表示・保存・参照してはならない（MUST NOT）。
 - `/login/recovery/consume` と `/login/recovery/register` は、dedicated wireframe が追加されるまで recovery / recovery-sent と同じ card hierarchy、spacing rhythm、CTA ordering を SHALL 継承する。
@@ -99,26 +99,26 @@ session expiry と logout の導線は、expired / revoked session と missing s
 
 **Customer Context**
 
-`/app/*` に入る基盤では、利用者が「未ログインなのか」「認証が切れたのか」を迷わないことが重要です。session expiry と logout の導線が曖昧だと、再認証、公開面への退避、エラー画面 owner の責務が混線します。
+`/*` に入る基盤では、利用者が「未ログインなのか」「認証が切れたのか」を迷わないことが重要です。session expiry と logout の導線が曖昧だと、再認証、公開面への退避、エラー画面 owner の責務が混線します。
 
 **Requirement**
 
 - The system SHALL distinguish expired-or-revoked sessions from missing sessions and MUST route logout to an unauthenticated state.
-- 現在の session が有効である間、`/app/*` 上の authenticated navigation は SHALL 継続する。
-- 以前は有効だった session が expired または revoked と判定されたとき、client は利用者を `/app/session-expired` へ SHALL 遷移させる。
-- `/app/session-expired` route の presentation は auth routes から独立した owner に保たれ、Auth コアは redirect trigger と route selection だけを SHALL 担当する。
-- 現在の bearer session を持たない初回の `/app/*` アクセスは、通常の未認証ログイン導線へ SHALL 留まり、`/app/session-expired` と混同してはならない。
-- client は bearer token を in-memory にのみ保持しなければならず（SHALL）、tab または browser を閉じた後の再訪では previously issued bearer session を復元せず、missing session と同じ `unauthenticated` 扱いに SHALL 正規化し、`/app/session-expired` へ送ってはならない。
+- 現在の session が有効である間、`/*` 上の authenticated navigation は SHALL 継続する。
+- 以前は有効だった session が expired または revoked と判定されたとき、client は利用者を `/session-expired` へ SHALL 遷移させる。
+- `/session-expired` route の presentation は auth routes から独立した owner に保たれ、Auth コアは redirect trigger と route selection だけを SHALL 担当する。
+- 現在の bearer session を持たない初回の `/*` アクセスは、通常の未認証ログイン導線へ SHALL 留まり、`/session-expired` と混同してはならない。
+- client は bearer token を in-memory にのみ保持しなければならず（SHALL）、tab または browser を閉じた後の再訪では previously issued bearer session を復元せず、missing session と同じ `unauthenticated` 扱いに SHALL 正規化し、`/session-expired` へ送ってはならない。
 - `/logout` route は現在の bearer session を SHALL revoke し、client が保持する bearer-authenticated state を消去し、利用者を public route または login route の非認証状態へ戻す。
-- `/logout` route は public utility route として存在しても、logout 実行自体は canonical な `POST /api/v1/app/auth/logout` を呼び出して完了しなければならない（SHALL）。
+- `/logout` route は public utility route として存在しても、logout 実行自体は canonical な `POST /api/v1/auth/logout` を呼び出して完了しなければならない（SHALL）。
 - logout / expiry handling で client が参照する session ID、account ID、event ID、request ID、notification ID などの識別子が必要な箇所は ULID を SHALL 用い、opaque bearer token や cache key を ULID resource ID と混同してはならない。
 - `/logout` 導線は、invite onboarding や権限管理 copy を混在させない抑制された auth presentation を SHALL 保つ。
 
 #### Scenario: セッション失効時は再認証画面へリダイレクトする (AUTH-FE-S006)
 
-- **GIVEN** 利用者が `/app/*` 内で操作している
+- **GIVEN** 利用者が `/*` 内で操作している
 - **WHEN** 現在の session が expired または revoked として報告される
-- **THEN** 利用者は `/app/session-expired` へ遷移し、その後の画面 presentation はその route contract に委ねられる
+- **THEN** 利用者は `/session-expired` へ遷移し、その後の画面 presentation はその route contract に委ねられる
 
 #### Scenario: logout は利用者を非認証 route へ戻す (AUTH-FE-S007)
 
@@ -126,8 +126,8 @@ session expiry と logout の導線は、expired / revoked session と missing s
 - **WHEN** 利用者が `/logout` を開く
 - **THEN** bearer-authenticated state は消去され、利用者は signed in として振る舞わない public route または login route に到達する
 
-#### Scenario: session を持たない `/app/*` 到達は通常の未認証導線に留まる (AUTH-FE-S008)
+#### Scenario: session を持たない `/*` 到達は通常の未認証導線に留まる (AUTH-FE-S008)
 
-- **GIVEN** 利用者が有効な bearer session を持たずに `/app/*` を開く
+- **GIVEN** 利用者が有効な bearer session を持たずに `/*` を開く
 - **WHEN** app が current session の不在を検知する
-- **THEN** 利用者は通常の login 導線へ進み、`/app/session-expired` へは遷移しない
+- **THEN** 利用者は通常の login 導線へ進み、`/session-expired` へは遷移しない

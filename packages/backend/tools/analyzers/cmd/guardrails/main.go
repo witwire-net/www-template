@@ -620,17 +620,17 @@ func checkRoutePolicy(path string, file *ast.File) []string {
 		}
 
 		if selector.Sel.Name == "Group" {
-			if routePath != "/api/v1/app" && !strings.HasPrefix(routePath, "/api/v1/app/") {
-				violations = append(violations, fmt.Sprintf("%s: custom Gin groups must live under /api/v1/app/*, got %s", path, routePath))
+			if routePath != "/api/v1" && !strings.HasPrefix(routePath, "/api/v1/") {
+				violations = append(violations, fmt.Sprintf("%s: custom Gin groups must live under /api/v1/*, got %s", path, routePath))
 			}
 			return true
 		}
 
-		if routePath == "/health" || routePath == "/api/v1/app" || strings.HasPrefix(routePath, "/api/v1/app/") {
+		if routePath == "/health" || routePath == "/api/v1" || strings.HasPrefix(routePath, "/api/v1/") {
 			return true
 		}
 
-		violations = append(violations, fmt.Sprintf("%s: non-generated Gin routes must be /health or /api/v1/app/*, got %s", path, routePath))
+		violations = append(violations, fmt.Sprintf("%s: non-generated Gin routes must be /health or /api/v1/*, got %s", path, routePath))
 		return true
 	})
 

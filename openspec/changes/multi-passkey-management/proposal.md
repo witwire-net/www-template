@@ -22,7 +22,7 @@
 
 ### Modified Spec Units
 
-- `auth-be`: 認証済みアカウントによるパスキー管理 API（一覧・追加・削除）の追加。最終 1 件削除防止制約の追加。OTP ハンドオフによる新端末パスキー登録フローの追加（`POST /api/v1/app/passkeys/otp` 発行、`POST /api/v1/auth/passkey/add/start`・`POST /api/v1/auth/passkey/add/finish` 公開エンドポイント）。
+- `auth-be`: 認証済みアカウントによるパスキー管理 API（一覧・追加・削除）の追加。最終 1 件削除防止制約の追加。OTP ハンドオフによる新端末パスキー登録フローの追加（`POST /api/v1/passkeys/otp` 発行、`POST /api/v1/auth/passkey/add/start`・`POST /api/v1/auth/passkey/add/finish` 公開エンドポイント）。
 - `auth-fe`: 認証済みアプリ内パスキー管理画面（一覧・追加・削除 UI）の追加。
 
 ## Naming
@@ -33,7 +33,7 @@
 
 ## Impact
 
-- **API**: TypeSpec に `GET /api/v1/app/passkeys`、`POST /api/v1/app/passkeys/start`、`POST /api/v1/app/passkeys/finish`、`DELETE /api/v1/app/passkeys/{id}`、`POST /api/v1/app/passkeys/otp`（OTP 発行）、`POST /api/v1/auth/passkey/add/start`、`POST /api/v1/auth/passkey/add/finish`（新端末向け公開エンドポイント）を追加。
+- **API**: TypeSpec に `GET /api/v1/passkeys`、`POST /api/v1/passkeys/start`、`POST /api/v1/passkeys/finish`、`DELETE /api/v1/passkeys/{id}`、`POST /api/v1/passkeys/otp`（OTP 発行）、`POST /api/v1/auth/passkey/add/start`、`POST /api/v1/auth/passkey/add/finish`（新端末向け公開エンドポイント）を追加。
 - **DB**: `passkey_credentials` テーブルは既存のままだが、ドメイン・永続化層が複数件を扱えるよう変更。既存データは無変換で利用可能（後方互換）。
 - **Backend**: `domain.AuthAccount` の単一パスキーフィールドを `[]PasskeyCredential` に変更。`persistence` 層の `ReplacePasskey` を廃止し、`AddPasskey` / `ListPasskeys` / `DeletePasskey` に置き換える。
 - **Frontend**: `packages/frontend/api` に新規エンドポイントのクライアント生成。`packages/frontend/domain` に passkey 管理ユースケース追加。`packages/frontend/app` にパスキー管理ページ追加。

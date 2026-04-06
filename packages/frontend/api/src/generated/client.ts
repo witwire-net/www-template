@@ -47,8 +47,43 @@ export interface LogoutResponse {
   revoked: boolean;
 }
 
+export interface PasskeyAddByOtpFinishRequest {
+  otp: string;
+  credential: string;
+}
+
+export interface PasskeyAddByOtpStartRequest {
+  otp: string;
+}
+
+export interface PasskeyAddFinishRequest {
+  credential: string;
+}
+
+export interface PasskeyAddStartResponse {
+  requestId: UlidId;
+  challenge: string;
+  rpId: string;
+}
+
 export interface PasskeyFinishRequest {
   credential: string;
+}
+
+export interface PasskeyItem {
+  id: UlidId;
+  identifier: string;
+  createdAt: string;
+}
+
+export interface PasskeyListResponse {
+  requestId: UlidId;
+  passkeys: PasskeyItem[];
+}
+
+export interface PasskeyOtpResponse {
+  requestId: UlidId;
+  otp: string;
 }
 
 export type PasskeyRegisterRequest =
@@ -129,7 +164,7 @@ export type logoutResponseError = (logoutResponse401 | logoutResponse503) & {
 export type logoutResponse = logoutResponseSuccess | logoutResponseError;
 
 export const getLogoutUrl = () => {
-  return `/api/v1/app/auth/logout`;
+  return `/api/v1/auth/logout`;
 };
 
 export const logout = async (options?: RequestInit): Promise<logoutResponse> => {
@@ -142,6 +177,112 @@ export const logout = async (options?: RequestInit): Promise<logoutResponse> => 
 
   const data: logoutResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as logoutResponse;
+};
+
+/**
+ * @summary Finishes adding a passkey on a new device by OTP handoff
+ */
+export type finishPasskeyAdditionByOtpResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type finishPasskeyAdditionByOtpResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type finishPasskeyAdditionByOtpResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type finishPasskeyAdditionByOtpResponseSuccess = finishPasskeyAdditionByOtpResponse200 & {
+  headers: Headers;
+};
+export type finishPasskeyAdditionByOtpResponseError = (
+  | finishPasskeyAdditionByOtpResponse400
+  | finishPasskeyAdditionByOtpResponse503
+) & {
+  headers: Headers;
+};
+
+export type finishPasskeyAdditionByOtpResponse =
+  | finishPasskeyAdditionByOtpResponseSuccess
+  | finishPasskeyAdditionByOtpResponseError;
+
+export const getFinishPasskeyAdditionByOtpUrl = () => {
+  return `/api/v1/auth/passkey/add/finish`;
+};
+
+export const finishPasskeyAdditionByOtp = async (
+  passkeyAddByOtpFinishRequest: PasskeyAddByOtpFinishRequest,
+  options?: RequestInit
+): Promise<finishPasskeyAdditionByOtpResponse> => {
+  const res = await fetch(getFinishPasskeyAdditionByOtpUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyAddByOtpFinishRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: finishPasskeyAdditionByOtpResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as finishPasskeyAdditionByOtpResponse;
+};
+
+/**
+ * @summary Starts adding a passkey on a new device by OTP handoff
+ */
+export type startPasskeyAdditionByOtpResponse200 = {
+  data: PasskeyAddStartResponse;
+  status: 200;
+};
+
+export type startPasskeyAdditionByOtpResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type startPasskeyAdditionByOtpResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type startPasskeyAdditionByOtpResponseSuccess = startPasskeyAdditionByOtpResponse200 & {
+  headers: Headers;
+};
+export type startPasskeyAdditionByOtpResponseError = (
+  | startPasskeyAdditionByOtpResponse400
+  | startPasskeyAdditionByOtpResponse503
+) & {
+  headers: Headers;
+};
+
+export type startPasskeyAdditionByOtpResponse =
+  | startPasskeyAdditionByOtpResponseSuccess
+  | startPasskeyAdditionByOtpResponseError;
+
+export const getStartPasskeyAdditionByOtpUrl = () => {
+  return `/api/v1/auth/passkey/add/start`;
+};
+
+export const startPasskeyAdditionByOtp = async (
+  passkeyAddByOtpStartRequest: PasskeyAddByOtpStartRequest,
+  options?: RequestInit
+): Promise<startPasskeyAdditionByOtpResponse> => {
+  const res = await fetch(getStartPasskeyAdditionByOtpUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyAddByOtpStartRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startPasskeyAdditionByOtpResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startPasskeyAdditionByOtpResponse;
 };
 
 /**
@@ -405,6 +546,271 @@ export const consumeRecoveryToken = async (
 
   const data: consumeRecoveryTokenResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as consumeRecoveryTokenResponse;
+};
+
+/**
+ * @summary Lists registered passkeys for the current account
+ */
+export type listPasskeysResponse200 = {
+  data: PasskeyListResponse;
+  status: 200;
+};
+
+export type listPasskeysResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type listPasskeysResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type listPasskeysResponseSuccess = listPasskeysResponse200 & {
+  headers: Headers;
+};
+export type listPasskeysResponseError = (listPasskeysResponse401 | listPasskeysResponse503) & {
+  headers: Headers;
+};
+
+export type listPasskeysResponse = listPasskeysResponseSuccess | listPasskeysResponseError;
+
+export const getListPasskeysUrl = () => {
+  return `/api/v1/passkeys`;
+};
+
+export const listPasskeys = async (options?: RequestInit): Promise<listPasskeysResponse> => {
+  const res = await fetch(getListPasskeysUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listPasskeysResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listPasskeysResponse;
+};
+
+/**
+ * @summary Finishes adding a passkey for the current account
+ */
+export type finishPasskeyAdditionResponse200 = {
+  data: PasskeyListResponse;
+  status: 200;
+};
+
+export type finishPasskeyAdditionResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type finishPasskeyAdditionResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type finishPasskeyAdditionResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type finishPasskeyAdditionResponseSuccess = finishPasskeyAdditionResponse200 & {
+  headers: Headers;
+};
+export type finishPasskeyAdditionResponseError = (
+  | finishPasskeyAdditionResponse400
+  | finishPasskeyAdditionResponse401
+  | finishPasskeyAdditionResponse503
+) & {
+  headers: Headers;
+};
+
+export type finishPasskeyAdditionResponse =
+  | finishPasskeyAdditionResponseSuccess
+  | finishPasskeyAdditionResponseError;
+
+export const getFinishPasskeyAdditionUrl = () => {
+  return `/api/v1/passkeys/finish`;
+};
+
+export const finishPasskeyAddition = async (
+  passkeyAddFinishRequest: PasskeyAddFinishRequest,
+  options?: RequestInit
+): Promise<finishPasskeyAdditionResponse> => {
+  const res = await fetch(getFinishPasskeyAdditionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyAddFinishRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: finishPasskeyAdditionResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as finishPasskeyAdditionResponse;
+};
+
+/**
+ * @summary Issues a one-time password for adding a passkey on a new device
+ */
+export type issuePasskeyOtpResponse200 = {
+  data: PasskeyOtpResponse;
+  status: 200;
+};
+
+export type issuePasskeyOtpResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type issuePasskeyOtpResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type issuePasskeyOtpResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type issuePasskeyOtpResponseSuccess = issuePasskeyOtpResponse200 & {
+  headers: Headers;
+};
+export type issuePasskeyOtpResponseError = (
+  | issuePasskeyOtpResponse400
+  | issuePasskeyOtpResponse401
+  | issuePasskeyOtpResponse503
+) & {
+  headers: Headers;
+};
+
+export type issuePasskeyOtpResponse = issuePasskeyOtpResponseSuccess | issuePasskeyOtpResponseError;
+
+export const getIssuePasskeyOtpUrl = () => {
+  return `/api/v1/passkeys/otp`;
+};
+
+export const issuePasskeyOtp = async (options?: RequestInit): Promise<issuePasskeyOtpResponse> => {
+  const res = await fetch(getIssuePasskeyOtpUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: issuePasskeyOtpResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as issuePasskeyOtpResponse;
+};
+
+/**
+ * @summary Starts adding a passkey for the current account
+ */
+export type startPasskeyAdditionResponse200 = {
+  data: PasskeyAddStartResponse;
+  status: 200;
+};
+
+export type startPasskeyAdditionResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type startPasskeyAdditionResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type startPasskeyAdditionResponseSuccess = startPasskeyAdditionResponse200 & {
+  headers: Headers;
+};
+export type startPasskeyAdditionResponseError = (
+  | startPasskeyAdditionResponse401
+  | startPasskeyAdditionResponse503
+) & {
+  headers: Headers;
+};
+
+export type startPasskeyAdditionResponse =
+  | startPasskeyAdditionResponseSuccess
+  | startPasskeyAdditionResponseError;
+
+export const getStartPasskeyAdditionUrl = () => {
+  return `/api/v1/passkeys/start`;
+};
+
+export const startPasskeyAddition = async (
+  options?: RequestInit
+): Promise<startPasskeyAdditionResponse> => {
+  const res = await fetch(getStartPasskeyAdditionUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startPasskeyAdditionResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startPasskeyAdditionResponse;
+};
+
+/**
+ * @summary Deletes a registered passkey for the current account
+ */
+export type deletePasskeyResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deletePasskeyResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type deletePasskeyResponse403 = {
+  data: AuthOperationErrorResponse;
+  status: 403;
+};
+
+export type deletePasskeyResponse409 = {
+  data: AuthOperationErrorResponse;
+  status: 409;
+};
+
+export type deletePasskeyResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type deletePasskeyResponseSuccess = deletePasskeyResponse204 & {
+  headers: Headers;
+};
+export type deletePasskeyResponseError = (
+  | deletePasskeyResponse401
+  | deletePasskeyResponse403
+  | deletePasskeyResponse409
+  | deletePasskeyResponse503
+) & {
+  headers: Headers;
+};
+
+export type deletePasskeyResponse = deletePasskeyResponseSuccess | deletePasskeyResponseError;
+
+export const getDeletePasskeyUrl = (id: UlidId) => {
+  return `/api/v1/passkeys/${id}`;
+};
+
+export const deletePasskey = async (
+  id: UlidId,
+  options?: RequestInit
+): Promise<deletePasskeyResponse> => {
+  const res = await fetch(getDeletePasskeyUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deletePasskeyResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as deletePasskeyResponse;
 };
 
 /**

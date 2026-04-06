@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 </script>
 
@@ -25,7 +27,7 @@
         <p class="card-desc">
           セキュリティのため、セッションが終了しました。再度ログインしてください。
         </p>
-        <Button class="w-full" onclick={() => { window.location.href = '/login'; }}>
+        <Button class="w-full" onclick={() => { void goto('/login'); }}>
           ログインへ
         </Button>
         <Separator />

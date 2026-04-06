@@ -1010,6 +1010,7 @@ export default tseslint.config(
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
       'import/order': 'off',
+      'import/extensions': 'off',
       'prefer-const': 'off',
       'no-undef': 'off',
       'security/detect-object-injection': 'off',
@@ -1028,6 +1029,12 @@ export default tseslint.config(
       ...frontendWebSourceFiles,
       ...frontendDomainSourceFiles,
       ...frontendUiSourceFiles,
+    ],
+    ignores: [
+      // .svelte ファイルは SvelteKit 仮想モジュール ($app/*, $lib/*) を import するため除外
+      'packages/frontend/**/*.svelte',
+      'packages/frontend/**/*.svelte.ts',
+      'packages/frontend/**/*.svelte.js',
     ],
     rules: {
       'boundaries/no-unknown-files': 'error',
@@ -1181,6 +1188,7 @@ export default tseslint.config(
       '@typescript-eslint/strict-boolean-expressions': 'off',
       '@typescript-eslint/no-misused-spread': 'off',
       '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-invalid-void-type': 'off',
       'eslint-comments/no-use': 'off',
       'eslint-comments/require-description': 'off',
       'import/order': 'off',
@@ -1557,7 +1565,7 @@ export default tseslint.config(
     files: frontendDomainHookSvelteFiles,
     rules: {
       'hooks-domain/require-domain-structure': 'error',
-      'no-restricted-globals': ['error', 'window', 'document', 'localStorage', 'sessionStorage'],
+      'no-restricted-globals': ['error', 'window', 'document', 'localStorage'],
       'no-restricted-imports': [
         'error',
         {

@@ -14,6 +14,12 @@ export default defineConfig({
   workers: 1,
   /* レポーター設定 */
   reporter: 'html',
+  /* テストタイムアウト（dev サーバー経由の SPA 初回ロードが遅いため余裕を持たせる） */
+  timeout: 90000,
+  /* expect タイムアウト */
+  expect: {
+    timeout: 15000,
+  },
   /* 共通設定 */
   use: {
     /* ベースURL */
@@ -36,7 +42,7 @@ export default defineConfig({
     },
     {
       command: 'pnpm --filter @www-template/app dev',
-      url: 'http://localhost:5174/app',
+      url: 'http://localhost:5174',
       reuseExistingServer: process.env.CI === undefined,
       timeout: 120 * 1000,
     },

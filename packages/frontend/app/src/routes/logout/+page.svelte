@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+
   import { useAuthSession } from '@www-template/domain/hooks/auth/useAuthSession';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
@@ -15,7 +17,7 @@
   async function performLogout() {
     try {
       await actions.logoutCurrentSession();
-      window.location.href = '/login';
+      await goto('/login');
     } catch {
       logoutError = 'ログアウトに失敗しました。';
       isLoggingOut = false;
@@ -44,12 +46,12 @@
           {:else if logoutError}
             <h1 class="auth-title">ログアウト</h1>
             <p class="auth-error" role="alert">{logoutError}</p>
-            <Button variant="secondary" class="w-full" onclick={() => { window.location.href = '/login'; }}>
+            <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
               ログインへ
             </Button>
           {:else}
             <h1 class="auth-title">ログアウトしました</h1>
-            <Button variant="secondary" class="w-full" onclick={() => { window.location.href = '/login'; }}>
+            <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
               ログインへ
             </Button>
           {/if}

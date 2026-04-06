@@ -54,10 +54,10 @@ description: Enforce this repository's actual coding rules and verification flow
 - Active frontend source に React / TSX を持ち込まない
 - Domain hooks は `use*` export、`{ data, actions }` 戻り値、stateful 実装は `.svelte.ts`
 - Frontend app は SvelteKit SPA（SSR 無効）として保ち、server route / server hook / server-only lib を持ち込まない
-- Frontend web の SvelteKit route/server 制約と、`/app/*` auth surface を担う frontend app の分離を維持する
+- Frontend web の SvelteKit route/server 制約と、独立オリジンで動く frontend app の分離を維持する
 - Go file は `packages/backend/cmd/api`, `packages/backend/internal/*`, `packages/backend/tools/analyzers` の許可 layer にだけ置く
 - GORM は `packages/backend/internal/persistence/**` だけ、`AutoMigrate` は禁止、migration は `packages/backend/db/migrations/*.sql`
-- Non-generated Gin route は `/health` または `/api/v1/app/*` の string literal だけにする
+- Non-generated Gin route は `/health` または `/api/v1/*` の string literal だけにする
 - `fmt.Print*`, `print`, `println` と host-derived URL composition を backend code に入れない
 
 ### 4) Verify with the real repo flow

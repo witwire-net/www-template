@@ -11,6 +11,8 @@
     ".": "./src/index.ts",
     "./hooks/auth/useAuthSession": "./src/hooks/auth/useAuthSession.svelte.ts",
     "./hooks/auth/usePasskeyLogin": "./src/hooks/auth/usePasskeyLogin.svelte.ts",
+    "./hooks/auth/usePasskeyManagement": "./src/hooks/auth/usePasskeyManagement.svelte.ts",
+    "./hooks/auth/usePasskeyAddByOtp": "./src/hooks/auth/usePasskeyAddByOtp.svelte.ts",
     "./hooks/auth/useRecoveryFlow": "./src/hooks/auth/useRecoveryFlow.svelte.ts",
     "./hooks/auth/useSessionGuard": "./src/hooks/auth/useSessionGuard.svelte.ts",
     "./hooks/status/useStatus": "./src/hooks/status/useStatus.svelte.ts",

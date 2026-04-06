@@ -6,36 +6,36 @@ Auth core backend requirements, covering bearer-compatible passkey authenticatio
 
 ### Requirement: パスキー認証は bearer 互換 application session を発行・失効する
 
-パスキー認証は、`Authorization: Bearer <session token>` で `/api/v1/app/*` を利用できる application session を SHALL 発行し、logout で MUST revoke しなければならない。
+パスキー認証は、`Authorization: Bearer <session token>` で `/api/v1/*` を利用できる application session を SHALL 発行し、logout で MUST revoke しなければならない。
 
 **Customer Context**
 
-`/app/*` は認証必須面であり、企画書と repository rule は app API を明示的な bearer 境界として扱います。パスキー認証が session 発行・失効・app surface の認可と一体で定義されていないと、認証面全体の境界が不安定になります。
+`/api/v1/*`（`/api/v1/auth/*` 除く）は認証必須面であり、企画書と repository rule は bearer 境界として扱います。パスキー認証が session 発行・失効・app surface の認可と一体で定義されていないと、認証面全体の境界が不安定になります。
 
 **Requirement**
 
-- The system SHALL issue a bearer-compatible application session on successful passkey authentication and MUST revoke that session through `POST /api/v1/app/auth/logout` on logout.
+- The system SHALL issue a bearer-compatible application session on successful passkey authentication and MUST revoke that session through `POST /api/v1/auth/logout` on logout.
 - account、passkey credential、session、revocation marker、recovery token、`recovery_session`、`invitation_session`、および auth 実行を相互参照する system-owned resource ID は ULID を SHALL 使用し、UUID その他の別方式を新規採用してはならない。
 - The system SHALL expose `POST /api/v1/auth/passkey/start` to issue a WebAuthn challenge, and `POST /api/v1/auth/passkey/finish` SHALL verify the credential and create an active session for the authenticated account.
 - WebAuthn challenge、active session、revoked session marker、temporary auth throttle / lock state は、node 間で共有できる Valkey-backed auth state store に TTL 付きで MUST 保持される。
 - WebAuthn challenge record、session record、revocation record、failure counter record が保持する subject ID / actor ID / correlation ID / notification ID / job ID などの識別子が必要な箇所は、ULID を SHALL 用いる。
-- `POST /api/v1/auth/passkey/finish` と recovery branch の `POST /api/v1/auth/passkey/register` は、`Authorization: Bearer <session token>` で `/api/v1/app/*` に提示できる同一の session 契約を SHALL 返す。
-- `/api/v1/app/*` surface は active bearer session を MUST 要求し、missing / expired / revoked session を SHALL 拒否する。
+- `POST /api/v1/auth/passkey/finish` と recovery branch の `POST /api/v1/auth/passkey/register` は、`Authorization: Bearer <session token>` で `/api/v1/*` に提示できる同一の session 契約を SHALL 返す。
+- `/api/v1/*` surface は active bearer session を MUST 要求し、missing / expired / revoked session を SHALL 拒否する。
 - request が bearer session をまったく持たない場合は stable classification `unauthenticated` として SHALL 扱われ、expired / revoked session failure と混同してはならない。
 - expired または revoked session は stable classification `session-expired` として SHALL 扱われる。
 - auth state store unavailable などの fail-close な auth boundary failure は stable classification `internal-error` として SHALL 扱われる。
-- logout flow は `POST /api/v1/app/auth/logout` で active session を SHALL revoke し、その後の `/api/v1/app/*` request を認可できないようにする。revoke 判定に必要な state は Valkey-backed auth state store に MUST 反映される。
-- auth start / finish / `POST /api/v1/app/auth/logout` response は `Cache-Control: no-store` を SHALL 保ち、cacheable な auth response を返してはならない。
+- logout flow は `POST /api/v1/auth/logout` で active session を SHALL revoke し、その後の `/api/v1/*` request を認可できないようにする。revoke 判定に必要な state は Valkey-backed auth state store に MUST 反映される。
+- auth start / finish / `POST /api/v1/auth/logout` response は `Cache-Control: no-store` を SHALL 保ち、cacheable な auth response を返してはならない。
 
 #### Scenario: パスキーログイン成功時に bearer session を作成する (AUTH-BE-S001)
 
 - **GIVEN** account が passkey authentication を開始している
 - **WHEN** account が valid credential で `POST /api/v1/auth/passkey/finish` を完了する
-- **THEN** system は後続の `/api/v1/app/*` access を `Authorization: Bearer <session token>` で認可できる active session を返す
+- **THEN** system は後続の `/api/v1/*` access を `Authorization: Bearer <session token>` で認可できる active session を返す
 
 #### Scenario: 欠落または inactive な session は拒否される (AUTH-BE-S002)
 
-- **GIVEN** request が `/api/v1/app/*` を対象にしている
+- **GIVEN** request が `/api/v1/*` を対象にしている
 - **WHEN** request が expired または revoked session を持つ
 - **THEN** system はその request を `session-expired` failure として拒否する
 
@@ -43,17 +43,17 @@ Auth core backend requirements, covering bearer-compatible passkey authenticatio
 
 - **GIVEN** account が active session を持っている
 - **WHEN** logout action がその session を revoke する
-- **THEN** revoked session は `/api/v1/app/*` access を以後認可しない
+- **THEN** revoked session は `/api/v1/*` access を以後認可しない
 
 #### Scenario: session を持たない request は session-expired と混同されない (AUTH-BE-S009)
 
-- **GIVEN** request が `/api/v1/app/*` を対象にしている
+- **GIVEN** request が `/api/v1/*` を対象にしている
 - **WHEN** request が bearer session をまったく提示しない
 - **THEN** system は unauthenticated failure として拒否し、expired / revoked session 用の failure と区別する
 
 #### Scenario: auth state store unavailable は fail-close で internal-error になる (AUTH-BE-S010)
 
-- **GIVEN** request が auth boundary を通って `/api/v1/app/*` または auth endpoint を呼んでいる
+- **GIVEN** request が auth boundary を通って `/api/v1/*` または auth endpoint を呼んでいる
 - **WHEN** Valkey を含む auth state store が unavailable で session / challenge / recovery state を安全に検証できない
 - **THEN** system は fail-close で request を拒否し、stable classification `internal-error` を返す
 

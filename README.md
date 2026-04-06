@@ -97,8 +97,8 @@ pnpm build
 
 OpenAPI には Spectral lint を掛けています。
 
-- path policy: `/api/v1/*` と `/api/v1/app/*` だけを許可
-- app endpoint: `BearerAuth` 宣言を必須化
+- path policy: `/api/v1/*` だけを許可
+- app endpoint（`/api/v1/auth/*` 除く）: `BearerAuth` 宣言を必須化
 - `BearerAuth`: `type=http` / `scheme=bearer` を必須化
 
 ## 現在の API surface
@@ -110,22 +110,22 @@ OpenAPI には Spectral lint を掛けています。
 - `POST /api/v1/auth/recovery`
 - `POST /api/v1/auth/recovery/consume`
 - `POST /api/v1/auth/passkey/register`
-- `POST /api/v1/app/auth/logout`
+- `POST /api/v1/auth/logout`
 
-`/api/v1/app/*` は bearer token が必須です。
+`/api/v1/auth/logout` 以下および `/api/v1/passkeys/*` は bearer token が必須です。
 
 ## Auth surface
 
-- `/app/login` は passkey-only の認証面です
-- `/app/login/recovery`, `/app/login/recovery/sent`, `/app/login/recovery/consume`, `/app/login/recovery/register` は既存アカウント向けの recovery-only 導線です
-- `/app/logout` は utility route ですが、logout 実行は canonical な `POST /api/v1/app/auth/logout` を使います
-- auth routes (`/app/login*`, `/app/logout`) と auth endpoints は no-store 前提で扱います
+- `/login` は passkey-only の認証面です
+- `/login/recovery`, `/login/recovery/sent`, `/login/recovery/consume`, `/login/recovery/register` は既存アカウント向けの recovery-only 導線です
+- `/logout` は utility route ですが、logout 実行は canonical な `POST /api/v1/auth/logout` を使います
+- auth routes (`/login*`, `/logout`) と auth endpoints は no-store 前提で扱います
 
 bearer session contract:
 
-- login / recovery register 成功後、client は `Authorization: Bearer <session token>` で `/api/v1/app/*` を利用します
+- login / recovery register 成功後、client は `Authorization: Bearer <session token>` で `/api/v1/passkeys/*` 等を利用します
 - bearer token は frontend の in-memory state にのみ保持し、永続 storage に復元しません
-- missing session は通常の `/app/login` 導線へ戻し、expired / revoked session は `/app/session-expired` へ分岐します
+- missing session は通常の `/login` 導線へ戻し、expired / revoked session は `/session-expired` へ分岐します
 
 auth-owned identifier policy:
 
@@ -156,7 +156,7 @@ auth runtime dependencies:
 - `R2_SECRET_ACCESS_KEY` - object storage secret key。backend 起動に必須
 - `R2_USE_PATH_STYLE` - MinIO 等の path-style endpoint を使う場合に `true`
 - `WEBAUTHN_RP_ID` - passkey/WebAuthn の RP ID。既定値は `localhost`
-- `ACCOUNT_RECOVERY_URL_BASE` - account recovery link の base URL。既定値は `http://localhost:5173/app/login/recovery/consume`
+- `ACCOUNT_RECOVERY_URL_BASE` - account recovery link の base URL。既定値は `http://localhost:5174/login/recovery/consume`
 - `SMTP_HOST` - shared SMTP host。backend 起動に必須
 - `SMTP_PORT` - shared SMTP port。既定値は `587`
 - `SMTP_USERNAME` - shared SMTP username
@@ -215,8 +215,8 @@ GORM は `packages/backend/internal/persistence/**` に限定され、`AutoMigra
 
 - Frontend dependency direction: `frontend/app -> frontend/domain -> frontend/api`
 - Backend dependency direction: `backend/cmd/api -> backend/internal/app -> (backend/internal/http|backend/internal/persistence|backend/internal/usecases) -> backend/internal/domain -> backend/internal/types`
-- public routes は `/api/v1/*`
-- app routes は `/api/v1/app/*`
+- public routes は `/api/v1/auth/*` および `/api/v1/status`
+- app routes（bearer 必須）は `/api/v1/passkeys/*` および `/api/v1/auth/logout`
 - OpenAPI は TypeSpec から生成し、server route から逆生成しません
 
 より厳密な機械ルールは `CODING_STANDARDS.md` を見てください。

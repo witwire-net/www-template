@@ -11,7 +11,7 @@ context: |
   Architecture:
   - frontend/app -> frontend/domain -> frontend/api
   - backend/cmd -> backend/internal/app -> backend/internal/http|persistence|usecases -> backend/internal/domain -> backend/internal/types
-  - public routes use api/v1/*; app routes use api/v1/app/*
+  - public routes use api/v1/*; app routes use api/v1/*
   - GORM imports are allowed only under packages/backend/internal/persistence/**
   - AutoMigrate is banned; use packages/backend/db/migrations/** with golang-migrate
   - OpenSpec is archived and not part of the default lint/CI loop

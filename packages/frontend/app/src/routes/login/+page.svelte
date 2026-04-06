@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+
   import { usePasskeyLogin } from '@www-template/domain/hooks/auth/usePasskeyLogin';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
@@ -7,7 +9,7 @@
   async function handlePasskeySignIn() {
     const result = await actions.signInWithPasskey();
     if (result === null && data.state.lastSession !== null) {
-      window.location.href = '/';
+      await goto('/');
     }
   }
 </script>

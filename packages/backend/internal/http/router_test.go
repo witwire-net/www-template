@@ -31,7 +31,7 @@ func TestAppSurfaceFallsBackToNotFound(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
-	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/app/unknown", nil)
+	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/unknown", nil)
 	challengeRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
 	challenge := decodeJSONBody(t, challengeRecorder)
 	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
@@ -50,7 +50,7 @@ func TestAppAuthEndpointRequiresAuthorization(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
-	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/app/auth/logout", nil)
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/auth/logout", nil)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, request)
@@ -80,7 +80,7 @@ func TestAppAuthEndpointSucceedsWithBearerToken(t *testing.T) {
 	if !ok || bearer == "" {
 		t.Fatalf("expected sessionToken in response, got %v", finishBody["sessionToken"])
 	}
-	logoutRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/app/auth/logout", nil, bearer)
+	logoutRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/logout", nil, bearer)
 
 	if logoutRecorder.Code != stdhttp.StatusOK {
 		t.Fatalf("expected status 200, got %d", logoutRecorder.Code)
@@ -92,12 +92,14 @@ func TestRoutePolicy(t *testing.T) {
 
 	router := newTestRouter(t)
 	allowedPublicRoutes := map[string]struct{}{
-		"/api/v1/status":                {},
-		"/api/v1/auth/passkey/start":    {},
-		"/api/v1/auth/passkey/finish":   {},
-		"/api/v1/auth/passkey/register": {},
-		"/api/v1/auth/recovery":         {},
-		"/api/v1/auth/recovery/consume": {},
+		"/api/v1/status":                  {},
+		"/api/v1/auth/passkey/start":      {},
+		"/api/v1/auth/passkey/finish":     {},
+		"/api/v1/auth/passkey/register":   {},
+		"/api/v1/auth/recovery":           {},
+		"/api/v1/auth/recovery/consume":   {},
+		"/api/v1/auth/passkey/add/start":  {},
+		"/api/v1/auth/passkey/add/finish": {},
 	}
 
 	for _, route := range router.Routes() {
@@ -105,11 +107,12 @@ func TestRoutePolicy(t *testing.T) {
 			continue
 		}
 
-		if strings.HasPrefix(route.Path, "/api/v1/app") {
+		if _, ok := allowedPublicRoutes[route.Path]; ok {
 			continue
 		}
 
-		if _, ok := allowedPublicRoutes[route.Path]; ok {
+		// routes under /api/v1/ that are not in the public list must be bearer-protected
+		if strings.HasPrefix(route.Path, "/api/v1/") {
 			continue
 		}
 

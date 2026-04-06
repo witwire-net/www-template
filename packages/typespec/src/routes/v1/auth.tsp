@@ -99,6 +99,43 @@ namespace WWWTemplate.ApiV1 {
     @header("Cache-Control") cacheControl: "no-store";
     @body body: WWWTemplate.AuthFailureResponse;
   };
+
+  @tag("auth")
+  @summary("Starts adding a passkey on a new device by OTP handoff")
+  @operationId("startPasskeyAdditionByOtp")
+  @post
+  @route("/auth/passkey/add/start")
+  op startPasskeyAdditionByOtp(@body body: WWWTemplate.PasskeyAddByOtpStartRequest): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.PasskeyAddStartResponse;
+  } | {
+    @statusCode statusCode: 400;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthOperationErrorResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
+
+  @tag("auth")
+  @summary("Finishes adding a passkey on a new device by OTP handoff")
+  @operationId("finishPasskeyAdditionByOtp")
+  @post
+  @route("/auth/passkey/add/finish")
+  op finishPasskeyAdditionByOtp(@body body: WWWTemplate.PasskeyAddByOtpFinishRequest): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+  } | {
+    @statusCode statusCode: 400;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthOperationErrorResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
 }
 
 namespace WWWTemplate.ApiV1App {
@@ -120,4 +157,127 @@ namespace WWWTemplate.ApiV1App {
     @header("Cache-Control") cacheControl: "no-store";
     @body body: WWWTemplate.AuthFailureResponse;
   };
+
+  @tag("app-auth")
+  @summary("Lists registered passkeys for the current account")
+  @operationId("listPasskeys")
+  @get
+  @route("/passkeys")
+  op listPasskeys(): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.PasskeyListResponse;
+  } | {
+    @statusCode statusCode: 401;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
+
+  @tag("app-auth")
+  @summary("Starts adding a passkey for the current account")
+  @operationId("startPasskeyAddition")
+  @post
+  @route("/passkeys/start")
+  op startPasskeyAddition(): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.PasskeyAddStartResponse;
+  } | {
+    @statusCode statusCode: 401;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
+
+  @tag("app-auth")
+  @summary("Finishes adding a passkey for the current account")
+  @operationId("finishPasskeyAddition")
+  @post
+  @route("/passkeys/finish")
+  op finishPasskeyAddition(@body body: WWWTemplate.PasskeyAddFinishRequest):
+    | {
+        @statusCode statusCode: 200;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.PasskeyListResponse;
+      }
+    | {
+        @statusCode statusCode: 400;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthOperationErrorResponse;
+      }
+    | {
+        @statusCode statusCode: 401;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthFailureResponse;
+      }
+    | {
+        @statusCode statusCode: 503;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthFailureResponse;
+      };
+
+  @tag("app-auth")
+  @summary("Deletes a registered passkey for the current account")
+  @operationId("deletePasskey")
+  @delete
+  @route("/passkeys/{id}")
+  op deletePasskey(@path id: WWWTemplate.UlidId):
+    | {
+        @statusCode statusCode: 204;
+        @header("Cache-Control") cacheControl: "no-store";
+      }
+    | {
+        @statusCode statusCode: 401;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthFailureResponse;
+      }
+    | {
+        @statusCode statusCode: 403;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthOperationErrorResponse;
+      }
+    | {
+        @statusCode statusCode: 409;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthOperationErrorResponse;
+      }
+    | {
+        @statusCode statusCode: 503;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthFailureResponse;
+      };
+
+  @tag("app-auth")
+  @summary("Issues a one-time password for adding a passkey on a new device")
+  @operationId("issuePasskeyOtp")
+  @post
+  @route("/passkeys/otp")
+  op issuePasskeyOtp():
+    | {
+        @statusCode statusCode: 200;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.PasskeyOtpResponse;
+      }
+    | {
+        @statusCode statusCode: 400;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthOperationErrorResponse;
+      }
+    | {
+        @statusCode statusCode: 401;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthFailureResponse;
+      }
+    | {
+        @statusCode statusCode: 503;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthFailureResponse;
+      };
 }

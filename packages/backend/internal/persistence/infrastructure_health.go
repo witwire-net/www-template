@@ -93,7 +93,6 @@ func CheckObjectStorage(ctx context.Context, config types.ObjectStorageConfig) e
 	if err != nil {
 		return fmt.Errorf("build object storage request: %w", err)
 	}
-	request.SetBasicAuth(config.AccessKeyID, config.SecretAccessKey)
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -103,6 +102,11 @@ func CheckObjectStorage(ctx context.Context, config types.ObjectStorageConfig) e
 		_ = response.Body.Close()
 	}()
 	_, _ = io.Copy(io.Discard, response.Body)
+	// 200-299: accessible. 403: reachable but auth required (expected for S3/MinIO without signing).
+	// Any other status indicates a configuration or connectivity problem.
+	if response.StatusCode == http.StatusForbidden {
+		return nil
+	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("ping object storage: unexpected status %d", response.StatusCode)
 	}

@@ -136,6 +136,51 @@ func (r *AuthStateRepository) GetLock(ctx context.Context, key string) (domain.A
 	return domain.NewAuthLock(record.LockedUntil), true, nil
 }
 
+// SavePasskeyOtp は OTP キーと accountID を Valkey に TTL 付きで保存する。
+func (r *AuthStateRepository) SavePasskeyOtp(ctx context.Context, otpKey string, accountID string, ttl time.Duration) error {
+	err := r.store.Set(ctx, r.key("auth", "passkey-otp", otpKey), accountID, ttl)
+	if err != nil {
+		return domain.ErrAuthStoreUnavailable
+	}
+	return nil
+}
+
+// ConsumePasskeyOtp は OTP を取得して削除する（1 回限りの消費）。
+// 存在しない・期限切れの場合は domain.ErrOtpNotFound を返す。
+func (r *AuthStateRepository) ConsumePasskeyOtp(ctx context.Context, otpKey string) (string, error) {
+	k := r.key("auth", "passkey-otp", otpKey)
+	accountID, err := r.store.Get(ctx, k)
+	if err != nil {
+		if errors.Is(err, errRESPNil) {
+			return "", domain.ErrOtpNotFound
+		}
+		return "", domain.ErrAuthStoreUnavailable
+	}
+	if accountID == "" {
+		return "", domain.ErrOtpNotFound
+	}
+	if err := r.store.Delete(ctx, k); err != nil {
+		return "", domain.ErrAuthStoreUnavailable
+	}
+	return accountID, nil
+}
+
+// GetPasskeyOtp は OTP を消費せずに accountID を取得する。
+// 存在しない・期限切れの場合は domain.ErrOtpNotFound を返す。
+func (r *AuthStateRepository) GetPasskeyOtp(ctx context.Context, otpKey string) (string, error) {
+	accountID, err := r.store.Get(ctx, r.key("auth", "passkey-otp", otpKey))
+	if err != nil {
+		if errors.Is(err, errRESPNil) {
+			return "", domain.ErrOtpNotFound
+		}
+		return "", domain.ErrAuthStoreUnavailable
+	}
+	if accountID == "" {
+		return "", domain.ErrOtpNotFound
+	}
+	return accountID, nil
+}
+
 func (r *AuthStateRepository) getChallenge(ctx context.Context, secret string) (domain.AuthChallenge, error) {
 	var record challengeRecord
 	if err := r.getJSON(ctx, r.key("auth", "challenge", secret), &record); err != nil {

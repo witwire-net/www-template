@@ -55,3 +55,24 @@ export interface RecoveryFlowState {
   error: string | null;
   sentView: RecoverySentView;
 }
+
+/** 登録済みパスキーの表示用モデル。 */
+export interface PasskeyItem {
+  id: string;
+  identifier: string;
+  createdAt: string;
+}
+
+/** passkey management hook state。 */
+export interface PasskeyManagementState {
+  passkeys: PasskeyItem[];
+  loading: boolean;
+  error: string | null;
+}
+
+/** passkey add-by-OTP hook state。 */
+export interface PasskeyAddByOtpState {
+  loading: boolean;
+  error: string | null;
+  done: boolean;
+}

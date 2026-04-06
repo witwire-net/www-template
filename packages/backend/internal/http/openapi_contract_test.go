@@ -45,7 +45,7 @@ func TestAppOpenAPIDeclaresBearerSecurity(t *testing.T) {
 		t.Fatalf("unexpected BearerAuth scheme: type=%s scheme=%s", bearerAuth.Type, bearerAuth.Scheme)
 	}
 
-	assertBearerSecurity(t, contract, "/api/v1/app/auth/logout", "post")
+	assertBearerSecurity(t, contract, "/api/v1/auth/logout", "post")
 }
 
 func assertBearerSecurity(t *testing.T, contract openAPIContract, path string, method string) {

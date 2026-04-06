@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"strings"
@@ -200,7 +201,7 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 	if err != nil {
 		return AuthSession{}, ErrInternalError
 	}
-	account, err := s.accountRepo.ReplacePasskey(ctx, recoverySession.AccountID(), passkeyID, input.Credential)
+	account, err := s.accountRepo.AddPasskey(ctx, recoverySession.AccountID(), passkeyID, input.Credential)
 	if err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return AuthSession{}, ErrInternalError
@@ -390,4 +391,214 @@ func splitCredentialEnvelope(value string) (string, string, bool) {
 	}
 
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+}
+
+// ─── Multi-passkey management ───────────────────────────────────────────────
+
+// ListPasskeys は accountID に紐づく全パスキー credential を返す。
+func (s *AuthService) ListPasskeys(ctx context.Context, accountID string) ([]PasskeyCredentialDTO, error) {
+	creds, err := s.accountRepo.ListPasskeys(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, domain.ErrAuthAccountNotFound) {
+			return nil, domain.ErrAuthAccountNotFound
+		}
+		return nil, ErrInternalError
+	}
+	return toPasskeyCredentialDTOs(creds), nil
+}
+
+// StartAddPasskey は認証済みアカウントのパスキー追加チャレンジを発行する。
+func (s *AuthService) StartAddPasskey(ctx context.Context, accountID string) (PasskeyChallenge, error) {
+	requestID, challengeID, err := s.nextTwoIDs()
+	if err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	challengeValue := opaqueValue(challengeID)
+	challenge, err := domain.NewAuthChallenge(challengeID, accountID, challengeValue, s.clock().Add(s.authConfig.ChallengeTTL))
+	if err != nil {
+		return PasskeyChallenge{}, ErrBadRequest
+	}
+	if err := s.stateRepo.SaveChallenge(ctx, challenge, s.authConfig.ChallengeTTL); err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	return PasskeyChallenge{RequestID: requestID, Challenge: challengeValue, ChallengeID: challengeID, WebAuthnRPID: s.authConfig.WebAuthnRPID}, nil
+}
+
+// FinishAddPasskey はチャレンジを検証して新しいパスキーを追加する。
+func (s *AuthService) FinishAddPasskey(ctx context.Context, accountID string, credential string) ([]PasskeyCredentialDTO, error) {
+	credentialHandle, challengeValue, ok := splitCredentialEnvelope(credential)
+	if !ok {
+		return nil, ErrBadRequest
+	}
+
+	challenge, err := s.stateRepo.ConsumeChallenge(ctx, challengeValue)
+	if err != nil {
+		return nil, ErrBadRequest
+	}
+	if challenge.Identifier() != accountID {
+		return nil, ErrBadRequest
+	}
+	if err := challenge.EnsureAvailable(s.clock()); err != nil {
+		return nil, ErrBadRequest
+	}
+
+	passkeyID, err := s.policy.Next()
+	if err != nil {
+		return nil, ErrInternalError
+	}
+	if _, err := s.accountRepo.AddPasskey(ctx, accountID, passkeyID, credentialHandle); err != nil {
+		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
+			return nil, ErrInternalError
+		}
+		return nil, ErrBadRequest
+	}
+
+	creds, err := s.accountRepo.ListPasskeys(ctx, accountID)
+	if err != nil {
+		return nil, ErrInternalError
+	}
+	return toPasskeyCredentialDTOs(creds), nil
+}
+func (s *AuthService) DeletePasskey(ctx context.Context, accountID string, credentialID string) error {
+	creds, err := s.accountRepo.ListPasskeys(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, domain.ErrAuthAccountNotFound) {
+			return domain.ErrAuthAccountNotFound
+		}
+		return ErrInternalError
+	}
+	if len(creds) <= 1 {
+		return ErrLastPasskeyCannotBeDeleted
+	}
+
+	// credentialID が accountID に属することを確認してから削除
+	if err := s.accountRepo.DeletePasskeyByID(ctx, accountID, credentialID); err != nil {
+		if errors.Is(err, domain.ErrAuthAccountNotFound) {
+			return domain.ErrAuthAccountNotFound
+		}
+		return ErrInternalError
+	}
+	return nil
+}
+
+// ─── OTP handoff ────────────────────────────────────────────────────────────
+
+const otpTTL = 5 * time.Minute
+
+// IssuePasskeyOtp は 6 桁の OTP を生成して Valkey に保存し、OTP 文字列を返す。
+func (s *AuthService) IssuePasskeyOtp(ctx context.Context, accountID string) (string, error) {
+	var buf [4]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return "", ErrInternalError
+	}
+	n := int(buf[0])<<16 | int(buf[1])<<8 | int(buf[2])
+	n %= 1000000
+	otp := fmt.Sprintf("%06d", n)
+	key := otpKey(otp)
+	if err := s.stateRepo.SavePasskeyOtp(ctx, key, accountID, otpTTL); err != nil {
+		return "", ErrInternalError
+	}
+	return otp, nil
+}
+
+// StartAddPasskeyByOtp は OTP を検証し、チャレンジを生成して返す。
+func (s *AuthService) StartAddPasskeyByOtp(ctx context.Context, otp string) (PasskeyChallenge, error) {
+	key := otpKey(otp)
+	accountID, err := s.stateRepo.GetPasskeyOtp(ctx, key)
+	if err != nil {
+		if errors.Is(err, domain.ErrOtpNotFound) {
+			return PasskeyChallenge{}, ErrOtpExpiredOrConsumed
+		}
+		return PasskeyChallenge{}, ErrInternalError
+	}
+
+	requestID, challengeID, err := s.nextTwoIDs()
+	if err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	challengeValue := opaqueValue(challengeID)
+	challenge, err := domain.NewAuthChallenge(challengeID, accountID, challengeValue, s.clock().Add(s.authConfig.ChallengeTTL))
+	if err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	// チャレンジを OTP キー付きで保存（challengeKey は通常チャレンジと同じ仕組み）
+	if err := s.stateRepo.SaveChallenge(ctx, challenge, s.authConfig.ChallengeTTL); err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	// OTP に対応するチャレンジキーを otpChallengeKey として保存して FinishAddPasskeyByOtp でも使えるようにする
+	if err := s.stateRepo.SavePasskeyOtp(ctx, otpChallengeKey(otp), challengeValue, s.authConfig.ChallengeTTL); err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+
+	return PasskeyChallenge{RequestID: requestID, Challenge: challengeValue, ChallengeID: challengeID, WebAuthnRPID: s.authConfig.WebAuthnRPID}, nil
+}
+
+// FinishAddPasskeyByOtp は OTP を再検証・消費し、パスキーを追加する。
+func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, otp string, credential string) error {
+	key := otpKey(otp)
+	accountID, err := s.stateRepo.ConsumePasskeyOtp(ctx, key)
+	if err != nil {
+		if errors.Is(err, domain.ErrOtpNotFound) {
+			return ErrOtpExpiredOrConsumed
+		}
+		return ErrInternalError
+	}
+
+	// チャレンジを OTP キー付きで取得
+	challengeKey := otpChallengeKey(otp)
+	challengeValue, err := s.stateRepo.ConsumePasskeyOtp(ctx, challengeKey)
+	if err != nil {
+		if errors.Is(err, domain.ErrOtpNotFound) {
+			return ErrOtpExpiredOrConsumed
+		}
+		return ErrInternalError
+	}
+
+	credentialHandle, storedChallengeValue, ok := splitCredentialEnvelope(credential)
+	if !ok {
+		return ErrBadRequest
+	}
+
+	// challengeValue（otpChallengeKey から取得）と storedChallengeValue（credential から取得）を
+	// ConsumeChallenge の前に比較する。不一致の場合、他の有効な challenge を消費しないよう早期リターンする。
+	if challengeValue != storedChallengeValue {
+		return ErrBadRequest
+	}
+
+	challenge, err := s.stateRepo.ConsumeChallenge(ctx, storedChallengeValue)
+	if err != nil {
+		return ErrBadRequest
+	}
+	if challenge.Identifier() != accountID {
+		return ErrBadRequest
+	}
+	if err := challenge.EnsureAvailable(s.clock()); err != nil {
+		return ErrBadRequest
+	}
+
+	passkeyID, err := s.policy.Next()
+	if err != nil {
+		return ErrInternalError
+	}
+	if _, err := s.accountRepo.AddPasskey(ctx, accountID, passkeyID, credentialHandle); err != nil {
+		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
+			return ErrInternalError
+		}
+		return ErrBadRequest
+	}
+	return nil
+}
+
+// toPasskeyCredentialDTOs は domain.PasskeyCredential のスライスをユースケース DTO に変換する。
+func toPasskeyCredentialDTOs(creds []domain.PasskeyCredential) []PasskeyCredentialDTO {
+	dtos := make([]PasskeyCredentialDTO, len(creds))
+	for i, c := range creds {
+		dtos[i] = PasskeyCredentialDTO{
+			ID:         c.ID(),
+			AccountID:  c.AccountID(),
+			Identifier: c.Identifier(),
+			CreatedAt:  c.CreatedAt(),
+		}
+	}
+	return dtos
 }

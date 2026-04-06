@@ -6,7 +6,7 @@ functions:
 
 rules:
   template-path-policy:
-    description: Paths must stay under /api/v1/* or /api/v1/app/*
+    description: Paths must stay under /api/v1/*
     severity: error
     given: $.paths
     then:

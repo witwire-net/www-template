@@ -25,7 +25,7 @@ Read these files before applying `coding-guardian` in this repository.
 
 - `packages/typespec/package.json`: TypeSpec format/check and Spectral command
 - `packages/typespec/.spectral.yaml`: active Spectral ruleset
-- `packages/typespec/spectral/path-policy.js`: `/api/v1/*` and `/api/v1/app/*` path policy
+- `packages/typespec/spectral/path-policy.js`: `/api/v1/*` path policy
 - `packages/typespec/spectral/app-security.js`: app endpoint bearer security requirement
 - `packages/typespec/spectral/bearer-scheme.js`: `BearerAuth` security scheme requirement
 

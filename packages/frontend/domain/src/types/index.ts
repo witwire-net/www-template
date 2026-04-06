@@ -4,7 +4,10 @@ export type {
   AuthRouteIntent,
   AuthSessionState,
   AuthSessionSummary,
+  PasskeyAddByOtpState,
+  PasskeyItem,
   PasskeyLoginState,
+  PasskeyManagementState,
   RecoveryFlowState,
   RecoverySentView,
 } from './auth';

@@ -25,6 +25,14 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@www-template/domain',
+        replacement: fileURLToPath(new URL('../domain/src/index.ts', import.meta.url)),
+      },
+      {
+        find: /^@www-template\/domain\/(.*)$/,
+        replacement: `${fileURLToPath(new URL('../domain/src/', import.meta.url))}$1`,
+      },
+      {
         find: '@www-template/ui/styles',
         replacement: fileURLToPath(new URL('../ui/src/styles/index.ts', import.meta.url)),
       },
@@ -65,15 +73,5 @@ export default defineConfig({
         replacement: `${fileURLToPath(new URL('../api/src/', import.meta.url))}$1`,
       },
     ],
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-      },
-    },
   },
 });

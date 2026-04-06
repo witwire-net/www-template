@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { RecoveryReadySnapshot } from '@www-template/domain/hooks/auth/useRecoveryFlow';
 
+  import { goto } from '$app/navigation';
+
   import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
@@ -12,7 +14,7 @@
     const result = await actions.registerRecoveryPasskey();
     if (result === null && data.state.phase !== 'registering' && data.state.error === null) {
       sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-      window.location.href = '/';
+      await goto('/');
     }
   }
 
@@ -47,15 +49,15 @@
           actions.restoreReadyState(parsed);
         } else {
           sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-          window.location.href = '/login/recovery';
+          void goto('/login/recovery');
         }
       } catch {
         sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-        window.location.href = '/login/recovery';
+        void goto('/login/recovery');
       }
       sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
     } else {
-      window.location.href = '/login/recovery';
+      void goto('/login/recovery');
     }
   }
 </script>

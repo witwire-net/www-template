@@ -6,6 +6,8 @@ const config = {
   kit: {
     adapter: adapter(),
     alias: {
+      '@www-template/domain': '../domain/src/index.ts',
+      '@www-template/domain/*': '../domain/src/*',
       '@www-template/api': '../api/src/index.ts',
       '@www-template/api/*': '../api/src/*',
       '@www-template/ui': '../ui/src/index.ts',

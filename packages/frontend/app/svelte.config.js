@@ -21,6 +21,10 @@ const config = {
         '../domain/src/hooks/auth/useRecoveryFlow.svelte.ts',
       '@www-template/domain/hooks/auth/useSessionGuard':
         '../domain/src/hooks/auth/useSessionGuard.svelte.ts',
+      '@www-template/domain/hooks/auth/usePasskeyManagement':
+        '../domain/src/hooks/auth/usePasskeyManagement.svelte.ts',
+      '@www-template/domain/hooks/auth/usePasskeyAddByOtp':
+        '../domain/src/hooks/auth/usePasskeyAddByOtp.svelte.ts',
       '@www-template/domain/hooks/status/useStatus':
         '../domain/src/hooks/status/useStatus.svelte.ts',
       '@www-template/domain/*': '../domain/src/*',

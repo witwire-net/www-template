@@ -1,11 +1,13 @@
+@import '@fontsource/m-plus-1/700.css';
 @import '@fontsource/m-plus-1/800.css';
 @import '@fontsource/noto-sans-jp/400.css';
 @import '@fontsource/noto-sans-jp/500.css';
 @import '@fontsource/noto-sans-jp/700.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import "shadcn-svelte/tailwind.css";
-@import "@fontsource-variable/outfit";
+@import 'shadcn-svelte/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -201,9 +203,9 @@
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
-  --font-sans: 'Outfit Variable', sans-serif;
+  --font-sans: var(--font-family-sans);
   --font-mono: var(--font-family-mono);
-  --font-heading: 'Outfit Variable', sans-serif;
+  --font-heading: var(--font-family-display);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
@@ -213,13 +215,13 @@
   * {
     box-sizing: border-box;
     border-color: var(--color-border);
-  	@apply border-border outline-ring/50;
+    @apply border-border outline-ring/50;
   }
 
   html {
     font-family: var(--font-family-sans);
     line-height: var(--line-height-normal);
-  	@apply font-sans;
+    @apply font-sans;
   }
 
   body {
@@ -229,7 +231,7 @@
     color: var(--color-text);
     font-family: var(--font-family-sans);
     text-rendering: optimizeLegibility;
-  	@apply bg-background text-foreground;
+    @apply bg-background text-foreground;
   }
 
   a {

@@ -8,10 +8,13 @@ import (
 )
 
 var (
-	ErrUnauthenticated = errors.New("unauthenticated")
-	ErrSessionExpired  = errors.New("session-expired")
-	ErrInternalError   = errors.New("internal-error")
-	ErrBadRequest      = errors.New("bad auth request")
+	ErrUnauthenticated            = errors.New("unauthenticated")
+	ErrSessionExpired             = errors.New("session-expired")
+	ErrInternalError              = errors.New("internal-error")
+	ErrBadRequest                 = errors.New("bad auth request")
+	ErrLastPasskeyCannotBeDeleted = errors.New("last passkey cannot be deleted")
+	ErrInvalidOtp                 = errors.New("invalid otp")
+	ErrOtpExpiredOrConsumed       = errors.New("otp expired or consumed")
 )
 
 func toAuthSession(requestID string, session domain.Session) AuthSession {
@@ -87,6 +90,14 @@ func (s *AuthService) mapRecoveryConsumeError(err error) error {
 	default:
 		return ErrBadRequest
 	}
+}
+
+func otpKey(otp string) string {
+	return "passkey-otp:" + strings.TrimSpace(otp)
+}
+
+func otpChallengeKey(otp string) string {
+	return "passkey-otp-challenge:" + strings.TrimSpace(otp)
 }
 
 func (s *AuthService) mapAuthStoreError(err error) error {

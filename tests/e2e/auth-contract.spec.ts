@@ -141,7 +141,7 @@ test.describe('auth api contract', () => {
   });
 
   test('session を持たない app endpoint は unauthenticated を返す', async ({ request }) => {
-    const response = await request.post('/api/v1/app/auth/logout');
+    const response = await request.post('/api/v1/auth/logout');
 
     expect(response.status()).toBe(401);
     expectNoStore(response.headers()['cache-control'] ?? null);
@@ -153,7 +153,7 @@ test.describe('auth api contract', () => {
   test('revoked session で app endpoint を叩くと session-expired を返す', async ({ request }) => {
     const { finishBody } = await loginViaApi(request, '198.51.100.11');
 
-    const logoutResponse = await request.post('/api/v1/app/auth/logout', {
+    const logoutResponse = await request.post('/api/v1/auth/logout', {
       headers: {
         Authorization: `Bearer ${finishBody.sessionToken}`,
       },
@@ -162,7 +162,7 @@ test.describe('auth api contract', () => {
     expect(logoutResponse.status()).toBe(200);
     expectNoStore(logoutResponse.headers()['cache-control'] ?? null);
 
-    const expiredResponse = await request.post('/api/v1/app/auth/logout', {
+    const expiredResponse = await request.post('/api/v1/auth/logout', {
       headers: {
         Authorization: `Bearer ${finishBody.sessionToken}`,
       },
@@ -176,7 +176,7 @@ test.describe('auth api contract', () => {
   });
 
   test('logout without session は unauthenticated を返す', async ({ request }) => {
-    const response = await request.post('/api/v1/app/auth/logout');
+    const response = await request.post('/api/v1/auth/logout');
 
     expect(response.status()).toBe(401);
     expectNoStore(response.headers()['cache-control'] ?? null);
@@ -262,9 +262,9 @@ test.describe('auth api internal-error classification', () => {
   });
 
   test('logout は internal-error classification を no-store で返せる', async ({ page }) => {
-    await page.route('**/api/v1/app/auth/logout', fulfillInternalError);
+    await page.route('**/api/v1/auth/logout', fulfillInternalError);
 
-    const result = await fetchJsonInBrowser(page, '/api/v1/app/auth/logout', {
+    const result = await fetchJsonInBrowser(page, '/api/v1/auth/logout', {
       method: 'POST',
       headers: { Authorization: 'Bearer opaque-session-token' },
     });

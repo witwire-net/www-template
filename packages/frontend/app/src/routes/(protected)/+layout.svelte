@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
+  import { goto } from '$app/navigation';
+
   import { useSessionGuard } from '@www-template/domain/hooks/auth/useSessionGuard';
 
   let { children }: { children: Snippet } = $props();
@@ -8,7 +10,7 @@
   const { data } = useSessionGuard({
     readPathname: () => window.location.pathname,
     redirectTo: (intent) => {
-      window.location.href = intent;
+      goto(intent);
     },
   });
 </script>
@@ -22,6 +24,7 @@
       </div>
       <div class="links">
         <a href="/">Overview</a>
+        <a href="/passkeys/">パスキー管理</a>
         <a href="/logout">ログアウト</a>
       </div>
     </div>

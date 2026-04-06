@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+
   import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
   import { Card, CardContent, Separator } from '@www-template/ui/components';
 
@@ -16,7 +18,7 @@
     const token = params.get('token');
 
     if (token === null || token === '') {
-      window.location.href = '/login/recovery';
+      await goto('/login/recovery');
       return;
     }
 
@@ -27,7 +29,7 @@
       if (snapshot !== null) {
         sessionStorage.setItem(RECOVERY_SNAPSHOT_KEY, JSON.stringify(snapshot));
       }
-      window.location.href = '/login/recovery/register';
+      await goto('/login/recovery/register');
     } else if (result === '/login/recovery') {
       /* 画面に retry guidance を表示するのでそのまま留まる */
     }

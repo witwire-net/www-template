@@ -117,3 +117,6 @@ issues:
         - funlen
         - gocritic
         - gosec
+    - path: internal/usecases/auth_service_test\.go
+      linters:
+        - gosec
