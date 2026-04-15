@@ -26,6 +26,14 @@ type gormPasskeyCredentialRecord struct {
 	Identifier       string    `gorm:"column:identifier"`
 	CredentialHandle string    `gorm:"column:credential_handle"`
 	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime"`
+	// WebAuthn Credential Record fields (migration 000003).
+	// Nullable to maintain compatibility with rows created before migration 000003.
+	PublicKey      []byte   `gorm:"column:public_key"`
+	SignCount      uint32   `gorm:"column:sign_count;default:0"`
+	AAGUID         []byte   `gorm:"column:aaguid"`
+	BackupEligible bool     `gorm:"column:backup_eligible;default:false"`
+	BackupState    bool     `gorm:"column:backup_state;default:false"`
+	Transports     []string `gorm:"column:transports;serializer:json"`
 }
 
 func (gormPasskeyCredentialRecord) TableName() string {
@@ -89,11 +97,12 @@ func (r *GormAuthAccountRepository) ListPasskeys(ctx context.Context, accountID 
 }
 
 // AddPasskey は既存パスキーを削除せず 1 件追加する。
+// credData に WebAuthn credential record のデータを渡す（provider なしの場合は zero value で可）。
 // 返却する AuthAccount は追加前から存在する先頭 credential（id ASC）をベースに構築する。
 // これは既存認証フロー（FindByCredential, FindByEmail）との一貫性を保つ意図仕様であり、
 // session の passkeyCredentialId は「先頭 credential」を指す。
 // 新規追加 credential を passkeyCredentialId として返したい場合は呼び出し側で ListPasskeys を呼ぶこと。
-func (r *GormAuthAccountRepository) AddPasskey(ctx context.Context, accountID string, credentialID string, handle string) (domain.AuthAccount, error) {
+func (r *GormAuthAccountRepository) AddPasskey(ctx context.Context, accountID string, credentialID string, handle string, credData domain.WebAuthnCredentialData) (domain.AuthAccount, error) {
 	var account gormAccountRecord
 	if err := r.db.WithContext(ctx).Where("id = ?", accountID).First(&account).Error; err != nil {
 		return emptyAuthAccount(), mapAuthAccountError(err)
@@ -111,6 +120,12 @@ func (r *GormAuthAccountRepository) AddPasskey(ctx context.Context, accountID st
 		Identifier:       firstPasskey.Identifier,
 		CredentialHandle: strings.TrimSpace(handle),
 		CreatedAt:        time.Now().UTC(),
+		PublicKey:        credData.PublicKey,
+		SignCount:        credData.SignCount,
+		AAGUID:           credData.AAGUID,
+		BackupEligible:   credData.BackupEligible,
+		BackupState:      credData.BackupState,
+		Transports:       credData.Transports,
 	}
 	if err := r.db.WithContext(ctx).Create(&newRecord).Error; err != nil {
 		return emptyAuthAccount(), domain.ErrAuthStoreUnavailable
@@ -129,6 +144,39 @@ func (r *GormAuthAccountRepository) DeletePasskeyByID(ctx context.Context, accou
 	}
 	if result.RowsAffected == 0 {
 		return domain.ErrAuthAccountNotFound
+	}
+	return nil
+}
+
+// FindWebAuthnCredential は credentialHandle（base64url rawID）から WebAuthn stored credential を返す。
+// FinishLogin 時の署名検証に必要な public key 等を提供する。
+func (r *GormAuthAccountRepository) FindWebAuthnCredential(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
+	var rec gormPasskeyCredentialRecord
+	if err := r.db.WithContext(ctx).Where("credential_handle = ?", strings.TrimSpace(handle)).First(&rec).Error; err != nil {
+		return domain.ZeroWebAuthnStoredCredential(), mapAuthAccountError(err)
+	}
+	return domain.ReconstitueWebAuthnStoredCredential(
+		rec.CredentialHandle,
+		rec.PublicKey,
+		rec.SignCount,
+		rec.AAGUID,
+		rec.BackupEligible,
+		rec.BackupState,
+		rec.Transports,
+	), nil
+}
+
+// UpdateWebAuthnCredentialState は FinishLogin 成功後に credential の SignCount と BackupState を更新する。
+// SignCount はリプレイ攻撃検出に使用するため、login 成功のたびに最新値へ更新する必要がある。
+func (r *GormAuthAccountRepository) UpdateWebAuthnCredentialState(ctx context.Context, handle string, newSignCount uint32, newBackupState bool) error {
+	result := r.db.WithContext(ctx).Model(&gormPasskeyCredentialRecord{}).
+		Where("credential_handle = ?", strings.TrimSpace(handle)).
+		Updates(map[string]any{
+			"sign_count":   newSignCount,
+			"backup_state": newBackupState,
+		})
+	if result.Error != nil {
+		return domain.ErrAuthStoreUnavailable
 	}
 	return nil
 }

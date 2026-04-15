@@ -17,7 +17,7 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	fakeRepo := fakeAuthStateRepository{}
 	_, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
+		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: types.AuthConfig{WebAuthnRPID: "example.com"}},
 		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
@@ -38,7 +38,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	t.Parallel()
 	container, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}}, Auth: types.AuthConfig{WebAuthnRPID: "www-template"}},
+		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}}, Auth: types.AuthConfig{WebAuthnRPID: "example.com"}},
 		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
@@ -54,7 +54,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	if err != nil {
 		t.Fatalf("start passkey authentication: %v", err)
 	}
-	if challenge.WebAuthnRPID != "www-template" {
+	if challenge.WebAuthnRPID != "example.com" {
 		t.Fatalf("expected RP ID wiring to preserve config, got %q", challenge.WebAuthnRPID)
 	}
 }
@@ -98,7 +98,7 @@ func (stubAuthAccountRepository) FindByEmail(context.Context, string) (domain.Au
 	return emptyAuthAccountForContainerTest(), nil
 }
 
-func (stubAuthAccountRepository) AddPasskey(_ context.Context, _, _, _ string) (domain.AuthAccount, error) {
+func (stubAuthAccountRepository) AddPasskey(_ context.Context, _, _, _ string, _ domain.WebAuthnCredentialData) (domain.AuthAccount, error) {
 	return emptyAuthAccountForContainerTest(), nil
 }
 
@@ -107,6 +107,14 @@ func (stubAuthAccountRepository) ListPasskeys(_ context.Context, _ string) ([]do
 }
 
 func (stubAuthAccountRepository) DeletePasskeyByID(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (stubAuthAccountRepository) FindWebAuthnCredential(_ context.Context, _ string) (domain.WebAuthnStoredCredential, error) {
+	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthAccountNotFound
+}
+
+func (stubAuthAccountRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
 	return nil
 }
 

@@ -24,31 +24,66 @@ func (s *AuthService) StartPasskeyAuthentication(ctx context.Context, input Star
 		return PasskeyChallenge{}, ErrBadRequest
 	}
 
-	requestID, challengeID, err := s.nextTwoIDs()
-	if err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-	challengeValue := opaqueValue(challengeID)
-	challenge, err := domain.NewAuthChallenge(challengeID, strings.TrimSpace(input.Identifier), challengeValue, s.clock().Add(s.authConfig.ChallengeTTL))
-	if err != nil {
-		return PasskeyChallenge{}, ErrBadRequest
-	}
-	if err := s.stateRepo.SaveChallenge(ctx, challenge, s.authConfig.ChallengeTTL); err != nil {
+	if s.webauthn == nil {
 		return PasskeyChallenge{}, ErrInternalError
 	}
 
-	return PasskeyChallenge{RequestID: requestID, Challenge: challengeValue, ChallengeID: challengeID, WebAuthnRPID: s.authConfig.WebAuthnRPID}, nil
+	challengeKey, optionsJSON, beginErr := s.webauthn.BeginLogin(ctx, strings.TrimSpace(input.Identifier))
+	if beginErr != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	return PasskeyChallenge{
+		RequestID:       requestID,
+		Challenge:       challengeKey,
+		ChallengeID:     challengeKey,
+		WebAuthnRPID:    s.authConfig.WebAuthnRPID,
+		WebAuthnOptions: optionsJSON,
+	}, nil
 }
 
 func (s *AuthService) FinishPasskeyAuthentication(ctx context.Context, input FinishPasskeyAuthenticationInput) (AuthSession, error) {
-	credentialHandle, challengeValue, ok := splitCredentialEnvelope(input.Credential)
-	if !ok {
+	return s.finishPasskeyAuthenticationWebAuthn(ctx, input)
+}
+
+// finishPasskeyAuthenticationWebAuthn は go-webauthn provider を使った WebAuthn ceremony 実装。
+func (s *AuthService) finishPasskeyAuthenticationWebAuthn(ctx context.Context, input FinishPasskeyAuthenticationInput) (AuthSession, error) {
+	if s.webauthn == nil {
+		return AuthSession{}, ErrInternalError
+	}
+	// credential.ID を lockKey の seed とする（FinishLogin 前は credentialHandle が未確定なため）。
+	// これにより無効な challenge/signature 試行もロックカウントの対象となる。
+	lockKey := failureLockKey(strings.TrimSpace(input.Credential.ID), input.ClientIP)
+	if err := s.ensureNotLocked(ctx, lockKey); err != nil {
+		return AuthSession{}, err
+	}
+
+	// challengeKey は空文字列を渡す: provider が clientDataJSON から challenge を自己解決する。
+	// lookupCredential コールバックで DB から stored credential（公開鍵等）を取得して full signature verification を行う。
+	credentialHandle, newSignCount, newBackupState, signCountUpdated, err := s.webauthn.FinishLogin(ctx, "", input.Credential, s.accountRepo.FindWebAuthnCredential)
+	if err != nil {
+		// DB 障害（ErrAuthStoreUnavailable 等）は内部エラーとして分類する。failure counter は加算しない。
+		// WebAuthn library のシグネチャ・challenge 検証失敗は ErrBadRequest → failure を加算。
+		// legacy path と一致: internal error 時は registerFailure を呼ばない。
+		if errors.Is(err, domain.ErrAuthStoreUnavailable) {
+			return AuthSession{}, ErrInternalError
+		}
+		s.registerFailure(ctx, lockKey)
 		return AuthSession{}, ErrBadRequest
 	}
 
-	lockKey := failureLockKey(credentialHandle, input.ClientIP)
-	if err := s.ensureNotLocked(ctx, lockKey); err != nil {
-		return AuthSession{}, err
+	// FinishLogin 成功後に SignCount と BackupState を DB に永続化する（リプレイ攻撃検出のため）。
+	// signCountUpdated が false の場合は updatedCred が取得できなかったため更新をスキップする。
+	// 更新失敗はサービス継続を妨げない（best-effort）。
+	if signCountUpdated {
+		if updateErr := s.accountRepo.UpdateWebAuthnCredentialState(ctx, credentialHandle, newSignCount, newBackupState); updateErr != nil {
+			// best-effort: ログを残したいが fmt.Print* は禁止のため、エラーは握りつぶす。
+			// TODO: structured logger を導入したタイミングでログを追加する。
+			_ = updateErr
+		}
 	}
 
 	account, err := s.accountRepo.FindByCredential(ctx, credentialHandle)
@@ -56,19 +91,6 @@ func (s *AuthService) FinishPasskeyAuthentication(ctx context.Context, input Fin
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return AuthSession{}, ErrInternalError
 		}
-		s.registerFailure(ctx, lockKey)
-		return AuthSession{}, ErrBadRequest
-	}
-
-	challenge, err := s.stateRepo.ConsumeChallenge(ctx, challengeValue)
-	if err != nil {
-		mappedErr := s.mapAuthStoreError(err)
-		if !errors.Is(mappedErr, ErrInternalError) {
-			s.registerFailure(ctx, lockKey)
-		}
-		return AuthSession{}, mappedErr
-	}
-	if err := challenge.EnsureAvailable(s.clock()); err != nil || account.Identifier() != challenge.Identifier() {
 		s.registerFailure(ctx, lockKey)
 		return AuthSession{}, ErrBadRequest
 	}
@@ -172,8 +194,63 @@ func (s *AuthService) ConsumeRecoveryToken(ctx context.Context, input ConsumeRec
 	}, nil
 }
 
+// StartPasskeyRegistration はリカバリ or 招待セッションを検証してセレモニーを開始する。
+func (s *AuthService) StartPasskeyRegistration(ctx context.Context, input StartPasskeyRegistrationInput) (PasskeyChallenge, error) {
+	lockKey := "regstart:" + input.ClientIP
+	if err := s.ensureNotLocked(ctx, lockKey); err != nil {
+		return PasskeyChallenge{}, err
+	}
+
+	if selectorCount(input.RecoverySession, input.InvitationSession) != 1 {
+		return PasskeyChallenge{}, ErrBadRequest
+	}
+
+	accountID, err := s.resolveRegistrationAccountID(ctx, input)
+	if err != nil {
+		s.registerFailure(ctx, lockKey)
+		return PasskeyChallenge{}, err
+	}
+
+	// WebAuthn provider 必須
+	if s.webauthn == nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+
+	challengeKey, optionsJSON, beginErr := s.webauthn.BeginRegistration(ctx, accountID)
+	if beginErr != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	return PasskeyChallenge{
+		RequestID:       requestID,
+		Challenge:       challengeKey,
+		ChallengeID:     challengeKey,
+		WebAuthnRPID:    s.authConfig.WebAuthnRPID,
+		WebAuthnOptions: optionsJSON,
+	}, nil
+}
+
+func (s *AuthService) resolveRegistrationAccountID(ctx context.Context, input StartPasskeyRegistrationInput) (string, error) {
+	if strings.TrimSpace(input.InvitationSession) != "" {
+		// invitation path: invitation registrar が accountID を解決する（今はシンプルにエラー）
+		return "", ErrBadRequest
+	}
+	// recovery path
+	recoverySession, err := s.stateRepo.GetRecoverySession(ctx, input.RecoverySession)
+	if err != nil {
+		return "", s.mapRecoveryConsumeError(err)
+	}
+	if err := recoverySession.EnsureAvailable(s.clock()); err != nil {
+		return "", ErrBadRequest
+	}
+	return recoverySession.AccountID(), nil
+}
+
 func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskeyInput) (AuthSession, error) {
-	lockKey := failureLockKey(input.Credential, input.ClientIP)
+	lockKey := failureLockKey(input.Credential.ID, input.ClientIP)
 	if err := s.ensureNotLocked(ctx, lockKey); err != nil {
 		return AuthSession{}, err
 	}
@@ -197,11 +274,18 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 		return AuthSession{}, ErrBadRequest
 	}
 
+	// recovery path: challengeKey は空文字列を渡す（provider が clientDataJSON から自己解決）
+	credentialHandle, credData, err := s.resolveCredentialHandleAndData(ctx, "", recoverySession.AccountID(), input.Credential)
+	if err != nil {
+		s.registerFailure(ctx, lockKey)
+		return AuthSession{}, ErrBadRequest
+	}
+
 	passkeyID, err := s.policy.Next()
 	if err != nil {
 		return AuthSession{}, ErrInternalError
 	}
-	account, err := s.accountRepo.AddPasskey(ctx, recoverySession.AccountID(), passkeyID, input.Credential)
+	account, err := s.accountRepo.AddPasskey(ctx, recoverySession.AccountID(), passkeyID, credentialHandle, credData)
 	if err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return AuthSession{}, ErrInternalError
@@ -228,6 +312,19 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 	}
 
 	return toAuthSession(requestID, session), nil
+}
+
+// resolveCredentialHandleAndData は WebAuthn FinishRegistration を呼んで credential handle と永続化データを返す。
+// challengeKey が空文字列の場合、provider は clientDataJSON から challenge を自己解決する。
+func (s *AuthService) resolveCredentialHandleAndData(ctx context.Context, challengeKey string, accountID string, credential WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
+	if s.webauthn == nil {
+		return "", domain.ZeroWebAuthnCredentialData(), ErrInternalError
+	}
+	handle, credData, err := s.webauthn.FinishRegistration(ctx, challengeKey, accountID, credential)
+	if err != nil {
+		return "", domain.ZeroWebAuthnCredentialData(), err
+	}
+	return handle, credData, nil
 }
 
 func (s *AuthService) registerInvitationPasskey(ctx context.Context, input RegisterPasskeyInput) (AuthSession, error) {
@@ -384,15 +481,6 @@ func emptyUsecaseSession() domain.Session {
 	return session
 }
 
-func splitCredentialEnvelope(value string) (string, string, bool) {
-	parts := strings.SplitN(strings.TrimSpace(value), "::", 2)
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return "", "", false
-	}
-
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
-}
-
 // ─── Multi-passkey management ───────────────────────────────────────────────
 
 // ListPasskeys は accountID に紐づく全パスキー credential を返す。
@@ -409,36 +497,31 @@ func (s *AuthService) ListPasskeys(ctx context.Context, accountID string) ([]Pas
 
 // StartAddPasskey は認証済みアカウントのパスキー追加チャレンジを発行する。
 func (s *AuthService) StartAddPasskey(ctx context.Context, accountID string) (PasskeyChallenge, error) {
-	requestID, challengeID, err := s.nextTwoIDs()
+	if s.webauthn == nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	challengeKey, optionsJSON, beginErr := s.webauthn.BeginRegistration(ctx, accountID)
+	if beginErr != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	requestID, err := s.policy.Next()
 	if err != nil {
 		return PasskeyChallenge{}, ErrInternalError
 	}
-	challengeValue := opaqueValue(challengeID)
-	challenge, err := domain.NewAuthChallenge(challengeID, accountID, challengeValue, s.clock().Add(s.authConfig.ChallengeTTL))
-	if err != nil {
-		return PasskeyChallenge{}, ErrBadRequest
-	}
-	if err := s.stateRepo.SaveChallenge(ctx, challenge, s.authConfig.ChallengeTTL); err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-	return PasskeyChallenge{RequestID: requestID, Challenge: challengeValue, ChallengeID: challengeID, WebAuthnRPID: s.authConfig.WebAuthnRPID}, nil
+	return PasskeyChallenge{
+		RequestID:       requestID,
+		Challenge:       challengeKey,
+		ChallengeID:     challengeKey,
+		WebAuthnRPID:    s.authConfig.WebAuthnRPID,
+		WebAuthnOptions: optionsJSON,
+	}, nil
 }
 
 // FinishAddPasskey はチャレンジを検証して新しいパスキーを追加する。
-func (s *AuthService) FinishAddPasskey(ctx context.Context, accountID string, credential string) ([]PasskeyCredentialDTO, error) {
-	credentialHandle, challengeValue, ok := splitCredentialEnvelope(credential)
-	if !ok {
-		return nil, ErrBadRequest
-	}
-
-	challenge, err := s.stateRepo.ConsumeChallenge(ctx, challengeValue)
+func (s *AuthService) FinishAddPasskey(ctx context.Context, accountID string, credential WebAuthnAttestationCredentialDTO) ([]PasskeyCredentialDTO, error) {
+	// challengeKey は空文字列を渡す（provider が clientDataJSON から自己解決）
+	credentialHandle, credData, err := s.resolveCredentialHandleAndData(ctx, "", accountID, credential)
 	if err != nil {
-		return nil, ErrBadRequest
-	}
-	if challenge.Identifier() != accountID {
-		return nil, ErrBadRequest
-	}
-	if err := challenge.EnsureAvailable(s.clock()); err != nil {
 		return nil, ErrBadRequest
 	}
 
@@ -446,7 +529,7 @@ func (s *AuthService) FinishAddPasskey(ctx context.Context, accountID string, cr
 	if err != nil {
 		return nil, ErrInternalError
 	}
-	if _, err := s.accountRepo.AddPasskey(ctx, accountID, passkeyID, credentialHandle); err != nil {
+	if _, err := s.accountRepo.AddPasskey(ctx, accountID, passkeyID, credentialHandle, credData); err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return nil, ErrInternalError
 		}
@@ -459,6 +542,7 @@ func (s *AuthService) FinishAddPasskey(ctx context.Context, accountID string, cr
 	}
 	return toPasskeyCredentialDTOs(creds), nil
 }
+
 func (s *AuthService) DeletePasskey(ctx context.Context, accountID string, credentialID string) error {
 	creds, err := s.accountRepo.ListPasskeys(ctx, accountID)
 	if err != nil {
@@ -512,29 +596,34 @@ func (s *AuthService) StartAddPasskeyByOtp(ctx context.Context, otp string) (Pas
 		return PasskeyChallenge{}, ErrInternalError
 	}
 
-	requestID, challengeID, err := s.nextTwoIDs()
-	if err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-	challengeValue := opaqueValue(challengeID)
-	challenge, err := domain.NewAuthChallenge(challengeID, accountID, challengeValue, s.clock().Add(s.authConfig.ChallengeTTL))
-	if err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-	// チャレンジを OTP キー付きで保存（challengeKey は通常チャレンジと同じ仕組み）
-	if err := s.stateRepo.SaveChallenge(ctx, challenge, s.authConfig.ChallengeTTL); err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-	// OTP に対応するチャレンジキーを otpChallengeKey として保存して FinishAddPasskeyByOtp でも使えるようにする
-	if err := s.stateRepo.SavePasskeyOtp(ctx, otpChallengeKey(otp), challengeValue, s.authConfig.ChallengeTTL); err != nil {
+	// WebAuthn provider 必須
+	if s.webauthn == nil {
 		return PasskeyChallenge{}, ErrInternalError
 	}
 
-	return PasskeyChallenge{RequestID: requestID, Challenge: challengeValue, ChallengeID: challengeID, WebAuthnRPID: s.authConfig.WebAuthnRPID}, nil
+	challengeKey, optionsJSON, beginErr := s.webauthn.BeginRegistration(ctx, accountID)
+	if beginErr != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	// challengeKey → accountID のマッピングを保存して FinishAddPasskeyByOtp で使えるようにする
+	if err := s.stateRepo.SavePasskeyOtp(ctx, otpChallengeKey(otp), challengeKey, s.authConfig.ChallengeTTL); err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return PasskeyChallenge{}, ErrInternalError
+	}
+	return PasskeyChallenge{
+		RequestID:       requestID,
+		Challenge:       challengeKey,
+		ChallengeID:     challengeKey,
+		WebAuthnRPID:    s.authConfig.WebAuthnRPID,
+		WebAuthnOptions: optionsJSON,
+	}, nil
 }
 
 // FinishAddPasskeyByOtp は OTP を再検証・消費し、パスキーを追加する。
-func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, otp string, credential string) error {
+func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, otp string, credential WebAuthnAttestationCredentialDTO) error {
 	key := otpKey(otp)
 	accountID, err := s.stateRepo.ConsumePasskeyOtp(ctx, key)
 	if err != nil {
@@ -544,9 +633,8 @@ func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, otp string, cre
 		return ErrInternalError
 	}
 
-	// チャレンジを OTP キー付きで取得
-	challengeKey := otpChallengeKey(otp)
-	challengeValue, err := s.stateRepo.ConsumePasskeyOtp(ctx, challengeKey)
+	// チャレンジキーを消費して無効化する（リプレイ防止）。storedChallengeKey を provider に渡して challenge を検証する。
+	storedChallengeKey, err := s.stateRepo.ConsumePasskeyOtp(ctx, otpChallengeKey(otp))
 	if err != nil {
 		if errors.Is(err, domain.ErrOtpNotFound) {
 			return ErrOtpExpiredOrConsumed
@@ -554,25 +642,8 @@ func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, otp string, cre
 		return ErrInternalError
 	}
 
-	credentialHandle, storedChallengeValue, ok := splitCredentialEnvelope(credential)
-	if !ok {
-		return ErrBadRequest
-	}
-
-	// challengeValue（otpChallengeKey から取得）と storedChallengeValue（credential から取得）を
-	// ConsumeChallenge の前に比較する。不一致の場合、他の有効な challenge を消費しないよう早期リターンする。
-	if challengeValue != storedChallengeValue {
-		return ErrBadRequest
-	}
-
-	challenge, err := s.stateRepo.ConsumeChallenge(ctx, storedChallengeValue)
+	credentialHandle, credData, err := s.resolveCredentialHandleAndData(ctx, storedChallengeKey, accountID, credential)
 	if err != nil {
-		return ErrBadRequest
-	}
-	if challenge.Identifier() != accountID {
-		return ErrBadRequest
-	}
-	if err := challenge.EnsureAvailable(s.clock()); err != nil {
 		return ErrBadRequest
 	}
 
@@ -580,7 +651,7 @@ func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, otp string, cre
 	if err != nil {
 		return ErrInternalError
 	}
-	if _, err := s.accountRepo.AddPasskey(ctx, accountID, passkeyID, credentialHandle); err != nil {
+	if _, err := s.accountRepo.AddPasskey(ctx, accountID, passkeyID, credentialHandle, credData); err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return ErrInternalError
 		}

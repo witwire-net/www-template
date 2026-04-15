@@ -78,10 +78,17 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// InvitationPasskeyRegisterRequest defines model for InvitationPasskeyRegisterRequest.
-type InvitationPasskeyRegisterRequest struct {
-	Credential string `json:"credential"`
+// InvitationPasskeyFinishRequest Finish passkey registration ceremony using an invitation session.
+type InvitationPasskeyFinishRequest struct {
+	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
+	Credential WebAuthnAttestationCredential `json:"credential"`
 
+	// InvitationSession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	InvitationSession UlidId `json:"invitation_session"`
+}
+
+// InvitationPasskeyStartRequest Start passkey registration ceremony using an invitation session.
+type InvitationPasskeyStartRequest struct {
 	// InvitationSession Canonical ULID string used for auth-owned resource and correlation identifiers.
 	InvitationSession UlidId `json:"invitation_session"`
 }
@@ -98,8 +105,9 @@ type LogoutResponseRevoked bool
 
 // PasskeyAddByOtpFinishRequest defines model for PasskeyAddByOtpFinishRequest.
 type PasskeyAddByOtpFinishRequest struct {
-	Credential string `json:"credential"`
-	Otp        string `json:"otp"`
+	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
+	Credential WebAuthnAttestationCredential `json:"credential"`
+	Otp        string                        `json:"otp"`
 }
 
 // PasskeyAddByOtpStartRequest defines model for PasskeyAddByOtpStartRequest.
@@ -109,21 +117,40 @@ type PasskeyAddByOtpStartRequest struct {
 
 // PasskeyAddFinishRequest defines model for PasskeyAddFinishRequest.
 type PasskeyAddFinishRequest struct {
-	Credential string `json:"credential"`
+	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
+	Credential WebAuthnAttestationCredential `json:"credential"`
 }
 
-// PasskeyAddStartResponse defines model for PasskeyAddStartResponse.
+// PasskeyAddStartResponse WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration.
 type PasskeyAddStartResponse struct {
-	Challenge string `json:"challenge"`
+	Attestation *string `json:"attestation,omitempty"`
+
+	// Challenge base64url-encoded challenge bytes issued by the server.
+	Challenge          string                          `json:"challenge"`
+	ExcludeCredentials *[]WebAuthnCredentialDescriptor `json:"excludeCredentials,omitempty"`
+
+	// PubKeyCredParams Supported public key credential algorithms.
+	PubKeyCredParams []WebAuthnCredentialParameter `json:"pubKeyCredParams"`
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
 	RpId      string `json:"rpId"`
+
+	// RpName Relying Party display name.
+	RpName string `json:"rpName"`
+
+	// Timeout Timeout in milliseconds suggested by the server.
+	Timeout *int64 `json:"timeout,omitempty"`
+
+	// User User entity (id is base64url-encoded bytes).
+	User             WebAuthnUserEntity `json:"user"`
+	UserVerification *string            `json:"userVerification,omitempty"`
 }
 
 // PasskeyFinishRequest defines model for PasskeyFinishRequest.
 type PasskeyFinishRequest struct {
-	Credential string `json:"credential"`
+	// Credential WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
+	Credential WebAuthnAssertionCredential `json:"credential"`
 }
 
 // PasskeyItem defines model for PasskeyItem.
@@ -151,9 +178,15 @@ type PasskeyOtpResponse struct {
 	RequestId UlidId `json:"requestId"`
 }
 
-// PasskeyRegisterRequest defines model for PasskeyRegisterRequest.
+// PasskeyRegisterRequest Finish request for passkey register — exactly one selector must be present.
 type PasskeyRegisterRequest struct {
 	union json.RawMessage
+}
+
+// PasskeyRegisterStartRequest Start request for passkey registration via recovery session.
+type PasskeyRegisterStartRequest struct {
+	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RecoverySession UlidId `json:"recovery_session"`
 }
 
 // PasskeyStartRequest defines model for PasskeyStartRequest.
@@ -161,13 +194,21 @@ type PasskeyStartRequest struct {
 	Identifier string `json:"identifier"`
 }
 
-// PasskeyStartResponse defines model for PasskeyStartResponse.
+// PasskeyStartResponse WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin.
 type PasskeyStartResponse struct {
+	// AllowCredentials Allowed credential descriptors (empty for usernameless flows).
+	AllowCredentials *[]WebAuthnCredentialDescriptor `json:"allowCredentials,omitempty"`
+
+	// Challenge base64url-encoded challenge bytes issued by the server.
 	Challenge string `json:"challenge"`
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
 	RpId      string `json:"rpId"`
+
+	// Timeout Timeout in milliseconds suggested by the server.
+	Timeout          *int64  `json:"timeout,omitempty"`
+	UserVerification *string `json:"userVerification,omitempty"`
 }
 
 // RecoveryAcceptedResponse defines model for RecoveryAcceptedResponse.
@@ -196,17 +237,24 @@ type RecoveryConsumeResponse struct {
 	// RecoveryTokenId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RecoveryTokenId UlidId `json:"recoveryTokenId"`
 
-	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	// RecoverySession Alias of recoverySessionId for client convenience.
 	RecoverySession UlidId `json:"recovery_session"`
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
 }
 
-// RecoveryPasskeyRegisterRequest defines model for RecoveryPasskeyRegisterRequest.
-type RecoveryPasskeyRegisterRequest struct {
-	Credential string `json:"credential"`
+// RecoveryPasskeyFinishRequest Finish passkey registration ceremony using a recovery session.
+type RecoveryPasskeyFinishRequest struct {
+	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
+	Credential WebAuthnAttestationCredential `json:"credential"`
 
+	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RecoverySession UlidId `json:"recovery_session"`
+}
+
+// RecoveryPasskeyStartRequest Start passkey registration ceremony using a recovery session.
+type RecoveryPasskeyStartRequest struct {
 	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RecoverySession UlidId `json:"recovery_session"`
 }
@@ -225,6 +273,83 @@ type StatusResponse struct {
 // UlidId Canonical ULID string used for auth-owned resource and correlation identifiers.
 type UlidId = string
 
+// WebAuthnAssertionCredential WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
+type WebAuthnAssertionCredential struct {
+	AuthenticatorAttachment *string `json:"authenticatorAttachment,omitempty"`
+	Id                      string  `json:"id"`
+	RawId                   string  `json:"rawId"`
+
+	// Response WebAuthn AuthenticatorAssertionResponse (login).
+	Response WebAuthnAssertionResponse `json:"response"`
+	Type     string                    `json:"type"`
+}
+
+// WebAuthnAssertionResponse WebAuthn AuthenticatorAssertionResponse (login).
+type WebAuthnAssertionResponse struct {
+	// AuthenticatorData base64url-encoded authenticatorData.
+	AuthenticatorData string `json:"authenticatorData"`
+
+	// ClientDataJSON base64url-encoded clientDataJSON.
+	ClientDataJSON string `json:"clientDataJSON"`
+
+	// Signature base64url-encoded signature.
+	Signature string `json:"signature"`
+
+	// UserHandle base64url-encoded userHandle (optional).
+	UserHandle *string `json:"userHandle,omitempty"`
+}
+
+// WebAuthnAttestationCredential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
+type WebAuthnAttestationCredential struct {
+	AuthenticatorAttachment *string `json:"authenticatorAttachment,omitempty"`
+	Id                      string  `json:"id"`
+	RawId                   string  `json:"rawId"`
+
+	// Response WebAuthn AuthenticatorAttestationResponse (registration).
+	Response WebAuthnAttestationResponse `json:"response"`
+	Type     string                      `json:"type"`
+}
+
+// WebAuthnAttestationResponse WebAuthn AuthenticatorAttestationResponse (registration).
+type WebAuthnAttestationResponse struct {
+	// AttestationObject base64url-encoded attestationObject.
+	AttestationObject string `json:"attestationObject"`
+
+	// ClientDataJSON base64url-encoded clientDataJSON.
+	ClientDataJSON string    `json:"clientDataJSON"`
+	Transports     *[]string `json:"transports,omitempty"`
+}
+
+// WebAuthnAuthenticatorResponse WebAuthn AuthenticatorResponse inner object.
+type WebAuthnAuthenticatorResponse struct {
+	// ClientDataJSON base64url-encoded clientDataJSON.
+	ClientDataJSON string `json:"clientDataJSON"`
+}
+
+// WebAuthnCredentialDescriptor Credential descriptor used in allowCredentials and excludeCredentials lists.
+type WebAuthnCredentialDescriptor struct {
+	// Id base64url-encoded credential ID.
+	Id         string    `json:"id"`
+	Transports *[]string `json:"transports,omitempty"`
+	Type       string    `json:"type"`
+}
+
+// WebAuthnCredentialParameter WebAuthn public key credential parameter (algorithm descriptor).
+type WebAuthnCredentialParameter struct {
+	// Alg COSE algorithm identifier.
+	Alg  int32  `json:"alg"`
+	Type string `json:"type"`
+}
+
+// WebAuthnUserEntity WebAuthn user entity (id is base64url-encoded bytes).
+type WebAuthnUserEntity struct {
+	DisplayName string `json:"displayName"`
+
+	// Id base64url-encoded user ID bytes.
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // FinishPasskeyAdditionByOtpJSONRequestBody defines body for FinishPasskeyAdditionByOtp for application/json ContentType.
 type FinishPasskeyAdditionByOtpJSONRequestBody = PasskeyAddByOtpFinishRequest
 
@@ -236,6 +361,9 @@ type FinishPasskeyAuthenticationJSONRequestBody = PasskeyFinishRequest
 
 // RegisterPasskeyJSONRequestBody defines body for RegisterPasskey for application/json ContentType.
 type RegisterPasskeyJSONRequestBody = PasskeyRegisterRequest
+
+// StartPasskeyRegistrationJSONRequestBody defines body for StartPasskeyRegistration for application/json ContentType.
+type StartPasskeyRegistrationJSONRequestBody = PasskeyRegisterStartRequest
 
 // StartPasskeyAuthenticationJSONRequestBody defines body for StartPasskeyAuthentication for application/json ContentType.
 type StartPasskeyAuthenticationJSONRequestBody = PasskeyStartRequest
@@ -249,22 +377,22 @@ type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
 // FinishPasskeyAdditionJSONRequestBody defines body for FinishPasskeyAddition for application/json ContentType.
 type FinishPasskeyAdditionJSONRequestBody = PasskeyAddFinishRequest
 
-// AsRecoveryPasskeyRegisterRequest returns the union data inside the PasskeyRegisterRequest as a RecoveryPasskeyRegisterRequest
-func (t PasskeyRegisterRequest) AsRecoveryPasskeyRegisterRequest() (RecoveryPasskeyRegisterRequest, error) {
-	var body RecoveryPasskeyRegisterRequest
+// AsRecoveryPasskeyFinishRequest returns the union data inside the PasskeyRegisterRequest as a RecoveryPasskeyFinishRequest
+func (t PasskeyRegisterRequest) AsRecoveryPasskeyFinishRequest() (RecoveryPasskeyFinishRequest, error) {
+	var body RecoveryPasskeyFinishRequest
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromRecoveryPasskeyRegisterRequest overwrites any union data inside the PasskeyRegisterRequest as the provided RecoveryPasskeyRegisterRequest
-func (t *PasskeyRegisterRequest) FromRecoveryPasskeyRegisterRequest(v RecoveryPasskeyRegisterRequest) error {
+// FromRecoveryPasskeyFinishRequest overwrites any union data inside the PasskeyRegisterRequest as the provided RecoveryPasskeyFinishRequest
+func (t *PasskeyRegisterRequest) FromRecoveryPasskeyFinishRequest(v RecoveryPasskeyFinishRequest) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeRecoveryPasskeyRegisterRequest performs a merge with any union data inside the PasskeyRegisterRequest, using the provided RecoveryPasskeyRegisterRequest
-func (t *PasskeyRegisterRequest) MergeRecoveryPasskeyRegisterRequest(v RecoveryPasskeyRegisterRequest) error {
+// MergeRecoveryPasskeyFinishRequest performs a merge with any union data inside the PasskeyRegisterRequest, using the provided RecoveryPasskeyFinishRequest
+func (t *PasskeyRegisterRequest) MergeRecoveryPasskeyFinishRequest(v RecoveryPasskeyFinishRequest) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -275,22 +403,22 @@ func (t *PasskeyRegisterRequest) MergeRecoveryPasskeyRegisterRequest(v RecoveryP
 	return err
 }
 
-// AsInvitationPasskeyRegisterRequest returns the union data inside the PasskeyRegisterRequest as a InvitationPasskeyRegisterRequest
-func (t PasskeyRegisterRequest) AsInvitationPasskeyRegisterRequest() (InvitationPasskeyRegisterRequest, error) {
-	var body InvitationPasskeyRegisterRequest
+// AsInvitationPasskeyFinishRequest returns the union data inside the PasskeyRegisterRequest as a InvitationPasskeyFinishRequest
+func (t PasskeyRegisterRequest) AsInvitationPasskeyFinishRequest() (InvitationPasskeyFinishRequest, error) {
+	var body InvitationPasskeyFinishRequest
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromInvitationPasskeyRegisterRequest overwrites any union data inside the PasskeyRegisterRequest as the provided InvitationPasskeyRegisterRequest
-func (t *PasskeyRegisterRequest) FromInvitationPasskeyRegisterRequest(v InvitationPasskeyRegisterRequest) error {
+// FromInvitationPasskeyFinishRequest overwrites any union data inside the PasskeyRegisterRequest as the provided InvitationPasskeyFinishRequest
+func (t *PasskeyRegisterRequest) FromInvitationPasskeyFinishRequest(v InvitationPasskeyFinishRequest) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeInvitationPasskeyRegisterRequest performs a merge with any union data inside the PasskeyRegisterRequest, using the provided InvitationPasskeyRegisterRequest
-func (t *PasskeyRegisterRequest) MergeInvitationPasskeyRegisterRequest(v InvitationPasskeyRegisterRequest) error {
+// MergeInvitationPasskeyFinishRequest performs a merge with any union data inside the PasskeyRegisterRequest, using the provided InvitationPasskeyFinishRequest
+func (t *PasskeyRegisterRequest) MergeInvitationPasskeyFinishRequest(v InvitationPasskeyFinishRequest) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -325,9 +453,12 @@ type ServerInterface interface {
 	// Finishes passkey authentication and returns a bearer session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(c *gin.Context)
-	// Registers or re-registers a passkey from exactly one auth selector
+	// Finishes a passkey registration ceremony and issues a session
 	// (POST /api/v1/auth/passkey/register)
 	RegisterPasskey(c *gin.Context)
+	// Starts a passkey registration ceremony using a recovery session
+	// (POST /api/v1/auth/passkey/register/start)
+	StartPasskeyRegistration(c *gin.Context)
 	// Starts a passkey authentication ceremony
 	// (POST /api/v1/auth/passkey/start)
 	StartPasskeyAuthentication(c *gin.Context)
@@ -431,6 +562,19 @@ func (siw *ServerInterfaceWrapper) RegisterPasskey(c *gin.Context) {
 	}
 
 	siw.Handler.RegisterPasskey(c)
+}
+
+// StartPasskeyRegistration operation middleware
+func (siw *ServerInterfaceWrapper) StartPasskeyRegistration(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartPasskeyRegistration(c)
 }
 
 // StartPasskeyAuthentication operation middleware
@@ -603,6 +747,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/add/start", wrapper.StartPasskeyAdditionByOtp)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
+	router.POST(options.BaseURL+"/api/v1/auth/passkey/register/start", wrapper.StartPasskeyRegistration)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/start", wrapper.StartPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
@@ -898,6 +1043,65 @@ type RegisterPasskey503JSONResponse struct {
 }
 
 func (response RegisterPasskey503JSONResponse) VisitRegisterPasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyRegistrationRequestObject struct {
+	Body *StartPasskeyRegistrationJSONRequestBody
+}
+
+type StartPasskeyRegistrationResponseObject interface {
+	VisitStartPasskeyRegistrationResponse(w http.ResponseWriter) error
+}
+
+type StartPasskeyRegistration200ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyRegistration200JSONResponse struct {
+	Body    PasskeyAddStartResponse
+	Headers StartPasskeyRegistration200ResponseHeaders
+}
+
+func (response StartPasskeyRegistration200JSONResponse) VisitStartPasskeyRegistrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyRegistration400ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyRegistration400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers StartPasskeyRegistration400ResponseHeaders
+}
+
+func (response StartPasskeyRegistration400JSONResponse) VisitStartPasskeyRegistrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyRegistration503ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyRegistration503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartPasskeyRegistration503ResponseHeaders
+}
+
+func (response StartPasskeyRegistration503JSONResponse) VisitStartPasskeyRegistrationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(503)
@@ -1469,9 +1673,12 @@ type StrictServerInterface interface {
 	// Finishes passkey authentication and returns a bearer session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(ctx context.Context, request FinishPasskeyAuthenticationRequestObject) (FinishPasskeyAuthenticationResponseObject, error)
-	// Registers or re-registers a passkey from exactly one auth selector
+	// Finishes a passkey registration ceremony and issues a session
 	// (POST /api/v1/auth/passkey/register)
 	RegisterPasskey(ctx context.Context, request RegisterPasskeyRequestObject) (RegisterPasskeyResponseObject, error)
+	// Starts a passkey registration ceremony using a recovery session
+	// (POST /api/v1/auth/passkey/register/start)
+	StartPasskeyRegistration(ctx context.Context, request StartPasskeyRegistrationRequestObject) (StartPasskeyRegistrationResponseObject, error)
 	// Starts a passkey authentication ceremony
 	// (POST /api/v1/auth/passkey/start)
 	StartPasskeyAuthentication(ctx context.Context, request StartPasskeyAuthenticationRequestObject) (StartPasskeyAuthenticationResponseObject, error)
@@ -1663,6 +1870,39 @@ func (sh *strictHandler) RegisterPasskey(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(RegisterPasskeyResponseObject); ok {
 		if err := validResponse.VisitRegisterPasskeyResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartPasskeyRegistration operation middleware
+func (sh *strictHandler) StartPasskeyRegistration(ctx *gin.Context) {
+	var request StartPasskeyRegistrationRequestObject
+
+	var body StartPasskeyRegistrationJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.StartPasskeyRegistration(ctx, request.(StartPasskeyRegistrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartPasskeyRegistration")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(StartPasskeyRegistrationResponseObject); ok {
+		if err := validResponse.VisitStartPasskeyRegistrationResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

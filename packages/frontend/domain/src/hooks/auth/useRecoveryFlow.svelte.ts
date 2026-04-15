@@ -6,8 +6,10 @@ import {
   applyRecoveryReady,
   clearRecoveryState,
   createRecoveryFlowInitialState,
-} from '../../auth/recoveryState';
-import { toRecoveryErrorMessage } from '../../auth/passkeyState';
+  createWebAuthnAttestation,
+  normalizeWebAuthnError,
+  toRecoveryErrorMessage,
+} from '../../auth';
 
 import { useAuthSession } from './useAuthSession.svelte';
 
@@ -32,7 +34,7 @@ interface RecoveryFlowActions {
   setEmail: (email: string) => void;
   submitRecoveryRequest: () => Promise<'/login/recovery/sent' | null>;
   consumeToken: (token: string) => Promise<'/login/recovery/register' | '/login/recovery' | null>;
-  registerRecoveryPasskey: (credential?: string) => Promise<null>;
+  registerRecoveryPasskey: () => Promise<null>;
   /** ready state の snapshot を取得する。フルリロード遷移前に app 層が永続化に使う。 */
   getReadySnapshot: () => RecoveryReadySnapshot | null;
   /** app 層が永続化から復元した snapshot で ready state を再構成する。 */
@@ -123,7 +125,7 @@ const createConsumeTokenAction =
 
 const createRegisterRecoveryPasskeyAction =
   (state: RecoveryFlowState, authSession: ReturnType<typeof useAuthSession>) =>
-  async (credential?: string): Promise<null> => {
+  async (): Promise<null> => {
     if (state.recoverySession === null) {
       applyInvalidRecoveryToken(
         state,
@@ -137,10 +139,37 @@ const createRegisterRecoveryPasskeyAction =
     state.error = null;
 
     try {
-      const response = await authApi.registerRecoveryPasskey(
-        state.recoverySession,
-        credential ?? JSON.stringify({ recoverySessionId: state.recoverySessionId, recovery: true })
-      );
+      // Step 1: Start — get WebAuthn creation options from server
+      const startResponse = await authApi.startRecoveryPasskeyRegistration(state.recoverySession);
+      if (startResponse.status === 400) {
+        applyInvalidRecoveryToken(
+          state,
+          '復旧リンクの有効期限が切れた可能性があります。再度復旧をお試しください。',
+          startResponse.headers.get(CACHE_CONTROL_HEADER)
+        );
+        return null;
+      }
+      if (startResponse.status !== 200) {
+        authSession.actions.handleFailure(
+          startResponse.data.error,
+          'パスキー再登録を開始できませんでした。'
+        );
+        state.phase = 'idle';
+        return null;
+      }
+
+      // Step 2: Call browser WebAuthn API — normalize browser/device errors only
+      let credential;
+      try {
+        credential = await createWebAuthnAttestation(startResponse.data);
+      } catch (webAuthnError: unknown) {
+        state.phase = 'ready';
+        state.error = normalizeWebAuthnError(webAuthnError);
+        return null;
+      }
+
+      // Step 3: Finish — send attestation to server
+      const response = await authApi.registerRecoveryPasskey(state.recoverySession, credential);
 
       state.lastCacheControl = response.headers.get(CACHE_CONTROL_HEADER);
 

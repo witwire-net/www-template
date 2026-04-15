@@ -37,7 +37,7 @@
 
 ## Backend Guardrails
 
-- API path policy: all routes live under `api/v1/*`; public auth routes use `api/v1/auth/*`, bearer-protected routes use the remaining `api/v1/*` paths
+- API path policy: all routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*` and `api/v1/auth/logout`
 - GORM imports are allowed only under `packages/backend/internal/persistence/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow

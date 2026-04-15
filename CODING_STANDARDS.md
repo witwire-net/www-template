@@ -244,10 +244,10 @@
 
 ### layer ごとの外部依存を守る
 
-- required: Gin / CORS / oapi runtime は `internal/http` だけ、GORM / Postgres driver / Redis は `internal/persistence` だけ、`types` は `github.com/oklog/ulid/v2` のみ、他 layer は stdlib と許可された internal package を使う
+- required: Gin / CORS / oapi runtime は `internal/http` だけ、GORM / Postgres driver / Redis は `internal/persistence` だけ、`types` は `github.com/oklog/ulid/v2` のみ、他 layer は stdlib と許可された internal package を使う; 例外として `internal/app` は `github.com/go-webauthn/webauthn` を使用可能（WebAuthnProvider 実装のため）
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
 - NG例: `internal/domain` で `github.com/gin-gonic/gin` を import する
-- OK例: `internal/domain` は stdlib と domain/types に閉じる
+- OK例: `internal/domain` は stdlib と domain/types に閉じる; `internal/app/webauthn_provider.go` で `github.com/go-webauthn/webauthn` を import する
 
 ### http は domain の entity / command / error に直接依存しない
 
@@ -295,14 +295,14 @@
 
 ### runtime route policy をテストで守る
 
-- required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume` に限定し、それ以外の custom route は `/health` または `/api/v1/*`（`/api/v1/auth/*` 除く）に収める
+- required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register/start`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`, `/api/v1/auth/passkey/add/start`, `/api/v1/auth/passkey/add/finish` に限定し、whitelist 外の `/api/v1/*` は bearer を要求する
 - Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
 - NG例: runtime route に `/api/v1/admin/users` を増やす
 - OK例: app surface の custom route は `/api/v1/passkeys/*` に置く
 
 ### app API は Bearer token 必須にする
 
-- required: `/api/v1/auth/*` 以外の `/api/v1/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する
+- required: whitelist 外の `/api/v1/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する（例: `/api/v1/passkeys/*`, `/api/v1/auth/logout`）
 - Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
 - NG例: `/api/v1/passkeys` を認証なしで通す
 - OK例: bearer middleware で保護し、OpenAPI に `security: [{ BearerAuth: [] }]` を残す
@@ -411,7 +411,7 @@
 
 ### CI verify job の順番を前提にする
 
-- required: CI は `Checkout -> Setup pnpm (10.33.0) -> Setup Node (24) -> Setup Go (1.26.1) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
+- required: CI は `Checkout -> Setup pnpm (10.33.0) -> Setup Node (24) -> Setup Go (1.26.2) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
 - Enforcement point: `.github/workflows/ci.yml`
 - NG例: ローカルで `pnpm test:run` だけ通して `pnpm gen` や `pnpm check:codegen` を飛ばす
 - OK例: 変更に応じて少なくとも CI と同じ順番で確認する

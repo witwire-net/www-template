@@ -9,7 +9,7 @@ import {
   createAuthorizationHeaders,
   createAuthSessionInitialState,
   hasUlidAuthSessionShape,
-} from '../../auth/authSessionState';
+} from '../../auth';
 
 import type {
   AuthFailureState,

@@ -25,7 +25,7 @@ func TestAuthPasskeyFinishIssuesSession(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
 	challenge := startPasskey(t, env.router, "member@example.com")
-	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	assertStatus(t, response, stdhttp.StatusOK)
 	assertNoStore(t, response)
 
@@ -43,7 +43,7 @@ func TestAuthInactiveSessionRejected(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
 	challenge := startPasskey(t, env.router, "member@example.com")
-	finishResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	finishResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	assertStatus(t, finishResponse, stdhttp.StatusOK)
 	assertNoStore(t, finishResponse)
 	var session map[string]any
@@ -60,7 +60,7 @@ func TestAuthLogoutRevokesSession(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
 	challenge := startPasskey(t, env.router, "member@example.com")
-	finishResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	finishResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	assertStatus(t, finishResponse, stdhttp.StatusOK)
 	assertNoStore(t, finishResponse)
 	var session map[string]any
@@ -125,6 +125,7 @@ func TestAuthPasskeyStartUsesConfiguredWebAuthnRPID(t *testing.T) {
 	cfg := testConfig()
 	cfg.Auth.WebAuthnRPID = "www-template"
 	auth := usecases.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), cfg.AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 	router := NewRouter(cfg, Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
@@ -289,6 +290,7 @@ func TestAuthRecoverySendFailurePersistsOriginalTokenExpiryAUTHBES011(t *testing
 	accountRepo := stubAuthAccountRepositoryWithMember()
 	sender := advancingFailingAccountRecoverySender{advance: func() { clock.Advance(2 * time.Minute) }, err: errors.New("smtp delayed failure")}
 	auth := usecases.NewAuthService(stateRepo, accountRepo, sender, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/recovery", map[string]string{"email": "member@example.com"}, "")
@@ -340,7 +342,7 @@ func TestAuthRecoveryRegisterExistingAccountOnly(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
 	recoverySession := consumeRecoverySession(t, env)
-	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register", map[string]string{"recovery_session": recoverySession, "credential": "new-credential"}, "")
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register", map[string]any{"recovery_session": recoverySession, "credential": attestationCredentialJSON("new-credential", "")}, "")
 	assertStatus(t, response, stdhttp.StatusOK)
 	assertNoStore(t, response)
 	var body map[string]any
@@ -352,7 +354,7 @@ func TestAuthRecoveryRegisterExistingAccountOnly(t *testing.T) {
 func TestAuthInviteOnlyCannotRegisterRecovery(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
-	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register", map[string]string{"credential": "invite-only", "invitation_session": "01ARZ3NDEKTSV4RRFFQ69G5FC1"}, "")
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register", map[string]any{"credential": attestationCredentialJSON("invite-only", ""), "invitation_session": "01ARZ3NDEKTSV4RRFFQ69G5FC1"}, "")
 	assertStatus(t, response, stdhttp.StatusBadRequest)
 	assertNoStore(t, response)
 	if !env.invite.called {
@@ -366,9 +368,9 @@ func TestAuthInviteOnlyCannotRegisterRecovery(t *testing.T) {
 func TestAuthRegisterRejectsAmbiguousSelectors(t *testing.T) {
 	t.Parallel()
 	env := newAuthTestEnv(t)
-	cases := []map[string]string{
-		{"credential": "only-credential"},
-		{"credential": "both", "invitation_session": "01ARZ3NDEKTSV4RRFFQ69G5FC2", "recovery_session": "01ARZ3NDEKTSV4RRFFQ69G5FC3"},
+	cases := []map[string]any{
+		{"credential": attestationCredentialJSON("only-credential", "")},
+		{"credential": attestationCredentialJSON("both", ""), "invitation_session": "01ARZ3NDEKTSV4RRFFQ69G5FC2", "recovery_session": "01ARZ3NDEKTSV4RRFFQ69G5FC3"},
 	}
 	for _, payload := range cases {
 		response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register", payload, "")
@@ -415,6 +417,7 @@ func newAuthTestEnvWithSender(t *testing.T, sender usecases.AccountRecoverySende
 	accountRepo := stubAuthAccountRepositoryWithMember()
 	invite := &stubInvitationPasskeyRegistrar{}
 	auth := usecases.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 	capturingSender, _ := sender.(*capturingAccountRecoverySender)
 	return authTestEnv{
 		router:    NewRouter(testConfig(), Dependencies{Auth: auth}),
@@ -604,8 +607,35 @@ func challengeValue(challenge map[string]any) string {
 	return value
 }
 
-func credentialEnvelope(credential string, challenge string) string {
-	return credential + "::" + challenge
+// assertionCredentialJSON は WebAuthn login credential の JSON 表現を返す。
+// ID に credential handle を、Response.ClientDataJSON に challenge 値を格納する。
+// HTTP テスト用 mock provider（mockWebAuthnProvider）がこの構造を解釈する。
+func assertionCredentialJSON(credentialHandle string, challengeVal string) map[string]any {
+	return map[string]any{
+		"id":    credentialHandle,
+		"rawId": credentialHandle,
+		"type":  "public-key",
+		"response": map[string]any{
+			"clientDataJSON":    challengeVal,
+			"authenticatorData": "",
+			"signature":         "",
+		},
+	}
+}
+
+// attestationCredentialJSON は WebAuthn registration credential の JSON 表現を返す。
+// ID に credential handle を、Response.ClientDataJSON に challenge 値を格納する。
+// HTTP テスト用 mock provider（mockWebAuthnProvider）がこの構造を解釈する。
+func attestationCredentialJSON(credentialHandle string, challengeVal string) map[string]any {
+	return map[string]any{
+		"id":    credentialHandle,
+		"rawId": credentialHandle,
+		"type":  "public-key",
+		"response": map[string]any{
+			"clientDataJSON":    challengeVal,
+			"attestationObject": "",
+		},
+	}
 }
 
 type stubAuthStateRepository struct {
@@ -830,7 +860,7 @@ func (r *stubAuthAccountRepository) FindByEmail(_ context.Context, email string)
 	return r.account, nil
 }
 
-func (r *stubAuthAccountRepository) AddPasskey(_ context.Context, accountID string, passkeyCredentialID string, credential string) (domain.AuthAccount, error) {
+func (r *stubAuthAccountRepository) AddPasskey(_ context.Context, accountID string, passkeyCredentialID string, credential string, _ domain.WebAuthnCredentialData) (domain.AuthAccount, error) {
 	if accountID != r.account.AccountID() {
 		return emptyAuthAccountForTest(), domain.ErrAuthAccountNotFound
 	}
@@ -880,6 +910,19 @@ func (r *stubAuthAccountRepository) DeletePasskeyByID(_ context.Context, account
 		return err
 	}
 	r.account = updated
+	return nil
+}
+
+func (r *stubAuthAccountRepository) FindWebAuthnCredential(_ context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
+	for _, c := range r.account.Credentials() {
+		if c.CredentialHandle() == handle {
+			return domain.ReconstitueWebAuthnStoredCredential(handle, nil, 0, nil, false, false, nil), nil
+		}
+	}
+	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthAccountNotFound
+}
+
+func (r *stubAuthAccountRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
 	return nil
 }
 
@@ -975,7 +1018,7 @@ func loginWithPasskey(t *testing.T, router *gin.Engine, identifier string) strin
 	t.Helper()
 	challenge := startPasskey(t, router, identifier)
 	resp := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish",
-		map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+		map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	assertStatus(t, resp, stdhttp.StatusOK)
 	var session map[string]any
 	decodeJSON(t, resp, &session)
@@ -1046,12 +1089,12 @@ func (m *multiAccountStubAuthAccountRepository) FindByEmail(ctx context.Context,
 	return emptyAuthAccountForTest(), domain.ErrAuthAccountNotFound
 }
 
-func (m *multiAccountStubAuthAccountRepository) AddPasskey(ctx context.Context, accountID string, passkeyCredentialID string, credential string) (domain.AuthAccount, error) {
+func (m *multiAccountStubAuthAccountRepository) AddPasskey(ctx context.Context, accountID string, passkeyCredentialID string, credential string, credData domain.WebAuthnCredentialData) (domain.AuthAccount, error) {
 	r, ok := m.repoByID(accountID)
 	if !ok {
 		return emptyAuthAccountForTest(), domain.ErrAuthAccountNotFound
 	}
-	return r.AddPasskey(ctx, accountID, passkeyCredentialID, credential)
+	return r.AddPasskey(ctx, accountID, passkeyCredentialID, credential, credData)
 }
 
 func (m *multiAccountStubAuthAccountRepository) ListPasskeys(ctx context.Context, accountID string) ([]domain.PasskeyCredential, error) {
@@ -1068,6 +1111,18 @@ func (m *multiAccountStubAuthAccountRepository) DeletePasskeyByID(ctx context.Co
 		return domain.ErrAuthAccountNotFound
 	}
 	return r.DeletePasskeyByID(ctx, accountID, credentialID)
+}
+
+func (m *multiAccountStubAuthAccountRepository) FindWebAuthnCredential(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
+	r, ok := m.repoByCredentialHandle(handle)
+	if !ok {
+		return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthAccountNotFound
+	}
+	return r.FindWebAuthnCredential(ctx, handle)
+}
+
+func (m *multiAccountStubAuthAccountRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
+	return nil
 }
 
 // stubAuthAccountRepositoryWithTwoCredentials は 2 件の credential を持つ account stub を生成する。
@@ -1115,7 +1170,7 @@ func TestFinishPasskeyAdditionPreservesExistingPasskeys(t *testing.T) {
 
 	// finish: 新しい credential を追加
 	finishResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/finish",
-		map[string]string{"credential": credentialEnvelope("new-credential", challengeValue(startBody))},
+		map[string]any{"credential": attestationCredentialJSON("new-credential", challengeValue(startBody))},
 		token)
 	assertStatus(t, finishResp, stdhttp.StatusOK)
 	assertNoStore(t, finishResp)
@@ -1154,6 +1209,7 @@ func TestDeleteOneOfTwoPasskeysSucceeds(t *testing.T) {
 		"01ARZ3NDEKTSV4RRFFQ69G5FB1", "second-credential",
 	)
 	auth := usecases.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	token := loginWithPasskey(t, router, "member@example.com")
@@ -1193,6 +1249,7 @@ func TestDeleteOtherAccountPasskeyReturns403(t *testing.T) {
 
 	accountRepo := newMultiAccountStubAuthAccountRepository(account1, account2)
 	auth := usecases.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	// account1 でログイン
@@ -1217,7 +1274,7 @@ func TestPasskeyManagementUnauthenticatedReturns401(t *testing.T) {
 	}{
 		{stdhttp.MethodGet, "/api/v1/passkeys", nil},
 		{stdhttp.MethodPost, "/api/v1/passkeys/start", nil},
-		{stdhttp.MethodPost, "/api/v1/passkeys/finish", map[string]string{"credential": "x::y"}},
+		{stdhttp.MethodPost, "/api/v1/passkeys/finish", map[string]any{"credential": attestationCredentialJSON("x", "y")}},
 		{stdhttp.MethodDelete, "/api/v1/passkeys/01ARZ3NDEKTSV4RRFFQ69G5FB0", nil},
 		{stdhttp.MethodPost, "/api/v1/passkeys/otp", nil},
 	} {
@@ -1239,7 +1296,7 @@ func TestFinishPasskeyAdditionRetainsExistingOnList(t *testing.T) {
 	decodeJSON(t, startResp, &startBody)
 
 	performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/finish",
-		map[string]string{"credential": credentialEnvelope("reg-credential", challengeValue(startBody))},
+		map[string]any{"credential": attestationCredentialJSON("reg-credential", challengeValue(startBody))},
 		token)
 
 	listResp := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/passkeys", nil, token)
@@ -1303,7 +1360,7 @@ func TestPasskeyAddByOtpFullFlowPreservesExisting(t *testing.T) {
 
 	// add/finish: 新しい credential を登録
 	finishResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/finish",
-		map[string]string{"otp": otp, "credential": credentialEnvelope("otp-added-credential", challengeValue(startBody))}, "")
+		map[string]any{"otp": otp, "credential": attestationCredentialJSON("otp-added-credential", challengeValue(startBody))}, "")
 	assertStatus(t, finishResp, stdhttp.StatusOK)
 	assertNoStore(t, finishResp)
 
@@ -1325,6 +1382,7 @@ func TestStartPasskeyAddByOtpRejectsExpiredOtp(t *testing.T) {
 	stateRepo := newStubAuthStateRepository(clock.Now)
 	accountRepo := stubAuthAccountRepositoryWithMember()
 	auth := usecases.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	// ログインして OTP を発行
@@ -1343,6 +1401,164 @@ func TestStartPasskeyAddByOtpRejectsExpiredOtp(t *testing.T) {
 		map[string]string{"otp": otp}, "")
 
 	assertStatus(t, resp, stdhttp.StatusBadRequest)
+	assertNoStore(t, resp)
+}
+
+// assertPasskeyAddStartCreationFields は PasskeyAddStartResponse の
+// rpName / user / pubKeyCredParams が正しく設定されていることを検証する共通ヘルパー。
+func assertPasskeyAddStartCreationFields(t *testing.T, body map[string]any) {
+	t.Helper()
+	assertNonEmptyStringField(t, body, "rpName")
+	user, ok := body["user"].(map[string]any)
+	if !ok || user == nil {
+		t.Fatalf("expected user object, got %v", body["user"])
+	}
+	assertNonEmptyStringField(t, user, "id")
+	assertNonEmptyStringField(t, user, "name")
+	assertNonEmptyStringField(t, user, "displayName")
+	params, ok := body["pubKeyCredParams"].([]any)
+	if !ok || len(params) == 0 {
+		t.Fatalf("expected non-empty pubKeyCredParams, got %v", body["pubKeyCredParams"])
+	}
+	for i, p := range params {
+		assertCredentialParam(t, i, p)
+	}
+}
+
+func assertNonEmptyStringField(t *testing.T, m map[string]any, key string) {
+	t.Helper()
+	if m[key] == "" || m[key] == nil {
+		t.Errorf("expected non-empty %s, got %v", key, m[key])
+	}
+}
+
+func assertCredentialParam(t *testing.T, idx int, p any) {
+	t.Helper()
+	param, ok := p.(map[string]any)
+	if !ok {
+		t.Fatalf("pubKeyCredParams[%d] is not an object: %v", idx, p)
+	}
+	if param["type"] == "" || param["type"] == nil {
+		t.Errorf("pubKeyCredParams[%d].type is empty", idx)
+	}
+	if param["alg"] == nil {
+		t.Errorf("pubKeyCredParams[%d].alg is nil", idx)
+	}
+}
+
+// [AUTH-BE-S025] StartPasskeyRegistration (recovery path) が rpName / user / pubKeyCredParams を返す
+func TestStartPasskeyRegistrationReturnsWebAuthnCreationFields(t *testing.T) {
+	t.Parallel()
+	env := newAuthTestEnv(t)
+	recoverySession := consumeRecoverySession(t, env)
+
+	resp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register/start",
+		map[string]any{"recovery_session": recoverySession}, "")
+	assertStatus(t, resp, stdhttp.StatusOK)
+	assertNoStore(t, resp)
+
+	var body map[string]any
+	decodeJSON(t, resp, &body)
+	assertULIDField(t, body, "requestId")
+	assertPasskeyAddStartCreationFields(t, body)
+}
+
+// [AUTH-BE-S026] StartPasskeyAdditionByOtp が rpName / user / pubKeyCredParams を返す
+func TestStartPasskeyAddByOtpReturnsWebAuthnCreationFields(t *testing.T) {
+	t.Parallel()
+	env := newAuthTestEnv(t)
+	token := loginWithPasskey(t, env.router, "member@example.com")
+
+	otpResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token)
+	assertStatus(t, otpResp, stdhttp.StatusOK)
+	var otpBody map[string]any
+	decodeJSON(t, otpResp, &otpBody)
+	otp := otpBody["otp"].(string)
+
+	startResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start",
+		map[string]string{"otp": otp}, "")
+	assertStatus(t, startResp, stdhttp.StatusOK)
+	assertNoStore(t, startResp)
+
+	var body map[string]any
+	decodeJSON(t, startResp, &body)
+	assertULIDField(t, body, "requestId")
+	assertPasskeyAddStartCreationFields(t, body)
+}
+
+// [AUTH-BE-S027] BeginRegistration が必須フィールドを返さない場合、register/start は 503 を返す
+func TestStartPasskeyRegistrationIncompleteOptionsReturns503(t *testing.T) {
+	t.Parallel()
+	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
+	stateRepo := newStubAuthStateRepository(clock.Now)
+	accountRepo := stubAuthAccountRepositoryWithMember()
+	invite := &stubInvitationPasskeyRegistrar{}
+	sender := &capturingAccountRecoverySender{}
+	auth := usecases.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProviderWithIncompleteOptions())
+	router := NewRouter(testConfig(), Dependencies{Auth: auth})
+	env := authTestEnv{router: router, stateRepo: stateRepo, sender: sender, invite: invite, now: clock.Now, advance: clock.Advance}
+
+	recoverySession := consumeRecoverySession(t, env)
+	resp := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/register/start",
+		map[string]any{"recovery_session": recoverySession}, "")
+	assertStatus(t, resp, stdhttp.StatusServiceUnavailable)
+	assertNoStore(t, resp)
+}
+
+// [AUTH-BE-S028] StartPasskeyAddition (bearer) が rpName / user / pubKeyCredParams を返す
+func TestStartPasskeyAdditionReturnsWebAuthnCreationFields(t *testing.T) {
+	t.Parallel()
+	env := newAuthTestEnv(t)
+	token := loginWithPasskey(t, env.router, "member@example.com")
+
+	resp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/start", nil, token)
+	assertStatus(t, resp, stdhttp.StatusOK)
+	assertNoStore(t, resp)
+
+	var body map[string]any
+	decodeJSON(t, resp, &body)
+	assertULIDField(t, body, "requestId")
+	assertPasskeyAddStartCreationFields(t, body)
+}
+
+// newAuthEnvWithCustomProvider は指定した WebAuthn provider を使う authTestEnv を構築する。
+func newAuthEnvWithCustomProvider(t *testing.T, provider usecases.WebAuthnProvider) authTestEnv {
+	t.Helper()
+	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
+	stateRepo := newStubAuthStateRepository(clock.Now)
+	accountRepo := stubAuthAccountRepositoryWithMember()
+	invite := &stubInvitationPasskeyRegistrar{}
+	sender := &capturingAccountRecoverySender{}
+	auth := usecases.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(provider)
+	router := NewRouter(testConfig(), Dependencies{Auth: auth})
+	return authTestEnv{router: router, stateRepo: stateRepo, sender: sender, invite: invite, now: clock.Now, advance: clock.Advance}
+}
+
+// [AUTH-BE-S029] user.name が空の場合、register/start は 503 を返す
+func TestStartPasskeyRegistrationMissingUserNameReturns503(t *testing.T) {
+	t.Parallel()
+	// user.name を空にした options
+	const opts = `{"publicKey":{"rp":{"id":"localhost","name":"Test RP"},"user":{"id":"dXNlcmlk","name":"","displayName":"Test User"},"challenge":"__KEY__","pubKeyCredParams":[{"type":"public-key","alg":-7}]}}`
+	env := newAuthEnvWithCustomProvider(t, newMockWebAuthnProviderWithOptions(opts))
+	recoverySession := consumeRecoverySession(t, env)
+	resp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register/start",
+		map[string]any{"recovery_session": recoverySession}, "")
+	assertStatus(t, resp, stdhttp.StatusServiceUnavailable)
+	assertNoStore(t, resp)
+}
+
+// [AUTH-BE-S030] user.displayName が空の場合、register/start は 503 を返す
+func TestStartPasskeyRegistrationMissingDisplayNameReturns503(t *testing.T) {
+	t.Parallel()
+	// user.displayName を空にした options
+	const opts = `{"publicKey":{"rp":{"id":"localhost","name":"Test RP"},"user":{"id":"dXNlcmlk","name":"testuser","displayName":""},"challenge":"__KEY__","pubKeyCredParams":[{"type":"public-key","alg":-7}]}}`
+	env := newAuthEnvWithCustomProvider(t, newMockWebAuthnProviderWithOptions(opts))
+	recoverySession := consumeRecoverySession(t, env)
+	resp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/register/start",
+		map[string]any{"recovery_session": recoverySession}, "")
+	assertStatus(t, resp, stdhttp.StatusServiceUnavailable)
 	assertNoStore(t, resp)
 }
 
@@ -1368,7 +1584,7 @@ func TestPasskeyAddByOtpConsumedOtpRejected(t *testing.T) {
 
 	// finish で OTP を消費
 	finishResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/finish",
-		map[string]string{"otp": otp, "credential": credentialEnvelope("first-new-cred", challengeValue(startBody))}, "")
+		map[string]any{"otp": otp, "credential": attestationCredentialJSON("first-new-cred", challengeValue(startBody))}, "")
 	assertStatus(t, finishResp, stdhttp.StatusOK)
 
 	// 同じ OTP で再度 start を試みる（OTP が消費済みのため 400）

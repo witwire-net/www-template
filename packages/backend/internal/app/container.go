@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"www-template/packages/backend/internal/persistence"
@@ -47,10 +48,25 @@ func buildContainer(ctx context.Context, cfg types.Config, newAuthAccountReposit
 	smtpSender := NewSMTPSender(cfg.Infra)
 	recoverySender := NewAccountRecoverySender(smtpSender, cfg.Infra)
 
+	authSvc := usecases.NewAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, func() time.Time {
+		return time.Now().UTC()
+	}, idPolicy, authConfig)
+
+	// RPID が未設定の場合は起動を拒否する（fail-closed）。
+	if authConfig.WebAuthnRPID == "" {
+		_ = composeClosers(closeStateRepo, closeAccountRepo)(ctx)
+		return nil, fmt.Errorf("webauthn RPID is required: set AUTH_WEBAUTHN_RPID")
+	}
+
+	webAuthnProv, webAuthnErr := newWebAuthnProvider(authConfig.WebAuthnRPID, cfg.AllowedOrigins, authConfig.ChallengeTTL)
+	if webAuthnErr != nil {
+		_ = composeClosers(closeStateRepo, closeAccountRepo)(ctx)
+		return nil, fmt.Errorf("webauthn provider init: %w", webAuthnErr)
+	}
+	authSvc.UseWebAuthnProvider(webAuthnProv)
+
 	return &Container{
-		Auth: usecases.NewAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, func() time.Time {
-			return time.Now().UTC()
-		}, idPolicy, authConfig),
+		Auth:  authSvc,
 		close: composeClosers(closeStateRepo, closeAccountRepo),
 	}, nil
 }

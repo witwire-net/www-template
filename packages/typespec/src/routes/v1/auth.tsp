@@ -82,7 +82,26 @@ namespace WWWTemplate.ApiV1 {
   };
 
   @tag("auth")
-  @summary("Registers or re-registers a passkey from exactly one auth selector")
+  @summary("Starts a passkey registration ceremony using a recovery session")
+  @operationId("startPasskeyRegistration")
+  @post
+  @route("/auth/passkey/register/start")
+  op startPasskeyRegistration(@body body: WWWTemplate.PasskeyRegisterStartRequest): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.PasskeyAddStartResponse;
+  } | {
+    @statusCode statusCode: 400;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthOperationErrorResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
+
+  @tag("auth")
+  @summary("Finishes a passkey registration ceremony and issues a session")
   @operationId("registerPasskey")
   @post
   @route("/auth/passkey/register")

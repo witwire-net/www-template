@@ -315,7 +315,7 @@
     "/api/v1/auth/passkey/register": {
       "post": {
         "operationId": "registerPasskey",
-        "summary": "Registers or re-registers a passkey from exactly one auth selector",
+        "summary": "Finishes a passkey registration ceremony and issues a session",
         "parameters": [],
         "responses": {
           "200": {
@@ -383,6 +383,83 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PasskeyRegisterRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/register/start": {
+      "post": {
+        "operationId": "startPasskeyRegistration",
+        "summary": "Starts a passkey registration ceremony using a recovery session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyAddStartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegisterStartRequest"
               }
             }
           }
@@ -1160,7 +1237,7 @@
           }
         }
       },
-      "InvitationPasskeyRegisterRequest": {
+      "InvitationPasskeyFinishRequest": {
         "type": "object",
         "required": ["invitation_session", "credential"],
         "properties": {
@@ -1168,9 +1245,20 @@
             "$ref": "#/components/schemas/UlidId"
           },
           "credential": {
-            "type": "string"
+            "$ref": "#/components/schemas/WebAuthnAttestationCredential"
           }
-        }
+        },
+        "description": "Finish passkey registration ceremony using an invitation session."
+      },
+      "InvitationPasskeyStartRequest": {
+        "type": "object",
+        "required": ["invitation_session"],
+        "properties": {
+          "invitation_session": {
+            "$ref": "#/components/schemas/UlidId"
+          }
+        },
+        "description": "Start passkey registration ceremony using an invitation session."
       },
       "LogoutResponse": {
         "type": "object",
@@ -1193,7 +1281,7 @@
             "type": "string"
           },
           "credential": {
-            "type": "string"
+            "$ref": "#/components/schemas/WebAuthnAttestationCredential"
           }
         }
       },
@@ -1211,31 +1299,69 @@
         "required": ["credential"],
         "properties": {
           "credential": {
-            "type": "string"
+            "$ref": "#/components/schemas/WebAuthnAttestationCredential"
           }
         }
       },
       "PasskeyAddStartResponse": {
         "type": "object",
-        "required": ["requestId", "challenge", "rpId"],
+        "required": ["requestId", "challenge", "rpId", "rpName", "user", "pubKeyCredParams"],
         "properties": {
           "requestId": {
             "$ref": "#/components/schemas/UlidId"
           },
           "challenge": {
-            "type": "string"
+            "type": "string",
+            "description": "base64url-encoded challenge bytes issued by the server."
           },
           "rpId": {
             "type": "string"
+          },
+          "rpName": {
+            "type": "string",
+            "description": "Relying Party display name."
+          },
+          "user": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebAuthnUserEntity"
+              }
+            ],
+            "description": "User entity (id is base64url-encoded bytes)."
+          },
+          "pubKeyCredParams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebAuthnCredentialParameter"
+            },
+            "description": "Supported public key credential algorithms."
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Timeout in milliseconds suggested by the server."
+          },
+          "excludeCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebAuthnCredentialDescriptor"
+            }
+          },
+          "userVerification": {
+            "type": "string"
+          },
+          "attestation": {
+            "type": "string"
           }
-        }
+        },
+        "description": "WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration."
       },
       "PasskeyFinishRequest": {
         "type": "object",
         "required": ["credential"],
         "properties": {
           "credential": {
-            "type": "string"
+            "$ref": "#/components/schemas/WebAuthnAssertionCredential"
           }
         }
       },
@@ -1285,12 +1411,23 @@
       "PasskeyRegisterRequest": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/RecoveryPasskeyRegisterRequest"
+            "$ref": "#/components/schemas/RecoveryPasskeyFinishRequest"
           },
           {
-            "$ref": "#/components/schemas/InvitationPasskeyRegisterRequest"
+            "$ref": "#/components/schemas/InvitationPasskeyFinishRequest"
           }
-        ]
+        ],
+        "description": "Finish request for passkey register — exactly one selector must be present."
+      },
+      "PasskeyRegisterStartRequest": {
+        "type": "object",
+        "required": ["recovery_session"],
+        "properties": {
+          "recovery_session": {
+            "$ref": "#/components/schemas/UlidId"
+          }
+        },
+        "description": "Start request for passkey registration via recovery session."
       },
       "PasskeyStartRequest": {
         "type": "object",
@@ -1309,12 +1446,29 @@
             "$ref": "#/components/schemas/UlidId"
           },
           "challenge": {
-            "type": "string"
+            "type": "string",
+            "description": "base64url-encoded challenge bytes issued by the server."
           },
           "rpId": {
             "type": "string"
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Timeout in milliseconds suggested by the server."
+          },
+          "allowCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebAuthnCredentialDescriptor"
+            },
+            "description": "Allowed credential descriptors (empty for usernameless flows)."
+          },
+          "userVerification": {
+            "type": "string"
           }
-        }
+        },
+        "description": "WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin."
       },
       "RecoveryAcceptedResponse": {
         "type": "object",
@@ -1358,7 +1512,12 @@
             "$ref": "#/components/schemas/UlidId"
           },
           "recovery_session": {
-            "$ref": "#/components/schemas/UlidId"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UlidId"
+              }
+            ],
+            "description": "Alias of recoverySessionId for client convenience."
           },
           "expiresAt": {
             "type": "string",
@@ -1366,7 +1525,7 @@
           }
         }
       },
-      "RecoveryPasskeyRegisterRequest": {
+      "RecoveryPasskeyFinishRequest": {
         "type": "object",
         "required": ["recovery_session", "credential"],
         "properties": {
@@ -1374,9 +1533,20 @@
             "$ref": "#/components/schemas/UlidId"
           },
           "credential": {
-            "type": "string"
+            "$ref": "#/components/schemas/WebAuthnAttestationCredential"
           }
-        }
+        },
+        "description": "Finish passkey registration ceremony using a recovery session."
+      },
+      "RecoveryPasskeyStartRequest": {
+        "type": "object",
+        "required": ["recovery_session"],
+        "properties": {
+          "recovery_session": {
+            "$ref": "#/components/schemas/UlidId"
+          }
+        },
+        "description": "Start passkey registration ceremony using a recovery session."
       },
       "RecoveryRequest": {
         "type": "object",
@@ -1404,6 +1574,157 @@
       "UlidId": {
         "type": "string",
         "description": "Canonical ULID string used for auth-owned resource and correlation identifiers."
+      },
+      "WebAuthnAssertionCredential": {
+        "type": "object",
+        "required": ["id", "rawId", "type", "response"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/WebAuthnAssertionResponse"
+          },
+          "authenticatorAttachment": {
+            "type": "string"
+          }
+        },
+        "description": "WebAuthn PublicKeyCredential for login (navigator.credentials.get result)."
+      },
+      "WebAuthnAssertionResponse": {
+        "type": "object",
+        "required": ["clientDataJSON", "authenticatorData", "signature"],
+        "properties": {
+          "clientDataJSON": {
+            "type": "string",
+            "description": "base64url-encoded clientDataJSON."
+          },
+          "authenticatorData": {
+            "type": "string",
+            "description": "base64url-encoded authenticatorData."
+          },
+          "signature": {
+            "type": "string",
+            "description": "base64url-encoded signature."
+          },
+          "userHandle": {
+            "type": "string",
+            "description": "base64url-encoded userHandle (optional)."
+          }
+        },
+        "description": "WebAuthn AuthenticatorAssertionResponse (login)."
+      },
+      "WebAuthnAttestationCredential": {
+        "type": "object",
+        "required": ["id", "rawId", "type", "response"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/WebAuthnAttestationResponse"
+          },
+          "authenticatorAttachment": {
+            "type": "string"
+          }
+        },
+        "description": "WebAuthn PublicKeyCredential for registration (navigator.credentials.create result)."
+      },
+      "WebAuthnAttestationResponse": {
+        "type": "object",
+        "required": ["clientDataJSON", "attestationObject"],
+        "properties": {
+          "clientDataJSON": {
+            "type": "string",
+            "description": "base64url-encoded clientDataJSON."
+          },
+          "attestationObject": {
+            "type": "string",
+            "description": "base64url-encoded attestationObject."
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "WebAuthn AuthenticatorAttestationResponse (registration)."
+      },
+      "WebAuthnAuthenticatorResponse": {
+        "type": "object",
+        "required": ["clientDataJSON"],
+        "properties": {
+          "clientDataJSON": {
+            "type": "string",
+            "description": "base64url-encoded clientDataJSON."
+          }
+        },
+        "description": "WebAuthn AuthenticatorResponse inner object."
+      },
+      "WebAuthnCredentialDescriptor": {
+        "type": "object",
+        "required": ["type", "id"],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "description": "base64url-encoded credential ID."
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Credential descriptor used in allowCredentials and excludeCredentials lists."
+      },
+      "WebAuthnCredentialParameter": {
+        "type": "object",
+        "required": ["type", "alg"],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "alg": {
+            "type": "integer",
+            "format": "int32",
+            "description": "COSE algorithm identifier."
+          }
+        },
+        "description": "WebAuthn public key credential parameter (algorithm descriptor)."
+      },
+      "WebAuthnUserEntity": {
+        "type": "object",
+        "required": ["id", "name", "displayName"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "base64url-encoded user ID bytes."
+          },
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "description": "WebAuthn user entity (id is base64url-encoded bytes)."
       }
     },
     "securitySchemes": {

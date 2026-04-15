@@ -37,6 +37,7 @@ const config = {
       '@ui': '../ui/src',
       '@ui/*': '../ui/src/*',
       types: '../domain/src/types',
+      'types/*': '../domain/src/types/*',
     },
   },
 };

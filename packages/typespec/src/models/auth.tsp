@@ -30,14 +30,103 @@ model PasskeyStartRequest {
   identifier: string;
 }
 
+@doc("WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin.")
 model PasskeyStartResponse {
   requestId: UlidId;
+
+  @doc("base64url-encoded challenge bytes issued by the server.")
   challenge: string;
+
   rpId: string;
+
+  @doc("Timeout in milliseconds suggested by the server.")
+  timeout?: int64;
+
+  @doc("Allowed credential descriptors (empty for usernameless flows).")
+  allowCredentials?: WebAuthnCredentialDescriptor[];
+
+  userVerification?: string;
+}
+
+@doc("Credential descriptor used in allowCredentials and excludeCredentials lists.")
+model WebAuthnCredentialDescriptor {
+  type: string;
+
+  @doc("base64url-encoded credential ID.")
+  id: string;
+
+  transports?: string[];
+}
+
+@doc("WebAuthn user entity (id is base64url-encoded bytes).")
+model WebAuthnUserEntity {
+  @doc("base64url-encoded user ID bytes.")
+  id: string;
+
+  name: string;
+  displayName: string;
+}
+
+@doc("WebAuthn public key credential parameter (algorithm descriptor).")
+model WebAuthnCredentialParameter {
+  type: string;
+
+  @doc("COSE algorithm identifier.")
+  alg: int32;
+}
+
+@doc("WebAuthn AuthenticatorResponse inner object.")
+model WebAuthnAuthenticatorResponse {
+  @doc("base64url-encoded clientDataJSON.")
+  clientDataJSON: string;
+}
+
+@doc("WebAuthn AuthenticatorAssertionResponse (login).")
+model WebAuthnAssertionResponse {
+  @doc("base64url-encoded clientDataJSON.")
+  clientDataJSON: string;
+
+  @doc("base64url-encoded authenticatorData.")
+  authenticatorData: string;
+
+  @doc("base64url-encoded signature.")
+  signature: string;
+
+  @doc("base64url-encoded userHandle (optional).")
+  userHandle?: string;
+}
+
+@doc("WebAuthn AuthenticatorAttestationResponse (registration).")
+model WebAuthnAttestationResponse {
+  @doc("base64url-encoded clientDataJSON.")
+  clientDataJSON: string;
+
+  @doc("base64url-encoded attestationObject.")
+  attestationObject: string;
+
+  transports?: string[];
+}
+
+@doc("WebAuthn PublicKeyCredential for login (navigator.credentials.get result).")
+model WebAuthnAssertionCredential {
+  id: string;
+  rawId: string;
+  type: string;
+  response: WebAuthnAssertionResponse;
+  authenticatorAttachment?: string;
+}
+
+@doc("WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).")
+model WebAuthnAttestationCredential {
+  id: string;
+  rawId: string;
+  type: string;
+  response: WebAuthnAttestationResponse;
+  authenticatorAttachment?: string;
 }
 
 model PasskeyFinishRequest {
-  credential: string;
+  credential: WebAuthnAssertionCredential;
 }
 
 model PasskeyItem {
@@ -51,14 +140,34 @@ model PasskeyListResponse {
   passkeys: PasskeyItem[];
 }
 
+@doc("WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration.")
 model PasskeyAddStartResponse {
   requestId: UlidId;
+
+  @doc("base64url-encoded challenge bytes issued by the server.")
   challenge: string;
+
   rpId: string;
+
+  @doc("Relying Party display name.")
+  rpName: string;
+
+  @doc("User entity (id is base64url-encoded bytes).")
+  user: WebAuthnUserEntity;
+
+  @doc("Supported public key credential algorithms.")
+  pubKeyCredParams: WebAuthnCredentialParameter[];
+
+  @doc("Timeout in milliseconds suggested by the server.")
+  timeout?: int64;
+
+  excludeCredentials?: WebAuthnCredentialDescriptor[];
+  userVerification?: string;
+  attestation?: string;
 }
 
 model PasskeyAddFinishRequest {
-  credential: string;
+  credential: WebAuthnAttestationCredential;
 }
 
 model PasskeyOtpResponse {
@@ -72,7 +181,7 @@ model PasskeyAddByOtpStartRequest {
 
 model PasskeyAddByOtpFinishRequest {
   otp: string;
-  credential: string;
+  credential: WebAuthnAttestationCredential;
 }
 
 model AuthSessionResponse {
@@ -102,24 +211,45 @@ model RecoveryConsumeResponse {
   requestId: UlidId;
   recoveryTokenId: UlidId;
   recoverySessionId: UlidId;
+
+  @doc("Alias of recoverySessionId for client convenience.")
   recovery_session: UlidId;
+
   expiresAt: utcDateTime;
 }
 
-model RecoveryPasskeyRegisterRequest {
+@doc("Start passkey registration ceremony using a recovery session.")
+model RecoveryPasskeyStartRequest {
   recovery_session: UlidId;
-  credential: string;
 }
 
-model InvitationPasskeyRegisterRequest {
+@doc("Finish passkey registration ceremony using a recovery session.")
+model RecoveryPasskeyFinishRequest {
+  recovery_session: UlidId;
+  credential: WebAuthnAttestationCredential;
+}
+
+@doc("Start passkey registration ceremony using an invitation session.")
+model InvitationPasskeyStartRequest {
   invitation_session: UlidId;
-  credential: string;
 }
 
+@doc("Finish passkey registration ceremony using an invitation session.")
+model InvitationPasskeyFinishRequest {
+  invitation_session: UlidId;
+  credential: WebAuthnAttestationCredential;
+}
+
+@doc("Start request for passkey registration via recovery session.")
+model PasskeyRegisterStartRequest {
+  recovery_session: UlidId;
+}
+
+@doc("Finish request for passkey register — exactly one selector must be present.")
 @oneOf
 union PasskeyRegisterRequest {
-  recovery: RecoveryPasskeyRegisterRequest,
-  invitation: InvitationPasskeyRegisterRequest,
+  recovery: RecoveryPasskeyFinishRequest,
+  invitation: InvitationPasskeyFinishRequest,
 }
 
 model LogoutResponse {

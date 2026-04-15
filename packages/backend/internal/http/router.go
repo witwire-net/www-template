@@ -2,7 +2,9 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	stdhttp "net/http"
 	"time"
 
@@ -100,8 +102,10 @@ func (s *StrictServer) StartPasskeyAuthentication(ctx context.Context, request o
 		return openapi.StartPasskeyAuthentication400JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.StartPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
+	body := openapi.PasskeyStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID}
+	applyWebAuthnLoginOptions(&body, result.WebAuthnOptions)
 	return openapi.StartPasskeyAuthentication200JSONResponse{
-		Body:    openapi.PasskeyStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID},
+		Body:    body,
 		Headers: openapi.StartPasskeyAuthentication200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
 }
@@ -111,7 +115,7 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 		return openapi.FinishPasskeyAuthentication400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.FinishPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	result, err := s.auth.FinishPasskeyAuthentication(ctx, usecases.FinishPasskeyAuthenticationInput{Credential: request.Body.Credential, ClientIP: clientIPFromContext(ctx)})
+	result, err := s.auth.FinishPasskeyAuthentication(ctx, usecases.FinishPasskeyAuthenticationInput{Credential: mapAssertionCredentialToDTO(request.Body.Credential), ClientIP: clientIPFromContext(ctx)})
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, usecases.ErrInternalError) {
@@ -169,14 +173,39 @@ func (s *StrictServer) ConsumeRecoveryToken(ctx context.Context, request openapi
 	}, nil
 }
 
+func (s *StrictServer) StartPasskeyRegistration(ctx context.Context, request openapi.StartPasskeyRegistrationRequestObject) (openapi.StartPasskeyRegistrationResponseObject, error) {
+	if request.Body == nil {
+		return openapi.StartPasskeyRegistration400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.StartPasskeyRegistration400ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	result, err := s.auth.StartPasskeyRegistration(ctx, usecases.StartPasskeyRegistrationInput{RecoverySession: string(request.Body.RecoverySession), ClientIP: clientIPFromContext(ctx)})
+	if err != nil {
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, usecases.ErrInternalError) {
+			return openapi.StartPasskeyRegistration503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartPasskeyRegistration503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.StartPasskeyRegistration400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.StartPasskeyRegistration400ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	body := openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID}
+	if err := applyWebAuthnRegistrationOptions(&body, result.WebAuthnOptions); err != nil {
+		return openapi.StartPasskeyRegistration503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartPasskeyRegistration503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	return openapi.StartPasskeyRegistration200JSONResponse{
+		Body:    body,
+		Headers: openapi.StartPasskeyRegistration200ResponseHeaders{CacheControl: noStoreValue},
+	}, nil
+}
+
 func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.RegisterPasskeyRequestObject) (openapi.RegisterPasskeyResponseObject, error) {
 	if request.Body == nil {
 		return openapi.RegisterPasskey400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.RegisterPasskey400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	recovery, _ := request.Body.AsRecoveryPasskeyRegisterRequest()
-	invitation, _ := request.Body.AsInvitationPasskeyRegisterRequest()
-	result, err := s.auth.RegisterPasskey(ctx, usecases.RegisterPasskeyInput{RecoverySession: recovery.RecoverySession, InvitationSession: invitation.InvitationSession, Credential: chooseCredential(recovery.Credential, invitation.Credential), ClientIP: clientIPFromContext(ctx)})
+	recovery, _ := request.Body.AsRecoveryPasskeyFinishRequest()
+	invitation, _ := request.Body.AsInvitationPasskeyFinishRequest()
+	credential := chooseAttestationCredential(recovery.Credential, invitation.Credential)
+	result, err := s.auth.RegisterPasskey(ctx, usecases.RegisterPasskeyInput{RecoverySession: string(recovery.RecoverySession), InvitationSession: string(invitation.InvitationSession), Credential: credential, ClientIP: clientIPFromContext(ctx)})
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, usecases.ErrInternalError) {
@@ -191,11 +220,60 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 	}, nil
 }
 
-func chooseCredential(primary string, secondary string) string {
-	if primary != "" {
-		return primary
+// ─── OpenAPI → usecases DTO mapping helpers ──────────────────────────────────
+
+func mapAssertionCredentialToDTO(c openapi.WebAuthnAssertionCredential) usecases.WebAuthnAssertionCredentialDTO {
+	userHandle := ""
+	if c.Response.UserHandle != nil {
+		userHandle = *c.Response.UserHandle
 	}
-	return secondary
+	attachment := ""
+	if c.AuthenticatorAttachment != nil {
+		attachment = *c.AuthenticatorAttachment
+	}
+	return usecases.WebAuthnAssertionCredentialDTO{
+		ID:                      c.Id,
+		RawID:                   c.RawId,
+		Type:                    c.Type,
+		AuthenticatorAttachment: attachment,
+		Response: usecases.WebAuthnAssertionResponseDTO{
+			ClientDataJSON:    c.Response.ClientDataJSON,
+			AuthenticatorData: c.Response.AuthenticatorData,
+			Signature:         c.Response.Signature,
+			UserHandle:        userHandle,
+		},
+	}
+}
+
+func mapAttestationCredentialToDTO(c openapi.WebAuthnAttestationCredential) usecases.WebAuthnAttestationCredentialDTO {
+	attachment := ""
+	if c.AuthenticatorAttachment != nil {
+		attachment = *c.AuthenticatorAttachment
+	}
+	var transports []string
+	if c.Response.Transports != nil {
+		transports = *c.Response.Transports
+	}
+	return usecases.WebAuthnAttestationCredentialDTO{
+		ID:                      c.Id,
+		RawID:                   c.RawId,
+		Type:                    c.Type,
+		AuthenticatorAttachment: attachment,
+		Response: usecases.WebAuthnAttestationResponseDTO{
+			ClientDataJSON:    c.Response.ClientDataJSON,
+			AttestationObject: c.Response.AttestationObject,
+			Transports:        transports,
+		},
+	}
+}
+
+// chooseAttestationCredential は recovery または invitation の credential を選択する。
+// どちらも空（ゼロ値）の場合は空の DTO を返す（usecases 層で検証する）。
+func chooseAttestationCredential(primary openapi.WebAuthnAttestationCredential, secondary openapi.WebAuthnAttestationCredential) usecases.WebAuthnAttestationCredentialDTO {
+	if primary.Id != "" {
+		return mapAttestationCredentialToDTO(primary)
+	}
+	return mapAttestationCredentialToDTO(secondary)
 }
 
 // ─── Multi-passkey management handlers ──────────────────────────────────────
@@ -236,8 +314,12 @@ func (s *StrictServer) StartPasskeyAddition(ctx context.Context, _ openapi.Start
 		return openapi.StartPasskeyAddition503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartPasskeyAddition503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
+	body := openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID}
+	if err := applyWebAuthnRegistrationOptions(&body, result.WebAuthnOptions); err != nil {
+		return openapi.StartPasskeyAddition503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartPasskeyAddition503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
 	return openapi.StartPasskeyAddition200JSONResponse{
-		Body:    openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID},
+		Body:    body,
 		Headers: openapi.StartPasskeyAddition200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
 }
@@ -252,7 +334,7 @@ func (s *StrictServer) FinishPasskeyAddition(ctx context.Context, request openap
 		return openapi.FinishPasskeyAddition401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.FinishPasskeyAddition401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	creds, err := s.auth.FinishAddPasskey(ctx, session.AccountID, request.Body.Credential)
+	creds, err := s.auth.FinishAddPasskey(ctx, session.AccountID, mapAttestationCredentialToDTO(request.Body.Credential))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, usecases.ErrInternalError) {
@@ -324,8 +406,12 @@ func (s *StrictServer) StartPasskeyAdditionByOtp(ctx context.Context, request op
 		return openapi.StartPasskeyAdditionByOtp400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.StartPasskeyAdditionByOtp400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
+	body := openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID}
+	if err := applyWebAuthnRegistrationOptions(&body, result.WebAuthnOptions); err != nil {
+		return openapi.StartPasskeyAdditionByOtp503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartPasskeyAdditionByOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
 	return openapi.StartPasskeyAdditionByOtp200JSONResponse{
-		Body:    openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID},
+		Body:    body,
 		Headers: openapi.StartPasskeyAdditionByOtp200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
 }
@@ -335,7 +421,7 @@ func (s *StrictServer) FinishPasskeyAdditionByOtp(ctx context.Context, request o
 		return openapi.FinishPasskeyAdditionByOtp400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.FinishPasskeyAdditionByOtp400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	if err := s.auth.FinishAddPasskeyByOtp(ctx, request.Body.Otp, request.Body.Credential); err != nil {
+	if err := s.auth.FinishAddPasskeyByOtp(ctx, request.Body.Otp, mapAttestationCredentialToDTO(request.Body.Credential)); err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, usecases.ErrInternalError) {
 			return openapi.FinishPasskeyAdditionByOtp503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishPasskeyAdditionByOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
@@ -360,4 +446,176 @@ func clientIPFromContext(ctx context.Context) string {
 		return "unknown"
 	}
 	return requestIP(ginContext)
+}
+
+// ─── WebAuthn options helpers ────────────────────────────────────────────────
+
+// webAuthnLoginOptionsJSON は BeginLogin/BeginDiscoverableLogin が返す JSON の
+// 関連フィールドを保持する中間構造体。
+type webAuthnLoginOptionsJSON struct {
+	PublicKey struct {
+		AllowCredentials []struct {
+			ID         string   `json:"id"`
+			Type       string   `json:"type"`
+			Transports []string `json:"transports,omitempty"`
+		} `json:"allowCredentials,omitempty"`
+		Timeout          *int64 `json:"timeout,omitempty"`
+		UserVerification string `json:"userVerification,omitempty"`
+	} `json:"publicKey"`
+}
+
+// webAuthnRegistrationOptionsJSON は BeginRegistration が返す JSON の
+// 関連フィールドを保持する中間構造体。
+type webAuthnRegistrationOptionsJSON struct {
+	PublicKey struct {
+		RP struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"rp"`
+		User struct {
+			ID          any    `json:"id"`
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		} `json:"user"`
+		PubKeyCredParams []struct {
+			Type string `json:"type"`
+			Alg  int32  `json:"alg"`
+		} `json:"pubKeyCredParams,omitempty"`
+		ExcludeCredentials []struct {
+			ID         string   `json:"id"`
+			Type       string   `json:"type"`
+			Transports []string `json:"transports,omitempty"`
+		} `json:"excludeCredentials,omitempty"`
+		Attestation      string `json:"attestation,omitempty"`
+		Timeout          *int64 `json:"timeout,omitempty"`
+		UserVerification string `json:"userVerification,omitempty"`
+	} `json:"publicKey"`
+}
+
+// applyWebAuthnLoginOptions は WebAuthnOptions の JSON bytes から
+// PasskeyStartResponse の optional フィールドを設定する。
+// optionsJSON が nil または parse エラーの場合は何もしない（fail-open）。
+func applyWebAuthnLoginOptions(resp *openapi.PasskeyStartResponse, optionsJSON []byte) {
+	if len(optionsJSON) == 0 {
+		return
+	}
+	var opts webAuthnLoginOptionsJSON
+	if err := json.Unmarshal(optionsJSON, &opts); err != nil {
+		return
+	}
+	pk := opts.PublicKey
+	if len(pk.AllowCredentials) > 0 {
+		descriptors := make([]openapi.WebAuthnCredentialDescriptor, 0, len(pk.AllowCredentials))
+		for _, c := range pk.AllowCredentials {
+			d := openapi.WebAuthnCredentialDescriptor{Id: c.ID, Type: c.Type}
+			if len(c.Transports) > 0 {
+				t := c.Transports
+				d.Transports = &t
+			}
+			descriptors = append(descriptors, d)
+		}
+		resp.AllowCredentials = &descriptors
+	}
+	if pk.Timeout != nil {
+		resp.Timeout = pk.Timeout
+	}
+	if pk.UserVerification != "" {
+		uv := pk.UserVerification
+		resp.UserVerification = &uv
+	}
+}
+
+// buildRegistrationUserEntity は webAuthnRegistrationOptionsJSON の User フィールドから
+// openapi.WebAuthnUserEntity を構築する。
+// go-webauthn は User.ID を base64url string として JSON 返す。
+// 非 string 型や空文字の場合は error を返す（fail-closed）。
+func buildRegistrationUserEntity(u struct {
+	ID          any    `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+},
+) (openapi.WebAuthnUserEntity, error) {
+	userID, ok := u.ID.(string)
+	if !ok || userID == "" {
+		return openapi.WebAuthnUserEntity{}, errors.New("webauthn options missing required user.id")
+	}
+	return openapi.WebAuthnUserEntity{Id: userID, Name: u.Name, DisplayName: u.DisplayName}, nil
+}
+
+// buildCredentialDescriptors は webAuthnRegistrationOptionsJSON の ExcludeCredentials から
+// []openapi.WebAuthnCredentialDescriptor を構築する。
+func buildCredentialDescriptors(raw []struct {
+	ID         string   `json:"id"`
+	Type       string   `json:"type"`
+	Transports []string `json:"transports,omitempty"`
+},
+) []openapi.WebAuthnCredentialDescriptor {
+	out := make([]openapi.WebAuthnCredentialDescriptor, 0, len(raw))
+	for _, c := range raw {
+		d := openapi.WebAuthnCredentialDescriptor{Id: c.ID, Type: c.Type}
+		if len(c.Transports) > 0 {
+			t := c.Transports
+			d.Transports = &t
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
+// applyWebAuthnRegistrationOptions は WebAuthnOptions の JSON bytes から
+// PasskeyAddStartResponse のフィールドを設定する。
+// optionsJSON が nil・parse エラー・必須フィールド（user / pubKeyCredParams）欠落の場合は
+// error を返す（fail-closed）。
+func applyWebAuthnRegistrationOptions(resp *openapi.PasskeyAddStartResponse, optionsJSON []byte) error {
+	if len(optionsJSON) == 0 {
+		return errors.New("webauthn options are empty")
+	}
+	var opts webAuthnRegistrationOptionsJSON
+	if err := json.Unmarshal(optionsJSON, &opts); err != nil {
+		return fmt.Errorf("failed to parse webauthn options: %w", err)
+	}
+	pk := opts.PublicKey
+
+	if pk.RP.Name == "" {
+		return errors.New("webauthn options missing required rp.name")
+	}
+	resp.RpName = pk.RP.Name
+
+	if pk.User.Name == "" {
+		return errors.New("webauthn options missing required user.name")
+	}
+	if pk.User.DisplayName == "" {
+		return errors.New("webauthn options missing required user.displayName")
+	}
+	userEntity, err := buildRegistrationUserEntity(pk.User)
+	if err != nil {
+		return err
+	}
+	resp.User = userEntity
+
+	if len(pk.PubKeyCredParams) == 0 {
+		return errors.New("webauthn options missing required pubKeyCredParams")
+	}
+	params := make([]openapi.WebAuthnCredentialParameter, 0, len(pk.PubKeyCredParams))
+	for _, p := range pk.PubKeyCredParams {
+		params = append(params, openapi.WebAuthnCredentialParameter{Type: p.Type, Alg: p.Alg})
+	}
+	resp.PubKeyCredParams = params
+
+	if len(pk.ExcludeCredentials) > 0 {
+		descriptors := buildCredentialDescriptors(pk.ExcludeCredentials)
+		resp.ExcludeCredentials = &descriptors
+	}
+	if pk.Attestation != "" {
+		att := pk.Attestation
+		resp.Attestation = &att
+	}
+	if pk.Timeout != nil {
+		resp.Timeout = pk.Timeout
+	}
+	if pk.UserVerification != "" {
+		uv := pk.UserVerification
+		resp.UserVerification = &uv
+	}
+	return nil
 }

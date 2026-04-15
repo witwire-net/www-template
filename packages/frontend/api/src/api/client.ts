@@ -11,11 +11,14 @@ import {
   type PasskeyItem,
   type PasskeyListResponse,
   type PasskeyOtpResponse,
+  type PasskeyRegisterStartRequest,
   type PasskeyStartResponse,
   type RecoveryAcceptedResponse,
   type RecoveryConsumeResponse,
   type StatusResponse,
   type UlidId,
+  type WebAuthnAssertionCredential,
+  type WebAuthnAttestationCredential,
 } from '../sdk';
 
 import type { Status } from '../types';
@@ -68,8 +71,10 @@ const authApi = {
     const operationError = response as AuthOperationError;
     throw new Error(operationError.data.error);
   },
-  finishPasskeyAuthentication: async (credential: string, options?: RequestInit) =>
-    sdk.auth.finishPasskeyAuthentication({ credential }, options),
+  finishPasskeyAuthentication: async (
+    credential: WebAuthnAssertionCredential,
+    options?: RequestInit
+  ) => sdk.auth.finishPasskeyAuthentication({ credential }, options),
   requestPasskeyRecovery: async (
     email: string,
     options?: RequestInit
@@ -87,16 +92,24 @@ const authApi = {
     options?: RequestInit
   ): Promise<AuthSuccess<RecoveryConsumeResponse, 200> | AuthOperationError | AuthFailure> =>
     sdk.auth.consumeRecoveryToken({ token }, options),
+  startRecoveryPasskeyRegistration: async (
+    recoverySession: string,
+    options?: RequestInit
+  ): Promise<AuthSuccess<PasskeyAddStartResponse, 200> | AuthOperationError | AuthFailure> => {
+    const payload: PasskeyRegisterStartRequest = { recovery_session: recoverySession };
+    const response = await sdk.auth.startPasskeyRegistration(payload, options);
+    return response as AuthSuccess<PasskeyAddStartResponse, 200> | AuthOperationError | AuthFailure;
+  },
   registerRecoveryPasskey: async (
     recoverySession: string,
-    credential: string,
+    credential: WebAuthnAttestationCredential,
     options?: RequestInit
   ) => sdk.auth.registerPasskey({ recovery_session: recoverySession, credential }, options),
   toFailureClassification: (failure: AuthFailureResponse): AuthFailureClassification =>
     failure.error,
   toSessionSummary: (session: AuthSessionResponse): AuthSessionResponse => session,
 
-  // Passkey management (authenticated surface: /api/v1/app/passkeys)
+  // Passkey management (authenticated surface: /api/v1/passkeys)
   listPasskeys: async (
     options?: RequestInit
   ): Promise<AuthSuccess<PasskeyListResponse, 200> | AuthFailure> => sdk.auth.listPasskeys(options),
@@ -105,7 +118,7 @@ const authApi = {
   ): Promise<AuthSuccess<PasskeyAddStartResponse, 200> | AuthFailure> =>
     sdk.auth.startPasskeyAddition(options),
   finishPasskeyAddition: async (
-    credential: string,
+    credential: WebAuthnAttestationCredential,
     options?: RequestInit
   ): Promise<AuthSuccess<PasskeyListResponse, 200> | AuthFailure> => {
     const response = await sdk.auth.finishPasskeyAddition({ credential }, options);
@@ -150,7 +163,7 @@ const authApi = {
   },
   finishPasskeyAdditionByOtp: async (
     otp: string,
-    credential: string,
+    credential: WebAuthnAttestationCredential,
     options?: RequestInit
   ): Promise<void> => {
     const response = await sdk.auth.finishPasskeyAdditionByOtp({ otp, credential }, options);

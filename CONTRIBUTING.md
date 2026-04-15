@@ -4,7 +4,7 @@
 
 - Node.js 24.12+
 - pnpm 10.27+
-- Go 1.26.1+
+- Go 1.26.2+
 - backend 実行には `DATABASE_URL`, `VALKEY_URL`, `OPENSEARCH_URL`, `R2_ENDPOINT`, `R2_REGION`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `MAIL_FROM_ADDRESS`
 
 ## 基本フロー
@@ -29,9 +29,9 @@
 
 ## Go backend ルール
 
-- public surface は `/api/v1/*`
-- runtime public surface baseline は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`
-- app surface は `/api/v1/*`（`/api/v1/auth/*` を除く）
+- public surface は `/api/v1/auth/*`（`/api/v1/auth/logout` を除く）および `/api/v1/status`
+- runtime public surface baseline は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register/start`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`, `/api/v1/auth/passkey/add/start`, `/api/v1/auth/passkey/add/finish`
+- app surface（bearer 必須）は `/api/v1/passkeys/*` および `/api/v1/auth/logout`
 - app surface は `Authorization: Bearer <token>` 境界を必須にする
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` を必須にする
 - OpenAPI は Spectral lint で path policy と bearer security declaration を検証する

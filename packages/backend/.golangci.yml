@@ -82,6 +82,8 @@ linters-settings:
           - internal/app/*.go
         allow:
           - $gostd
+          - github.com/go-webauthn/webauthn
+          - github.com/go-webauthn/webauthn/protocol
           - github.com/oklog/ulid/v2
           - www-template/packages/backend/internal/app
           - www-template/packages/backend/internal/domain

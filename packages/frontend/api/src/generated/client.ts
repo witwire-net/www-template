@@ -37,9 +37,19 @@ export interface ErrorResponse {
   error: string;
 }
 
-export interface InvitationPasskeyRegisterRequest {
+/**
+ * Finish passkey registration ceremony using an invitation session.
+ */
+export interface InvitationPasskeyFinishRequest {
   invitation_session: UlidId;
-  credential: string;
+  credential: WebAuthnAttestationCredential;
+}
+
+/**
+ * Start passkey registration ceremony using an invitation session.
+ */
+export interface InvitationPasskeyStartRequest {
+  invitation_session: UlidId;
 }
 
 export interface LogoutResponse {
@@ -49,7 +59,7 @@ export interface LogoutResponse {
 
 export interface PasskeyAddByOtpFinishRequest {
   otp: string;
-  credential: string;
+  credential: WebAuthnAttestationCredential;
 }
 
 export interface PasskeyAddByOtpStartRequest {
@@ -57,17 +67,32 @@ export interface PasskeyAddByOtpStartRequest {
 }
 
 export interface PasskeyAddFinishRequest {
-  credential: string;
+  credential: WebAuthnAttestationCredential;
 }
 
+/**
+ * WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration.
+ */
 export interface PasskeyAddStartResponse {
   requestId: UlidId;
+  /** base64url-encoded challenge bytes issued by the server. */
   challenge: string;
   rpId: string;
+  /** Relying Party display name. */
+  rpName: string;
+  /** User entity (id is base64url-encoded bytes). */
+  user: WebAuthnUserEntity;
+  /** Supported public key credential algorithms. */
+  pubKeyCredParams: WebAuthnCredentialParameter[];
+  /** Timeout in milliseconds suggested by the server. */
+  timeout?: number;
+  excludeCredentials?: WebAuthnCredentialDescriptor[];
+  userVerification?: string;
+  attestation?: string;
 }
 
 export interface PasskeyFinishRequest {
-  credential: string;
+  credential: WebAuthnAssertionCredential;
 }
 
 export interface PasskeyItem {
@@ -86,18 +111,35 @@ export interface PasskeyOtpResponse {
   otp: string;
 }
 
-export type PasskeyRegisterRequest =
-  | RecoveryPasskeyRegisterRequest
-  | InvitationPasskeyRegisterRequest;
+/**
+ * Finish request for passkey register — exactly one selector must be present.
+ */
+export type PasskeyRegisterRequest = RecoveryPasskeyFinishRequest | InvitationPasskeyFinishRequest;
+
+/**
+ * Start request for passkey registration via recovery session.
+ */
+export interface PasskeyRegisterStartRequest {
+  recovery_session: UlidId;
+}
 
 export interface PasskeyStartRequest {
   identifier: string;
 }
 
+/**
+ * WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin.
+ */
 export interface PasskeyStartResponse {
   requestId: UlidId;
+  /** base64url-encoded challenge bytes issued by the server. */
   challenge: string;
   rpId: string;
+  /** Timeout in milliseconds suggested by the server. */
+  timeout?: number;
+  /** Allowed credential descriptors (empty for usernameless flows). */
+  allowCredentials?: WebAuthnCredentialDescriptor[];
+  userVerification?: string;
 }
 
 export interface RecoveryAcceptedResponse {
@@ -113,13 +155,24 @@ export interface RecoveryConsumeResponse {
   requestId: UlidId;
   recoveryTokenId: UlidId;
   recoverySessionId: UlidId;
+  /** Alias of recoverySessionId for client convenience. */
   recovery_session: UlidId;
   expiresAt: string;
 }
 
-export interface RecoveryPasskeyRegisterRequest {
+/**
+ * Finish passkey registration ceremony using a recovery session.
+ */
+export interface RecoveryPasskeyFinishRequest {
   recovery_session: UlidId;
-  credential: string;
+  credential: WebAuthnAttestationCredential;
+}
+
+/**
+ * Start passkey registration ceremony using a recovery session.
+ */
+export interface RecoveryPasskeyStartRequest {
+  recovery_session: UlidId;
 }
 
 export interface RecoveryRequest {
@@ -135,6 +188,90 @@ export interface StatusResponse {
  * Canonical ULID string used for auth-owned resource and correlation identifiers.
  */
 export type UlidId = string;
+
+/**
+ * WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
+ */
+export interface WebAuthnAssertionCredential {
+  id: string;
+  rawId: string;
+  type: string;
+  response: WebAuthnAssertionResponse;
+  authenticatorAttachment?: string;
+}
+
+/**
+ * WebAuthn AuthenticatorAssertionResponse (login).
+ */
+export interface WebAuthnAssertionResponse {
+  /** base64url-encoded clientDataJSON. */
+  clientDataJSON: string;
+  /** base64url-encoded authenticatorData. */
+  authenticatorData: string;
+  /** base64url-encoded signature. */
+  signature: string;
+  /** base64url-encoded userHandle (optional). */
+  userHandle?: string;
+}
+
+/**
+ * WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
+ */
+export interface WebAuthnAttestationCredential {
+  id: string;
+  rawId: string;
+  type: string;
+  response: WebAuthnAttestationResponse;
+  authenticatorAttachment?: string;
+}
+
+/**
+ * WebAuthn AuthenticatorAttestationResponse (registration).
+ */
+export interface WebAuthnAttestationResponse {
+  /** base64url-encoded clientDataJSON. */
+  clientDataJSON: string;
+  /** base64url-encoded attestationObject. */
+  attestationObject: string;
+  transports?: string[];
+}
+
+/**
+ * WebAuthn AuthenticatorResponse inner object.
+ */
+export interface WebAuthnAuthenticatorResponse {
+  /** base64url-encoded clientDataJSON. */
+  clientDataJSON: string;
+}
+
+/**
+ * Credential descriptor used in allowCredentials and excludeCredentials lists.
+ */
+export interface WebAuthnCredentialDescriptor {
+  type: string;
+  /** base64url-encoded credential ID. */
+  id: string;
+  transports?: string[];
+}
+
+/**
+ * WebAuthn public key credential parameter (algorithm descriptor).
+ */
+export interface WebAuthnCredentialParameter {
+  type: string;
+  /** COSE algorithm identifier. */
+  alg: number;
+}
+
+/**
+ * WebAuthn user entity (id is base64url-encoded bytes).
+ */
+export interface WebAuthnUserEntity {
+  /** base64url-encoded user ID bytes. */
+  id: string;
+  name: string;
+  displayName: string;
+}
 
 /**
  * @summary Revokes the current bearer session
@@ -339,7 +476,7 @@ export const finishPasskeyAuthentication = async (
 };
 
 /**
- * @summary Registers or re-registers a passkey from exactly one auth selector
+ * @summary Finishes a passkey registration ceremony and issues a session
  */
 export type registerPasskeyResponse200 = {
   data: AuthSessionResponse;
@@ -387,6 +524,59 @@ export const registerPasskey = async (
 
   const data: registerPasskeyResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as registerPasskeyResponse;
+};
+
+/**
+ * @summary Starts a passkey registration ceremony using a recovery session
+ */
+export type startPasskeyRegistrationResponse200 = {
+  data: PasskeyAddStartResponse;
+  status: 200;
+};
+
+export type startPasskeyRegistrationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type startPasskeyRegistrationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type startPasskeyRegistrationResponseSuccess = startPasskeyRegistrationResponse200 & {
+  headers: Headers;
+};
+export type startPasskeyRegistrationResponseError = (
+  | startPasskeyRegistrationResponse400
+  | startPasskeyRegistrationResponse503
+) & {
+  headers: Headers;
+};
+
+export type startPasskeyRegistrationResponse =
+  | startPasskeyRegistrationResponseSuccess
+  | startPasskeyRegistrationResponseError;
+
+export const getStartPasskeyRegistrationUrl = () => {
+  return `/api/v1/auth/passkey/register/start`;
+};
+
+export const startPasskeyRegistration = async (
+  passkeyRegisterStartRequest: PasskeyRegisterStartRequest,
+  options?: RequestInit
+): Promise<startPasskeyRegistrationResponse> => {
+  const res = await fetch(getStartPasskeyRegistrationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passkeyRegisterStartRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startPasskeyRegistrationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startPasskeyRegistrationResponse;
 };
 
 /**

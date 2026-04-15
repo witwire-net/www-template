@@ -14,21 +14,8 @@
     event.preventDefault();
     localError = null;
 
-    // Step 1: Start OTP flow to get challenge
-    let challenge: { requestId: string; challenge: string; rpId: string } | null;
     try {
-      challenge = await actions.start(otp);
-    } catch {
-      localError = 'OTP が無効または期限切れです。';
-      return;
-    }
-    if (challenge === null) return;
-
-    // Step 2: Build credential envelope and finish
-    const credential = `${challenge.requestId}::${challenge.challenge}`;
-
-    try {
-      await actions.finish(otp, credential);
+      await actions.addPasskeyByOtp(otp);
     } catch {
       localError = 'パスキーの登録を完了できませんでした。';
     }

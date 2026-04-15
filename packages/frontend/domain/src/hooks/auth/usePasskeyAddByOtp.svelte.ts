@@ -1,5 +1,7 @@
 import { authApi } from '@www-template/api';
 
+import { createWebAuthnAttestation, normalizeWebAuthnError } from '../../auth';
+
 import type { PasskeyAddByOtpState } from 'types';
 
 interface PasskeyAddByOtpData {
@@ -9,8 +11,7 @@ interface PasskeyAddByOtpData {
 }
 
 interface PasskeyAddByOtpActions {
-  start: (otp: string) => Promise<{ requestId: string; challenge: string; rpId: string } | null>;
-  finish: (otp: string, credential: string) => Promise<void>;
+  addPasskeyByOtp: (otp: string) => Promise<void>;
 }
 
 /** 新端末でのパスキー追加（OTP handoff）フローを扱う domain composable。 */
@@ -22,28 +23,25 @@ function usePasskeyAddByOtp(): { data: PasskeyAddByOtpData; actions: PasskeyAddB
   });
 
   const actions: PasskeyAddByOtpActions = {
-    start: async (otp: string) => {
+    addPasskeyByOtp: async (otp: string) => {
       state.loading = true;
       state.error = null;
       state.done = false;
 
       try {
-        const result = await authApi.startPasskeyAdditionByOtp(otp);
-        return result;
-      } catch (error: unknown) {
-        state.error =
-          error instanceof Error ? error.message : 'パスキー追加を開始できませんでした。';
-        return null;
-      } finally {
-        state.loading = false;
-      }
-    },
+        // Step 1: Start — get WebAuthn creation options from server
+        const startOptions = await authApi.startPasskeyAdditionByOtp(otp);
 
-    finish: async (otp: string, credential: string) => {
-      state.loading = true;
-      state.error = null;
+        // Step 2: Call browser WebAuthn API — normalize browser/device errors only
+        let credential;
+        try {
+          credential = await createWebAuthnAttestation(startOptions);
+        } catch (webAuthnError: unknown) {
+          state.error = normalizeWebAuthnError(webAuthnError);
+          return;
+        }
 
-      try {
+        // Step 3: Finish — send attestation to server
         await authApi.finishPasskeyAdditionByOtp(otp, credential);
         state.done = true;
       } catch (error: unknown) {

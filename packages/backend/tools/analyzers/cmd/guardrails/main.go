@@ -31,6 +31,7 @@ var allowedInternalImports = map[string][]string{
 }
 
 var allowedExternalImports = map[string][]string{
+	"app":         {"github.com/go-webauthn/webauthn/webauthn", "github.com/go-webauthn/webauthn/protocol"},
 	"http":        {"github.com/gin-contrib/cors", "github.com/gin-gonic/gin", "github.com/oapi-codegen/runtime/types"},
 	"persistence": {"github.com/redis/go-redis/v9", "gorm.io/driver/postgres", "gorm.io/gorm"},
 	"types":       {"github.com/oklog/ulid/v2"},

@@ -2,6 +2,7 @@ package usecases_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -170,7 +171,7 @@ func (r *stubAccountRepo) FindByEmail(_ context.Context, email string) (domain.A
 	}
 	return emptyAuthAccount(), domain.ErrAuthAccountNotFound
 }
-func (r *stubAccountRepo) AddPasskey(_ context.Context, accountID string, credentialID string, handle string) (domain.AuthAccount, error) {
+func (r *stubAccountRepo) AddPasskey(_ context.Context, accountID string, credentialID string, handle string, _ domain.WebAuthnCredentialData) (domain.AuthAccount, error) {
 	a, ok := r.accounts[accountID]
 	if !ok {
 		return emptyAuthAccount(), domain.ErrAuthAccountNotFound
@@ -205,6 +206,39 @@ func (r *stubAccountRepo) DeletePasskeyByID(_ context.Context, accountID string,
 		}
 	}
 	return domain.ErrAuthAccountNotFound
+}
+
+func (r *stubAccountRepo) FindWebAuthnCredential(_ context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
+	for _, a := range r.accounts {
+		for _, c := range a.Credentials() {
+			if c.CredentialHandle() == handle {
+				return domain.ReconstitueWebAuthnStoredCredential(handle, nil, 0, nil, false, false, nil), nil
+			}
+		}
+	}
+	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthAccountNotFound
+}
+
+func (r *stubAccountRepo) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
+	return nil
+}
+
+// trackingAccountRepo は UpdateWebAuthnCredentialState の呼び出しを記録する stubAccountRepo の拡張。
+type trackingAccountRepo struct {
+	stubAccountRepo
+	updateStateCallCount int
+	updateStateErr       error
+}
+
+func newTrackingAccountRepo(account domain.AuthAccount) *trackingAccountRepo {
+	return &trackingAccountRepo{
+		stubAccountRepo: stubAccountRepo{accounts: map[string]domain.AuthAccount{account.AccountID(): account}},
+	}
+}
+
+func (r *trackingAccountRepo) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
+	r.updateStateCallCount++
+	return r.updateStateErr
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -323,6 +357,282 @@ func newTestAuthService(stateRepo usecases.AuthStateRepository, accountRepo usec
 	})
 }
 
+// ─── MockWebAuthnProvider ─────────────────────────────────────────────────────
+
+// mockWebAuthnProvider は WebAuthnProvider interface のテスト用スタブ。
+// テストごとに BeginLogin/FinishLogin/BeginRegistration/FinishRegistration の
+// 戻り値・エラーをカスタマイズできる。
+type mockWebAuthnProvider struct {
+	beginLoginFn         func(ctx context.Context, identifier string) (string, []byte, error)
+	finishLoginFn        func(ctx context.Context, challengeKey string, credential usecases.WebAuthnAssertionCredentialDTO, lookupCredential func(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error)
+	beginRegistrationFn  func(ctx context.Context, accountID string) (string, []byte, error)
+	finishRegistrationFn func(ctx context.Context, challengeKey string, accountID string, credential usecases.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error)
+}
+
+func (m *mockWebAuthnProvider) BeginLogin(ctx context.Context, identifier string) (string, []byte, error) {
+	if m.beginLoginFn != nil {
+		return m.beginLoginFn(ctx, identifier)
+	}
+	return "challenge-key-login", []byte(`{"challenge":"challenge-key-login"}`), nil
+}
+
+func (m *mockWebAuthnProvider) FinishLogin(ctx context.Context, challengeKey string, credential usecases.WebAuthnAssertionCredentialDTO, lookupCredential func(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error) {
+	if m.finishLoginFn != nil {
+		return m.finishLoginFn(ctx, challengeKey, credential, lookupCredential)
+	}
+	return "handle-one", 1, false, true, nil
+}
+
+func (m *mockWebAuthnProvider) BeginRegistration(ctx context.Context, accountID string) (string, []byte, error) {
+	if m.beginRegistrationFn != nil {
+		return m.beginRegistrationFn(ctx, accountID)
+	}
+	return "challenge-key-reg", []byte(`{"challenge":"challenge-key-reg"}`), nil
+}
+
+func (m *mockWebAuthnProvider) FinishRegistration(ctx context.Context, challengeKey string, accountID string, credential usecases.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
+	if m.finishRegistrationFn != nil {
+		return m.finishRegistrationFn(ctx, challengeKey, accountID, credential)
+	}
+	return credential.ID, domain.ZeroWebAuthnCredentialData(), nil
+}
+
+// newTestAuthServiceWithProvider は WebAuthn provider を注入した AuthService を返す。
+func newTestAuthServiceWithProvider(stateRepo usecases.AuthStateRepository, accountRepo usecases.AuthAccountRepository, provider usecases.WebAuthnProvider) *usecases.AuthService {
+	svc := newTestAuthService(stateRepo, accountRepo)
+	svc.UseWebAuthnProvider(provider)
+	return svc
+}
+
+// ─── Provider-on tests ────────────────────────────────────────────────────────
+
+// [AUTH-BE-WA-1] StartPasskeyAuthentication with provider: returns WebAuthnOptions from provider.
+func TestStartPasskeyAuthenticationWithProvider(t *testing.T) {
+	t.Parallel()
+	_, accountRepo := accountWithOnePasskey(t)
+	stateRepo := newStubStateRepo(fixedClock())
+	provider := &mockWebAuthnProvider{
+		beginLoginFn: func(_ context.Context, _ string) (string, []byte, error) {
+			return "ck-login-001", []byte(`{"publicKey":{"challenge":"ck-login-001"}}`), nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	ch, err := svc.StartPasskeyAuthentication(context.Background(), usecases.StartPasskeyAuthenticationInput{
+		Identifier: "user@example.com",
+		ClientIP:   "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("StartPasskeyAuthentication: %v", err)
+	}
+	if ch.Challenge != "ck-login-001" {
+		t.Errorf("expected Challenge=ck-login-001, got %q", ch.Challenge)
+	}
+	if ch.ChallengeID != "ck-login-001" {
+		t.Errorf("expected ChallengeID=ck-login-001, got %q", ch.ChallengeID)
+	}
+	if len(ch.WebAuthnOptions) == 0 {
+		t.Error("expected non-empty WebAuthnOptions")
+	}
+}
+
+// [AUTH-BE-WA-2] FinishPasskeyAuthentication with provider: calls FinishLogin and issues session.
+func TestFinishPasskeyAuthenticationWithProvider(t *testing.T) {
+	t.Parallel()
+	account, accountRepo := accountWithOnePasskey(t)
+	stateRepo := newStubStateRepo(fixedClock())
+
+	// provider は "handle-one" を返す（account に handle-one が登録済み）
+	provider := &mockWebAuthnProvider{
+		finishLoginFn: func(_ context.Context, _ string, _ usecases.WebAuthnAssertionCredentialDTO, lookupFn func(context.Context, string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error) {
+			// lookupCredential が正しく渡されていることを確認
+			if lookupFn == nil {
+				t.Error("lookupCredential callback must not be nil")
+			}
+			return "handle-one", 1, false, true, nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	result, err := svc.FinishPasskeyAuthentication(context.Background(), usecases.FinishPasskeyAuthenticationInput{
+		Credential: usecases.WebAuthnAssertionCredentialDTO{
+			ID:    "handle-one",
+			RawID: "handle-one",
+			Type:  "public-key",
+			Response: usecases.WebAuthnAssertionResponseDTO{
+				ClientDataJSON:    "clientdata",
+				AuthenticatorData: "authdata",
+				Signature:         "sig",
+			},
+		},
+		ClientIP: "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("FinishPasskeyAuthentication: %v", err)
+	}
+	if result.AccountID != account.AccountID() {
+		t.Errorf("expected AccountID=%q, got %q", account.AccountID(), result.AccountID)
+	}
+	if result.SessionToken == "" {
+		t.Error("expected non-empty SessionToken")
+	}
+}
+
+// [AUTH-BE-WA-3] FinishPasskeyAuthentication with provider: FinishLogin error → ErrBadRequest.
+func TestFinishPasskeyAuthenticationWithProviderError(t *testing.T) {
+	t.Parallel()
+	_, accountRepo := accountWithOnePasskey(t)
+	stateRepo := newStubStateRepo(fixedClock())
+
+	provider := &mockWebAuthnProvider{
+		finishLoginFn: func(_ context.Context, _ string, _ usecases.WebAuthnAssertionCredentialDTO, _ func(context.Context, string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error) {
+			return "", 0, false, false, context.DeadlineExceeded // simulate provider error
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	_, err := svc.FinishPasskeyAuthentication(context.Background(), usecases.FinishPasskeyAuthenticationInput{
+		Credential: usecases.WebAuthnAssertionCredentialDTO{
+			ID:       "bad-handle",
+			Response: usecases.WebAuthnAssertionResponseDTO{ClientDataJSON: "x"},
+		},
+		ClientIP: "127.0.0.1",
+	})
+	if err != usecases.ErrBadRequest {
+		t.Fatalf("expected ErrBadRequest, got %v", err)
+	}
+}
+
+// [AUTH-BE-WA-4] StartPasskeyRegistration with provider: returns WebAuthnOptions.
+func TestStartPasskeyRegistrationWithProvider(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	_, accountRepo := accountWithOnePasskey(t)
+
+	// recovery session をセットアップ
+	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("NewRecoverySession: %v", err)
+	}
+	stateRepo.recoverySessions[recoverySession.ID()] = recoverySession
+
+	provider := &mockWebAuthnProvider{
+		beginRegistrationFn: func(_ context.Context, _ string) (string, []byte, error) {
+			return "ck-reg-001", []byte(`{"publicKey":{"challenge":"ck-reg-001"}}`), nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	ch, err := svc.StartPasskeyRegistration(context.Background(), usecases.StartPasskeyRegistrationInput{
+		RecoverySession: recoverySession.ID(),
+		ClientIP:        "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("StartPasskeyRegistration: %v", err)
+	}
+	if ch.Challenge != "ck-reg-001" {
+		t.Errorf("expected Challenge=ck-reg-001, got %q", ch.Challenge)
+	}
+	if len(ch.WebAuthnOptions) == 0 {
+		t.Error("expected non-empty WebAuthnOptions")
+	}
+}
+
+// [AUTH-BE-WA-5] RegisterPasskey with provider: FinishRegistration resolves handle and stores credential.
+func TestRegisterPasskeyWithProvider(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	_, accountRepo := accountWithOnePasskey(t)
+
+	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("NewRecoverySession: %v", err)
+	}
+	stateRepo.recoverySessions[recoverySession.ID()] = recoverySession
+
+	provider := &mockWebAuthnProvider{
+		finishRegistrationFn: func(_ context.Context, _ string, _ string, cred usecases.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
+			return "new-handle-webauthn", domain.NewWebAuthnCredentialData([]byte("pubkey"), 0, make([]byte, 16), false, false, nil), nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	result, err := svc.RegisterPasskey(context.Background(), usecases.RegisterPasskeyInput{
+		RecoverySession: recoverySession.ID(),
+		Credential: usecases.WebAuthnAttestationCredentialDTO{
+			ID:    "new-handle-webauthn",
+			RawID: "new-handle-webauthn",
+			Type:  "public-key",
+			Response: usecases.WebAuthnAttestationResponseDTO{
+				ClientDataJSON:    "clientdata",
+				AttestationObject: "attestation",
+			},
+		},
+		ClientIP: "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("RegisterPasskey: %v", err)
+	}
+	if result.AccountID != accountID {
+		t.Errorf("expected AccountID=%q, got %q", accountID, result.AccountID)
+	}
+}
+
+// [AUTH-BE-WA-6] StartAddPasskey with provider: returns WebAuthnOptions.
+func TestStartAddPasskeyWithProvider(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	_, accountRepo := accountWithOnePasskey(t)
+
+	provider := &mockWebAuthnProvider{
+		beginRegistrationFn: func(_ context.Context, _ string) (string, []byte, error) {
+			return "ck-add-001", []byte(`{"publicKey":{"challenge":"ck-add-001"}}`), nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	ch, err := svc.StartAddPasskey(context.Background(), "01ARZ3NDEKTSV4RRFFQ69G5FAW")
+	if err != nil {
+		t.Fatalf("StartAddPasskey: %v", err)
+	}
+	if ch.Challenge != "ck-add-001" {
+		t.Errorf("expected Challenge=ck-add-001, got %q", ch.Challenge)
+	}
+}
+
+// [AUTH-BE-WA-7] FinishAddPasskey with provider: adds new passkey without challenge lookup.
+func TestFinishAddPasskeyWithProvider(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	_, accountRepo := accountWithOnePasskey(t)
+
+	provider := &mockWebAuthnProvider{
+		finishRegistrationFn: func(_ context.Context, _ string, _ string, _ usecases.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
+			return "handle-added", domain.ZeroWebAuthnCredentialData(), nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	creds, err := svc.FinishAddPasskey(context.Background(), "01ARZ3NDEKTSV4RRFFQ69G5FAW", usecases.WebAuthnAttestationCredentialDTO{
+		ID:    "handle-added",
+		RawID: "handle-added",
+		Type:  "public-key",
+		Response: usecases.WebAuthnAttestationResponseDTO{
+			ClientDataJSON:    "clientdata",
+			AttestationObject: "attestation",
+		},
+	})
+	if err != nil {
+		t.Fatalf("FinishAddPasskey: %v", err)
+	}
+	// 元の 1 件 + 新規 1 件 = 2 件
+	if len(creds) != 2 {
+		t.Errorf("expected 2 credentials, got %d", len(creds))
+	}
+}
+
 // ─── Task 4.7: DeletePasskey – last passkey cannot be deleted ─────────────────
 
 // [AUTH-BE-4.7] DeletePasskey が最終 1 件のとき ErrLastPasskeyCannotBeDeleted を返す
@@ -418,7 +728,7 @@ func TestFinishAddPasskeyByOtpRejectsConsumedOtp(t *testing.T) {
 	t.Parallel()
 	stateRepo := newStubStateRepo(fixedClock())
 	_, accountRepo := accountWithOnePasskey(t)
-	svc := newTestAuthService(stateRepo, accountRepo)
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, &mockWebAuthnProvider{})
 
 	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
@@ -435,8 +745,15 @@ func TestFinishAddPasskeyByOtpRejectsConsumedOtp(t *testing.T) {
 	}
 
 	// Step 3: 1 回目の FinishAddPasskeyByOtp を成功させる
-	// credential は "credentialHandle::challengeValue" の形式
-	credential := "handle-new::" + passkeyChallenge.Challenge
+	// legacy path: ID に handle、Response.ClientDataJSON に challenge を格納
+	credential := usecases.WebAuthnAttestationCredentialDTO{
+		ID:    "handle-new",
+		RawID: "handle-new",
+		Type:  "public-key",
+		Response: usecases.WebAuthnAttestationResponseDTO{
+			ClientDataJSON: passkeyChallenge.Challenge,
+		},
+	}
 	if err := svc.FinishAddPasskeyByOtp(context.Background(), otp, credential); err != nil {
 		t.Fatalf("FinishAddPasskeyByOtp (1st call) should succeed, got: %v", err)
 	}
@@ -449,15 +766,35 @@ func TestFinishAddPasskeyByOtpRejectsConsumedOtp(t *testing.T) {
 	}
 }
 
-// ─── Regression: challenge mismatch does not consume another account's challenge ─
+// ─── Regression: challenge mismatch protects account B's session ─────────────
 
 // [AUTH-BE-REG-1] FinishAddPasskeyByOtp に別 OTP セッションの challengeValue を渡した場合、
-// ErrBadRequest を返し、正規の challenge（C1 と C2 の両方）は ConsumeChallenge されない（差し替え攻撃への回帰テスト）。
+// ErrBadRequest を返す（差し替え攻撃への回帰テスト）。
+// 仕様: otpA の OTP/challenge は消費されるが、otpB 側のセッションは一切影響を受けない。
 func TestFinishAddPasskeyByOtpRejectsChallengeMismatch(t *testing.T) {
 	t.Parallel()
 	stateRepo := newStubStateRepo(fixedClock())
 	_, accountRepo := accountWithOnePasskey(t)
-	svc := newTestAuthService(stateRepo, accountRepo)
+
+	// アカウント A と B でそれぞれ異なる challengeKey を返すように beginRegistrationFn をカスタマイズする。
+	// これにより challengeA.Challenge != challengeB.Challenge となり、
+	// provider の FinishRegistration で challenge mismatch を検出できる。
+	callCount := 0
+	provider := &mockWebAuthnProvider{
+		beginRegistrationFn: func(_ context.Context, _ string) (string, []byte, error) {
+			callCount++
+			key := fmt.Sprintf("challenge-key-reg-%d", callCount)
+			return key, []byte(`{"challenge":"` + key + `"}`), nil
+		},
+		finishRegistrationFn: func(_ context.Context, challengeKey string, _ string, credential usecases.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
+			// storedChallengeKey と credential の ClientDataJSON が一致しない場合は mismatch エラー
+			if challengeKey != "" && credential.Response.ClientDataJSON != challengeKey {
+				return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("challenge mismatch: stored=%q, got=%q", challengeKey, credential.Response.ClientDataJSON)
+			}
+			return credential.ID, domain.ZeroWebAuthnCredentialData(), nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
 
 	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
@@ -470,6 +807,7 @@ func TestFinishAddPasskeyByOtpRejectsChallengeMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartAddPasskeyByOtp A: %v", err)
 	}
+	_ = challengeA // challengeA は使用しない（チャレンジが生成されたことの確認のみ）
 
 	// Step 2: 別のアカウントで OTP を発行し、チャレンジ C2 を取得する
 	otherAccountID := "01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -482,31 +820,143 @@ func TestFinishAddPasskeyByOtpRejectsChallengeMismatch(t *testing.T) {
 		t.Fatalf("StartAddPasskeyByOtp B: %v", err)
 	}
 
-	// mismatch 前に challenge の数を記録する（C1 と C2 の 2 件が stateRepo.challenges に存在する）
-	challengeCountBefore := len(stateRepo.challenges)
-	if challengeCountBefore != 2 {
-		t.Fatalf("expected 2 challenges before mismatch, got %d", challengeCountBefore)
+	// mismatch 前に otpStore の数を記録する（otpA×2 と otpB×2 の 4 件が存在する）
+	// otpKey(otpA), otpChallengeKey(otpA), otpKey(otpB), otpChallengeKey(otpB)
+	otpStoreCountBefore := len(stateRepo.otpStore)
+	if otpStoreCountBefore != 4 {
+		t.Fatalf("expected 4 otpStore entries before mismatch, got %d", otpStoreCountBefore)
 	}
 
 	// Step 3: account A の OTP を使い、C2（別セッションの challenge）を credential に埋め込んで送る
-	// → challengeValue（A の otpChallengeKey から取得）!= storedChallengeValue（C2）なので ErrBadRequest
-	// → ConsumeChallenge は呼ばれない（早期リターン）
-	mismatchCredential := "handle-new::" + challengeB.Challenge
+	// → provider の FinishRegistration で storedChallengeKey(C1) != credential.ClientDataJSON(C2) なので ErrBadRequest
+	// → otpA と otpChallengeKey(otpA) は消費されるが、otpB と otpChallengeKey(otpB) は残る
+	mismatchCredential := usecases.WebAuthnAttestationCredentialDTO{
+		ID:    "handle-new",
+		RawID: "handle-new",
+		Type:  "public-key",
+		Response: usecases.WebAuthnAttestationResponseDTO{
+			ClientDataJSON: challengeB.Challenge, // mismatch: A の OTP に B の challenge を渡す
+		},
+	}
 	if err := svc.FinishAddPasskeyByOtp(context.Background(), otpA, mismatchCredential); err == nil {
 		t.Fatal("expected ErrBadRequest for challenge mismatch, got nil")
 	} else if err != usecases.ErrBadRequest {
 		t.Fatalf("expected ErrBadRequest, got %v", err)
 	}
 
-	// Step 4: mismatch で早期リターンしたため C1 と C2 は stateRepo.challenges に残っている
-	// （ConsumeChallenge が呼ばれなかったことの証明）
-	if len(stateRepo.challenges) != 2 {
-		t.Fatalf("expected challenges to remain intact after mismatch (got %d, want 2)", len(stateRepo.challenges))
+	// Step 4: otpA 側（OTP と challenge）は消費されており、otpB 側は一切影響を受けていない（差し替え攻撃の影響が波及しないことの確認）
+	// A 側: otpKey(otpA) と otpChallengeKey(otpA) が消費されている
+	if _, otpAexists := stateRepo.otpStore["passkey-otp:"+otpA]; otpAexists {
+		t.Fatal("otpA should be consumed after mismatch attempt (one-time use)")
 	}
-	if _, c1exists := stateRepo.challenges[challengeA.Challenge]; !c1exists {
-		t.Fatal("C1 (account A challenge) should not be consumed after mismatch attempt")
+	if _, c1exists := stateRepo.otpStore["passkey-otp-challenge:"+otpA]; c1exists {
+		t.Fatal("C1 (account A challenge) should be consumed after mismatch attempt")
 	}
-	if _, c2exists := stateRepo.challenges[challengeB.Challenge]; !c2exists {
-		t.Fatal("C2 (other account challenge) should not be consumed after mismatch attempt")
+	// B 側: otpKey(otpB) と otpChallengeKey(otpB) は残っている
+	if _, c2exists := stateRepo.otpStore["passkey-otp-challenge:"+otpB]; !c2exists {
+		t.Fatal("C2 (account B challenge) should not be consumed after A's mismatch attempt")
+	}
+	if _, otpBexists := stateRepo.otpStore["passkey-otp:"+otpB]; !otpBexists {
+		t.Fatal("otpB should not be consumed after A's mismatch attempt")
+	}
+}
+
+// ─── WebAuthn failure lock / error classification tests ──────────────────────
+
+// [AUTH-BE-WA-8] FinishPasskeyAuthentication with provider: FinishLogin error increments failure lock.
+func TestFinishPasskeyAuthenticationWithProviderErrorIncrementsFailureLock(t *testing.T) {
+	t.Parallel()
+	_, accountRepo := accountWithOnePasskey(t)
+	stateRepo := newStubStateRepo(fixedClock())
+
+	provider := &mockWebAuthnProvider{
+		finishLoginFn: func(_ context.Context, _ string, _ usecases.WebAuthnAssertionCredentialDTO, _ func(context.Context, string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error) {
+			return "", 0, false, false, fmt.Errorf("invalid signature")
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	input := usecases.FinishPasskeyAuthenticationInput{
+		Credential: usecases.WebAuthnAssertionCredentialDTO{
+			ID:       "bad-handle",
+			Response: usecases.WebAuthnAssertionResponseDTO{ClientDataJSON: "x"},
+		},
+		ClientIP: "10.0.0.1",
+	}
+	_, err := svc.FinishPasskeyAuthentication(context.Background(), input)
+	if err != usecases.ErrBadRequest {
+		t.Fatalf("expected ErrBadRequest, got %v", err)
+	}
+
+	// failure window カウンタが増加していることを確認
+	// failureLockKey("bad-handle", "10.0.0.1") = "lock:bad-handle:10.0.0.1"
+	// failureWindowKey(lockKey) = "failures:lock:bad-handle:10.0.0.1"
+	lockWindowKey := "failures:lock:bad-handle:10.0.0.1"
+	if stateRepo.counters[lockWindowKey] < 1 {
+		t.Errorf("expected failure counter to be incremented, got %d", stateRepo.counters[lockWindowKey])
+	}
+}
+
+// [AUTH-BE-WA-9] FinishPasskeyAuthentication with provider: ErrAuthStoreUnavailable → ErrInternalError, failure counter NOT incremented.
+func TestFinishPasskeyAuthenticationWithProviderDBOutageReturnsInternalError(t *testing.T) {
+	t.Parallel()
+	_, accountRepo := accountWithOnePasskey(t)
+	stateRepo := newStubStateRepo(fixedClock())
+
+	provider := &mockWebAuthnProvider{
+		finishLoginFn: func(_ context.Context, _ string, _ usecases.WebAuthnAssertionCredentialDTO, _ func(context.Context, string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error) {
+			return "", 0, false, false, domain.ErrAuthStoreUnavailable
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	_, err := svc.FinishPasskeyAuthentication(context.Background(), usecases.FinishPasskeyAuthenticationInput{
+		Credential: usecases.WebAuthnAssertionCredentialDTO{
+			ID:       "some-handle",
+			Response: usecases.WebAuthnAssertionResponseDTO{ClientDataJSON: "x"},
+		},
+		ClientIP: "10.0.0.1",
+	})
+	if err != usecases.ErrInternalError {
+		t.Fatalf("expected ErrInternalError for DB outage, got %v", err)
+	}
+	// DB 障害時は failure counter を加算しない（正当ユーザーを誤ってロックしないため）
+	lockWindowKey := "failures:lock:some-handle:10.0.0.1"
+	if stateRepo.counters[lockWindowKey] != 0 {
+		t.Errorf("expected failure counter NOT to be incremented on DB outage, got %d", stateRepo.counters[lockWindowKey])
+	}
+}
+
+// [AUTH-BE-WA-10] FinishPasskeyAuthentication with provider: signCountUpdated=false skips UpdateWebAuthnCredentialState.
+func TestFinishPasskeyAuthenticationSkipsStateUpdateWhenSignCountNotObtained(t *testing.T) {
+	t.Parallel()
+	account, _ := accountWithOnePasskey(t)
+	accountRepo := newTrackingAccountRepo(account)
+	stateRepo := newStubStateRepo(fixedClock())
+
+	provider := &mockWebAuthnProvider{
+		finishLoginFn: func(_ context.Context, _ string, _ usecases.WebAuthnAssertionCredentialDTO, _ func(context.Context, string) (domain.WebAuthnStoredCredential, error)) (string, uint32, bool, bool, error) {
+			// signCountUpdated = false: updatedCred が nil だったケース
+			return "handle-one", 0, false, false, nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	result, err := svc.FinishPasskeyAuthentication(context.Background(), usecases.FinishPasskeyAuthenticationInput{
+		Credential: usecases.WebAuthnAssertionCredentialDTO{
+			ID:       "handle-one",
+			Response: usecases.WebAuthnAssertionResponseDTO{ClientDataJSON: "clientdata"},
+		},
+		ClientIP: "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("FinishPasskeyAuthentication: %v", err)
+	}
+	if result.AccountID != account.AccountID() {
+		t.Errorf("expected AccountID=%q, got %q", account.AccountID(), result.AccountID)
+	}
+	// signCountUpdated=false なので UpdateWebAuthnCredentialState は呼ばれないはず
+	if accountRepo.updateStateCallCount != 0 {
+		t.Errorf("expected UpdateWebAuthnCredentialState NOT to be called when signCountUpdated=false, got %d calls", accountRepo.updateStateCallCount)
 	}
 }

@@ -1,6 +1,11 @@
 import { authApi } from '@www-template/api';
 
-import { createPasskeyLoginInitialState, toPasskeyErrorMessage } from '../../auth/passkeyState';
+import {
+  createPasskeyLoginInitialState,
+  getWebAuthnAssertion,
+  normalizeWebAuthnError,
+  toPasskeyErrorMessage,
+} from '../../auth';
 
 import { useAuthSession } from './useAuthSession.svelte';
 
@@ -12,10 +17,10 @@ interface PasskeyLoginData {
 
 interface PasskeyLoginActions {
   setIdentifier: (identifier: string) => void;
-  signInWithPasskey: (credential?: string) => Promise<AuthRouteIntent | null>;
+  signInWithPasskey: () => Promise<AuthRouteIntent | null>;
 }
 
-/** passkey start / finish と shared session 更新を扱う domain composable。 */
+/** passkey start / navigator.credentials.get / finish と shared session 更新を扱う domain composable。 */
 function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActions } {
   const state = $state<PasskeyLoginState>(createPasskeyLoginInitialState());
   const authSession = useAuthSession();
@@ -24,11 +29,12 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
     setIdentifier: (identifier) => {
       state.identifier = identifier;
     },
-    signInWithPasskey: async (credential) => {
+    signInWithPasskey: async () => {
       state.isSubmitting = true;
       state.error = null;
 
       try {
+        // Step 1: Start ceremony — get challenge from server
         const startResponse = await authApi.startPasskeyAuthentication(state.identifier.trim());
 
         if (startResponse.status !== 200) {
@@ -41,13 +47,18 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
         state.lastChallengeRequestId = startResponse.data.requestId;
         state.lastCacheControl = startResponse.headers.get('cache-control');
 
-        const finishResponse = await authApi.finishPasskeyAuthentication(
-          credential ??
-            JSON.stringify({
-              requestId: startResponse.data.requestId,
-              challenge: startResponse.data.challenge,
-            })
-        );
+        // Step 2: Call browser WebAuthn API — normalize browser/device errors only
+        let credential;
+        try {
+          credential = await getWebAuthnAssertion(startResponse.data);
+        } catch (webAuthnError: unknown) {
+          state.error = normalizeWebAuthnError(webAuthnError);
+          state.isSubmitting = false;
+          return null;
+        }
+
+        // Step 3: Finish ceremony — send assertion to server
+        const finishResponse = await authApi.finishPasskeyAuthentication(credential);
 
         state.lastCacheControl = finishResponse.headers.get('cache-control');
 

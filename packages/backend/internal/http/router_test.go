@@ -3,6 +3,7 @@ package http
 import (
 	stdhttp "net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ func TestAppSurfaceFallsBackToNotFound(t *testing.T) {
 	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/unknown", nil)
 	challengeRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
 	challenge := decodeJSONBody(t, challengeRecorder)
-	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	finishBody := decodeJSONBody(t, finishRecorder)
 	request.Header.Set("Authorization", "Bearer "+finishBody["sessionToken"].(string))
 	recorder := httptest.NewRecorder()
@@ -70,7 +71,7 @@ func TestAppAuthEndpointSucceedsWithBearerToken(t *testing.T) {
 	}
 	challenge := decodeJSONBody(t, challengeRecorder)
 
-	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]string{"credential": credentialEnvelope("existing-credential", challengeValue(challenge))}, "")
+	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	if finishRecorder.Code != stdhttp.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", finishRecorder.Code, finishRecorder.Body.String())
 	}
@@ -92,32 +93,55 @@ func TestRoutePolicy(t *testing.T) {
 
 	router := newTestRouter(t)
 	allowedPublicRoutes := map[string]struct{}{
-		"/api/v1/status":                  {},
-		"/api/v1/auth/passkey/start":      {},
-		"/api/v1/auth/passkey/finish":     {},
-		"/api/v1/auth/passkey/register":   {},
-		"/api/v1/auth/recovery":           {},
-		"/api/v1/auth/recovery/consume":   {},
-		"/api/v1/auth/passkey/add/start":  {},
-		"/api/v1/auth/passkey/add/finish": {},
+		"GET /api/v1/status":                       {},
+		"POST /api/v1/auth/passkey/start":          {},
+		"POST /api/v1/auth/passkey/finish":         {},
+		"POST /api/v1/auth/passkey/register/start": {},
+		"POST /api/v1/auth/passkey/register":       {},
+		"POST /api/v1/auth/recovery":               {},
+		"POST /api/v1/auth/recovery/consume":       {},
+		"POST /api/v1/auth/passkey/add/start":      {},
+		"POST /api/v1/auth/passkey/add/finish":     {},
 	}
+	seenPublicRoutes := map[string]struct{}{}
 
 	for _, route := range router.Routes() {
 		if route.Path == "/health" {
 			continue
 		}
+		if !strings.HasPrefix(route.Path, "/api/v1/") {
+			t.Fatalf("route policy violation: %s %s", route.Method, route.Path)
+		}
 
-		if _, ok := allowedPublicRoutes[route.Path]; ok {
+		routeKey := route.Method + " " + route.Path
+		if _, ok := allowedPublicRoutes[routeKey]; ok {
+			seenPublicRoutes[routeKey] = struct{}{}
 			continue
 		}
 
-		// routes under /api/v1/ that are not in the public list must be bearer-protected
-		if strings.HasPrefix(route.Path, "/api/v1/") {
-			continue
-		}
+		request := httptest.NewRequest(route.Method, routePolicyRequestPath(route.Path), strings.NewReader("{}"))
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
 
-		t.Fatalf("route policy violation: %s %s", route.Method, route.Path)
+		router.ServeHTTP(recorder, request)
+
+		if recorder.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("route policy violation: expected bearer protection for %s, got %d body=%s", routeKey, recorder.Code, recorder.Body.String())
+		}
 	}
+
+	publicRouteKeys := make([]string, 0, len(allowedPublicRoutes))
+	for routeKey := range allowedPublicRoutes {
+		publicRouteKeys = append(publicRouteKeys, routeKey)
+		if _, ok := seenPublicRoutes[routeKey]; !ok {
+			t.Fatalf("route policy violation: missing public route %s", routeKey)
+		}
+	}
+	slices.Sort(publicRouteKeys)
+}
+
+func routePolicyRequestPath(routePath string) string {
+	return strings.ReplaceAll(routePath, ":id", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
 }
 
 func newTestRouter(t *testing.T) *gin.Engine {
@@ -126,6 +150,7 @@ func newTestRouter(t *testing.T) *gin.Engine {
 		return time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)
 	}
 	auth := usecases.NewAuthService(newStubAuthStateRepository(clock), stubAuthAccountRepositoryWithMember(), nil, nil, clock, newSequentialPolicy(), testConfig().AuthRuntime())
+	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 
 	return NewRouter(testConfig(), Dependencies{Auth: auth})
 }

@@ -5,8 +5,10 @@ import {
   applyPasskeyError,
   applyPasskeyList,
   createPasskeyManagementInitialState,
+  createWebAuthnAttestation,
+  normalizeWebAuthnError,
   toPasskeyManagementErrorMessage,
-} from '../../auth/passkeyManagementState';
+} from '../../auth';
 
 import { useAuthSession } from './useAuthSession.svelte';
 
@@ -22,8 +24,7 @@ interface PasskeyManagementData {
 
 interface PasskeyManagementActions {
   listPasskeys: () => Promise<void>;
-  startAddPasskey: () => Promise<{ requestId: string; challenge: string; rpId: string } | null>;
-  finishAddPasskey: (credential: string) => Promise<void>;
+  addPasskey: () => Promise<void>;
   deletePasskey: (id: string) => Promise<void>;
   issueOtp: () => Promise<string | null>;
 }
@@ -63,7 +64,9 @@ const createListPasskeys =
         );
         return;
       }
-      applyPasskeyList(state, response.data.passkeys);
+      if (response.status === 200) {
+        applyPasskeyList(state, response.data.passkeys);
+      }
     } catch (error: unknown) {
       applyPasskeyError(state, toPasskeyManagementErrorMessage(error));
     } finally {
@@ -71,52 +74,51 @@ const createListPasskeys =
     }
   };
 
-const createStartAddPasskey =
-  (state: PasskeyManagementState, authSession: AuthSessionRef) =>
-  async (): Promise<{ requestId: string; challenge: string; rpId: string } | null> => {
+const createAddPasskey =
+  (state: PasskeyManagementState, authSession: AuthSessionRef) => async (): Promise<void> => {
     state.loading = true;
     state.error = null;
     try {
-      const response = await authApi.startPasskeyAddition({
+      // Step 1: Start — get challenge from server
+      const startResponse = await authApi.startPasskeyAddition({
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (response.status === 401 || response.status === 503) {
+      if (startResponse.status === 401 || startResponse.status === 503) {
         handleApiError(
-          response.data.error,
+          startResponse.data.error,
           'パスキー追加を開始できませんでした。',
           state,
           authSession
         );
-        return null;
+        return;
       }
-      return response.data;
-    } catch (error: unknown) {
-      applyPasskeyError(state, toPasskeyManagementErrorMessage(error));
-      return null;
-    } finally {
-      state.loading = false;
-    }
-  };
+      if (startResponse.status !== 200) return;
 
-const createFinishAddPasskey =
-  (state: PasskeyManagementState, authSession: AuthSessionRef) =>
-  async (credential: string): Promise<void> => {
-    state.loading = true;
-    state.error = null;
-    try {
-      const response = await authApi.finishPasskeyAddition(credential, {
+      // Step 2: Call browser WebAuthn API — normalize browser/device errors only
+      let credential;
+      try {
+        credential = await createWebAuthnAttestation(startResponse.data);
+      } catch (webAuthnError: unknown) {
+        applyPasskeyError(state, normalizeWebAuthnError(webAuthnError));
+        return;
+      }
+
+      // Step 3: Finish — send attestation to server
+      const finishResponse = await authApi.finishPasskeyAddition(credential, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (response.status === 401 || response.status === 503) {
+      if (finishResponse.status === 401 || finishResponse.status === 503) {
         handleApiError(
-          response.data.error,
+          finishResponse.data.error,
           'パスキー追加を完了できませんでした。',
           state,
           authSession
         );
         return;
       }
-      applyPasskeyList(state, response.data.passkeys);
+      if (finishResponse.status === 200) {
+        applyPasskeyList(state, finishResponse.data.passkeys);
+      }
     } catch (error: unknown) {
       applyPasskeyError(state, toPasskeyManagementErrorMessage(error));
     } finally {
@@ -158,7 +160,10 @@ const createIssueOtp =
         handleApiError(response.data.error, 'OTP を発行できませんでした。', state, authSession);
         return null;
       }
-      return response.data.otp;
+      if (response.status === 200) {
+        return response.data.otp;
+      }
+      return null;
     } catch (error: unknown) {
       applyPasskeyError(state, toPasskeyManagementErrorMessage(error));
       return null;
@@ -167,7 +172,7 @@ const createIssueOtp =
     }
   };
 
-/** 認証済みユーザーのパスキー一覧・追加・削除・OTP 発行を扱う domain composable。 */
+/** 認証済みユーザーのパスキー一覧・追加（WebAuthn）・削除・OTP 発行を扱う domain composable。 */
 function usePasskeyManagement(): {
   data: PasskeyManagementData;
   actions: PasskeyManagementActions;
@@ -177,8 +182,7 @@ function usePasskeyManagement(): {
 
   const actions: PasskeyManagementActions = {
     listPasskeys: createListPasskeys(state, authSession),
-    startAddPasskey: createStartAddPasskey(state, authSession),
-    finishAddPasskey: createFinishAddPasskey(state, authSession),
+    addPasskey: createAddPasskey(state, authSession),
     deletePasskey: createDeletePasskey(state, authSession),
     issueOtp: createIssueOtp(state, authSession),
   };

@@ -23,23 +23,10 @@
 
   async function handleAddPasskey(): Promise<void> {
     localError = null;
-
-    let challenge: { requestId: string; challenge: string; rpId: string } | null;
     try {
-      challenge = await actions.startAddPasskey();
+      await actions.addPasskey();
     } catch {
-      localError = 'パスキー追加の開始に失敗しました。';
-      return;
-    }
-    if (challenge === null) return;
-
-    const credential = `${challenge.requestId}::${challenge.challenge}`;
-
-    try {
-      await actions.finishAddPasskey(credential);
-      await actions.listPasskeys();
-    } catch {
-      localError = 'パスキーの登録完了に失敗しました。';
+      localError = 'パスキーの登録に失敗しました。';
     }
   }
 

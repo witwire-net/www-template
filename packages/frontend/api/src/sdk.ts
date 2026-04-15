@@ -13,6 +13,7 @@ import {
   startPasskeyAddition,
   startPasskeyAdditionByOtp,
   startPasskeyAuthentication,
+  startPasskeyRegistration,
   type consumeRecoveryTokenResponse,
   type deletePasskeyResponse,
   type finishPasskeyAdditionByOtpResponse,
@@ -27,6 +28,7 @@ import {
   type PasskeyAddFinishRequest,
   type PasskeyFinishRequest,
   type PasskeyRegisterRequest,
+  type PasskeyRegisterStartRequest,
   type PasskeyStartRequest,
   type RecoveryConsumeRequest,
   type RecoveryRequest,
@@ -35,6 +37,7 @@ import {
   type startPasskeyAdditionByOtpResponse,
   type startPasskeyAdditionResponse,
   type startPasskeyAuthenticationResponse,
+  type startPasskeyRegistrationResponse,
   type UlidId,
 } from './generated/client.js';
 
@@ -52,6 +55,7 @@ export type {
   PasskeyListResponse,
   PasskeyOtpResponse,
   PasskeyRegisterRequest,
+  PasskeyRegisterStartRequest,
   PasskeyStartRequest,
   PasskeyStartResponse,
   ErrorResponse,
@@ -61,6 +65,11 @@ export type {
   RecoveryRequest,
   StatusResponse,
   UlidId,
+  WebAuthnAssertionCredential,
+  WebAuthnAssertionResponse,
+  WebAuthnAttestationCredential,
+  WebAuthnAttestationResponse,
+  WebAuthnCredentialDescriptor,
   consumeRecoveryTokenResponse,
   deletePasskeyResponse,
   finishPasskeyAdditionByOtpResponse,
@@ -75,6 +84,7 @@ export type {
   startPasskeyAdditionByOtpResponse,
   startPasskeyAdditionResponse,
   startPasskeyAuthenticationResponse,
+  startPasskeyRegistrationResponse,
 } from './generated/client.js';
 
 /** Configuration for the API SDK default request settings. */
@@ -101,6 +111,10 @@ interface AuthSdk {
     payload: RecoveryConsumeRequest,
     options?: RequestInit
   ) => Promise<consumeRecoveryTokenResponse>;
+  startPasskeyRegistration: (
+    payload: PasskeyRegisterStartRequest,
+    options?: RequestInit
+  ) => Promise<startPasskeyRegistrationResponse>;
   registerPasskey: (
     payload: PasskeyRegisterRequest,
     options?: RequestInit
@@ -168,6 +182,8 @@ const createAuthSdk = (defaultInit: RequestInit | undefined): AuthSdk => ({
     requestPasskeyRecovery(payload, withJsonInit(options, defaultInit)),
   consumeRecoveryToken: (payload: RecoveryConsumeRequest, options?: RequestInit) =>
     consumeRecoveryToken(payload, withJsonInit(options, defaultInit)),
+  startPasskeyRegistration: (payload: PasskeyRegisterStartRequest, options?: RequestInit) =>
+    startPasskeyRegistration(payload, withJsonInit(options, defaultInit)),
   registerPasskey: (payload: PasskeyRegisterRequest, options?: RequestInit) =>
     registerPasskey(payload, withJsonInit(options, defaultInit)),
   listPasskeys: (options?: RequestInit) => listPasskeys(withDefaultInit(options, defaultInit)),
