@@ -32,7 +32,7 @@ permission:
     'rm *': deny
 ---
 
-You are the `unit/build/reviewer` subagent. Based on the change summary and artifact references provided by the caller, you review frontend changes across `packages/frontend/web`, `packages/frontend/app`, `packages/frontend/domain`, and `packages/frontend/ui`, then return review results to the caller.
+You are the `unit/build/reviewer` subagent. Based on the change summary and artifact references provided by the caller, you review frontend changes across `packages/web`, `packages/frontend/app`, `packages/frontend/domain`, and `packages/frontend/ui`, then return review results to the caller.
 
 ## First action
 
@@ -67,7 +67,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 
 1. No violations of `AGENTS.md`, `CODING_STANDARDS.md`, or `coding-guardian`
 2. No bespoke implementation where reusable components or functions should have been used
-3. No excessive styling in `packages/frontend/app`; app styling must remain minimal and composition-focused while `packages/frontend/web` follows existing public-site conventions
+3. No excessive styling in `packages/frontend/app`; app styling must remain minimal and composition-focused while `packages/web` follows existing public-site conventions
 
 ## Quantitative app-style thresholds
 

@@ -42,7 +42,7 @@
     "lint": "pnpm --filter @www-template/typespec lint:openapi && pnpm lint:eslint && bash scripts/go/lint.sh && bash scripts/security/lint-security.sh && pnpm check:codegen",
     "lint:eslint": "pnpm lint:eslint:root && pnpm lint:eslint:frontend && pnpm lint:eslint:ui",
     "lint:eslint:root": "eslint --no-inline-config --max-warnings 0 commitlint.config.js eslint.config.js playwright.config.ts vitest.config.ts scripts tests",
-    "lint:eslint:frontend": "pnpm --filter @www-template/web exec svelte-kit sync && pnpm --filter @www-template/app exec svelte-kit sync && eslint --no-inline-config --max-warnings 0 packages/frontend/api packages/frontend/domain packages/frontend/app packages/frontend/web",
+    "lint:eslint:frontend": "pnpm --filter @www-template/web exec svelte-kit sync && pnpm --filter @www-template/app exec svelte-kit sync && eslint --no-inline-config --max-warnings 0 packages/frontend/api packages/frontend/domain packages/frontend/app packages/web",
     "lint:eslint:ui": "eslint --no-inline-config --max-warnings 0 packages/frontend/ui",
     "format": "pnpm --filter @www-template/typespec format && prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\" && bash scripts/go/format.sh",
     "format:check": "pnpm --filter @www-template/typespec format:check && prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\" && bash scripts/go/format-check.sh",

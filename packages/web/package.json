@@ -14,14 +14,14 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@www-template/domain": "workspace:*",
+    "@tanstack/svelte-query": "^6.1.18",
     "@www-template/ui": "workspace:*"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.14",
     "@sveltejs/adapter-cloudflare": "^7.1.0",
     "@sveltejs/kit": "^2.48.4",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@tailwindcss/vite": "^4.1.14",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
     "@testing-library/user-event": "^14.6.1",

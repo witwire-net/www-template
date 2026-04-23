@@ -6,6 +6,7 @@
   />
 </svelte:head>
 <script lang="ts">
+  import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
   import '@www-template/ui/styles';
   import type { Snippet } from 'svelte';
 
@@ -16,25 +17,37 @@
 
   let { children }: { children: Snippet } = $props();
 
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        gcTime: 300_000,
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
+
   const links: NavLink[] = [
     { href: '/', label: 'Home' },
   ];
 </script>
 
-<div class="shell">
-  <header class="topbar">
-    <a class="brand" href="/">www-template</a>
-    <nav>
-      {#each links as link (link.href)}
-        <a href={link.href}>{link.label}</a>
-      {/each}
-    </nav>
-  </header>
+<QueryClientProvider client={queryClient}>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">www-template</a>
+      <nav>
+        {#each links as link (link.href)}
+          <a href={link.href}>{link.label}</a>
+        {/each}
+      </nav>
+    </header>
 
-  <main class="content">
-    {@render children()}
-  </main>
-</div>
+    <main class="content">
+      {@render children()}
+    </main>
+  </div>
+</QueryClientProvider>
 
 <style>
   :global(body) {

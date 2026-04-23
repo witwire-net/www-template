@@ -19,7 +19,7 @@
 ## API 契約
 
 - 正は `packages/typespec/main.tsp`
-- `packages/frontend/web/wrangler.toml` と `packages/frontend/app/wrangler.toml` は配備設定であり、API contract の canonical source ではない
+- `packages/web/wrangler.toml` と `packages/frontend/app/wrangler.toml` は配備設定であり、API contract の canonical source ではない
 - OpenAPI path は `/api/v1/*` だけを許可する
 - 生成物は手編集しない
   - `packages/typespec/openapi/openapi.json`

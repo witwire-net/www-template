@@ -23,10 +23,10 @@ const frontendAppSourceFiles = [
 ];
 
 const frontendWebSourceFiles = [
-  'packages/frontend/web/src/**/*.{ts,js}',
-  'packages/frontend/web/src/**/*.svelte',
-  'packages/frontend/web/src/**/*.svelte.ts',
-  'packages/frontend/web/src/**/*.svelte.js',
+  'packages/web/src/**/*.{ts,js}',
+  'packages/web/src/**/*.svelte',
+  'packages/web/src/**/*.svelte.ts',
+  'packages/web/src/**/*.svelte.js',
 ];
 
 const frontendDomainSourceFiles = [
@@ -46,23 +46,32 @@ const frontendSvelteFiles = [
   'packages/frontend/**/*.svelte',
   'packages/frontend/**/*.svelte.ts',
   'packages/frontend/**/*.svelte.js',
+  'packages/web/**/*.svelte',
+  'packages/web/**/*.svelte.ts',
+  'packages/web/**/*.svelte.js',
 ];
 
-const frontendRoutePageFiles = [
-  'packages/frontend/app/src/routes/**/*.svelte',
-  'packages/frontend/web/src/routes/**/*.svelte',
-];
+const frontendAppRoutePageFiles = ['packages/frontend/app/src/routes/**/*.svelte'];
 
-const frontendComponentFiles = [
+const frontendWebRoutePageFiles = ['packages/web/src/routes/**/*.svelte'];
+
+const frontendRoutePageFiles = [...frontendAppRoutePageFiles, ...frontendWebRoutePageFiles];
+
+const frontendAppComponentFiles = [
   'packages/frontend/app/src/components/**/*.{ts,js}',
   'packages/frontend/app/src/components/**/*.svelte',
   'packages/frontend/app/src/lib/**/*.{ts,js}',
   'packages/frontend/app/src/lib/**/*.svelte',
-  'packages/frontend/web/src/components/**/*.{ts,js}',
-  'packages/frontend/web/src/components/**/*.svelte',
-  'packages/frontend/web/src/lib/**/*.{ts,js}',
-  'packages/frontend/web/src/lib/**/*.svelte',
 ];
+
+const frontendWebComponentFiles = [
+  'packages/web/src/components/**/*.{ts,js}',
+  'packages/web/src/components/**/*.svelte',
+  'packages/web/src/lib/**/*.{ts,js}',
+  'packages/web/src/lib/**/*.svelte',
+];
+
+const frontendComponentFiles = [...frontendAppComponentFiles, ...frontendWebComponentFiles];
 
 const frontendDomainHookFiles = ['packages/frontend/domain/src/hooks/**/*.ts'];
 
@@ -82,8 +91,8 @@ const frontendNonReactSourceFiles = [
 
 const frontendWebSvelteKitImportFiles = [
   ...frontendWebSourceFiles,
-  'packages/frontend/web/src/**/*.svelte.ts',
-  'packages/frontend/web/src/**/*.svelte.js',
+  'packages/web/src/**/*.svelte.ts',
+  'packages/web/src/**/*.svelte.js',
 ];
 
 const frontendAppSvelteKitImportFiles = [
@@ -93,8 +102,8 @@ const frontendAppSvelteKitImportFiles = [
 ];
 
 const frontendWebSvelteKitRouteModuleFiles = [
-  'packages/frontend/web/src/routes/**/+page.{ts,js}',
-  'packages/frontend/web/src/routes/**/+layout.{ts,js}',
+  'packages/web/src/routes/**/+page.{ts,js}',
+  'packages/web/src/routes/**/+layout.{ts,js}',
 ];
 
 const frontendAppSvelteKitRouteModuleFiles = [
@@ -103,9 +112,9 @@ const frontendAppSvelteKitRouteModuleFiles = [
 ];
 
 const frontendWebSvelteKitHookModuleFiles = [
-  'packages/frontend/web/src/hooks.{ts,js}',
-  'packages/frontend/web/src/hooks.client.{ts,js}',
-  'packages/frontend/web/src/hooks.server.{ts,js}',
+  'packages/web/src/hooks.{ts,js}',
+  'packages/web/src/hooks.client.{ts,js}',
+  'packages/web/src/hooks.server.{ts,js}',
 ];
 
 const frontendAppSvelteKitHookModuleFiles = [
@@ -115,7 +124,7 @@ const frontendAppSvelteKitHookModuleFiles = [
 ];
 
 const frontendWebSvelteKitPageServerModuleFiles = [
-  'packages/frontend/web/src/routes/**/+page.server.{ts,js}',
+  'packages/web/src/routes/**/+page.server.{ts,js}',
 ];
 
 const frontendAppSvelteKitPageServerModuleFiles = [
@@ -823,7 +832,7 @@ export default tseslint.config(
         { type: 'frontend-api', pattern: 'packages/frontend/api/src/**/*', mode: 'full' },
         { type: 'frontend-domain', pattern: 'packages/frontend/domain/src/**/*', mode: 'full' },
         { type: 'frontend-app', pattern: 'packages/frontend/app/src/**/*', mode: 'full' },
-        { type: 'frontend-web', pattern: 'packages/frontend/web/src/**/*', mode: 'full' },
+        { type: 'frontend-web', pattern: 'packages/web/src/**/*', mode: 'full' },
         { type: 'ui', pattern: 'packages/frontend/ui/src/**/*', mode: 'full' },
       ],
     },
@@ -954,7 +963,7 @@ export default tseslint.config(
             },
             {
               from: ['frontend-web'],
-              allow: ['frontend-web', 'frontend-domain', 'frontend-api', 'ui'],
+              allow: ['frontend-web', 'ui'],
             },
             {
               from: ['ui'],
@@ -1035,6 +1044,9 @@ export default tseslint.config(
       'packages/frontend/**/*.svelte',
       'packages/frontend/**/*.svelte.ts',
       'packages/frontend/**/*.svelte.js',
+      'packages/web/**/*.svelte',
+      'packages/web/**/*.svelte.ts',
+      'packages/web/**/*.svelte.js',
     ],
     rules: {
       'boundaries/no-unknown-files': 'error',
@@ -1118,7 +1130,7 @@ export default tseslint.config(
 
   // Presentation 層から API パッケージを直接参照しない
   {
-    files: [...frontendAppSourceFiles, ...frontendWebSourceFiles],
+    files: [...frontendAppSourceFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -1135,6 +1147,38 @@ export default tseslint.config(
               group: ['@www-template/api/**'],
               message:
                 'frontend presentation 層では API パッケージを直接 import せず、domain hooks を経由してください。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // web は公開面 LP なので domain / api に依存しない
+  {
+    files: [...frontendWebSourceFiles],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@www-template/api',
+              message: 'web は公開面 WebPage なので API パッケージを import できません。',
+            },
+            {
+              name: '@www-template/domain',
+              message: 'web は公開面 WebPage なので domain パッケージを import できません。',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@www-template/api/**'],
+              message: 'web は公開面 WebPage なので API パッケージを import できません。',
+            },
+            {
+              group: ['@www-template/domain/**'],
+              message: 'web は公開面 WebPage なので domain パッケージを import できません。',
             },
           ],
         },
@@ -1759,9 +1803,9 @@ export default tseslint.config(
     },
   },
 
-  // client 全体で直接 fetch しない（共通 API 経由）
+  // app / domain では直接 fetch しない（共通 API 経由）
   {
-    files: [...frontendAppSourceFiles, ...frontendWebSourceFiles, ...frontendDomainSourceFiles],
+    files: [...frontendAppSourceFiles, ...frontendDomainSourceFiles],
     ignores: [
       'packages/frontend/app/src/**/*.test.ts',
       'packages/frontend/app/src/**/*.test.tsx',
@@ -1769,12 +1813,6 @@ export default tseslint.config(
       'packages/frontend/app/src/**/*.spec.ts',
       'packages/frontend/app/src/**/*.spec.tsx',
       'packages/frontend/app/src/**/*.spec.svelte',
-      'packages/frontend/web/src/**/*.test.ts',
-      'packages/frontend/web/src/**/*.test.tsx',
-      'packages/frontend/web/src/**/*.test.svelte',
-      'packages/frontend/web/src/**/*.spec.ts',
-      'packages/frontend/web/src/**/*.spec.tsx',
-      'packages/frontend/web/src/**/*.spec.svelte',
       'packages/frontend/domain/src/**/*.test.ts',
       'packages/frontend/domain/src/**/*.test.tsx',
       'packages/frontend/domain/src/**/*.test.svelte.ts',
@@ -1811,6 +1849,34 @@ export default tseslint.config(
             {
               name: 'cross-fetch',
               message: 'Use @www-template/api instead of performing manual fetches.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [...frontendWebSourceFiles],
+    ignores: [
+      'packages/web/src/**/*.test.ts',
+      'packages/web/src/**/*.test.tsx',
+      'packages/web/src/**/*.test.svelte',
+      'packages/web/src/**/*.spec.ts',
+      'packages/web/src/**/*.spec.tsx',
+      'packages/web/src/**/*.spec.svelte',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'web では native fetch を使い、axios は使わないでください。',
+            },
+            {
+              name: 'cross-fetch',
+              message: 'web では native fetch を使い、cross-fetch は使わないでください。',
             },
           ],
         },
@@ -1885,7 +1951,7 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendRoutePageFiles,
+    files: frontendAppRoutePageFiles,
     rules: {
       'no-restricted-imports': [
         'error',
@@ -1916,7 +1982,7 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendComponentFiles,
+    files: frontendAppComponentFiles,
     rules: {
       'no-restricted-imports': [
         'error',
@@ -2000,7 +2066,7 @@ export default tseslint.config(
         {
           names: ['actions'],
           message:
-            'frontend app では SvelteKit の form action export（`{{name}}`）を禁止します。API は backend に集約してください。',
+            'packages/web では SvelteKit の form action export（`{{name}}`）を禁止します。API は backend に集約してください。',
         },
       ],
     },
@@ -2086,19 +2152,19 @@ export default tseslint.config(
         {
           names: ['handle', 'handleFetch'],
           message:
-            'frontend app では SvelteKit の hook export（`{{name}}`）を禁止します。server 面は backend と CSR route 境界に集約してください。',
+            'packages/web では SvelteKit の hook export（`{{name}}`）を禁止します。server 面は backend に集約してください。',
         },
       ],
     },
   },
   {
     files: [
-      'packages/frontend/web/src/routes/**/+server.{ts,js}',
-      'packages/frontend/web/src/routes/**/+page.server.{ts,js}',
-      'packages/frontend/web/src/routes/**/+layout.server.{ts,js}',
-      'packages/frontend/web/src/hooks.server.{ts,js}',
-      'packages/frontend/web/src/lib/server/**/*.{ts,js,svelte}',
-      'packages/frontend/web/src/lib/server/**/*.svelte.{ts,js}',
+      'packages/web/src/routes/**/+server.{ts,js}',
+      'packages/web/src/routes/**/+page.server.{ts,js}',
+      'packages/web/src/routes/**/+layout.server.{ts,js}',
+      'packages/web/src/hooks.server.{ts,js}',
+      'packages/web/src/lib/server/**/*.{ts,js,svelte}',
+      'packages/web/src/lib/server/**/*.svelte.{ts,js}',
     ],
     rules: {
       'no-restricted-syntax': [
@@ -2106,7 +2172,7 @@ export default tseslint.config(
         {
           selector: 'Program',
           message:
-            'packages/frontend/web では SvelteKit の server route / server hook / server-only lib を禁止します。API は backend に集約してください。',
+            'packages/web では SvelteKit の server route / server hook / server-only lib を禁止します。API は backend に集約してください。',
         },
       ],
     },
@@ -2162,8 +2228,8 @@ export default tseslint.config(
     files: [
       'packages/frontend/app/src/tests/**/*.{ts,tsx}',
       'packages/frontend/app/src/tests/**/*.svelte',
-      'packages/frontend/web/src/tests/**/*.{ts,tsx}',
-      'packages/frontend/web/src/tests/**/*.svelte',
+      'packages/web/src/tests/**/*.{ts,tsx}',
+      'packages/web/src/tests/**/*.svelte',
     ],
     rules: {
       'no-restricted-imports': 'off',

@@ -7,7 +7,7 @@
     "baseUrl": ".",
     "paths": {
       "@www-template/app/*": ["packages/frontend/app/src/*"],
-      "@www-template/web/*": ["packages/frontend/web/src/*"],
+      "@www-template/web/*": ["packages/web/src/*"],
       "@www-template/domain": ["packages/frontend/domain/src/index.ts"],
       "@www-template/domain/hooks/auth/useAuthSession": [
         "packages/frontend/domain/src/hooks/auth/useAuthSession.svelte.ts"
