@@ -63,3 +63,4 @@ test-results/
 !.opencode/agents/unit/build
 
 storybook-static
+.opencode/package-lock.json

@@ -10,6 +10,7 @@ permission:
   task:
     '*': deny
     'planner': allow
+    'magi': allow
     'unit/backend/engineer': allow
     'unit/backend/reviewer': allow
     'unit/frontend/engineer': allow
@@ -27,12 +28,13 @@ permission:
     'orchestration-playbook': allow
     'openspec-*': allow
   bash:
-    '*': ask
+    '*': deny
     'openspec list*': allow
     'openspec status*': allow
     'openspec instructions*': allow
     'openspec show*': allow
     'openspec validate*': allow
+    'pnpm *': allow
     'git add*': allow
     'git commit*': allow
     'git diff*': allow
@@ -81,6 +83,7 @@ This agent does not do hands-on work. Delegate file edits, generation, lint/test
 
 ## Delegation map
 
+- Make Decision: `.opencode/agents/magi.md`
 - Frontend implementation: `.opencode/agents/unit/frontend/engineer.md` (`unit/frontend/engineer`)
 - Backend implementation: `.opencode/agents/unit/backend/engineer.md` (`unit/backend/engineer`)
 - Frontend review: `.opencode/agents/unit/frontend/reviewer.md`

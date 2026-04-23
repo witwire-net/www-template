@@ -96,6 +96,12 @@ You are the OpenSpec change analyzer subagent.
      - Verify it does not violate `rules.tasks` in `openspec/config.yaml`
    - Dependencies and ordering
      - Ensure no contradiction between artifact dependency order (ready/blocked) and task execution order
+   - Spec permanence — reject transient language in specs
+     - Flag any statement intended to be temporary or deferred: e.g. "out of scope for this change", "to be addressed later", "future work", "will be removed eventually", or equivalent Japanese phrasing (「本変更のスコープ外」「後続で対応」「将来的に削除」など)
+     - Such statements must not be committed to `openspec/specs/` or delta specs; they belong only in proposals/design notes and must be resolved before archiving
+   - Product-problem alignment
+     - Verify that each requirement does not contradict the product's core problem statement (defined in `docs/` or the change proposal)
+     - Flag any requirement that works against the user value the product is designed to deliver, even if it is internally consistent
 
 6. Output
    - One of: `READY | NEEDS_DECISIONS | NEEDS_FIXES | FAILED`

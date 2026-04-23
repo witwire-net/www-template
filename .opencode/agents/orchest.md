@@ -4,8 +4,7 @@ mode: primary
 permission:
   edit: deny
   webfetch: deny
-  task:
-    '*': allow
+  task: allow
   read: allow
   glob: allow
   grep: allow
@@ -15,22 +14,9 @@ permission:
   bash:
     '*': deny
     'cd *': allow
-    'openspec list*': allow
-    'openspec status*': allow
-    'openspec instructions*': allow
-    'openspec show*': allow
-    'openspec validate*': allow
-    'git add*': allow
-    'git commit*': allow
-    'git diff*': allow
-    'git status*': allow
-    'git log*': allow
-    'git show*': allow
-    'git grep*': allow
-    'git worktree*': allow
-    'git branch*': allow
-    'git checkout*': allow
-    'git merge*': allow
+    'openspec *': allow
+    'git *': allow
+    'pnpm *': allow
     'rm *': deny
 ---
 

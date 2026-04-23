@@ -3,7 +3,7 @@ description: Frontend UI design and implementation specialist. Loads coding-guar
 mode: subagent
 hidden: true
 model: github-copilot/claude-opus-4.6
-temperature: 0.1
+temperature: 0.5
 permission:
   edit: allow
   webfetch: deny

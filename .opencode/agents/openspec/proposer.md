@@ -1,9 +1,8 @@
 ---
 description: Create/update an OpenSpec change along the artifact graph; converge validate and drive analyzer and decisions.
 mode: subagent
-model: github-copilot/gpt-5.4
-reasoningEffort: 'high'
-temperature: 0.1
+model: github-copilot/claude-opus-4.6
+temperature: 0.3
 permission:
   edit: allow
   webfetch: deny
@@ -19,7 +18,6 @@ permission:
   skill:
     '*': deny
     'coding-guardian': allow
-    'orchestration-playbook': allow
     'openspec-*': allow
   bash:
     '*': allow
@@ -35,7 +33,6 @@ permission:
   - `AGENTS.md`
   - `docs/**`
   - `.opencode/**`
-- Then load `orchestration-playbook` via `skill` and use its templates to structure work
 - Then load `coding-guardian` via `skill` and pin repository conventions and OpenSpec rules
 - Then load `openspec-new-change`, `openspec-continue-change`, and `openspec-ff-change` via `skill` and align procedures and commands to those skills
 
@@ -107,8 +104,3 @@ Caller (primary) provides one or more of:
 8. Completion report
    - validate PASS
    - List remaining open questions if any (ideally zero blockers)
-
-# Reporting
-
-- Reply format is defined in `.opencode/skills/orchestration-playbook/SKILL.md`
-- Include status, change id, what was updated, commands run, and remaining risks or decisions
