@@ -241,6 +241,34 @@
 - NG例: `// eslint-disable-next-line @typescript-eslint/no-explicit-any`
 - OK例: 型を正しく付けて lint を通す / 設計上の例外は `eslint.config.js` に追加する
 
+### Svelte ファイル内で `<style>` タグを書かない
+
+- forbidden: `.svelte` ファイルに `<style>` タグを書かない。スタイルは Tailwind ユーティリティクラスまたは `@layer components` で定義する
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`frontend-css-policy/no-svelte-style-tag`)
+- NG例: `+page.svelte` で `<style>.auth-shell { ... }</style>` を書く
+- OK例: `class="auth-layout"` のように Tailwind クラスまたは CSS Components を使う
+
+### Tailwind CSS の任意値記法を使わない
+
+- forbidden: `bg-[...]` / `text-[...]` / `w-[...]` 等の Tailwind 任意値記法を使わない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`frontend-css-policy/no-tailwind-arbitrary-values`)
+- NG例: `class="bg-[linear-gradient(...)]"` / `class="text-[0.9375rem]"`
+- OK例: `class="bg-background text-sm"`（Design Tokens または標準ユーティリティを使う）
+
+### CSS ファイル内で `@apply` を使わない
+
+- forbidden: `.css` ファイルで `@apply` を使わない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:stylelint`) -> `stylelint.config.js` (`at-rule-disallowed-list: ['apply']`)
+- NG例: `base-styles.css` で `@apply border-border;` を書く
+- OK例: `border-color: var(--color-border);` のように通常の CSS プロパティで書く
+
+### CSS Components は `ui/src/styles/components/` に集約する
+
+- required: 複雑なレイアウト・UIパターンは `packages/frontend/ui/src/styles/components/*.css` の `@layer components` に定義し、Svelte ファイルではクラス名だけを参照する
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:stylelint`) -> `stylelint.config.js`; コードレビュー
+- NG例: 7つの認証画面で同じ `.auth-shell { ... }` を個別の `<style>` タグにコピペする
+- OK例: `components/auth.css` に `.auth-layout` を1回定義し、各ページで `class="auth-layout"` を使う
+
 ## 4. バックエンド構造と依存
 
 ### Go file は許可された backend layer にだけ置く
@@ -443,6 +471,7 @@
 | 対象パターン                           | 実行内容                                                                                                              |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `*.{ts,tsx,js,jsx}`                    | `eslint --fix --no-inline-config --max-warnings 0` -> `prettier --write`                                              |
+| `*.css`                                | `stylelint --fix --max-warnings 0` -> `prettier --write`                                                              |
 | `*.{json,md,yml,yaml}`                 | `prettier --write`                                                                                                    |
 | `*.go`                                 | `bash scripts/hooks/format-staged-go.sh` = `gofmt -w` + `goimports -local www-template -w`                            |
 | `packages/backend/db/migrations/*.sql` | `bash scripts/hooks/verify-staged-migrations.sh` = `bash scripts/go/guardrails.sh` (migration filename / pair policy) |
@@ -459,7 +488,8 @@ Note: `.husky/pre-commit` の実体は `pnpm lint-staged` のみです。`pnpm c
 ## 9. 設定参照
 
 - この文書の更新コマンド: `opencode run --command rules.update-coding-standard`
-- root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`
+- root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`, `stylelint.config.js`
 - TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
+- frontend CSS: `packages/frontend/ui/src/styles/base/global.css`, `packages/frontend/ui/src/styles/tokens.css`, `packages/frontend/ui/src/styles/theme.css`, `packages/frontend/ui/src/styles/base-styles.css`, `packages/frontend/ui/src/styles/components/*.css`, `packages/frontend/ui/src/styles/utilities.css`
 - backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/http/router_test.go`, `packages/backend/internal/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
 - helper scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`, `scripts/codegen/check.sh`, `scripts/hooks/format-staged-go.sh`, `scripts/hooks/verify-staged-migrations.sh`

@@ -1,0 +1,88 @@
+@layer components {
+  /* ===== App Layout ===== */
+  .app-layout {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .app-layout__banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.2rem 1.3rem;
+    border-radius: var(--radius-xl);
+    background: var(--palette-neutral-900);
+    color: var(--palette-neutral-50);
+  }
+
+  .app-layout__banner-title {
+    margin: 0.35rem 0 0;
+    font-size: clamp(1.5rem, 4vw, 2.4rem);
+  }
+
+  .app-layout__banner-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--color-text-muted);
+  }
+
+  .app-layout__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .app-layout__links a {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-hover);
+    color: inherit;
+    font-weight: 600;
+  }
+
+  .app-layout__panel {
+    padding: clamp(1.1rem, 3vw, 1.6rem);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+  }
+
+  .app-layout__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  /* ===== Overview / Content ===== */
+  .overview-section {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .overview-section__eyebrow {
+    font-family: var(--font-family-display);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.2em;
+    color: var(--color-info);
+  }
+
+  .overview-section__link {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.75rem var(--spacing-md);
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--color-info) 10%, transparent);
+    color: var(--color-info);
+    font-weight: var(--font-weight-bold);
+  }
+}

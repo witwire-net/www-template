@@ -672,6 +672,99 @@ const frontendAppPrimitiveUiPlugin = {
   },
 };
 
+const frontendCssPolicyPlugin = {
+  rules: {
+    'no-svelte-style-tag': {
+      meta: {
+        type: 'problem',
+        docs: { description: 'Disallow <style> tags in Svelte files' },
+        schema: [],
+        messages: {
+          styleTag:
+            '<style> tags are forbidden in Svelte files. Use Tailwind utilities or @layer components in CSS files instead.',
+        },
+      },
+      create(context) {
+        return {
+          SvelteStyleElement(node) {
+            context.report({ node, messageId: 'styleTag' });
+          },
+        };
+      },
+    },
+    'no-tailwind-arbitrary-values': {
+      meta: {
+        type: 'problem',
+        docs: { description: 'Disallow Tailwind CSS arbitrary value syntax' },
+        schema: [],
+        messages: {
+          arbitraryValue:
+            'Tailwind arbitrary value "{{value}}" is forbidden. Use Design Tokens or @layer components instead.',
+        },
+      },
+      create(context) {
+        const arbitraryValueRegex = /\b\w+-\[[^\]]+]/g;
+
+        function reportMatches(node, text) {
+          if (typeof text !== 'string') return;
+          for (const match of text.matchAll(arbitraryValueRegex)) {
+            context.report({
+              node,
+              messageId: 'arbitraryValue',
+              data: { value: match[0] },
+            });
+          }
+        }
+
+        return {
+          Literal(node) {
+            const parent = node.parent;
+            if (
+              parent?.type === 'JSXAttribute' &&
+              (parent.name?.name === 'class' || parent.name?.name === 'className')
+            ) {
+              reportMatches(node, node.value);
+            }
+            if (parent?.type === 'SvelteAttribute' && parent.key?.name === 'class') {
+              reportMatches(node, node.value);
+            }
+            if (parent?.type === 'SvelteDirective' && parent.name?.name === 'class') {
+              reportMatches(node, node.value);
+            }
+          },
+          SvelteAttribute(node) {
+            if (node.key?.name !== 'class') return;
+            for (const v of node.value) {
+              if (v.type === 'Literal') {
+                reportMatches(v, v.value);
+              }
+              if (
+                v.type === 'SvelteExpressionContainer' &&
+                v.expression?.type === 'TemplateLiteral'
+              ) {
+                for (const quasi of v.expression.quasis) {
+                  reportMatches(quasi, quasi.value.raw);
+                }
+              }
+              if (v.type === 'SvelteExpressionContainer' && v.expression?.type === 'Literal') {
+                reportMatches(v.expression, v.expression.value);
+              }
+            }
+          },
+          SvelteDirective(node) {
+            if (node.name?.name !== 'class') return;
+            for (const v of node.value) {
+              if (v.type === 'Literal') {
+                reportMatches(v, v.value);
+              }
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 const isImportMetaEnvChain = (node) => {
   if (!node || node.type !== 'MemberExpression' || node.computed) {
     return false;
@@ -2341,6 +2434,17 @@ export default tseslint.config(
       'packages/frontend/ui/src/**/*.stories.tsx',
     ],
     ...tseslint.configs.disableTypeChecked,
+  },
+
+  {
+    files: frontendSvelteFiles,
+    plugins: {
+      'frontend-css-policy': frontendCssPolicyPlugin,
+    },
+    rules: {
+      'frontend-css-policy/no-svelte-style-tag': 'error',
+      'frontend-css-policy/no-tailwind-arbitrary-values': 'error',
+    },
   },
 
   // 無視するファイル

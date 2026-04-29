@@ -80,7 +80,6 @@
     "layerchart": "2.0.0-next.48",
     "mode-watcher": "^1.1.0",
     "paneforge": "^1.0.2",
-    "sass-embedded": "^1.97.3",
     "shadcn-svelte": "^1.2.7",
     "storybook": "^10.2.17",
     "svelte": "^5.53.9",

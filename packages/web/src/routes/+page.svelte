@@ -9,9 +9,9 @@
   const appUrl = env.PUBLIC_APP_URL ?? 'http://localhost:5174';
 </script>
 
-<section class="hero">
-  <div class="hero-copy">
-    <div class="eyebrow">SvelteKit + Cloudflare Workers</div>
+<section class="hero-section">
+  <div class="hero-section__copy">
+    <div class="hero-section__eyebrow">SvelteKit + Cloudflare Workers</div>
     <h1>公開面と認証面を再利用しやすい構成でまとめています。</h1>
     <p>
       <code>packages/web</code> は公開ルートの SSR を担い、<code>packages/frontend/app</code> は
@@ -22,61 +22,6 @@
         <li>{item}</li>
       {/each}
     </ul>
-    <a href="{appUrl}/login" class="cta-link">ログインを試す</a>
+    <a href="{appUrl}/login" class="hero-section__cta">ログインを試す</a>
   </div>
 </section>
-
-<style>
-  .hero {
-    display: grid;
-    gap: var(--spacing-lg);
-  }
-
-  .hero-copy {
-    display: grid;
-    gap: 1.2rem;
-    padding: clamp(1.6rem, 4vw, 2.4rem);
-    border-radius: var(--radius-lg);
-    background: linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 88%, transparent), var(--color-surface));
-    border: 1px solid var(--color-border-subtle);
-  }
-
-  .eyebrow {
-    font-family: var(--font-family-display);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    letter-spacing: 0.22em;
-    color: var(--color-primary-active);
-  }
-
-  h1 {
-    margin: 0;
-    font-family: var(--font-family-display);
-    font-size: clamp(2.2rem, 6vw, 4.5rem);
-    line-height: var(--line-height-tight);
-    letter-spacing: -0.04em;
-  }
-
-  p,
-  li {
-    color: var(--color-text-secondary);
-    line-height: var(--line-height-relaxed);
-  }
-
-  ul {
-    margin: 0;
-    padding-left: 1.2rem;
-    display: grid;
-    gap: 0.55rem;
-  }
-
-  .cta-link {
-    display: inline-block;
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius-md);
-    background: var(--color-primary-active);
-    color: var(--color-on-primary, #fff);
-    font-weight: 600;
-    text-decoration: none;
-  }
-</style>
