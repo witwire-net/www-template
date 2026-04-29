@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"www-template/packages/backend/internal/generated/openapi"
+	"www-template/packages/backend/internal/observability"
 	"www-template/packages/backend/internal/types"
 	"www-template/packages/backend/internal/usecases"
 )
@@ -32,6 +33,7 @@ func NewRouter(cfg types.Config, dependencies Dependencies) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(authNoStoreAndBindErrorMiddleware())
+	router.Use(observability.OTelMiddleware())
 	router.Use(appAuthMiddleware(cfg, dependencies.Auth))
 	router.Use(cors.New(cors.Config{
 		AllowCredentials: true,

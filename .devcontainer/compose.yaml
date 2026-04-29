@@ -29,7 +29,7 @@ services:
       R2_USE_PATH_STYLE: 'true'
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       TOOLCHAIN_GO_VERSION: 1.26.2
-      TOOLCHAIN_PNPM_VERSION: 10.33.0
+      TOOLCHAIN_PNPM_VERSION: 10.33.2
       TOOLCHAIN_GORM_VERSION: 1.31.0
       TOOLCHAIN_GOLANG_MIGRATE_VERSION: 4.18.3
       TOOLCHAIN_OAPI_CODEGEN_VERSION: 2.4.1
@@ -39,6 +39,12 @@ services:
       SMTP_HOST: mailpit
       SMTP_PORT: '1025'
       VALKEY_URL: redis://valkey:6379/0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: www-template-api
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=www-template,deployment.environment=development
+      PUBLIC_OTEL_COLLECTOR_URL: http://localhost:4318/v1/traces
     extra_hosts:
       - host.docker.internal:host-gateway
     init: true
@@ -104,6 +110,65 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    command: ['--config=/etc/otel-collector-config.yaml']
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+    restart: unless-stopped
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+
+  prometheus:
+    image: prom/prometheus:v3.3.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-remote-write-receiver'
+    ports:
+      - '9090:9090'
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    command: ['-config.file=/etc/tempo.yml']
+    ports:
+      - '3200:3200'
+    restart: unless-stopped
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo.yml:ro
+      - tempo-data:/tmp/tempo
+
+  loki:
+    image: grafana/loki:3.4.0
+    command: ['-config.file=/etc/loki/local-config.yaml']
+    ports:
+      - '3100:3100'
+    restart: unless-stopped
+    volumes:
+      - loki-data:/loki
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_ORG_ROLE: Editor
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    ports:
+      - '3000:3000'
+    restart: unless-stopped
+    volumes:
+      - ../.devcontainer/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../.devcontainer/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
 volumes:
   go-build-cache:
   go-mod-cache:
@@ -113,3 +178,7 @@ volumes:
   pnpm-store:
   postgres18-data:
   valkey-data:
+  prometheus-data:
+  tempo-data:
+  loki-data:
+  grafana-data:

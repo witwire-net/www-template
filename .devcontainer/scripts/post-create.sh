@@ -7,6 +7,7 @@ corepack prepare pnpm@latest --activate
 pnpm install
 
 if pnpm exec playwright --version >/dev/null 2>&1; then
+  find /ms-playwright -xtype l -delete 2>/dev/null || true
   pnpm exec playwright install chromium firefox webkit
 fi
 

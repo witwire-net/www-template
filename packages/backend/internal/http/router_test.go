@@ -106,7 +106,7 @@ func TestRoutePolicy(t *testing.T) {
 	seenPublicRoutes := map[string]struct{}{}
 
 	for _, route := range router.Routes() {
-		if route.Path == "/health" {
+		if route.Path == "/health" || route.Path == "/metrics" {
 			continue
 		}
 		if !strings.HasPrefix(route.Path, "/api/v1/") {

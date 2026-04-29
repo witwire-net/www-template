@@ -42,7 +42,18 @@
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow
 
+## Observability
+
+- Grafana: `http://localhost:3000` (admin/admin)
+- Prometheus: `http://localhost:9090`
+- Tempo (trace): `http://localhost:3200`
+- Loki (logs): `http://localhost:3100`
+- OTel Collector OTLP: `http://localhost:4317` (gRPC), `http://localhost:4318` (HTTP)
+- Start observability stack: `pnpm dev:observability`
+- Go backend exposes `/metrics` for Prometheus scraping
+- Frontend browsers send traces to Collector via `PUBLIC_OTEL_COLLECTOR_URL`
+
 ## OpenSpec
 
-- `openspec/**` is archived and not part of the default tooling loop
+- `openspec/**` is archived and is not part of the default tooling loop
 - Do not update OpenSpec artifacts for backend migration work unless explicitly requested

@@ -20,21 +20,23 @@ const modulePath = "www-template/packages/backend"
 var migrationFilePattern = regexp.MustCompile(`^\d{6}_[a-z0-9_]+\.(up|down)\.sql$`)
 
 var allowedInternalImports = map[string][]string{
-	"app":         {"app", "domain", "http", "persistence", "types", "usecases"},
-	"cmd":         {"app"},
-	"domain":      {"domain", "types"},
-	"http":        {"domain", "generated", "http", "types", "usecases"},
-	"persistence": {"domain", "persistence", "types"},
-	"tools":       {"tools"},
-	"types":       {"types"},
-	"usecases":    {"domain", "types", "usecases"},
+	"app":           {"app", "domain", "http", "observability", "persistence", "types", "usecases"},
+	"cmd":           {"app"},
+	"domain":        {"domain", "types"},
+	"http":          {"domain", "generated", "http", "observability", "types", "usecases"},
+	"observability": {"observability", "types"},
+	"persistence":   {"domain", "persistence", "types"},
+	"tools":         {"tools"},
+	"types":         {"types"},
+	"usecases":      {"domain", "types", "usecases"},
 }
 
 var allowedExternalImports = map[string][]string{
-	"app":         {"github.com/go-webauthn/webauthn/webauthn", "github.com/go-webauthn/webauthn/protocol"},
-	"http":        {"github.com/gin-contrib/cors", "github.com/gin-gonic/gin", "github.com/oapi-codegen/runtime/types"},
-	"persistence": {"github.com/redis/go-redis/v9", "gorm.io/driver/postgres", "gorm.io/gorm"},
-	"types":       {"github.com/oklog/ulid/v2"},
+	"app":           {"github.com/go-webauthn/webauthn/webauthn", "github.com/go-webauthn/webauthn/protocol"},
+	"http":          {"github.com/gin-contrib/cors", "github.com/gin-gonic/gin", "github.com/oapi-codegen/runtime/types"},
+	"observability": {"github.com/gin-gonic/gin", "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin", "go.opentelemetry.io/contrib/instrumentation/runtime", "go.opentelemetry.io/otel", "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc", "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc", "go.opentelemetry.io/otel/propagation", "go.opentelemetry.io/otel/sdk/metric", "go.opentelemetry.io/otel/sdk/resource", "go.opentelemetry.io/otel/sdk/trace", "go.opentelemetry.io/otel/semconv/v1.26.0", "go.opentelemetry.io/otel/trace"},
+	"persistence":   {"github.com/redis/go-redis/v9", "gorm.io/driver/postgres", "gorm.io/gorm"},
+	"types":         {"github.com/oklog/ulid/v2"},
 }
 
 var routeSelectors = map[string]struct{}{
@@ -148,6 +150,7 @@ func verifyGoFilePlacement(path string) []string {
 		"internal/domain/",
 		"internal/generated/",
 		"internal/http/",
+		"internal/observability/",
 		"internal/persistence/",
 		"internal/types/",
 		"internal/usecases/",
@@ -1068,6 +1071,8 @@ func layerFromPath(path string) string {
 		return "generated"
 	case path == "internal/http" || strings.HasPrefix(path, "internal/http/"):
 		return "http"
+	case path == "internal/observability" || strings.HasPrefix(path, "internal/observability/"):
+		return "observability"
 	case path == "internal/persistence" || strings.HasPrefix(path, "internal/persistence/"):
 		return "persistence"
 	case path == "internal/types" || strings.HasPrefix(path, "internal/types/"):

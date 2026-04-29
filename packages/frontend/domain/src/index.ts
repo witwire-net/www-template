@@ -6,3 +6,5 @@ export * from './hooks/auth/usePasskeyManagement.svelte';
 export * from './hooks/auth/usePasskeyAddByOtp.svelte';
 export * from './hooks/auth/useRecoveryFlow.svelte';
 export type * from './types';
+export { initObservability } from './lib/observability';
+export { useObservability } from './hooks/observability/useObservability.svelte';

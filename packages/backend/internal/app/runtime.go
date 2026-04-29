@@ -5,6 +5,7 @@ import (
 	stdhttp "net/http"
 
 	backendhttp "www-template/packages/backend/internal/http"
+	"www-template/packages/backend/internal/observability"
 	"www-template/packages/backend/internal/persistence"
 	"www-template/packages/backend/internal/types"
 )
@@ -13,6 +14,7 @@ type Runtime struct {
 	config    types.Config
 	container *Container
 	server    *stdhttp.Server
+	closeObs  func(context.Context) error
 }
 
 func NewRuntime(ctx context.Context) (*Runtime, error) {
@@ -27,8 +29,26 @@ func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, erro
 		return nil, err
 	}
 
+	closeTracer, err := observability.InitTracer(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	closeMeter, err := observability.InitMeter(ctx)
+	if err != nil {
+		_ = closeTracer(ctx)
+		return nil, err
+	}
+
+	closeObs := func(ctx context.Context) error {
+		_ = closeTracer(ctx)
+		_ = closeMeter(ctx)
+		return nil
+	}
+
 	container, err := BuildContainer(ctx, cfg)
 	if err != nil {
+		_ = closeObs(ctx)
 		return nil, err
 	}
 
@@ -43,6 +63,7 @@ func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, erro
 		config:    cfg,
 		container: container,
 		server:    server,
+		closeObs:  closeObs,
 	}, nil
 }
 
@@ -79,6 +100,9 @@ func verifyInfrastructure(ctx context.Context, cfg types.Config) error {
 }
 
 func (r *Runtime) Close(ctx context.Context) error {
+	if r.closeObs != nil {
+		_ = r.closeObs(ctx)
+	}
 	return r.container.Close(ctx)
 }
 

@@ -8,6 +8,7 @@
 <script lang="ts">
   import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
   import '@www-template/ui/styles';
+  import { useObservability } from '$lib/observability';
   import type { Snippet } from 'svelte';
 
   type NavLink = {
@@ -16,6 +17,8 @@
   };
 
   let { children }: { children: Snippet } = $props();
+
+  useObservability('www-template-web');
 
   const queryClient = new QueryClient({
     defaultOptions: {

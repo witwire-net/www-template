@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "www-template monorepo with Svelte frontend, TypeSpec contract, and Go backend",
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=24.12.0"
   },
@@ -14,6 +14,7 @@
     "dev:app": "pnpm --filter @www-template/app dev",
     "dev:server": "go -C packages/backend run ./cmd/api",
     "dev:all": "concurrently \"pnpm dev:server\" \"pnpm dev:web\" \"pnpm dev:app\"",
+    "dev:observability": "docker compose -f .devcontainer/compose.yaml up -d otel-collector prometheus tempo loki grafana",
     "build:web": "pnpm --filter @www-template/web build",
     "build:app": "pnpm --filter @www-template/app build",
     "build:client": "pnpm build:web && pnpm build:app",
