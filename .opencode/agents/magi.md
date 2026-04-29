@@ -1,7 +1,8 @@
 ---
-description: 議事進行・合議制意思決定エージェント
-mode: all
-model: github-copilot/gpt-5.4
+description: 議事進行・合議制意思決定エージェント（仮）
+mode: primary
+model: openai/gpt-5.5
+hidden: true
 reasoningEffort: 'high'
 permission:
   edit: deny

@@ -2,8 +2,7 @@
 description: Build agent helper
 mode: subagent
 hidden: false
-model: github-copilot/gpt-5.4
-reasoningEffort: 'high'
+model: opencode-go/kimi-k2.6
 permission:
   edit: allow
   webfetch: allow
