@@ -1,0 +1,64 @@
+[app]
+environment = "development"
+bearer_token = "dev-app-auth"
+
+[server]
+port = 8080
+allowed_origins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
+]
+
+[auth]
+webauthn_rp_id = "localhost"
+account_recovery_url_base = "http://localhost:5174/login/recovery/consume"
+challenge_ttl = "5m"
+recovery_token_ttl = "30m"
+recovery_session_ttl = "15m"
+session_idle_ttl = "12h"
+session_absolute_ttl = "336h"
+passkey_start_limit = 5
+passkey_start_window = "5m"
+recovery_email_limit = 3
+recovery_email_window = "1h"
+recovery_ip_limit = 10
+recovery_ip_window = "1h"
+failure_threshold = 10
+failure_window = "15m"
+failure_duration = "15m"
+
+[database]
+url = "postgres://template:template@postgres:5432/template?sslmode=disable"
+
+[valkey]
+url = "redis://valkey:6379/0"
+key_prefix = "www-template"
+
+[opensearch]
+url = "http://opensearch:9200"
+
+[object_storage]
+endpoint = "http://minio:9000"
+region = "us-east-1"
+bucket = "template"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+use_path_style = true
+
+[smtp]
+host = "mailpit"
+port = 1025
+username = ""
+password = ""
+
+[mail]
+from_address = "noreply@example.com"
+
+[observability]
+otel_exporter_otlp_endpoint = "http://otel-collector:4317"
+otel_exporter_otlp_traces_endpoint = "http://otel-collector:4317"
+otel_exporter_otlp_logs_endpoint = "http://otel-collector:4317"
+otel_service_name = "www-template-api"
+otel_resource_attributes = "service.namespace=www-template,deployment.environment=development"

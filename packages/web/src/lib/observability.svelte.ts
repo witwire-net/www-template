@@ -8,15 +8,15 @@ import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { onMount } from 'svelte';
 
+import { PUBLIC_OTEL_COLLECTOR_URL } from '$env/static/public';
+
 /**
  * Initialize OpenTelemetry browser tracing for the given service.
  * @param serviceName - The service name to attribute traces to.
  */
 export function initObservability(serviceName: string): void {
-  const collectorUrl = getCollectorUrl();
-
   const exporter = new OTLPTraceExporter({
-    url: collectorUrl,
+    url: PUBLIC_OTEL_COLLECTOR_URL,
   });
 
   const provider = new WebTracerProvider({
@@ -82,12 +82,4 @@ export function useObservability(serviceName: string): void {
   onMount(() => {
     initObservability(serviceName);
   });
-}
-
-function getCollectorUrl(): string {
-  if (typeof import.meta !== 'undefined') {
-    const meta = import.meta as { env: Record<string, string | undefined> };
-    return meta.env.PUBLIC_OTEL_COLLECTOR_URL ?? 'http://localhost:4318/v1/traces';
-  }
-  return 'http://localhost:4318/v1/traces';
 }

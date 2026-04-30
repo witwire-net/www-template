@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -14,10 +13,13 @@ import (
 )
 
 // InitMeter initializes the OTel MeterProvider and starts Go runtime metrics collection.
-func InitMeter(ctx context.Context) (func(context.Context) error, error) {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+func InitMeter(ctx context.Context, endpoint, serviceName string) (func(context.Context) error, error) {
 	if endpoint == "" {
 		endpoint = "localhost:4317"
+	}
+
+	if serviceName == "" {
+		serviceName = "www-template-api"
 	}
 
 	exporter, err := otlpmetricgrpc.New(ctx,
@@ -26,11 +28,6 @@ func InitMeter(ctx context.Context) (func(context.Context) error, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create otlp metric exporter: %w", err)
-	}
-
-	serviceName := os.Getenv("OTEL_SERVICE_NAME")
-	if serviceName == "" {
-		serviceName = "www-template-api"
 	}
 
 	res, err := resource.New(ctx,

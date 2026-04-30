@@ -10,10 +10,9 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic
 /**
  * Initialize OpenTelemetry browser tracing for the given service.
  * @param serviceName - The service name to attribute traces to.
+ * @param collectorUrl - The OTLP HTTP collector endpoint URL.
  */
-export function initObservability(serviceName: string): void {
-  const collectorUrl = getCollectorUrl();
-
+export function initObservability(serviceName: string, collectorUrl: string): void {
   const exporter = new OTLPTraceExporter({
     url: collectorUrl,
   });
@@ -71,12 +70,4 @@ export function initObservability(serviceName: string): void {
 
   window.addEventListener('error', reportError);
   window.addEventListener('unhandledrejection', reportError as EventListener);
-}
-
-function getCollectorUrl(): string {
-  if (typeof import.meta !== 'undefined') {
-    const meta = import.meta as { env: Record<string, string | undefined> };
-    return meta.env.PUBLIC_OTEL_COLLECTOR_URL ?? 'http://localhost:4318/v1/traces';
-  }
-  return 'http://localhost:4318/v1/traces';
 }

@@ -1170,11 +1170,12 @@ export default tseslint.config(
 
   // packages 配下は import で拡張子 .js を禁止
   {
-    files: ['packages/**/*.{ts,tsx}', 'packages/**/*.svelte.ts', 'packages/**/*.svelte.js'],
+    files: ['packages/**/*.ts', 'packages/**/*.tsx'],
     ignores: [
-      'packages/frontend/api/src/generated/**/*.{ts,tsx}',
-      'packages/frontend/api/src/generated/**/*.svelte.ts',
-      'packages/frontend/api/src/generated/**/*.svelte.js',
+      'packages/frontend/api/src/generated/**/*.ts',
+      'packages/frontend/api/src/generated/**/*.tsx',
+      'packages/**/*.svelte.ts',
+      'packages/**/*.svelte.js',
     ],
     rules: {
       'import/extensions': [

@@ -2,8 +2,6 @@ package types
 
 import (
 	"errors"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -87,32 +85,15 @@ type Config struct {
 	Environment    string
 	Infra          InfraConfig
 	Port           string
+	Observability  ObservabilityConfig
 }
 
-func LoadConfig() Config {
-	environment := getEnv("APP_ENV", "development")
-	allowedOriginsValue := getEnv("ALLOWED_ORIGINS", defaultAllowedOrigins)
-	allowedOrigins := make([]string, 0)
-	for _, rawOrigin := range strings.Split(allowedOriginsValue, ",") {
-		origin := strings.TrimSpace(rawOrigin)
-		if origin != "" {
-			allowedOrigins = append(allowedOrigins, origin)
-		}
-	}
-
-	appBearerToken := strings.TrimSpace(os.Getenv("APP_BEARER_TOKEN"))
-	if environment == "development" && appBearerToken == "" {
-		appBearerToken = defaultAppAuthValue
-	}
-
-	return Config{
-		AllowedOrigins: allowedOrigins,
-		AppBearerToken: appBearerToken,
-		Auth:           loadAuthConfig(),
-		Environment:    environment,
-		Infra:          loadInfraConfig(),
-		Port:           getEnv("PORT", defaultPort),
-	}
+type ObservabilityConfig struct {
+	OTELExporterOTLPEndpoint       string
+	OTELExporterOTLPTracesEndpoint string
+	OTELExporterOTLPLogsEndpoint   string
+	OTELServiceName                string
+	OTELResourceAttributes         string
 }
 
 func (c Config) AppAuthorizationValue() string {
@@ -122,40 +103,40 @@ func (c Config) AppAuthorizationValue() string {
 func (c Config) Validate() error {
 	missing := make([]string, 0)
 	if c.Environment != "development" && strings.TrimSpace(c.AppBearerToken) == "" {
-		missing = append(missing, "APP_BEARER_TOKEN")
+		missing = append(missing, "app.bearer_token")
 	}
 	if strings.TrimSpace(c.Infra.Database.URL) == "" {
-		missing = append(missing, "DATABASE_URL")
+		missing = append(missing, "database.url")
 	}
 	if strings.TrimSpace(c.Infra.Valkey.URL) == "" {
-		missing = append(missing, "VALKEY_URL")
+		missing = append(missing, "valkey.url")
 	}
 	if strings.TrimSpace(c.Infra.SMTP.Host) == "" {
-		missing = append(missing, "SMTP_HOST")
+		missing = append(missing, "smtp.host")
 	}
 	if strings.TrimSpace(c.Infra.OpenSearch.URL) == "" {
-		missing = append(missing, "OPENSEARCH_URL")
+		missing = append(missing, "opensearch.url")
 	}
 	if strings.TrimSpace(c.Infra.ObjectStorage.Endpoint) == "" {
-		missing = append(missing, "R2_ENDPOINT")
+		missing = append(missing, "object_storage.endpoint")
 	}
 	if strings.TrimSpace(c.Infra.ObjectStorage.Region) == "" {
-		missing = append(missing, "R2_REGION")
+		missing = append(missing, "object_storage.region")
 	}
 	if strings.TrimSpace(c.Infra.ObjectStorage.Bucket) == "" {
-		missing = append(missing, "R2_BUCKET")
+		missing = append(missing, "object_storage.bucket")
 	}
 	if strings.TrimSpace(c.Infra.ObjectStorage.AccessKeyID) == "" {
-		missing = append(missing, "R2_ACCESS_KEY_ID")
+		missing = append(missing, "object_storage.access_key_id")
 	}
 	if strings.TrimSpace(c.Infra.ObjectStorage.SecretAccessKey) == "" {
-		missing = append(missing, "R2_SECRET_ACCESS_KEY")
+		missing = append(missing, "object_storage.secret_access_key")
 	}
 	if strings.TrimSpace(c.Infra.SMTP.Host) == "" {
-		missing = append(missing, "SMTP_HOST")
+		missing = append(missing, "smtp.host")
 	}
 	if strings.TrimSpace(c.Infra.Mail.FromAddress) == "" {
-		missing = append(missing, "MAIL_FROM_ADDRESS")
+		missing = append(missing, "mail.from_address")
 	}
 	if len(missing) > 0 {
 		return errors.New(strings.Join(missing, ", ") + " is required")
@@ -187,47 +168,6 @@ func (c Config) AuthRuntime() AuthConfig {
 	return configured
 }
 
-func loadInfraConfig() InfraConfig {
-	return InfraConfig{
-		Database: DatabaseConfig{
-			URL: strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		},
-		Mail: MailConfig{
-			FromAddress: strings.TrimSpace(os.Getenv("MAIL_FROM_ADDRESS")),
-		},
-		ObjectStorage: ObjectStorageConfig{
-			Endpoint:        strings.TrimSpace(os.Getenv("R2_ENDPOINT")),
-			Region:          strings.TrimSpace(os.Getenv("R2_REGION")),
-			Bucket:          strings.TrimSpace(os.Getenv("R2_BUCKET")),
-			AccessKeyID:     strings.TrimSpace(os.Getenv("R2_ACCESS_KEY_ID")),
-			SecretAccessKey: strings.TrimSpace(os.Getenv("R2_SECRET_ACCESS_KEY")),
-			UsePathStyle:    getEnvBool("R2_USE_PATH_STYLE", defaultR2UsePathStyle),
-		},
-		OpenSearch: OpenSearchConfig{
-			URL: strings.TrimSpace(os.Getenv("OPENSEARCH_URL")),
-		},
-		Valkey: ValkeyConfig{
-			URL:       strings.TrimSpace(os.Getenv("VALKEY_URL")),
-			KeyPrefix: getEnv("VALKEY_KEY_PREFIX", defaultValkeyPrefix),
-		},
-		SMTP: SMTPConfig{
-			Host:     strings.TrimSpace(os.Getenv("SMTP_HOST")),
-			Port:     getEnvInt("SMTP_PORT", defaultSMTPPort),
-			Username: strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
-			Password: strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
-		},
-	}
-}
-
-func getEnv(key string, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return fallback
-	}
-
-	return value
-}
-
 func defaultAuthConfig() AuthConfig {
 	return AuthConfig{
 		ChallengeTTL:                5 * time.Minute,
@@ -247,57 +187,6 @@ func defaultAuthConfig() AuthConfig {
 		WebAuthnRPID:                defaultWebAuthnRPID,
 		AccountRecoveryURLBase:      defaultRecoveryBase,
 	}
-}
-
-func loadAuthConfig() AuthConfig {
-	defaults := defaultAuthConfig()
-
-	return AuthConfig{
-		ChallengeTTL:                defaults.ChallengeTTL,
-		RecoveryTokenTTL:            defaults.RecoveryTokenTTL,
-		RecoverySessionTTL:          defaults.RecoverySessionTTL,
-		SessionIdleTTL:              defaults.SessionIdleTTL,
-		SessionAbsoluteTTL:          defaults.SessionAbsoluteTTL,
-		PasskeyStartThrottleLimit:   defaults.PasskeyStartThrottleLimit,
-		PasskeyStartThrottleWindow:  defaults.PasskeyStartThrottleWindow,
-		RecoveryEmailThrottleLimit:  defaults.RecoveryEmailThrottleLimit,
-		RecoveryEmailThrottleWindow: defaults.RecoveryEmailThrottleWindow,
-		RecoveryIPThrottleLimit:     defaults.RecoveryIPThrottleLimit,
-		RecoveryIPThrottleWindow:    defaults.RecoveryIPThrottleWindow,
-		FailureLockThreshold:        defaults.FailureLockThreshold,
-		FailureLockWindow:           defaults.FailureLockWindow,
-		FailureLockDuration:         defaults.FailureLockDuration,
-		WebAuthnRPID:                getEnv("WEBAUTHN_RP_ID", defaultWebAuthnRPID),
-		AccountRecoveryURLBase:      getEnv("ACCOUNT_RECOVERY_URL_BASE", defaultRecoveryBase),
-	}
-}
-
-func getEnvInt(key string, fallback int) int {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return fallback
-	}
-
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return fallback
-	}
-
-	return parsed
-}
-
-func getEnvBool(key string, fallback bool) bool {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return fallback
-	}
-
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		return fallback
-	}
-
-	return parsed
 }
 
 func defaultDuration(value time.Duration, fallback time.Duration) time.Duration {

@@ -16,17 +16,10 @@ services:
       mailpit:
         condition: service_started
     environment:
-      DATABASE_URL: postgres://template:template@postgres:5432/template?sslmode=disable
+      CONFIG_PATH: /workspaces/www-template/.config/local.toml
       GOPATH: /go
       GOMODCACHE: /go/pkg/mod
       GOCACHE: /home/node/.cache/go-build
-      OPENSEARCH_URL: http://opensearch:9200
-      R2_ACCESS_KEY_ID: minioadmin
-      R2_BUCKET: template
-      R2_ENDPOINT: http://minio:9000
-      R2_REGION: us-east-1
-      R2_SECRET_ACCESS_KEY: minioadmin
-      R2_USE_PATH_STYLE: 'true'
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       TOOLCHAIN_GO_VERSION: 1.26.2
       TOOLCHAIN_PNPM_VERSION: 10.33.2
@@ -35,16 +28,6 @@ services:
       TOOLCHAIN_OAPI_CODEGEN_VERSION: 2.4.1
       TOOLCHAIN_TYPESPEC_VERSION: 1.8.0
       TOOLCHAIN_OPENSPEC_VERSION: 1.2.0
-      MAIL_FROM_ADDRESS: noreply@example.com
-      SMTP_HOST: mailpit
-      SMTP_PORT: '1025'
-      VALKEY_URL: redis://valkey:6379/0
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4317
-      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4317
-      OTEL_SERVICE_NAME: www-template-api
-      OTEL_RESOURCE_ATTRIBUTES: service.namespace=www-template,deployment.environment=development
-      PUBLIC_OTEL_COLLECTOR_URL: http://localhost:4318/v1/traces
     extra_hosts:
       - host.docker.internal:host-gateway
     init: true
@@ -135,13 +118,14 @@ services:
 
   tempo:
     image: grafana/tempo:2.7.0
+    user: '0'
     command: ['-config.file=/etc/tempo.yml']
     ports:
       - '3200:3200'
     restart: unless-stopped
     volumes:
       - ./observability/tempo.yml:/etc/tempo.yml:ro
-      - tempo-data:/tmp/tempo
+      - tempo-data:/var/tempo
 
   loki:
     image: grafana/loki:3.4.0

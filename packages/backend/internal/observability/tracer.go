@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -14,10 +13,13 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
-func InitTracer(ctx context.Context) (func(context.Context) error, error) {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+func InitTracer(ctx context.Context, endpoint, serviceName string) (func(context.Context) error, error) {
 	if endpoint == "" {
 		endpoint = "localhost:4317"
+	}
+
+	if serviceName == "" {
+		serviceName = "www-template-api"
 	}
 
 	exporter, err := otlptracegrpc.New(ctx,
@@ -26,11 +28,6 @@ func InitTracer(ctx context.Context) (func(context.Context) error, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create otlp trace exporter: %w", err)
-	}
-
-	serviceName := os.Getenv("OTEL_SERVICE_NAME")
-	if serviceName == "" {
-		serviceName = "www-template-api"
 	}
 
 	res, err := resource.New(ctx,

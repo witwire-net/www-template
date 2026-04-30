@@ -18,7 +18,7 @@ type Runtime struct {
 }
 
 func NewRuntime(ctx context.Context) (*Runtime, error) {
-	return NewRuntimeWithConfig(ctx, types.LoadConfig())
+	return NewRuntimeWithConfig(ctx, LoadConfig())
 }
 
 func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, error) {
@@ -29,12 +29,13 @@ func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, erro
 		return nil, err
 	}
 
-	closeTracer, err := observability.InitTracer(ctx)
+	obs := cfg.Observability
+	closeTracer, err := observability.InitTracer(ctx, obs.OTELExporterOTLPEndpoint, obs.OTELServiceName)
 	if err != nil {
 		return nil, err
 	}
 
-	closeMeter, err := observability.InitMeter(ctx)
+	closeMeter, err := observability.InitMeter(ctx, obs.OTELExporterOTLPEndpoint, obs.OTELServiceName)
 	if err != nil {
 		_ = closeTracer(ctx)
 		return nil, err

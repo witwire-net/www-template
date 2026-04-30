@@ -32,7 +32,7 @@ var allowedInternalImports = map[string][]string{
 }
 
 var allowedExternalImports = map[string][]string{
-	"app":           {"github.com/go-webauthn/webauthn/webauthn", "github.com/go-webauthn/webauthn/protocol"},
+	"app":           {"github.com/pelletier/go-toml/v2", "github.com/go-webauthn/webauthn/webauthn", "github.com/go-webauthn/webauthn/protocol"},
 	"http":          {"github.com/gin-contrib/cors", "github.com/gin-gonic/gin", "github.com/oapi-codegen/runtime/types"},
 	"observability": {"github.com/gin-gonic/gin", "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin", "go.opentelemetry.io/contrib/instrumentation/runtime", "go.opentelemetry.io/otel", "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc", "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc", "go.opentelemetry.io/otel/propagation", "go.opentelemetry.io/otel/sdk/metric", "go.opentelemetry.io/otel/sdk/resource", "go.opentelemetry.io/otel/sdk/trace", "go.opentelemetry.io/otel/semconv/v1.26.0", "go.opentelemetry.io/otel/trace"},
 	"persistence":   {"github.com/redis/go-redis/v9", "gorm.io/driver/postgres", "gorm.io/gorm"},
