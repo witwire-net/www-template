@@ -1,6 +1,6 @@
 import { onMount } from 'svelte';
 
-import { initObservability } from '../../lib/observability';
+import { initObservability } from './init';
 
 type ObservabilityData = object;
 

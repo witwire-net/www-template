@@ -4,7 +4,7 @@ import {
   applyRecoveryAccepted,
   createGenericRecoverySentView,
   createRecoveryFlowInitialState,
-} from './recoveryState';
+} from './state';
 
 describe('recoveryState', () => {
   it('[AUTH-FE-S003] maps accepted recovery requests to a generic sent view', () => {

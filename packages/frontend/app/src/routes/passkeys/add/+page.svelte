@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { usePasskeyAddByOtp } from '@www-template/domain/hooks/auth/usePasskeyAddByOtp';
+  import { usePasskeyAddByOtp } from '@www-template/domain/auth/passkey/addByOtp';
   import { Button, Card, CardContent, InputOtp, Label, Separator } from '@www-template/ui/components';
 
   const { data, actions } = usePasskeyAddByOtp();

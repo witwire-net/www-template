@@ -1,4 +1,4 @@
-import type { PasskeyLoginState } from 'types';
+import type { PasskeyLoginState } from '../types';
 
 /** passkey login state の初期値を作る。 */
 function createPasskeyLoginInitialState(): PasskeyLoginState {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Button, Card, CardContent, Input, Label, Separator } from '@www-template/ui/components';
 
   const { data, actions } = useRecoveryFlow();

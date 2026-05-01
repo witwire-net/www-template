@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PasskeyItem } from '@www-template/domain/types';
+  import type { PasskeyItem } from '@www-template/domain/auth';
   import { Alert, Button, Item, Separator, Spinner } from '@www-template/ui/components';
 
   interface PasskeyListProps {

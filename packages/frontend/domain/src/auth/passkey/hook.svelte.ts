@@ -1,15 +1,12 @@
 import { authApi } from '@www-template/api';
 
-import {
-  createPasskeyLoginInitialState,
-  getWebAuthnAssertion,
-  normalizeWebAuthnError,
-  toPasskeyErrorMessage,
-} from '../../auth';
+import { getWebAuthnAssertion, normalizeWebAuthnError } from '../webauthn';
 
-import { useAuthSession } from './useAuthSession.svelte';
+import { createPasskeyLoginInitialState, toPasskeyErrorMessage } from './state';
 
-import type { AuthRouteIntent, PasskeyLoginState } from 'types';
+import { useAuthSession } from '../session/hook.svelte';
+
+import type { AuthRouteIntent, PasskeyLoginState } from '../types';
 
 interface PasskeyLoginData {
   state: PasskeyLoginState;

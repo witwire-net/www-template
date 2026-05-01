@@ -73,11 +73,11 @@ const frontendWebComponentFiles = [
 
 const frontendComponentFiles = [...frontendAppComponentFiles, ...frontendWebComponentFiles];
 
-const frontendDomainHookFiles = ['packages/frontend/domain/src/hooks/**/*.ts'];
+const frontendDomainHookFiles = [];
 
 const frontendDomainHookSvelteFiles = [
-  'packages/frontend/domain/src/hooks/**/*.svelte.ts',
-  'packages/frontend/domain/src/hooks/**/*.svelte.js',
+  'packages/frontend/domain/src/**/*.svelte.ts',
+  'packages/frontend/domain/src/**/*.svelte.js',
 ];
 
 const frontendDomainPlainTsFiles = ['packages/frontend/domain/src/**/*.ts'];
@@ -927,6 +927,21 @@ export default tseslint.config(
         { type: 'frontend-app', pattern: 'packages/frontend/app/src/**/*', mode: 'full' },
         { type: 'frontend-web', pattern: 'packages/web/src/**/*', mode: 'full' },
         { type: 'ui', pattern: 'packages/frontend/ui/src/**/*', mode: 'full' },
+        {
+          type: 'domain-auth',
+          pattern: 'packages/frontend/domain/src/auth/**/*',
+          mode: 'full',
+        },
+        {
+          type: 'domain-status',
+          pattern: 'packages/frontend/domain/src/status/**/*',
+          mode: 'full',
+        },
+        {
+          type: 'domain-observability',
+          pattern: 'packages/frontend/domain/src/observability/**/*',
+          mode: 'full',
+        },
       ],
     },
     rules: {
@@ -1374,9 +1389,46 @@ export default tseslint.config(
     },
   },
 
+  // Domain 内 Feature 境界と相対パス制限
+  {
+    files: frontendDomainSourceFiles,
+    rules: {
+      'boundaries/element-types': [
+        'error',
+        {
+          default: 'allow',
+          message:
+            'Domain feature boundary violation: %{from} is not allowed to import from %{target}.',
+          rules: [
+            {
+              from: ['domain-status'],
+              disallow: ['domain-auth', 'domain-observability'],
+            },
+            {
+              from: ['domain-observability'],
+              disallow: ['domain-auth', 'domain-status'],
+            },
+          ],
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../../*', '../..'],
+              message:
+                'domain 内で ../../ を使わず、同 Feature 内の相対パスまたはパスエイリアスを使ってください。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Domain composable/hook の命名規約
   {
-    files: frontendDomainHookFiles,
+    files: frontendDomainHookSvelteFiles,
     plugins: {
       'hooks-domain': {
         rules: {

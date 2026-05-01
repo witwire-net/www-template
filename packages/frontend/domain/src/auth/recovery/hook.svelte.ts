@@ -6,14 +6,14 @@ import {
   applyRecoveryReady,
   clearRecoveryState,
   createRecoveryFlowInitialState,
-  createWebAuthnAttestation,
-  normalizeWebAuthnError,
-  toRecoveryErrorMessage,
-} from '../../auth';
+} from './state';
 
-import { useAuthSession } from './useAuthSession.svelte';
+import { createWebAuthnAttestation, normalizeWebAuthnError } from '../webauthn';
+import { toRecoveryErrorMessage } from '../passkey/state';
 
-import type { RecoveryFlowState } from 'types';
+import { useAuthSession } from '../session/hook.svelte';
+
+import type { RecoveryFlowState } from '../types';
 
 const CACHE_CONTROL_HEADER = 'cache-control';
 

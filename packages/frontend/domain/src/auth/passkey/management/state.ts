@@ -1,4 +1,4 @@
-import type { PasskeyItem, PasskeyManagementState } from 'types';
+import type { PasskeyItem, PasskeyManagementState } from '../../types';
 
 /** passkey management state の初期値を作る。 */
 function createPasskeyManagementInitialState(): PasskeyManagementState {
@@ -11,7 +11,7 @@ function createPasskeyManagementInitialState(): PasskeyManagementState {
 
 /** 削除成功後に対象パスキーを state から除去する。 */
 function applyPasskeyDeleted(state: PasskeyManagementState, id: string): void {
-  state.passkeys = state.passkeys.filter((p) => p.id !== id);
+  state.passkeys = state.passkeys.filter((p: PasskeyItem) => p.id !== id);
 }
 
 /** 一覧取得成功後に state を更新する。 */

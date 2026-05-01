@@ -6,7 +6,9 @@ import {
   applyPasskeyList,
   createPasskeyManagementInitialState,
   toPasskeyManagementErrorMessage,
-} from './passkeyManagementState';
+} from './state';
+
+import type { PasskeyItem } from '../../types';
 
 describe('passkeyManagementState', () => {
   it('[AUTH-FE-S012] deletePasskey 成功時に data.passkeys から対象が除去される', () => {
@@ -32,8 +34,10 @@ describe('passkeyManagementState', () => {
 
     // Assert: 対象が除去され、残りは変化しない
     expect(state.passkeys).toHaveLength(1);
-    expect(state.passkeys.map((p) => p.id)).not.toContain('01ARZ3NDEKTSV4RRFFQ69G5FAX');
-    expect(state.passkeys.map((p) => p.id)).toContain('01ARZ3NDEKTSV4RRFFQ69G5FB1');
+    expect(state.passkeys.map((p: PasskeyItem) => p.id)).not.toContain(
+      '01ARZ3NDEKTSV4RRFFQ69G5FAX'
+    );
+    expect(state.passkeys.map((p: PasskeyItem) => p.id)).toContain('01ARZ3NDEKTSV4RRFFQ69G5FB1');
     expect(state.error).toBeNull();
   });
 
@@ -56,7 +60,7 @@ describe('passkeyManagementState', () => {
 
     // Assert: passkeys は変化せず、error が設定される
     expect(state.passkeys).toHaveLength(1);
-    expect(state.passkeys.map((p) => p.id)).toContain('01ARZ3NDEKTSV4RRFFQ69G5FAX');
+    expect(state.passkeys.map((p: PasskeyItem) => p.id)).toContain('01ARZ3NDEKTSV4RRFFQ69G5FAX');
     expect(state.error).toBe('last_passkey_cannot_be_deleted');
   });
 });

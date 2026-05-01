@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyInvalidRecoveryToken,
+  applyRecoveryAccepted,
+  applyRecoveryReady,
+  clearRecoveryState,
+  createGenericRecoverySentView,
+  createRecoveryFlowInitialState,
+} from '@www-template/domain/auth/recovery';
+import {
   applyExpiredSession,
   applyMissingSession,
   clearAuthSession,
@@ -8,15 +16,8 @@ import {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
-} from '../../../../domain/src/auth/authSessionState';
-import {
-  applyInvalidRecoveryToken,
-  applyRecoveryAccepted,
-  applyRecoveryReady,
-  clearRecoveryState,
-  createGenericRecoverySentView,
-  createRecoveryFlowInitialState,
-} from '../../../../domain/src/auth/recoveryState';
+} from '@www-template/domain/auth/session';
+
 import { TEST_ULID } from '../../tests/mocks/handlers';
 import { _AUTH_ROUTE_CACHE_POLICY as LOGOUT_CACHE_POLICY } from '../logout/+layout';
 

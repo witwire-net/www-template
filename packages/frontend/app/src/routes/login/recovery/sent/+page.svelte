@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Card, CardContent, Separator } from '@www-template/ui/components';
 
   const { data } = useRecoveryFlow();

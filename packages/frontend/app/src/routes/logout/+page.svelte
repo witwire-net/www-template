@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import { useAuthSession } from '@www-template/domain/hooks/auth/useAuthSession';
+  import { useAuthSession } from '@www-template/domain/auth/session';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
   const { actions } = useAuthSession();

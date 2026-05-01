@@ -6,17 +6,17 @@ import {
   applyInternalError,
   applyMissingSession,
   clearAuthSession,
-  createAuthorizationHeaders,
   createAuthSessionInitialState,
+  createAuthorizationHeaders,
   hasUlidAuthSessionShape,
-} from '../../auth';
+} from './state';
 
 import type {
   AuthFailureState,
   AuthRouteIntent,
   AuthSessionState,
   AuthSessionSummary,
-} from 'types';
+} from '../types';
 
 interface AuthSessionData {
   state: AuthSessionState;

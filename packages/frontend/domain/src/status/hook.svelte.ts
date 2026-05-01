@@ -1,8 +1,8 @@
 import { statusApi } from '@www-template/api';
 
-import { createStatusInitialState, toStatusErrorMessage } from '../../status/statusState';
+import { createStatusInitialState, toStatusErrorMessage } from './state';
 
-import type { StatusState } from 'types';
+import type { StatusState } from './types';
 
 interface StatusData {
   state: StatusState;

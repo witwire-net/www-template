@@ -1,8 +1,8 @@
 import { authApi } from '@www-template/api';
 
-import { createWebAuthnAttestation, normalizeWebAuthnError } from '../../auth';
+import { createWebAuthnAttestation, normalizeWebAuthnError } from '../../webauthn';
 
-import type { PasskeyAddByOtpState } from 'types';
+import type { PasskeyAddByOtpState } from '../../types';
 
 interface PasskeyAddByOtpData {
   loading: boolean;

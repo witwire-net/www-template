@@ -15,21 +15,21 @@ export {
   createPasskeyLoginInitialState,
   toPasskeyErrorMessage,
   toRecoveryErrorMessage,
-} from './passkeyState';
+} from './passkey/state';
 export {
   applyPasskeyDeleted,
   applyPasskeyError,
   applyPasskeyList,
   createPasskeyManagementInitialState,
   toPasskeyManagementErrorMessage,
-} from './passkeyManagementState';
+} from './passkey/management/state';
 export {
   applyInvalidRecoveryToken,
   applyRecoveryAccepted,
   applyRecoveryReady,
   clearRecoveryState,
   createRecoveryFlowInitialState,
-} from './recoveryState';
+} from './recovery/state';
 export {
   applyAuthenticatedSession,
   applyExpiredSession,
@@ -41,5 +41,40 @@ export {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
-} from './authSessionState';
-export { createGenericRecoverySentView } from './recoveryState';
+} from './session/state';
+export { createGenericRecoverySentView } from './recovery/state';
+export type {
+  AuthFailureState,
+  AuthRouteIntent,
+  AuthSessionState,
+  AuthSessionSummary,
+  PasskeyAddByOtpState,
+  PasskeyItem,
+  PasskeyLoginState,
+  PasskeyManagementState,
+  RecoveryFlowState,
+  RecoverySentView,
+} from './types';
+export { useAuthSession } from './session/hook.svelte';
+export type { AuthSessionActions, AuthSessionData } from './session/hook.svelte';
+export { usePasskeyLogin } from './passkey/hook.svelte';
+export type { PasskeyLoginActions, PasskeyLoginData } from './passkey/hook.svelte';
+export { usePasskeyAddByOtp } from './passkey/addByOtp/hook.svelte';
+export type { PasskeyAddByOtpActions, PasskeyAddByOtpData } from './passkey/addByOtp/hook.svelte';
+export { usePasskeyManagement } from './passkey/management/hook.svelte';
+export type {
+  PasskeyManagementActions,
+  PasskeyManagementData,
+} from './passkey/management/hook.svelte';
+export { useRecoveryFlow } from './recovery/hook.svelte';
+export type {
+  RecoveryFlowActions,
+  RecoveryFlowData,
+  RecoveryReadySnapshot,
+} from './recovery/hook.svelte';
+export { useSessionGuard } from './guard/hook.svelte';
+export type {
+  SessionGuardActions,
+  SessionGuardData,
+  SessionGuardOptions,
+} from './guard/hook.svelte';

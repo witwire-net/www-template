@@ -5,14 +5,14 @@ import {
   applyPasskeyError,
   applyPasskeyList,
   createPasskeyManagementInitialState,
-  createWebAuthnAttestation,
-  normalizeWebAuthnError,
   toPasskeyManagementErrorMessage,
-} from '../../auth';
+} from './state';
 
-import { useAuthSession } from './useAuthSession.svelte';
+import { createWebAuthnAttestation, normalizeWebAuthnError } from '../../webauthn';
 
-import type { PasskeyItem, PasskeyManagementState } from 'types';
+import { useAuthSession } from '../../session/hook.svelte';
+
+import type { PasskeyItem, PasskeyManagementState } from '../../types';
 
 type AuthSessionRef = ReturnType<typeof useAuthSession>;
 

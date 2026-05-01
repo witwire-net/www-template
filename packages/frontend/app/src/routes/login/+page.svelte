@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import { usePasskeyLogin } from '@www-template/domain/hooks/auth/usePasskeyLogin';
+  import { usePasskeyLogin } from '@www-template/domain/auth/passkey';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
   const { data, actions } = usePasskeyLogin();

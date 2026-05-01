@@ -3,7 +3,7 @@
 
   import { goto } from '$app/navigation';
 
-  import { useSessionGuard } from '@www-template/domain/hooks/auth/useSessionGuard';
+  import { useSessionGuard } from '@www-template/domain/auth/guard';
 
   let { children }: { children: Snippet } = $props();
 

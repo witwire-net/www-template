@@ -1,6 +1,6 @@
-import { useAuthSession } from './useAuthSession.svelte';
+import { useAuthSession } from '../session/hook.svelte';
 
-import type { AuthRouteIntent } from 'types';
+import type { AuthRouteIntent } from '../types';
 
 interface SessionGuardData {
   state: ReturnType<typeof useAuthSession>['data']['state'];

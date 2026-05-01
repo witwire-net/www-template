@@ -1,4 +1,4 @@
-import type { AuthRouteIntent, AuthSessionState, AuthSessionSummary } from 'types';
+import type { AuthRouteIntent, AuthSessionState, AuthSessionSummary } from '../types';
 
 const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/u;
 

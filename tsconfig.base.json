@@ -9,26 +9,22 @@
       "@www-template/app/*": ["packages/frontend/app/src/*"],
       "@www-template/web/*": ["packages/web/src/*"],
       "@www-template/domain": ["packages/frontend/domain/src/index.ts"],
-      "@www-template/domain/hooks/auth/useAuthSession": [
-        "packages/frontend/domain/src/hooks/auth/useAuthSession.svelte.ts"
+      "@www-template/domain/auth": ["packages/frontend/domain/src/auth/index.ts"],
+      "@www-template/domain/auth/session": ["packages/frontend/domain/src/auth/session/index.ts"],
+      "@www-template/domain/auth/passkey": ["packages/frontend/domain/src/auth/passkey/index.ts"],
+      "@www-template/domain/auth/passkey/addByOtp": [
+        "packages/frontend/domain/src/auth/passkey/addByOtp/index.ts"
       ],
-      "@www-template/domain/hooks/auth/usePasskeyLogin": [
-        "packages/frontend/domain/src/hooks/auth/usePasskeyLogin.svelte.ts"
+      "@www-template/domain/auth/passkey/management": [
+        "packages/frontend/domain/src/auth/passkey/management/index.ts"
       ],
-      "@www-template/domain/hooks/auth/useRecoveryFlow": [
-        "packages/frontend/domain/src/hooks/auth/useRecoveryFlow.svelte.ts"
-      ],
-      "@www-template/domain/hooks/auth/useSessionGuard": [
-        "packages/frontend/domain/src/hooks/auth/useSessionGuard.svelte.ts"
-      ],
-      "@www-template/domain/hooks/status/useStatus": [
-        "packages/frontend/domain/src/hooks/status/useStatus.svelte.ts"
-      ],
+      "@www-template/domain/auth/recovery": ["packages/frontend/domain/src/auth/recovery/index.ts"],
+      "@www-template/domain/auth/guard": ["packages/frontend/domain/src/auth/guard/index.ts"],
+      "@www-template/domain/status": ["packages/frontend/domain/src/status/index.ts"],
+      "@www-template/domain/observability": ["packages/frontend/domain/src/observability/index.ts"],
       "@www-template/domain/*": ["packages/frontend/domain/src/*"],
       "@www-template/api/*": ["packages/frontend/api/src/*"],
       "@www-template/api": ["packages/frontend/api/src/index.ts"],
-      "types": ["packages/frontend/domain/src/types/index.ts"],
-      "types/*": ["packages/frontend/domain/src/types/*"],
       "@www-template/ui/styles": ["packages/frontend/ui/src/styles/index.ts"],
       "@ui": ["packages/frontend/ui/src"],
       "@ui/*": ["packages/frontend/ui/src/*"],

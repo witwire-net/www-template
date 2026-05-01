@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { usePasskeyManagement } from '@www-template/domain/hooks/auth/usePasskeyManagement';
+  import { usePasskeyManagement } from '@www-template/domain/auth/passkey/management';
   import PasskeyList from '../../../lib/profiles/PasskeyList.svelte';
 
   const { data, actions } = usePasskeyManagement();

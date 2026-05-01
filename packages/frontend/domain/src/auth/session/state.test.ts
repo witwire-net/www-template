@@ -7,7 +7,7 @@ import {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
-} from './authSessionState';
+} from './state';
 
 describe('authSessionState', () => {
   it('[AUTH-FE-S008] distinguishes missing sessions from expired sessions', () => {

@@ -1,4 +1,4 @@
-import type { StatusState } from '../types';
+import type { StatusState } from './types';
 
 function createStatusInitialState(): StatusState {
   return {

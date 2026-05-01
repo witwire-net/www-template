@@ -61,10 +61,6 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('../domain/src/index.ts', import.meta.url)),
       },
       {
-        find: /^@www-template\/domain\/hooks\/(.*)$/,
-        replacement: `${fileURLToPath(new URL('../domain/src/hooks/', import.meta.url))}$1.svelte.ts`,
-      },
-      {
         find: /^@www-template\/domain\/(.*)$/,
         replacement: `${fileURLToPath(new URL('../domain/src/', import.meta.url))}$1`,
       },

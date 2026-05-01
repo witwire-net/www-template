@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { RecoveryReadySnapshot } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import type { RecoveryReadySnapshot } from '@www-template/domain/auth/recovery';
 
   import { goto } from '$app/navigation';
 
-  import { useRecoveryFlow } from '@www-template/domain/hooks/auth/useRecoveryFlow';
+  import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
 
   const RECOVERY_SNAPSHOT_KEY = 'www-template:recovery-snapshot';

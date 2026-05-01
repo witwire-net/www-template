@@ -1,4 +1,4 @@
-import type { RecoveryFlowState, RecoverySentView } from 'types';
+import type { RecoveryFlowState, RecoverySentView } from '../types';
 
 /** enumeration-safe な recovery sent view を返す。 */
 function createGenericRecoverySentView(): RecoverySentView {
