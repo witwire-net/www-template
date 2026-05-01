@@ -50,7 +50,8 @@
         "yoavbls.pretty-ts-errors",
         "redhat.vscode-yaml",
         "tamasfe.even-better-toml",
-        "svelte.svelte-vscode"
+        "svelte.svelte-vscode",
+        "shd101wyy.markdown-preview-enhanced"
       ],
       "settings": {
         "editor.formatOnSave": true,

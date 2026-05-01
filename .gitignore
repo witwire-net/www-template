@@ -42,6 +42,7 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+devcontainer-lock.json
 
 # Testing
 coverage/
