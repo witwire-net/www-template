@@ -43,24 +43,14 @@
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "bradlc.vscode-tailwindcss",
-        "hediet.vscode-drawio",
-        "ms-azuretools.vscode-docker",
         "typespec.typespec-vscode",
         "vitest.explorer",
-        "ms-playwright.playwright",
         "usernamehw.errorlens",
-        "eamodio.gitlens",
         "christian-kohler.path-intellisense",
-        "formulahendry.auto-rename-tag",
-        "wix.vscode-import-cost",
-        "dsznajder.es7-react-js-snippets",
         "yoavbls.pretty-ts-errors",
-        "mikestead.dotenv",
         "redhat.vscode-yaml",
         "tamasfe.even-better-toml",
-        "svelte.svelte-vscode",
-        "shd101wyy.markdown-preview-enhanced",
-        "openai.chatgpt"
+        "svelte.svelte-vscode"
       ],
       "settings": {
         "editor.formatOnSave": true,
@@ -80,7 +70,18 @@
         "go.lintTool": "golangci-lint",
         "go.lintOnSave": "package",
         "go.toolsManagement.autoUpdate": false,
-        "go.testFlags": ["-count=1"]
+        "go.testFlags": ["-count=1"],
+        "typescript.tsserver.maxTsServerMemory": 1536,
+        "files.watcherExclude": {
+          "**/.git/objects/**": true,
+          "**/node_modules/**": true,
+          "**/dist/**": true,
+          "**/.svelte-kit/**": true,
+          "**/playwright-report/**": true,
+          "**/test-results/**": true
+        },
+        "playwright.reuseBrowser": false,
+        "playwright.showTrace": false
       }
     }
   },

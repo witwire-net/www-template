@@ -1,5 +1,8 @@
 {
-  "*.{ts,tsx,js,jsx}": ["eslint --fix --no-inline-config --max-warnings 0", "prettier --write"],
+  "*.{ts,tsx,js,jsx}": [
+    "eslint --fix --no-inline-config --no-warn-ignored --max-warnings 0",
+    "prettier --write"
+  ],
   "*.css": ["stylelint --fix --max-warnings 0", "prettier --write"],
   "*.{json,md,yml,yaml}": ["prettier --write"],
   "*.go": ["bash scripts/hooks/format-staged-go.sh"],
