@@ -11,7 +11,7 @@ interface PasskeyAddByOtpData {
 }
 
 interface PasskeyAddByOtpActions {
-  addPasskeyByOtp: (otp: string) => Promise<void>;
+  addPasskeyByOtp: (email: string, otp: string) => Promise<void>;
 }
 
 /** 新端末でのパスキー追加（OTP handoff）フローを扱う domain composable。 */
@@ -23,14 +23,14 @@ function usePasskeyAddByOtp(): { data: PasskeyAddByOtpData; actions: PasskeyAddB
   });
 
   const actions: PasskeyAddByOtpActions = {
-    addPasskeyByOtp: async (otp: string) => {
+    addPasskeyByOtp: async (email: string, otp: string) => {
       state.loading = true;
       state.error = null;
       state.done = false;
 
       try {
         // Step 1: Start — get WebAuthn creation options from server
-        const startOptions = await authApi.startPasskeyAdditionByOtp(otp);
+        const startOptions = await authApi.startPasskeyAdditionByOtp(email, otp);
 
         // Step 2: Call browser WebAuthn API — normalize browser/device errors only
         let credential;
@@ -42,7 +42,7 @@ function usePasskeyAddByOtp(): { data: PasskeyAddByOtpData; actions: PasskeyAddB
         }
 
         // Step 3: Finish — send attestation to server
-        await authApi.finishPasskeyAdditionByOtp(otp, credential);
+        await authApi.finishPasskeyAdditionByOtp(email, otp, credential);
         state.done = true;
       } catch (error: unknown) {
         state.error =

@@ -67,11 +67,7 @@ export type {
   PasskeyManagementData,
 } from './passkey/management/hook.svelte';
 export { useRecoveryFlow } from './recovery/hook.svelte';
-export type {
-  RecoveryFlowActions,
-  RecoveryFlowData,
-  RecoveryReadySnapshot,
-} from './recovery/hook.svelte';
+export type { RecoveryFlowActions, RecoveryFlowData } from './recovery/hook.svelte';
 export { useSessionGuard } from './guard/hook.svelte';
 export type {
   SessionGuardActions,

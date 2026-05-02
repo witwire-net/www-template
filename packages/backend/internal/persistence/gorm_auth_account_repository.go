@@ -52,6 +52,21 @@ func (r *GormAuthAccountRepository) FindByIdentifier(ctx context.Context, identi
 	return r.findByPasskey(ctx, "identifier = ?", strings.TrimSpace(identifier))
 }
 
+// FindByID は accountID（ULID）でアカウントを検索し、最古の passkey credential を含む AuthAccount を返す。
+func (r *GormAuthAccountRepository) FindByID(ctx context.Context, accountID string) (domain.AuthAccount, error) {
+	var account gormAccountRecord
+	if err := r.db.WithContext(ctx).Where("id = ?", strings.TrimSpace(accountID)).First(&account).Error; err != nil {
+		return emptyAuthAccount(), mapAuthAccountError(err)
+	}
+
+	var passkey gormPasskeyCredentialRecord
+	if err := r.db.WithContext(ctx).Where("account_id = ?", account.ID).Order("id ASC").First(&passkey).Error; err != nil {
+		return emptyAuthAccount(), mapAuthAccountError(err)
+	}
+
+	return normalizeDomainAccount(account, passkey)
+}
+
 func (r *GormAuthAccountRepository) FindByCredential(ctx context.Context, credential string) (domain.AuthAccount, error) {
 	return r.findByPasskey(ctx, "credential_handle = ?", strings.TrimSpace(credential))
 }

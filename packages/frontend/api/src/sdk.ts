@@ -4,6 +4,7 @@ import {
   finishPasskeyAddition,
   finishPasskeyAdditionByOtp,
   finishPasskeyAuthentication,
+  finishReauthentication,
   getStatus,
   issuePasskeyOtp,
   listPasskeys,
@@ -14,11 +15,13 @@ import {
   startPasskeyAdditionByOtp,
   startPasskeyAuthentication,
   startPasskeyRegistration,
+  startReauthentication,
   type consumeRecoveryTokenResponse,
   type deletePasskeyResponse,
   type finishPasskeyAdditionByOtpResponse,
   type finishPasskeyAdditionResponse,
   type finishPasskeyAuthenticationResponse,
+  type finishReauthenticationResponse,
   type getStatusResponse,
   type issuePasskeyOtpResponse,
   type listPasskeysResponse,
@@ -34,10 +37,13 @@ import {
   type RecoveryRequest,
   type registerPasskeyResponse,
   type requestPasskeyRecoveryResponse,
+  type ReauthenticationFinishRequest,
+  type ReauthenticationStartRequest,
   type startPasskeyAdditionByOtpResponse,
   type startPasskeyAdditionResponse,
   type startPasskeyAuthenticationResponse,
   type startPasskeyRegistrationResponse,
+  type startReauthenticationResponse,
   type UlidId,
 } from './generated/client.js';
 
@@ -63,6 +69,10 @@ export type {
   RecoveryConsumeRequest,
   RecoveryConsumeResponse,
   RecoveryRequest,
+  ReauthenticationFinishRequest,
+  ReauthenticationSessionKind,
+  ReauthenticationSessionResponse,
+  ReauthenticationStartRequest,
   StatusResponse,
   UlidId,
   WebAuthnAssertionCredential,
@@ -75,6 +85,7 @@ export type {
   finishPasskeyAdditionByOtpResponse,
   finishPasskeyAdditionResponse,
   finishPasskeyAuthenticationResponse,
+  finishReauthenticationResponse,
   getStatusResponse,
   issuePasskeyOtpResponse,
   listPasskeysResponse,
@@ -85,6 +96,7 @@ export type {
   startPasskeyAdditionResponse,
   startPasskeyAuthenticationResponse,
   startPasskeyRegistrationResponse,
+  startReauthenticationResponse,
 } from './generated/client.js';
 
 /** Configuration for the API SDK default request settings. */
@@ -127,6 +139,14 @@ interface AuthSdk {
   ) => Promise<finishPasskeyAdditionResponse>;
   deletePasskey: (id: UlidId, options?: RequestInit) => Promise<deletePasskeyResponse>;
   issuePasskeyOtp: (options?: RequestInit) => Promise<issuePasskeyOtpResponse>;
+  startReauthentication: (
+    payload: ReauthenticationStartRequest,
+    options?: RequestInit
+  ) => Promise<startReauthenticationResponse>;
+  finishReauthentication: (
+    payload: ReauthenticationFinishRequest,
+    options?: RequestInit
+  ) => Promise<finishReauthenticationResponse>;
   startPasskeyAdditionByOtp: (
     payload: PasskeyAddByOtpStartRequest,
     options?: RequestInit
@@ -195,6 +215,10 @@ const createAuthSdk = (defaultInit: RequestInit | undefined): AuthSdk => ({
     deletePasskey(id, withDefaultInit(options, defaultInit)),
   issuePasskeyOtp: (options?: RequestInit) =>
     issuePasskeyOtp(withDefaultInit(options, defaultInit)),
+  startReauthentication: (payload: ReauthenticationStartRequest, options?: RequestInit) =>
+    startReauthentication(payload, withJsonInit(options, defaultInit)),
+  finishReauthentication: (payload: ReauthenticationFinishRequest, options?: RequestInit) =>
+    finishReauthentication(payload, withJsonInit(options, defaultInit)),
   startPasskeyAdditionByOtp: (payload: PasskeyAddByOtpStartRequest, options?: RequestInit) =>
     startPasskeyAdditionByOtp(payload, withJsonInit(options, defaultInit)),
   finishPasskeyAdditionByOtp: (payload: PasskeyAddByOtpFinishRequest, options?: RequestInit) =>

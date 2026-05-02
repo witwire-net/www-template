@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	goprotocol "github.com/go-webauthn/webauthn/protocol"
@@ -17,25 +16,30 @@ import (
 	"www-template/packages/backend/internal/usecases"
 )
 
-// webAuthnSessionEntry は pending ceremony の SessionData と TTL を保持する。
-type webAuthnSessionEntry struct {
-	sessionData gowebauthn.SessionData
-	expiresAt   time.Time
+// challengeStore は WebAuthn challenge session を外部ストレージ（Valkey）に保存するための最小インターフェース。
+type challengeStore interface {
+	// Key は環境プレフィックス付きのキーを構築する。
+	Key(parts ...string) string
+	// Set は key に value を TTL 付きで保存する。
+	Set(ctx context.Context, key string, value string, ttl time.Duration) error
+	// GetDel は key の値を取得すると同時にアトミックに削除する。
+	// キーが存在しない場合はエラーを返す。
+	GetDel(ctx context.Context, key string) (string, error)
 }
 
 // webAuthnProvider は go-webauthn/webauthn を使った WebAuthnProvider 実装。
-// セレモニーのセッションデータは短命（challengeTTL）のため、インスタンスのメモリに保持する。
-// TODO: 本番では Valkey に移行すること（複数インスタンス構成に対応するため）。
+// セレモニーのセッションデータは challengeStore に TTL 付きで保存され、
+// Finish 時に GetDel でアトミックに取得・削除される。
 type webAuthnProvider struct {
 	wa           *gowebauthn.WebAuthn
-	sessions     sync.Map // key: challengeKey(string) -> *webAuthnSessionEntry
+	store        challengeStore
 	challengeTTL time.Duration
 }
 
 // newWebAuthnProvider は WebAuthnProvider を生成する。
 // rpid は WebAuthn RPID（例: "localhost"）, origins は許可 origin のリスト（例: ["http://localhost:5173"]）。
 // origins が空の場合は "https://<rpid>" を fallback として補完する。
-func newWebAuthnProvider(rpid string, origins []string, challengeTTL time.Duration) (usecases.WebAuthnProvider, error) {
+func newWebAuthnProvider(rpid string, origins []string, challengeTTL time.Duration, store challengeStore) (usecases.WebAuthnProvider, error) {
 	rpOrigins := origins
 	if len(rpOrigins) == 0 {
 		rpOrigins = []string{"https://" + rpid}
@@ -50,6 +54,7 @@ func newWebAuthnProvider(rpid string, origins []string, challengeTTL time.Durati
 	}
 	return &webAuthnProvider{
 		wa:           wa,
+		store:        store,
 		challengeTTL: challengeTTL,
 	}, nil
 }
@@ -70,18 +75,18 @@ func (u *webAuthnUserAdapter) WebAuthnCredentials() []gowebauthn.Credential { re
 
 // ─── BeginLogin ───────────────────────────────────────────────────────────────
 
-func (p *webAuthnProvider) BeginLogin(_ context.Context, _ string) (challengeKey string, challengeBytes []byte, err error) {
+func (p *webAuthnProvider) BeginLogin(ctx context.Context, _ string) (challengeKey string, challengeBytes []byte, err error) {
 	// discoverable login（resident key）を使うため、BeginDiscoverableLogin を使用する。
-	assertion, sessionData, err := p.wa.BeginDiscoverableLogin()
+	// user verification を required に設定し、UV-less assertion を拒否できるようにする。
+	assertion, sessionData, err := p.wa.BeginDiscoverableLogin(gowebauthn.WithUserVerification(goprotocol.VerificationRequired))
 	if err != nil {
 		return "", nil, fmt.Errorf("webauthn: BeginDiscoverableLogin: %w", err)
 	}
 
 	challengeKey = sessionData.Challenge
-	p.sessions.Store(challengeKey, &webAuthnSessionEntry{
-		sessionData: *sessionData,
-		expiresAt:   time.Now().Add(p.challengeTTL),
-	})
+	if err := p.saveSessionData(ctx, challengeKey, *sessionData); err != nil {
+		return "", nil, fmt.Errorf("webauthn: save login session: %w", err)
+	}
 
 	jsonBytes, jsonErr := json.Marshal(assertion)
 	if jsonErr != nil {
@@ -93,16 +98,24 @@ func (p *webAuthnProvider) BeginLogin(_ context.Context, _ string) (challengeKey
 
 // ─── FinishLogin ─────────────────────────────────────────────────────────────
 
-// FinishLogin は clientDataJSON から challenge を自己解決して session を特定し、
+// FinishLogin は challengeKey で Valkey から session を取得・削除し、
 // lookupCredential コールバックで DB から公開鍵を取得したうえで
-// ValidatePasskeyLogin で full signature verification を行い、
-// credentialHandle と更新済み SignCount・BackupState を返す。
-// signCountUpdated が true のときのみ newSignCount/newBackupState が有効な値。
-// challengeKey は空文字列で渡せば clientDataJSON から自己解決する。
+// ValidatePasskeyLogin で full signature verification を行う。
+// UV（user verification）が確認できない assertion は無条件に拒否する。
+// challengeKey が空文字列の場合は clientDataJSON から自己解決する（後方互換性のため）。
 func (p *webAuthnProvider) FinishLogin(ctx context.Context, challengeKey string, credential usecases.WebAuthnAssertionCredentialDTO,
 	lookupCredential func(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error),
 ) (credentialHandle string, newSignCount uint32, newBackupState bool, signCountUpdated bool, err error) {
-	lookupKey, sessionEntry, sessionErr := p.resolveLoginSession(challengeKey, credential.Response.ClientDataJSON)
+	lookupKey := challengeKey
+	if lookupKey == "" {
+		derivedKey, deriveErr := challengeKeyFromClientDataJSON(credential.Response.ClientDataJSON)
+		if deriveErr != nil {
+			return "", 0, false, false, deriveErr
+		}
+		lookupKey = derivedKey
+	}
+
+	sessionData, sessionErr := p.consumeSessionData(ctx, lookupKey)
 	if sessionErr != nil {
 		return "", 0, false, false, sessionErr
 	}
@@ -112,12 +125,16 @@ func (p *webAuthnProvider) FinishLogin(ctx context.Context, challengeKey string,
 		return "", 0, false, false, fmt.Errorf("webauthn: parse assertion: %w", parseErr)
 	}
 
+	// UV（user verified）フラグを無条件に検証する。
+	if parsed.Response.AuthenticatorData.Flags&goprotocol.FlagUserVerified == 0 {
+		return "", 0, false, false, fmt.Errorf("webauthn: user verification required")
+	}
+
 	var resolvedHandle string
 	var handlerErr error
 	handler := p.buildDiscoverableHandler(ctx, &resolvedHandle, &handlerErr, lookupCredential)
 
-	_, updatedCred, validateErr := p.wa.ValidatePasskeyLogin(handler, sessionEntry.sessionData, parsed)
-	p.sessions.Delete(lookupKey)
+	_, updatedCred, validateErr := p.wa.ValidatePasskeyLogin(handler, sessionData, parsed)
 
 	if handlerErr != nil {
 		return "", 0, false, false, handlerErr
@@ -133,46 +150,6 @@ func (p *webAuthnProvider) FinishLogin(ctx context.Context, challengeKey string,
 		return resolvedHandle, updatedCred.Authenticator.SignCount, updatedCred.Flags.BackupState, true, nil
 	}
 	return resolvedHandle, 0, false, false, nil
-}
-
-// resolveLoginSession は challengeKey と clientDataJSON から sessionEntry を返す。
-func (p *webAuthnProvider) resolveLoginSession(challengeKey string, clientDataJSON string) (string, *webAuthnSessionEntry, error) {
-	derivedKey, err := challengeKeyFromClientDataJSON(clientDataJSON)
-	if err != nil {
-		return "", nil, fmt.Errorf("webauthn: cannot parse clientDataJSON: %w", err)
-	}
-	lookupKey := challengeKey
-	if lookupKey == "" {
-		lookupKey = derivedKey
-	} else if lookupKey != derivedKey {
-		return "", nil, fmt.Errorf("webauthn: challengeKey mismatch: provided %q, derived %q", challengeKey, derivedKey)
-	}
-	entry, ok := p.sessions.Load(lookupKey)
-	if !ok {
-		return "", nil, fmt.Errorf("webauthn: session not found for challengeKey %q", lookupKey)
-	}
-	sessionEntry := entry.(*webAuthnSessionEntry)
-	if time.Now().After(sessionEntry.expiresAt) {
-		p.sessions.Delete(lookupKey)
-		return "", nil, fmt.Errorf("webauthn: session expired for challengeKey %q", lookupKey)
-	}
-	return lookupKey, sessionEntry, nil
-}
-
-// resolveRegistrationSession は login 側と対称に challengeKey と clientDataJSON から lookupKey を返す。
-// challengeKey が空の場合は clientDataJSON から自己解決し、非空の場合は mismatch を検証する。
-func (p *webAuthnProvider) resolveRegistrationSession(challengeKey string, clientDataJSON string) (string, error) {
-	derivedKey, err := challengeKeyFromClientDataJSON(clientDataJSON)
-	if err != nil {
-		return "", fmt.Errorf("webauthn: cannot parse clientDataJSON: %w", err)
-	}
-	lookupKey := challengeKey
-	if lookupKey == "" {
-		lookupKey = derivedKey
-	} else if lookupKey != derivedKey {
-		return "", fmt.Errorf("webauthn: challengeKey mismatch: provided %q, derived %q", challengeKey, derivedKey)
-	}
-	return lookupKey, nil
 }
 
 // buildDiscoverableHandler は DiscoverableUserHandler を構築する。
@@ -251,19 +228,21 @@ func isDomainNotFound(err error) bool {
 
 // ─── BeginRegistration ────────────────────────────────────────────────────────
 
-func (p *webAuthnProvider) BeginRegistration(_ context.Context, accountID string) (challengeKey string, challengeBytes []byte, err error) {
+func (p *webAuthnProvider) BeginRegistration(ctx context.Context, accountID string) (challengeKey string, challengeBytes []byte, err error) {
 	user := &webAuthnUserAdapter{id: accountID, name: accountID}
 
-	creation, sessionData, err := p.wa.BeginRegistration(user)
+	// user verification を required に設定し、UV-less attestation を拒否できるようにする。
+	creation, sessionData, err := p.wa.BeginRegistration(user, gowebauthn.WithAuthenticatorSelection(goprotocol.AuthenticatorSelection{
+		UserVerification: goprotocol.VerificationRequired,
+	}))
 	if err != nil {
 		return "", nil, fmt.Errorf("webauthn: BeginRegistration: %w", err)
 	}
 
 	challengeKey = sessionData.Challenge
-	p.sessions.Store(challengeKey, &webAuthnSessionEntry{
-		sessionData: *sessionData,
-		expiresAt:   time.Now().Add(p.challengeTTL),
-	})
+	if err := p.saveSessionData(ctx, challengeKey, *sessionData); err != nil {
+		return "", nil, fmt.Errorf("webauthn: save registration session: %w", err)
+	}
 
 	jsonBytes, jsonErr := json.Marshal(creation)
 	if jsonErr != nil {
@@ -275,20 +254,23 @@ func (p *webAuthnProvider) BeginRegistration(_ context.Context, accountID string
 
 // ─── FinishRegistration ───────────────────────────────────────────────────────
 
-func (p *webAuthnProvider) FinishRegistration(_ context.Context, challengeKey string, accountID string, credential usecases.WebAuthnAttestationCredentialDTO) (credentialHandle string, credData domain.WebAuthnCredentialData, err error) {
-	lookupKey, resolveErr := p.resolveRegistrationSession(challengeKey, credential.Response.ClientDataJSON)
-	if resolveErr != nil {
-		return "", domain.ZeroWebAuthnCredentialData(), resolveErr
+// FinishRegistration は challengeKey で Valkey から session を取得・削除し、
+// credential を検証して credential handle と WebAuthn credential data を返す。
+// UV（user verification）が確認できない attestation は無条件に拒否する。
+// challengeKey が空文字列の場合は clientDataJSON から自己解決する（後方互換性のため）。
+func (p *webAuthnProvider) FinishRegistration(ctx context.Context, challengeKey string, accountID string, credential usecases.WebAuthnAttestationCredentialDTO) (credentialHandle string, credData domain.WebAuthnCredentialData, err error) {
+	lookupKey := challengeKey
+	if lookupKey == "" {
+		derivedKey, deriveErr := challengeKeyFromClientDataJSON(credential.Response.ClientDataJSON)
+		if deriveErr != nil {
+			return "", domain.ZeroWebAuthnCredentialData(), deriveErr
+		}
+		lookupKey = derivedKey
 	}
 
-	entry, ok := p.sessions.Load(lookupKey)
-	if !ok {
-		return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("webauthn: session not found for challengeKey %q", lookupKey)
-	}
-	sessionEntry := entry.(*webAuthnSessionEntry)
-	if time.Now().After(sessionEntry.expiresAt) {
-		p.sessions.Delete(lookupKey)
-		return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("webauthn: session expired for challengeKey %q", lookupKey)
+	sessionData, sessionErr := p.consumeSessionData(ctx, lookupKey)
+	if sessionErr != nil {
+		return "", domain.ZeroWebAuthnCredentialData(), sessionErr
 	}
 
 	user := &webAuthnUserAdapter{id: accountID, name: accountID}
@@ -298,12 +280,15 @@ func (p *webAuthnProvider) FinishRegistration(_ context.Context, challengeKey st
 		return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("webauthn: parse attestation: %w", parseErr)
 	}
 
-	webauthnCred, createErr := p.wa.CreateCredential(user, sessionEntry.sessionData, parsed)
+	// UV（user verified）フラグを無条件に検証する。
+	if parsed.Response.AttestationObject.AuthData.Flags&goprotocol.FlagUserVerified == 0 {
+		return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("webauthn: user verification required")
+	}
+
+	webauthnCred, createErr := p.wa.CreateCredential(user, sessionData, parsed)
 	if createErr != nil {
 		return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("webauthn: CreateCredential: %w", createErr)
 	}
-
-	p.sessions.Delete(lookupKey)
 
 	handle := base64.RawURLEncoding.EncodeToString(webauthnCred.ID)
 	transports := make([]string, 0, len(webauthnCred.Transport))
@@ -321,10 +306,39 @@ func (p *webAuthnProvider) FinishRegistration(_ context.Context, challengeKey st
 	return handle, cd, nil
 }
 
-// ─── DTO → protocol struct 変換ヘルパー ───────────────────────────────────────
+// ─── SessionData 保存・取得ヘルパー ───────────────────────────────────────────
+
+// saveSessionData は go-webauthn SessionData を JSON 化して challengeStore に TTL 付きで保存する。
+func (p *webAuthnProvider) saveSessionData(ctx context.Context, challengeKey string, sessionData gowebauthn.SessionData) error {
+	jsonBytes, err := json.Marshal(sessionData)
+	if err != nil {
+		return fmt.Errorf("marshal session data: %w", err)
+	}
+	key := p.store.Key("wa", "session", challengeKey)
+	if storeErr := p.store.Set(ctx, key, string(jsonBytes), p.challengeTTL); storeErr != nil {
+		return fmt.Errorf("store session data: %w", storeErr)
+	}
+	return nil
+}
+
+// consumeSessionData は challengeStore から SessionData を取得し、アトミックに削除する。
+// キーが存在しない場合はエラーを返す。
+func (p *webAuthnProvider) consumeSessionData(ctx context.Context, challengeKey string) (gowebauthn.SessionData, error) {
+	key := p.store.Key("wa", "session", challengeKey)
+	val, err := p.store.GetDel(ctx, key)
+	if err != nil {
+		return gowebauthn.SessionData{}, fmt.Errorf("webauthn: session not found or expired for challengeKey %q", challengeKey)
+	}
+	var sessionData gowebauthn.SessionData
+	if unmarshalErr := json.Unmarshal([]byte(val), &sessionData); unmarshalErr != nil {
+		return gowebauthn.SessionData{}, fmt.Errorf("webauthn: corrupt session data for challengeKey %q", challengeKey)
+	}
+	return sessionData, nil
+}
 
 // challengeKeyFromClientDataJSON は base64url-encoded clientDataJSON を decode して
 // JSON の "challenge" フィールド（base64url string）を challengeKey として返す。
+// 後方互換性のため、challengeKey が空文字列の場合にのみ使用する。
 func challengeKeyFromClientDataJSON(clientDataJSON string) (string, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(clientDataJSON)
 	if err != nil {
@@ -341,6 +355,8 @@ func challengeKeyFromClientDataJSON(clientDataJSON string) (string, error) {
 	}
 	return cd.Challenge, nil
 }
+
+// ─── DTO → protocol struct 変換ヘルパー ───────────────────────────────────────
 
 // dtoToAssertionParsed は WebAuthnAssertionCredentialDTO を
 // *protocol.ParsedCredentialAssertionData に変換する。

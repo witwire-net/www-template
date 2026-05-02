@@ -4,11 +4,16 @@ import {
   applyPasskeyDeleted,
   applyPasskeyError,
   applyPasskeyList,
+  applyReauthSession,
   createPasskeyManagementInitialState,
   toPasskeyManagementErrorMessage,
 } from './state';
 
-import { createWebAuthnAttestation, normalizeWebAuthnError } from '../../webauthn';
+import {
+  createWebAuthnAttestation,
+  getWebAuthnAssertion,
+  normalizeWebAuthnError,
+} from '../../webauthn';
 
 import { useAuthSession } from '../../session/hook.svelte';
 
@@ -20,13 +25,16 @@ interface PasskeyManagementData {
   passkeys: PasskeyItem[];
   loading: boolean;
   error: string | null;
+  reauthSession: string | null;
 }
 
 interface PasskeyManagementActions {
   listPasskeys: () => Promise<void>;
   addPasskey: () => Promise<void>;
-  deletePasskey: (id: string) => Promise<void>;
-  issueOtp: () => Promise<string | null>;
+  deletePasskey: (id: string, reauthSession: string) => Promise<void>;
+  issueOtp: (reauthSession: string) => Promise<boolean>;
+  performReauth: (kind: 'otp-issue' | 'passkey-delete') => Promise<string | null>;
+  clearReauthSession: () => void;
 }
 
 /**
@@ -128,11 +136,11 @@ const createAddPasskey =
 
 const createDeletePasskey =
   (state: PasskeyManagementState, authSession: AuthSessionRef) =>
-  async (id: string): Promise<void> => {
+  async (id: string, reauthSession: string): Promise<void> => {
     state.loading = true;
     state.error = null;
     try {
-      const response = await authApi.deletePasskey(id, {
+      const response = await authApi.deletePasskey(id, reauthSession, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
       if (response.status === 401 || response.status === 503) {
@@ -149,19 +157,80 @@ const createDeletePasskey =
 
 const createIssueOtp =
   (state: PasskeyManagementState, authSession: AuthSessionRef) =>
-  async (): Promise<string | null> => {
+  async (reauthSession: string): Promise<boolean> => {
     state.loading = true;
     state.error = null;
     try {
-      const response = await authApi.issuePasskeyOtp({
+      const response = await authApi.issuePasskeyOtp(reauthSession, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
       if (response.status === 401 || response.status === 503) {
         handleApiError(response.data.error, 'OTP を発行できませんでした。', state, authSession);
-        return null;
+        return false;
+      }
+      if (response.status === 400 || response.status === 403) {
+        applyPasskeyError(state, response.data.error);
+        return false;
       }
       if (response.status === 200) {
-        return response.data.otp;
+        return response.data.issued;
+      }
+      return false;
+    } catch (error: unknown) {
+      applyPasskeyError(state, toPasskeyManagementErrorMessage(error));
+      return false;
+    } finally {
+      state.loading = false;
+    }
+  };
+
+const createClearReauthSession = (state: PasskeyManagementState) => (): void => {
+  applyReauthSession(state, null);
+};
+
+const createPerformReauth =
+  (state: PasskeyManagementState, authSession: AuthSessionRef) =>
+  async (kind: 'otp-issue' | 'passkey-delete'): Promise<string | null> => {
+    state.loading = true;
+    state.error = null;
+    try {
+      const startResponse = await authApi.startReauthentication(kind, {
+        headers: authSession.actions.createAuthorizationHeaders(),
+      });
+      if (startResponse.status === 401 || startResponse.status === 503) {
+        handleApiError(
+          startResponse.data.error,
+          '再認証を開始できませんでした。',
+          state,
+          authSession
+        );
+        return null;
+      }
+      if (startResponse.status !== 200) return null;
+
+      let credential;
+      try {
+        credential = await getWebAuthnAssertion(startResponse.data);
+      } catch (webAuthnError: unknown) {
+        applyPasskeyError(state, normalizeWebAuthnError(webAuthnError));
+        return null;
+      }
+
+      const finishResponse = await authApi.finishReauthentication(kind, credential, {
+        headers: authSession.actions.createAuthorizationHeaders(),
+      });
+      if (finishResponse.status === 401 || finishResponse.status === 503) {
+        handleApiError(
+          finishResponse.data.error,
+          '再認証を完了できませんでした。',
+          state,
+          authSession
+        );
+        return null;
+      }
+      if (finishResponse.status === 200) {
+        applyReauthSession(state, finishResponse.data.reauthSessionId);
+        return finishResponse.data.reauthSessionId;
       }
       return null;
     } catch (error: unknown) {
@@ -185,6 +254,8 @@ function usePasskeyManagement(): {
     addPasskey: createAddPasskey(state, authSession),
     deletePasskey: createDeletePasskey(state, authSession),
     issueOtp: createIssueOtp(state, authSession),
+    performReauth: createPerformReauth(state, authSession),
+    clearReauthSession: createClearReauthSession(state),
   };
 
   return {
@@ -197,6 +268,9 @@ function usePasskeyManagement(): {
       },
       get error() {
         return state.error;
+      },
+      get reauthSession() {
+        return state.reauthSession;
       },
     },
     actions,

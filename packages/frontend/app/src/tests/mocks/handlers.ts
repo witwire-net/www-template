@@ -197,7 +197,18 @@ const handlers = [
   }),
 
   // DELETE /api/v1/passkeys/:id
-  http.delete('/api/v1/passkeys/:id', ({ params }) => {
+  http.delete('/api/v1/passkeys/:id', ({ params, request }) => {
+    const reauthSession = request.headers.get('X-Reauth-Session');
+    if (reauthSession === null || reauthSession === '') {
+      return HttpResponse.json(
+        {
+          requestId: TEST_ULID.requestId,
+          error: 'reauth_session_required',
+        },
+        { status: 400, headers: NO_STORE_HEADERS }
+      );
+    }
+
     const { id } = params as { id: string };
     if (id === TEST_ULID.passkeyCredentialId) {
       return new HttpResponse(null, {
@@ -218,11 +229,22 @@ const handlers = [
   }),
 
   // POST /api/v1/passkeys/otp
-  http.post('/api/v1/passkeys/otp', () => {
+  http.post('/api/v1/passkeys/otp', ({ request }) => {
+    const reauthSession = request.headers.get('X-Reauth-Session');
+    if (reauthSession === null || reauthSession === '') {
+      return HttpResponse.json(
+        {
+          requestId: TEST_ULID.requestId,
+          error: 'reauth_session_required',
+        },
+        { status: 400, headers: NO_STORE_HEADERS }
+      );
+    }
+
     return HttpResponse.json(
       {
         requestId: TEST_ULID.requestId,
-        otp: '123456',
+        issued: true,
       },
       {
         status: 200,
@@ -233,13 +255,24 @@ const handlers = [
 
   // POST /api/v1/auth/passkey/add/start
   http.post('/api/v1/auth/passkey/add/start', async ({ request }) => {
-    const body = (await request.json()) as { otp: string };
-    if (body.otp === 'valid-otp') {
+    const body = (await request.json()) as { email: string; otp: string };
+    if (body.email === 'valid@example.com' && body.otp === 'valid-otp') {
       return HttpResponse.json(
         {
           requestId: TEST_ULID.requestId,
           challenge: 'otp-add-challenge-base64',
           rpId: 'localhost',
+          rpName: 'Test RP',
+          user: {
+            id: 'dXNlcjE',
+            name: body.email,
+            displayName: 'Test User',
+          },
+          pubKeyCredParams: [
+            { type: 'public-key', alg: -7 },
+            { type: 'public-key', alg: -257 },
+          ],
+          userVerification: 'required',
         },
         {
           status: 200,

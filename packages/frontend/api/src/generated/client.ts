@@ -58,17 +58,27 @@ export interface LogoutResponse {
 }
 
 export interface PasskeyAddByOtpFinishRequest {
+  email: string;
   otp: string;
   credential: WebAuthnAttestationCredential;
 }
 
 export interface PasskeyAddByOtpStartRequest {
+  email: string;
   otp: string;
 }
 
 export interface PasskeyAddFinishRequest {
   credential: WebAuthnAttestationCredential;
 }
+
+export type PasskeyAddStartResponseUserVerification =
+  (typeof PasskeyAddStartResponseUserVerification)[keyof typeof PasskeyAddStartResponseUserVerification];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PasskeyAddStartResponseUserVerification = {
+  required: 'required',
+} as const;
 
 /**
  * WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration.
@@ -87,7 +97,7 @@ export interface PasskeyAddStartResponse {
   /** Timeout in milliseconds suggested by the server. */
   timeout?: number;
   excludeCredentials?: WebAuthnCredentialDescriptor[];
-  userVerification?: string;
+  userVerification: PasskeyAddStartResponseUserVerification;
   attestation?: string;
 }
 
@@ -108,7 +118,7 @@ export interface PasskeyListResponse {
 
 export interface PasskeyOtpResponse {
   requestId: UlidId;
-  otp: string;
+  issued: boolean;
 }
 
 /**
@@ -127,6 +137,14 @@ export interface PasskeyStartRequest {
   identifier: string;
 }
 
+export type PasskeyStartResponseUserVerification =
+  (typeof PasskeyStartResponseUserVerification)[keyof typeof PasskeyStartResponseUserVerification];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PasskeyStartResponseUserVerification = {
+  required: 'required',
+} as const;
+
 /**
  * WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin.
  */
@@ -139,7 +157,45 @@ export interface PasskeyStartResponse {
   timeout?: number;
   /** Allowed credential descriptors (empty for usernameless flows). */
   allowCredentials?: WebAuthnCredentialDescriptor[];
-  userVerification?: string;
+  userVerification: PasskeyStartResponseUserVerification;
+}
+
+/**
+ * Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind.
+ */
+export interface ReauthenticationFinishRequest {
+  requestId: UlidId;
+  kind: ReauthenticationSessionKind;
+  credential: WebAuthnAssertionCredential;
+}
+
+/**
+ * Reauthentication session kind bound to a high-risk operation.
+ */
+export type ReauthenticationSessionKind =
+  (typeof ReauthenticationSessionKind)[keyof typeof ReauthenticationSessionKind];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ReauthenticationSessionKind = {
+  'otp-issue': 'otp-issue',
+  'passkey-delete': 'passkey-delete',
+} as const;
+
+/**
+ * Reauthentication session response issued after a fresh WebAuthn reauthentication.
+ */
+export interface ReauthenticationSessionResponse {
+  requestId: UlidId;
+  reauthSessionId: UlidId;
+  kind: ReauthenticationSessionKind;
+  expiresAt: string;
+}
+
+/**
+ * Reauthentication start request that binds the ceremony to a high-risk operation kind.
+ */
+export interface ReauthenticationStartRequest {
+  kind: ReauthenticationSessionKind;
 }
 
 export interface RecoveryAcceptedResponse {
@@ -633,6 +689,124 @@ export const startPasskeyAuthentication = async (
 };
 
 /**
+ * @summary Finishes a WebAuthn reauthentication ceremony and issues a reauthentication session
+ */
+export type finishReauthenticationResponse200 = {
+  data: ReauthenticationSessionResponse;
+  status: 200;
+};
+
+export type finishReauthenticationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type finishReauthenticationResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type finishReauthenticationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type finishReauthenticationResponseSuccess = finishReauthenticationResponse200 & {
+  headers: Headers;
+};
+export type finishReauthenticationResponseError = (
+  | finishReauthenticationResponse400
+  | finishReauthenticationResponse401
+  | finishReauthenticationResponse503
+) & {
+  headers: Headers;
+};
+
+export type finishReauthenticationResponse =
+  | finishReauthenticationResponseSuccess
+  | finishReauthenticationResponseError;
+
+export const getFinishReauthenticationUrl = () => {
+  return `/api/v1/auth/reauth/finish`;
+};
+
+export const finishReauthentication = async (
+  reauthenticationFinishRequest: ReauthenticationFinishRequest,
+  options?: RequestInit
+): Promise<finishReauthenticationResponse> => {
+  const res = await fetch(getFinishReauthenticationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reauthenticationFinishRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: finishReauthenticationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as finishReauthenticationResponse;
+};
+
+/**
+ * @summary Starts a WebAuthn reauthentication ceremony for a high-risk operation
+ */
+export type startReauthenticationResponse200 = {
+  data: PasskeyStartResponse;
+  status: 200;
+};
+
+export type startReauthenticationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type startReauthenticationResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type startReauthenticationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type startReauthenticationResponseSuccess = startReauthenticationResponse200 & {
+  headers: Headers;
+};
+export type startReauthenticationResponseError = (
+  | startReauthenticationResponse400
+  | startReauthenticationResponse401
+  | startReauthenticationResponse503
+) & {
+  headers: Headers;
+};
+
+export type startReauthenticationResponse =
+  | startReauthenticationResponseSuccess
+  | startReauthenticationResponseError;
+
+export const getStartReauthenticationUrl = () => {
+  return `/api/v1/auth/reauth/start`;
+};
+
+export const startReauthentication = async (
+  reauthenticationStartRequest: ReauthenticationStartRequest,
+  options?: RequestInit
+): Promise<startReauthenticationResponse> => {
+  const res = await fetch(getStartReauthenticationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reauthenticationStartRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startReauthenticationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startReauthenticationResponse;
+};
+
+/**
  * @summary Accepts a recovery request without revealing account existence
  */
 export type requestPasskeyRecoveryResponse202 = {
@@ -858,6 +1032,11 @@ export type issuePasskeyOtpResponse401 = {
   status: 401;
 };
 
+export type issuePasskeyOtpResponse403 = {
+  data: AuthOperationErrorResponse;
+  status: 403;
+};
+
 export type issuePasskeyOtpResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -869,6 +1048,7 @@ export type issuePasskeyOtpResponseSuccess = issuePasskeyOtpResponse200 & {
 export type issuePasskeyOtpResponseError = (
   | issuePasskeyOtpResponse400
   | issuePasskeyOtpResponse401
+  | issuePasskeyOtpResponse403
   | issuePasskeyOtpResponse503
 ) & {
   headers: Headers;
@@ -950,6 +1130,11 @@ export type deletePasskeyResponse204 = {
   status: 204;
 };
 
+export type deletePasskeyResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
 export type deletePasskeyResponse401 = {
   data: AuthFailureResponse;
   status: 401;
@@ -974,6 +1159,7 @@ export type deletePasskeyResponseSuccess = deletePasskeyResponse204 & {
   headers: Headers;
 };
 export type deletePasskeyResponseError = (
+  | deletePasskeyResponse400
   | deletePasskeyResponse401
   | deletePasskeyResponse403
   | deletePasskeyResponse409

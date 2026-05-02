@@ -22,6 +22,9 @@ const (
 	defaultRecoveryBase   = "http://localhost:5174/login/recovery/consume"
 	defaultSMTPPort       = 587
 	defaultR2UsePathStyle = false
+	defaultReadTimeout    = 30 * time.Second
+	defaultWriteTimeout   = 30 * time.Second
+	defaultIdleTimeout    = 120 * time.Second
 )
 
 // tomlConfig mirrors the structure of .config/*.toml files.
@@ -31,8 +34,12 @@ type tomlConfig struct {
 		BearerToken string `toml:"bearer_token"`
 	} `toml:"app"`
 	Server struct {
-		Port           int      `toml:"port"`
-		AllowedOrigins []string `toml:"allowed_origins"`
+		Port              int      `toml:"port"`
+		AllowedOrigins    []string `toml:"allowed_origins"`
+		TrustedProxyCIDRs []string `toml:"trusted_proxy_cidrs"`
+		ReadTimeout       string   `toml:"read_timeout"`
+		WriteTimeout      string   `toml:"write_timeout"`
+		IdleTimeout       string   `toml:"idle_timeout"`
 	} `toml:"server"`
 	Auth struct {
 		WebAuthnRPID           string `toml:"webauthn_rp_id"`
@@ -40,6 +47,7 @@ type tomlConfig struct {
 		ChallengeTTL           string `toml:"challenge_ttl"`
 		RecoveryTokenTTL       string `toml:"recovery_token_ttl"`
 		RecoverySessionTTL     string `toml:"recovery_session_ttl"`
+		ReauthSessionTTL       string `toml:"reauth_session_ttl"`
 		SessionIdleTTL         string `toml:"session_idle_ttl"`
 		SessionAbsoluteTTL     string `toml:"session_absolute_ttl"`
 		PasskeyStartLimit      int    `toml:"passkey_start_limit"`
@@ -51,6 +59,8 @@ type tomlConfig struct {
 		FailureThreshold       int    `toml:"failure_threshold"`
 		FailureWindow          string `toml:"failure_window"`
 		FailureDuration        string `toml:"failure_duration"`
+		AuthBodyLimitBytes     int    `toml:"auth_body_limit_bytes"`
+		SecretHashKey          string `toml:"secret_hash_key"`
 	} `toml:"auth"`
 	Database struct {
 		URL string `toml:"url"`
@@ -71,10 +81,11 @@ type tomlConfig struct {
 		UsePathStyle    bool   `toml:"use_path_style"`
 	} `toml:"object_storage"`
 	SMTP struct {
-		Host     string `toml:"host"`
-		Port     int    `toml:"port"`
-		Username string `toml:"username"`
-		Password string `toml:"password"`
+		Host            string `toml:"host"`
+		Port            int    `toml:"port"`
+		Username        string `toml:"username"`
+		Password        string `toml:"password"`
+		SecureTransport bool   `toml:"secure_transport"`
 	} `toml:"smtp"`
 	Mail struct {
 		FromAddress string `toml:"from_address"`
@@ -139,10 +150,14 @@ func LoadConfig() types.Config {
 	}
 
 	return types.Config{
-		AllowedOrigins: allowedOrigins,
-		AppBearerToken: appBearerToken,
-		Auth:           buildAuthConfig(raw.Auth),
-		Environment:    environment,
+		AllowedOrigins:     allowedOrigins,
+		AppBearerToken:     appBearerToken,
+		Auth:               buildAuthConfig(raw.Auth),
+		Environment:        environment,
+		TrustedProxyCIDRs:  raw.Server.TrustedProxyCIDRs,
+		ServerReadTimeout:  parseDuration(raw.Server.ReadTimeout, defaultReadTimeout),
+		ServerWriteTimeout: parseDuration(raw.Server.WriteTimeout, defaultWriteTimeout),
+		ServerIdleTimeout:  parseDuration(raw.Server.IdleTimeout, defaultIdleTimeout),
 		Infra: types.InfraConfig{
 			Database: types.DatabaseConfig{
 				URL: strings.TrimSpace(raw.Database.URL),
@@ -166,10 +181,11 @@ func LoadConfig() types.Config {
 				KeyPrefix: defaultString(raw.Valkey.KeyPrefix, defaultValkeyPrefix),
 			},
 			SMTP: types.SMTPConfig{
-				Host:     strings.TrimSpace(raw.SMTP.Host),
-				Port:     defaultInt(raw.SMTP.Port, defaultSMTPPort),
-				Username: strings.TrimSpace(raw.SMTP.Username),
-				Password: strings.TrimSpace(raw.SMTP.Password),
+				Host:            strings.TrimSpace(raw.SMTP.Host),
+				Port:            defaultInt(raw.SMTP.Port, defaultSMTPPort),
+				Username:        strings.TrimSpace(raw.SMTP.Username),
+				Password:        strings.TrimSpace(raw.SMTP.Password),
+				SecureTransport: raw.SMTP.SecureTransport,
 			},
 		},
 		Port: defaultString(strconv.Itoa(raw.Server.Port), defaultPort),
@@ -189,6 +205,7 @@ func buildAuthConfig(raw struct {
 	ChallengeTTL           string `toml:"challenge_ttl"`
 	RecoveryTokenTTL       string `toml:"recovery_token_ttl"`
 	RecoverySessionTTL     string `toml:"recovery_session_ttl"`
+	ReauthSessionTTL       string `toml:"reauth_session_ttl"`
 	SessionIdleTTL         string `toml:"session_idle_ttl"`
 	SessionAbsoluteTTL     string `toml:"session_absolute_ttl"`
 	PasskeyStartLimit      int    `toml:"passkey_start_limit"`
@@ -200,6 +217,8 @@ func buildAuthConfig(raw struct {
 	FailureThreshold       int    `toml:"failure_threshold"`
 	FailureWindow          string `toml:"failure_window"`
 	FailureDuration        string `toml:"failure_duration"`
+	AuthBodyLimitBytes     int    `toml:"auth_body_limit_bytes"`
+	SecretHashKey          string `toml:"secret_hash_key"`
 }) types.AuthConfig {
 	defaults := defaultAuthConfig()
 
@@ -207,6 +226,7 @@ func buildAuthConfig(raw struct {
 		ChallengeTTL:                parseDuration(raw.ChallengeTTL, defaults.ChallengeTTL),
 		RecoveryTokenTTL:            parseDuration(raw.RecoveryTokenTTL, defaults.RecoveryTokenTTL),
 		RecoverySessionTTL:          parseDuration(raw.RecoverySessionTTL, defaults.RecoverySessionTTL),
+		ReauthSessionTTL:            parseDuration(raw.ReauthSessionTTL, defaults.ReauthSessionTTL),
 		SessionIdleTTL:              parseDuration(raw.SessionIdleTTL, defaults.SessionIdleTTL),
 		SessionAbsoluteTTL:          parseDuration(raw.SessionAbsoluteTTL, defaults.SessionAbsoluteTTL),
 		PasskeyStartThrottleLimit:   defaultInt(raw.PasskeyStartLimit, defaults.PasskeyStartThrottleLimit),
@@ -220,6 +240,8 @@ func buildAuthConfig(raw struct {
 		FailureLockDuration:         parseDuration(raw.FailureDuration, defaults.FailureLockDuration),
 		WebAuthnRPID:                defaultString(raw.WebAuthnRPID, defaults.WebAuthnRPID),
 		AccountRecoveryURLBase:      defaultString(raw.AccountRecoveryURLBase, defaults.AccountRecoveryURLBase),
+		AuthBodyLimitBytes:          defaultInt(raw.AuthBodyLimitBytes, defaults.AuthBodyLimitBytes),
+		SecretHashKey:               defaultString(raw.SecretHashKey, defaults.SecretHashKey),
 	}
 }
 
@@ -240,6 +262,7 @@ func defaultAuthConfig() types.AuthConfig {
 		ChallengeTTL:                5 * time.Minute,
 		RecoveryTokenTTL:            30 * time.Minute,
 		RecoverySessionTTL:          15 * time.Minute,
+		ReauthSessionTTL:            5 * time.Minute,
 		SessionIdleTTL:              12 * time.Hour,
 		SessionAbsoluteTTL:          14 * 24 * time.Hour,
 		PasskeyStartThrottleLimit:   5,

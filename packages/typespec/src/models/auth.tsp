@@ -45,7 +45,7 @@ model PasskeyStartResponse {
   @doc("Allowed credential descriptors (empty for usernameless flows).")
   allowCredentials?: WebAuthnCredentialDescriptor[];
 
-  userVerification?: string;
+  userVerification: "required";
 }
 
 @doc("Credential descriptor used in allowCredentials and excludeCredentials lists.")
@@ -162,7 +162,7 @@ model PasskeyAddStartResponse {
   timeout?: int64;
 
   excludeCredentials?: WebAuthnCredentialDescriptor[];
-  userVerification?: string;
+  userVerification: "required";
   attestation?: string;
 }
 
@@ -172,14 +172,18 @@ model PasskeyAddFinishRequest {
 
 model PasskeyOtpResponse {
   requestId: UlidId;
-  otp: string;
+  issued: true;
 }
 
 model PasskeyAddByOtpStartRequest {
+  @format("email")
+  email: string;
   otp: string;
 }
 
 model PasskeyAddByOtpFinishRequest {
+  @format("email")
+  email: string;
   otp: string;
   credential: WebAuthnAttestationCredential;
 }
@@ -250,6 +254,32 @@ model PasskeyRegisterStartRequest {
 union PasskeyRegisterRequest {
   recovery: RecoveryPasskeyFinishRequest,
   invitation: InvitationPasskeyFinishRequest,
+}
+
+@doc("Reauthentication session kind bound to a high-risk operation.")
+enum ReauthenticationSessionKind {
+  otpIssue: "otp-issue",
+  passkeyDelete: "passkey-delete",
+}
+
+@doc("Reauthentication start request that binds the ceremony to a high-risk operation kind.")
+model ReauthenticationStartRequest {
+  kind: ReauthenticationSessionKind;
+}
+
+@doc("Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind.")
+model ReauthenticationFinishRequest {
+  requestId: UlidId;
+  kind: ReauthenticationSessionKind;
+  credential: WebAuthnAssertionCredential;
+}
+
+@doc("Reauthentication session response issued after a fresh WebAuthn reauthentication.")
+model ReauthenticationSessionResponse {
+  requestId: UlidId;
+  reauthSessionId: UlidId;
+  kind: ReauthenticationSessionKind;
+  expiresAt: utcDateTime;
 }
 
 model LogoutResponse {

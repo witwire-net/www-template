@@ -43,10 +43,6 @@ func selectorCount(recoverySession string, invitationSession string) int {
 	return count
 }
 
-func passkeyStartKey(identifier string, clientIP string) string {
-	return "start:" + strings.TrimSpace(identifier) + ":" + strings.TrimSpace(clientIP)
-}
-
 func recoveryEmailKey(email string) string {
 	return "recovery:email:" + strings.TrimSpace(email)
 }
@@ -92,12 +88,18 @@ func (s *AuthService) mapRecoveryConsumeError(err error) error {
 	}
 }
 
-func otpKey(otp string) string {
-	return "passkey-otp:" + strings.TrimSpace(otp)
-}
-
-func otpChallengeKey(otp string) string {
-	return "passkey-otp-challenge:" + strings.TrimSpace(otp)
+// parseOpaqueTokenID は opaque token（"opaque-<tokenID>"）から tokenID を抽出する。
+// 想定外の形式の場合はエラーを返す。
+func parseOpaqueTokenID(token string) (string, error) {
+	const prefix = "opaque-"
+	if !strings.HasPrefix(token, prefix) {
+		return "", errors.New("invalid token format")
+	}
+	tokenID := strings.TrimPrefix(token, prefix)
+	if tokenID == "" {
+		return "", errors.New("empty token id")
+	}
+	return tokenID, nil
 }
 
 func (s *AuthService) mapAuthStoreError(err error) error {

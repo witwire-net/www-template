@@ -9,13 +9,13 @@
     loading: boolean;
     /** Error message to display, or null. */
     error: string | null;
-    /** Current OTP code to display, or null when not issued. */
-    otp: string | null;
-    /** Called when the user clicks "パスキーを追加" button. */
+    /** Whether an OTP has been issued for new-device login enablement. */
+    otpIssued: boolean;
+    /** Called when the user clicks "この端末でログインを有効にする" button. */
     onAddPasskey: () => void;
     /** Called when the user clicks "削除" on a passkey row. */
     onDeletePasskey: (id: string) => void;
-    /** Called when the user clicks "OTPを発行". */
+    /** Called when the user clicks "新しい端末でログインを有効にする" to issue OTP. */
     onIssueOtp: () => void;
   }
 
@@ -23,7 +23,7 @@
     passkeys,
     loading,
     error,
-    otp,
+    otpIssued,
     onAddPasskey,
     onDeletePasskey,
     onIssueOtp,
@@ -87,22 +87,37 @@
     {/if}
   {/if}
 
-  {#if otp !== null}
-    <div class="flex flex-col gap-1 rounded-md border border-border bg-muted p-4" aria-live="polite">
-      <span class="text-xs text-muted-foreground">発行済み OTP</span>
-      <span class="font-mono text-2xl font-bold tracking-widest">{otp}</span>
-      <span class="text-sm text-muted-foreground">このコードを新しい端末で入力してください</span>
-    </div>
+  {#if otpIssued}
+    <!--
+      平文 OTP は画面に表示せず、メール送信済み案内と共有禁止の注意喚起を表示する。
+      これにより画面共有や覗き見による secret leakage を防ぐ。
+    -->
+    <Alert.Alert aria-live="polite">
+      <Alert.AlertTitle>ログイン有効化コードを送信しました</Alert.AlertTitle>
+      <Alert.AlertDescription>
+        登録済みのメールアドレス宛にコードを送信しました。新しい端末でメールアドレスとコードを入力してください。コードは第三者と共有しないでください。
+        <br />
+        有効期限: 5分
+      </Alert.AlertDescription>
+    </Alert.Alert>
   {/if}
 
   <Separator />
 
   <div class="flex flex-wrap justify-end gap-2">
+    <!--
+      新しい端末でのログインを有効にするため、再認証後に OTP を発行するアクション。
+      技術用語「OTPを発行」ではなく、利用者の目的に即したラベルを使用する。
+    -->
     <Button variant="outline" disabled={loading} onclick={onIssueOtp}>
-      OTPを発行
+      新しい端末でログインを有効にする
     </Button>
+    <!--
+      現在の端末に直接パスキーを追加するアクション。
+      こちらも「add key」という技術用語を避け、利用者の目的に即した表現に統一する。
+    -->
     <Button disabled={loading} onclick={onAddPasskey}>
-      + パスキーを追加
+      この端末でログインを有効にする
     </Button>
   </div>
 </section>

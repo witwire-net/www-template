@@ -54,6 +54,20 @@ func (s *ValkeyStore) Get(ctx context.Context, key string) (string, error) {
 	return s.client.Get(ctx, key).Result()
 }
 
+// GetDel は指定したキーに対して GETDEL コマンドを発行し、値を取得すると同時にアトミックに削除する。
+// キーが存在しない場合は redis.Nil に対応する errRESPNil を返す。
+// コマンド実行時のエラーはそのまま返す。
+func (s *ValkeyStore) GetDel(ctx context.Context, key string) (string, error) {
+	val, err := s.client.GetDel(ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", errRESPNil
+		}
+		return "", err
+	}
+	return val, nil
+}
+
 func (s *ValkeyStore) Delete(ctx context.Context, key string) error {
 	return s.client.Del(ctx, key).Err()
 }

@@ -1,21 +1,22 @@
 <script lang="ts">
   import { usePasskeyAddByOtp } from '@www-template/domain/auth/passkey/addByOtp';
-  import { Button, Card, CardContent, InputOtp, Label, Separator } from '@www-template/ui/components';
+  import { Button, Card, CardContent, Input, InputOtp, Label, Separator } from '@www-template/ui/components';
 
   const { data, actions } = usePasskeyAddByOtp();
 
+  let email = $state('');
   let otp = $state('');
   let localError = $state<string | null>(null);
 
   let displayError = $derived(data.error ?? localError);
-  let isReady = $derived(otp.trim().length === 6 && !data.loading);
+  let isReady = $derived(email.trim().length > 0 && otp.trim().length === 6 && !data.loading);
 
   async function handleSubmit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     localError = null;
 
     try {
-      await actions.addPasskeyByOtp(otp);
+      await actions.addPasskeyByOtp(email.trim(), otp.trim());
     } catch {
       localError = 'パスキーの登録を完了できませんでした。';
     }
@@ -44,13 +45,26 @@
             <a href="/login" class="text-sm text-muted-foreground no-underline hover:underline">ログインページへ</a>
           {:else}
             <h1 class="m-0 text-2xl font-bold">パスキーを追加</h1>
-            <p class="m-0 text-sm text-muted-foreground">認証済みデバイスで発行された 6 桁の OTP を入力してください。</p>
+            <p class="m-0 text-sm text-muted-foreground">登録済みのメールアドレスと、認証済みデバイスで発行された 6 桁のコードを入力してください。</p>
 
             {#if displayError !== null}
               <p class="m-0 text-sm text-destructive" role="alert">{displayError}</p>
             {/if}
 
             <form class="flex w-full flex-col gap-2" onsubmit={handleSubmit}>
+              <div class="flex flex-col gap-1 text-left">
+                <Label for="passkey-add-email">メールアドレス</Label>
+                <Input
+                  id="passkey-add-email"
+                  type="email"
+                  placeholder="登録済みのメールアドレス"
+                  bind:value={email}
+                  disabled={data.loading}
+                  autocomplete="email"
+                  required
+                />
+              </div>
+
               <div class="flex flex-col gap-1 text-left">
                 <Label>ワンタイムパスワード</Label>
                 <div class="flex justify-center">

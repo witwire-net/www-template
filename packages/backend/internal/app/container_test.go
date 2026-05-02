@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 			called = true
 			return fakeRepo, func(context.Context) error { return nil }, nil
 		},
+		fakeChallengeStoreFactory,
 	)
 	if err != nil {
 		t.Fatalf("build container: %v", err)
@@ -45,6 +47,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
 			return fakeAuthStateRepository{}, func(context.Context) error { return nil }, nil
 		},
+		fakeChallengeStoreFactory,
 	)
 	if err != nil {
 		t.Fatalf("build container: %v", err)
@@ -75,6 +78,7 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
 			return nil, nil, errors.New("valkey unavailable")
 		},
+		fakeChallengeStoreFactory,
 	)
 	if err == nil {
 		t.Fatal("expected state repository error")
@@ -117,6 +121,9 @@ func (stubAuthAccountRepository) FindWebAuthnCredential(_ context.Context, _ str
 func (stubAuthAccountRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
 	return nil
 }
+func (stubAuthAccountRepository) FindByID(_ context.Context, _ string) (domain.AuthAccount, error) {
+	return emptyAuthAccountForContainerTest(), nil
+}
 
 type fakeAuthStateRepository struct{}
 
@@ -150,6 +157,9 @@ func (fakeAuthStateRepository) GetRecoveryTokenBySecret(context.Context, string)
 func (fakeAuthStateRepository) ConsumeRecoveryToken(context.Context, domain.RecoveryToken) error {
 	return nil
 }
+func (fakeAuthStateRepository) ConsumeRecoveryTokenAtomic(context.Context, string, string) (domain.RecoveryToken, error) {
+	return emptyRecoveryTokenForContainerTest(), domain.ErrRecoveryTokenNotFound
+}
 func (fakeAuthStateRepository) SaveRecoverySession(context.Context, domain.RecoverySession, time.Duration) error {
 	return nil
 }
@@ -177,6 +187,21 @@ func (fakeAuthStateRepository) ConsumePasskeyOtp(context.Context, string) (strin
 func (fakeAuthStateRepository) GetPasskeyOtp(context.Context, string) (string, error) {
 	return "", nil
 }
+func (fakeAuthStateRepository) SaveReauthenticationSession(context.Context, domain.ReauthenticationSession, time.Duration) error {
+	return nil
+}
+func (fakeAuthStateRepository) ConsumeReauthenticationSession(context.Context, string) (domain.ReauthenticationSession, error) {
+	return emptyReauthenticationSessionForContainerTest(), domain.ErrReauthSessionNotFound
+}
+func (fakeAuthStateRepository) SaveDeviceLoginHandoff(context.Context, domain.DeviceLoginHandoff, time.Duration) error {
+	return nil
+}
+func (fakeAuthStateRepository) FindDeviceLoginHandoffByEmailAndOtp(context.Context, string, string) (domain.DeviceLoginHandoff, error) {
+	return emptyDeviceLoginHandoffForContainerTest(), domain.ErrDeviceLoginHandoffNotFound
+}
+func (fakeAuthStateRepository) ConsumeDeviceLoginHandoff(context.Context, string) (domain.DeviceLoginHandoff, error) {
+	return emptyDeviceLoginHandoffForContainerTest(), domain.ErrDeviceLoginHandoffNotFound
+}
 
 func emptyChallengeForContainerTest() domain.AuthChallenge {
 	challenge, _ := domain.NewAuthChallenge("01ARZ3NDEKTSV4RRFFQ69G5FAV", "placeholder", "placeholder", time.Unix(0, 0).UTC())
@@ -198,7 +223,47 @@ func emptyRecoverySessionForContainerTest() domain.RecoverySession {
 	return session
 }
 
+func emptyReauthenticationSessionForContainerTest() domain.ReauthenticationSession {
+	session, _ := domain.NewReauthenticationSession(
+		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+		"otp-issue", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+	)
+	return session
+}
+
+func emptyDeviceLoginHandoffForContainerTest() domain.DeviceLoginHandoff {
+	h, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", "placeholder", time.Unix(1, 0).UTC())
+	return h
+}
+
 func emptyAuthAccountForContainerTest() domain.AuthAccount {
 	account, _ := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "member@example.com", "member@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential")
 	return account
+}
+
+// fakeChallengeStore はテスト用のインメモリ challengeStore 実装。
+type fakeChallengeStore struct {
+	data map[string]string
+}
+
+func (f *fakeChallengeStore) Key(parts ...string) string {
+	return strings.Join(parts, ":")
+}
+
+func (f *fakeChallengeStore) Set(_ context.Context, key string, value string, _ time.Duration) error {
+	f.data[key] = value
+	return nil
+}
+
+func (f *fakeChallengeStore) GetDel(_ context.Context, key string) (string, error) {
+	v, ok := f.data[key]
+	if !ok {
+		return "", errors.New("not found")
+	}
+	delete(f.data, key)
+	return v, nil
+}
+
+func fakeChallengeStoreFactory(context.Context, types.ValkeyConfig) (challengeStore, func(context.Context) error, error) {
+	return &fakeChallengeStore{data: map[string]string{}}, func(context.Context) error { return nil }, nil
 }

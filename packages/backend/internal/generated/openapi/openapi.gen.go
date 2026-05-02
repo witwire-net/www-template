@@ -32,9 +32,30 @@ const (
 	LogoutResponseRevokedTrue LogoutResponseRevoked = true
 )
 
+// Defines values for PasskeyAddStartResponseUserVerification.
+const (
+	PasskeyAddStartResponseUserVerificationRequired PasskeyAddStartResponseUserVerification = "required"
+)
+
+// Defines values for PasskeyOtpResponseIssued.
+const (
+	PasskeyOtpResponseIssuedTrue PasskeyOtpResponseIssued = true
+)
+
+// Defines values for PasskeyStartResponseUserVerification.
+const (
+	PasskeyStartResponseUserVerificationRequired PasskeyStartResponseUserVerification = "required"
+)
+
+// Defines values for ReauthenticationSessionKind.
+const (
+	OtpIssue      ReauthenticationSessionKind = "otp-issue"
+	PasskeyDelete ReauthenticationSessionKind = "passkey-delete"
+)
+
 // Defines values for RecoveryAcceptedResponseAccepted.
 const (
-	RecoveryAcceptedResponseAcceptedTrue RecoveryAcceptedResponseAccepted = true
+	True RecoveryAcceptedResponseAccepted = true
 )
 
 // AuthFailureClassification defines model for AuthFailureClassification.
@@ -107,12 +128,14 @@ type LogoutResponseRevoked bool
 type PasskeyAddByOtpFinishRequest struct {
 	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
 	Credential WebAuthnAttestationCredential `json:"credential"`
+	Email      openapi_types.Email           `json:"email"`
 	Otp        string                        `json:"otp"`
 }
 
 // PasskeyAddByOtpStartRequest defines model for PasskeyAddByOtpStartRequest.
 type PasskeyAddByOtpStartRequest struct {
-	Otp string `json:"otp"`
+	Email openapi_types.Email `json:"email"`
+	Otp   string              `json:"otp"`
 }
 
 // PasskeyAddFinishRequest defines model for PasskeyAddFinishRequest.
@@ -143,9 +166,12 @@ type PasskeyAddStartResponse struct {
 	Timeout *int64 `json:"timeout,omitempty"`
 
 	// User User entity (id is base64url-encoded bytes).
-	User             WebAuthnUserEntity `json:"user"`
-	UserVerification *string            `json:"userVerification,omitempty"`
+	User             WebAuthnUserEntity                      `json:"user"`
+	UserVerification PasskeyAddStartResponseUserVerification `json:"userVerification"`
 }
+
+// PasskeyAddStartResponseUserVerification defines model for PasskeyAddStartResponse.UserVerification.
+type PasskeyAddStartResponseUserVerification string
 
 // PasskeyFinishRequest defines model for PasskeyFinishRequest.
 type PasskeyFinishRequest struct {
@@ -172,11 +198,14 @@ type PasskeyListResponse struct {
 
 // PasskeyOtpResponse defines model for PasskeyOtpResponse.
 type PasskeyOtpResponse struct {
-	Otp string `json:"otp"`
+	Issued PasskeyOtpResponseIssued `json:"issued"`
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
 }
+
+// PasskeyOtpResponseIssued defines model for PasskeyOtpResponse.Issued.
+type PasskeyOtpResponseIssued bool
 
 // PasskeyRegisterRequest Finish request for passkey register — exactly one selector must be present.
 type PasskeyRegisterRequest struct {
@@ -207,8 +236,46 @@ type PasskeyStartResponse struct {
 	RpId      string `json:"rpId"`
 
 	// Timeout Timeout in milliseconds suggested by the server.
-	Timeout          *int64  `json:"timeout,omitempty"`
-	UserVerification *string `json:"userVerification,omitempty"`
+	Timeout          *int64                               `json:"timeout,omitempty"`
+	UserVerification PasskeyStartResponseUserVerification `json:"userVerification"`
+}
+
+// PasskeyStartResponseUserVerification defines model for PasskeyStartResponse.UserVerification.
+type PasskeyStartResponseUserVerification string
+
+// ReauthenticationFinishRequest Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind.
+type ReauthenticationFinishRequest struct {
+	// Credential WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
+	Credential WebAuthnAssertionCredential `json:"credential"`
+
+	// Kind Reauthentication session kind bound to a high-risk operation.
+	Kind ReauthenticationSessionKind `json:"kind"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// ReauthenticationSessionKind Reauthentication session kind bound to a high-risk operation.
+type ReauthenticationSessionKind string
+
+// ReauthenticationSessionResponse Reauthentication session response issued after a fresh WebAuthn reauthentication.
+type ReauthenticationSessionResponse struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Kind Reauthentication session kind bound to a high-risk operation.
+	Kind ReauthenticationSessionKind `json:"kind"`
+
+	// ReauthSessionId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	ReauthSessionId UlidId `json:"reauthSessionId"`
+
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId `json:"requestId"`
+}
+
+// ReauthenticationStartRequest Reauthentication start request that binds the ceremony to a high-risk operation kind.
+type ReauthenticationStartRequest struct {
+	// Kind Reauthentication session kind bound to a high-risk operation.
+	Kind ReauthenticationSessionKind `json:"kind"`
 }
 
 // RecoveryAcceptedResponse defines model for RecoveryAcceptedResponse.
@@ -350,6 +417,16 @@ type WebAuthnUserEntity struct {
 	Name string `json:"name"`
 }
 
+// IssuePasskeyOtpParams defines parameters for IssuePasskeyOtp.
+type IssuePasskeyOtpParams struct {
+	XReauthSession string `json:"X-Reauth-Session"`
+}
+
+// DeletePasskeyParams defines parameters for DeletePasskey.
+type DeletePasskeyParams struct {
+	XReauthSession string `json:"X-Reauth-Session"`
+}
+
 // FinishPasskeyAdditionByOtpJSONRequestBody defines body for FinishPasskeyAdditionByOtp for application/json ContentType.
 type FinishPasskeyAdditionByOtpJSONRequestBody = PasskeyAddByOtpFinishRequest
 
@@ -367,6 +444,12 @@ type StartPasskeyRegistrationJSONRequestBody = PasskeyRegisterStartRequest
 
 // StartPasskeyAuthenticationJSONRequestBody defines body for StartPasskeyAuthentication for application/json ContentType.
 type StartPasskeyAuthenticationJSONRequestBody = PasskeyStartRequest
+
+// FinishReauthenticationJSONRequestBody defines body for FinishReauthentication for application/json ContentType.
+type FinishReauthenticationJSONRequestBody = ReauthenticationFinishRequest
+
+// StartReauthenticationJSONRequestBody defines body for StartReauthentication for application/json ContentType.
+type StartReauthenticationJSONRequestBody = ReauthenticationStartRequest
 
 // RequestPasskeyRecoveryJSONRequestBody defines body for RequestPasskeyRecovery for application/json ContentType.
 type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
@@ -462,6 +545,12 @@ type ServerInterface interface {
 	// Starts a passkey authentication ceremony
 	// (POST /api/v1/auth/passkey/start)
 	StartPasskeyAuthentication(c *gin.Context)
+	// Finishes a WebAuthn reauthentication ceremony and issues a reauthentication session
+	// (POST /api/v1/auth/reauth/finish)
+	FinishReauthentication(c *gin.Context)
+	// Starts a WebAuthn reauthentication ceremony for a high-risk operation
+	// (POST /api/v1/auth/reauth/start)
+	StartReauthentication(c *gin.Context)
 	// Accepts a recovery request without revealing account existence
 	// (POST /api/v1/auth/recovery)
 	RequestPasskeyRecovery(c *gin.Context)
@@ -476,13 +565,13 @@ type ServerInterface interface {
 	FinishPasskeyAddition(c *gin.Context)
 	// Issues a one-time password for adding a passkey on a new device
 	// (POST /api/v1/passkeys/otp)
-	IssuePasskeyOtp(c *gin.Context)
+	IssuePasskeyOtp(c *gin.Context, params IssuePasskeyOtpParams)
 	// Starts adding a passkey for the current account
 	// (POST /api/v1/passkeys/start)
 	StartPasskeyAddition(c *gin.Context)
 	// Deletes a registered passkey for the current account
 	// (DELETE /api/v1/passkeys/{id})
-	DeletePasskey(c *gin.Context, id UlidId)
+	DeletePasskey(c *gin.Context, id UlidId, params DeletePasskeyParams)
 	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(c *gin.Context)
@@ -590,6 +679,36 @@ func (siw *ServerInterfaceWrapper) StartPasskeyAuthentication(c *gin.Context) {
 	siw.Handler.StartPasskeyAuthentication(c)
 }
 
+// FinishReauthentication operation middleware
+func (siw *ServerInterfaceWrapper) FinishReauthentication(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.FinishReauthentication(c)
+}
+
+// StartReauthentication operation middleware
+func (siw *ServerInterfaceWrapper) StartReauthentication(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartReauthentication(c)
+}
+
 // RequestPasskeyRecovery operation middleware
 func (siw *ServerInterfaceWrapper) RequestPasskeyRecovery(c *gin.Context) {
 
@@ -649,7 +768,36 @@ func (siw *ServerInterfaceWrapper) FinishPasskeyAddition(c *gin.Context) {
 // IssuePasskeyOtp operation middleware
 func (siw *ServerInterfaceWrapper) IssuePasskeyOtp(c *gin.Context) {
 
+	var err error
+
 	c.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IssuePasskeyOtpParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-Reauth-Session" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Reauth-Session")]; found {
+		var XReauthSession string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-Reauth-Session, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Reauth-Session", valueList[0], &XReauthSession, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-Reauth-Session: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XReauthSession = XReauthSession
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-Reauth-Session is required, but not found"), http.StatusBadRequest)
+		return
+	}
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -658,7 +806,7 @@ func (siw *ServerInterfaceWrapper) IssuePasskeyOtp(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.IssuePasskeyOtp(c)
+	siw.Handler.IssuePasskeyOtp(c, params)
 }
 
 // StartPasskeyAddition operation middleware
@@ -692,6 +840,33 @@ func (siw *ServerInterfaceWrapper) DeletePasskey(c *gin.Context) {
 
 	c.Set(BearerAuthScopes, []string{})
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeletePasskeyParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-Reauth-Session" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Reauth-Session")]; found {
+		var XReauthSession string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-Reauth-Session, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Reauth-Session", valueList[0], &XReauthSession, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-Reauth-Session: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XReauthSession = XReauthSession
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-Reauth-Session is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -699,7 +874,7 @@ func (siw *ServerInterfaceWrapper) DeletePasskey(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.DeletePasskey(c, id)
+	siw.Handler.DeletePasskey(c, id, params)
 }
 
 // GetStatus operation middleware
@@ -749,6 +924,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register/start", wrapper.StartPasskeyRegistration)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/start", wrapper.StartPasskeyAuthentication)
+	router.POST(options.BaseURL+"/api/v1/auth/reauth/finish", wrapper.FinishReauthentication)
+	router.POST(options.BaseURL+"/api/v1/auth/reauth/start", wrapper.StartReauthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
 	router.GET(options.BaseURL+"/api/v1/passkeys", wrapper.ListPasskeys)
@@ -1168,6 +1345,158 @@ func (response StartPasskeyAuthentication503JSONResponse) VisitStartPasskeyAuthe
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type FinishReauthenticationRequestObject struct {
+	Body *FinishReauthenticationJSONRequestBody
+}
+
+type FinishReauthenticationResponseObject interface {
+	VisitFinishReauthenticationResponse(w http.ResponseWriter) error
+}
+
+type FinishReauthentication200ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishReauthentication200JSONResponse struct {
+	Body    ReauthenticationSessionResponse
+	Headers FinishReauthentication200ResponseHeaders
+}
+
+func (response FinishReauthentication200JSONResponse) VisitFinishReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishReauthentication400ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishReauthentication400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers FinishReauthentication400ResponseHeaders
+}
+
+func (response FinishReauthentication400JSONResponse) VisitFinishReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishReauthentication401ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishReauthentication401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishReauthentication401ResponseHeaders
+}
+
+func (response FinishReauthentication401JSONResponse) VisitFinishReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishReauthentication503ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishReauthentication503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishReauthentication503ResponseHeaders
+}
+
+func (response FinishReauthentication503JSONResponse) VisitFinishReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartReauthenticationRequestObject struct {
+	Body *StartReauthenticationJSONRequestBody
+}
+
+type StartReauthenticationResponseObject interface {
+	VisitStartReauthenticationResponse(w http.ResponseWriter) error
+}
+
+type StartReauthentication200ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartReauthentication200JSONResponse struct {
+	Body    PasskeyStartResponse
+	Headers StartReauthentication200ResponseHeaders
+}
+
+func (response StartReauthentication200JSONResponse) VisitStartReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartReauthentication400ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartReauthentication400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers StartReauthentication400ResponseHeaders
+}
+
+func (response StartReauthentication400JSONResponse) VisitStartReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartReauthentication401ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartReauthentication401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartReauthentication401ResponseHeaders
+}
+
+func (response StartReauthentication401JSONResponse) VisitStartReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartReauthentication503ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartReauthentication503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartReauthentication503ResponseHeaders
+}
+
+func (response StartReauthentication503JSONResponse) VisitStartReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type RequestPasskeyRecoveryRequestObject struct {
 	Body *RequestPasskeyRecoveryJSONRequestBody
 }
@@ -1421,6 +1750,7 @@ func (response FinishPasskeyAddition503JSONResponse) VisitFinishPasskeyAdditionR
 }
 
 type IssuePasskeyOtpRequestObject struct {
+	Params IssuePasskeyOtpParams
 }
 
 type IssuePasskeyOtpResponseObject interface {
@@ -1474,6 +1804,23 @@ func (response IssuePasskeyOtp401JSONResponse) VisitIssuePasskeyOtpResponse(w ht
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssuePasskeyOtp403ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssuePasskeyOtp403JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers IssuePasskeyOtp403ResponseHeaders
+}
+
+func (response IssuePasskeyOtp403JSONResponse) VisitIssuePasskeyOtpResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -1554,7 +1901,8 @@ func (response StartPasskeyAddition503JSONResponse) VisitStartPasskeyAdditionRes
 }
 
 type DeletePasskeyRequestObject struct {
-	Id UlidId `json:"id"`
+	Id     UlidId `json:"id"`
+	Params DeletePasskeyParams
 }
 
 type DeletePasskeyResponseObject interface {
@@ -1573,6 +1921,23 @@ func (response DeletePasskey204Response) VisitDeletePasskeyResponse(w http.Respo
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(204)
 	return nil
+}
+
+type DeletePasskey400ResponseHeaders struct {
+	CacheControl string
+}
+
+type DeletePasskey400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers DeletePasskey400ResponseHeaders
+}
+
+func (response DeletePasskey400JSONResponse) VisitDeletePasskeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeletePasskey401ResponseHeaders struct {
@@ -1682,6 +2047,12 @@ type StrictServerInterface interface {
 	// Starts a passkey authentication ceremony
 	// (POST /api/v1/auth/passkey/start)
 	StartPasskeyAuthentication(ctx context.Context, request StartPasskeyAuthenticationRequestObject) (StartPasskeyAuthenticationResponseObject, error)
+	// Finishes a WebAuthn reauthentication ceremony and issues a reauthentication session
+	// (POST /api/v1/auth/reauth/finish)
+	FinishReauthentication(ctx context.Context, request FinishReauthenticationRequestObject) (FinishReauthenticationResponseObject, error)
+	// Starts a WebAuthn reauthentication ceremony for a high-risk operation
+	// (POST /api/v1/auth/reauth/start)
+	StartReauthentication(ctx context.Context, request StartReauthenticationRequestObject) (StartReauthenticationResponseObject, error)
 	// Accepts a recovery request without revealing account existence
 	// (POST /api/v1/auth/recovery)
 	RequestPasskeyRecovery(ctx context.Context, request RequestPasskeyRecoveryRequestObject) (RequestPasskeyRecoveryResponseObject, error)
@@ -1943,6 +2314,72 @@ func (sh *strictHandler) StartPasskeyAuthentication(ctx *gin.Context) {
 	}
 }
 
+// FinishReauthentication operation middleware
+func (sh *strictHandler) FinishReauthentication(ctx *gin.Context) {
+	var request FinishReauthenticationRequestObject
+
+	var body FinishReauthenticationJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.FinishReauthentication(ctx, request.(FinishReauthenticationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FinishReauthentication")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(FinishReauthenticationResponseObject); ok {
+		if err := validResponse.VisitFinishReauthenticationResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartReauthentication operation middleware
+func (sh *strictHandler) StartReauthentication(ctx *gin.Context) {
+	var request StartReauthenticationRequestObject
+
+	var body StartReauthenticationJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.StartReauthentication(ctx, request.(StartReauthenticationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartReauthentication")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(StartReauthenticationResponseObject); ok {
+		if err := validResponse.VisitStartReauthenticationResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RequestPasskeyRecovery operation middleware
 func (sh *strictHandler) RequestPasskeyRecovery(ctx *gin.Context) {
 	var request RequestPasskeyRecoveryRequestObject
@@ -2068,8 +2505,10 @@ func (sh *strictHandler) FinishPasskeyAddition(ctx *gin.Context) {
 }
 
 // IssuePasskeyOtp operation middleware
-func (sh *strictHandler) IssuePasskeyOtp(ctx *gin.Context) {
+func (sh *strictHandler) IssuePasskeyOtp(ctx *gin.Context, params IssuePasskeyOtpParams) {
 	var request IssuePasskeyOtpRequestObject
+
+	request.Params = params
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.IssuePasskeyOtp(ctx, request.(IssuePasskeyOtpRequestObject))
@@ -2118,10 +2557,11 @@ func (sh *strictHandler) StartPasskeyAddition(ctx *gin.Context) {
 }
 
 // DeletePasskey operation middleware
-func (sh *strictHandler) DeletePasskey(ctx *gin.Context, id UlidId) {
+func (sh *strictHandler) DeletePasskey(ctx *gin.Context, id UlidId, params DeletePasskeyParams) {
 	var request DeletePasskeyRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.DeletePasskey(ctx, request.(DeletePasskeyRequestObject))

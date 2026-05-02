@@ -58,6 +58,9 @@ func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, erro
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,
 		ReadHeaderTimeout: defaultReadHeaderTimeout,
+		ReadTimeout:       cfg.ServerReadTimeout,
+		WriteTimeout:      cfg.ServerWriteTimeout,
+		IdleTimeout:       cfg.ServerIdleTimeout,
 	}
 
 	return &Runtime{

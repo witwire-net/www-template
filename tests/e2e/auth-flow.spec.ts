@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+import { mockWebAuthn } from './support/webauthn';
+
 const NO_STORE_HEADERS = {
   'cache-control': 'private, no-store, max-age=0',
   'content-type': 'application/json',
@@ -26,8 +28,9 @@ const mockPasskeyLogin = async (page: Page) => {
   await page.route('**/api/v1/auth/passkey/start', async (route) => {
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
-      challenge: 'test-challenge-base64',
-      rpId: 'www-template',
+      challenge: 'dGVzdC1jaGFsbGVuZ2U',
+      rpId: 'localhost',
+      userVerification: 'required',
     });
   });
 
@@ -44,6 +47,7 @@ const mockPasskeyLogin = async (page: Page) => {
 };
 
 const loginViaPasskeyUi = async (page: Page) => {
+  await mockWebAuthn(page);
   await mockPasskeyLogin(page);
   await page.goto('http://localhost:5174/login');
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
@@ -65,6 +69,13 @@ test.describe('auth flow', () => {
   });
 
   test('recovery request は sent 画面へ進む', async ({ page }) => {
+    await page.route('**/api/v1/auth/recovery', async (route) => {
+      await fulfillJson(route, 202, {
+        requestId: TEST_ULID.requestId,
+        accepted: true,
+      });
+    });
+
     await page.goto('http://localhost:5174/login/recovery');
 
     await page.getByLabel('メールアドレス').fill('member@example.com');
@@ -123,13 +134,34 @@ test.describe('auth flow', () => {
   });
 
   test('valid recovery token から passkey 再登録を完了できる', async ({ page }) => {
+    await mockWebAuthn(page);
+
     await page.route('**/api/v1/auth/recovery/consume', async (route) => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
         recoveryTokenId: TEST_ULID.recoveryTokenId,
         recoverySessionId: TEST_ULID.recoverySessionId,
-        recovery_session: 'recovery-session-opaque',
+        recovery_session: TEST_ULID.recoverySessionId,
         expiresAt: '2026-03-21T00:15:00.000Z',
+      });
+    });
+
+    await page.route('**/api/v1/auth/passkey/register/start', async (route) => {
+      await fulfillJson(route, 200, {
+        requestId: TEST_ULID.requestId,
+        challenge: 'cmVnaXN0ZXItY2hhbGxlbmdl',
+        rpId: 'localhost',
+        rpName: 'www-template',
+        user: {
+          id: 'dXNlcjE',
+          name: 'test@example.com',
+          displayName: 'Test User',
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },
+          { type: 'public-key', alg: -257 },
+        ],
+        userVerification: 'required',
       });
     });
 
@@ -152,5 +184,23 @@ test.describe('auth flow', () => {
 
     await expect(page).toHaveURL(/localhost:5174\/?$/);
     await expect(page.getByRole('heading', { name: '認証済みアプリのエントリー' })).toBeVisible();
+  });
+
+  /**
+   * AUTH-FE-S019: Recovery token は URL から除去される
+   */
+  test('recovery token は URL から除去される', async ({ page }) => {
+    await page.route('**/api/v1/auth/recovery/consume', async (route) => {
+      await fulfillJson(route, 400, {
+        requestId: TEST_ULID.requestId,
+        error: 'invalid_token',
+      });
+    });
+
+    await page.goto('http://localhost:5174/login/recovery/consume?token=some-token');
+
+    // URL から token query が除去されることを確認
+    await expect(page).toHaveURL(/localhost:5174\/login\/recovery\/consume$/);
+    await expect(page).not.toHaveURL(/token=/);
   });
 });

@@ -20,6 +20,9 @@ allowed_origins = [
   "https://app.your-domain.com",
 ]
 
+# Trusted proxy CIDRs for secure client IP extraction.
+trusted_proxy_cidrs = ["10.0.0.0/8"]
+
 [auth]
 # WebAuthn Relying Party ID.
 webauthn_rp_id = "your-domain.com"
@@ -46,6 +49,13 @@ recovery_ip_window = "1h"
 failure_threshold = 10
 failure_window = "15m"
 failure_duration = "15m"
+
+# Auth body size limit (bytes).
+auth_body_limit_bytes = 1048576
+
+# Server-side pepper for HMAC hashing of OTP/email/IP keys.
+# MUST be at least 32 characters and changed from default in production.
+secret_hash_key = "change-this-to-a-long-random-pepper-in-production"
 
 [database]
 # PostgreSQL connection string.
@@ -75,6 +85,7 @@ host = "smtp.example.com"
 port = 587
 username = "smtp-user"
 password = "smtp-password"
+secure_transport = true
 
 [mail]
 # Default sender address for transactional emails.

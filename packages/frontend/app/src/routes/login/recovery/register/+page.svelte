@@ -1,64 +1,24 @@
 <script lang="ts">
-  import type { RecoveryReadySnapshot } from '@www-template/domain/auth/recovery';
-
   import { goto } from '$app/navigation';
 
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
-
-  const RECOVERY_SNAPSHOT_KEY = 'www-template:recovery-snapshot';
 
   const { data, actions } = useRecoveryFlow();
 
   async function handleRegisterPasskey() {
     const result = await actions.registerRecoveryPasskey();
     if (result === null && data.state.phase !== 'registering' && data.state.error === null) {
-      sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
       await goto('/');
     }
   }
 
-  /**
-   * Snapshot が正しい shape かを検証する。
-   * 全フィールドが存在し string であれば有効とみなす。
-   */
-  function isValidSnapshot(value: unknown): value is RecoveryReadySnapshot {
-    if (typeof value !== 'object' || value === null) {
-      return false;
-    }
-    const obj = value as Record<string, unknown>;
-    return (
-      typeof obj.requestId === 'string' &&
-      typeof obj.recoveryTokenId === 'string' &&
-      typeof obj.recoverySessionId === 'string' &&
-      typeof obj.recoverySession === 'string' &&
-      typeof obj.expiresAt === 'string'
-    );
-  }
-
-  /**
-   * recovery session が無い場合は sessionStorage から復元を試みる。
-   * 復元に失敗した場合は recovery ページへ戻す。
+  /*
+   * recovery session は domain singleton state で共有し、sessionStorage には保存しない。
+   * 直接アクセスやリロードで state が失われた場合は安全に復旧導線へ戻す。
    */
   if (typeof window !== 'undefined' && data.state.recoverySession === null) {
-    const raw = sessionStorage.getItem(RECOVERY_SNAPSHOT_KEY);
-    if (raw !== null) {
-      try {
-        const parsed: unknown = JSON.parse(raw);
-        if (isValidSnapshot(parsed)) {
-          actions.restoreReadyState(parsed);
-        } else {
-          sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-          void goto('/login/recovery');
-        }
-      } catch {
-        sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-        void goto('/login/recovery');
-      }
-      sessionStorage.removeItem(RECOVERY_SNAPSHOT_KEY);
-    } else {
-      void goto('/login/recovery');
-    }
+    void goto('/login/recovery');
   }
 </script>
 

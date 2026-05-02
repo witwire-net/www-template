@@ -68,6 +68,7 @@ export interface PasskeyManagementState {
   passkeys: PasskeyItem[];
   loading: boolean;
   error: string | null;
+  reauthSession: string | null;
 }
 
 /** passkey add-by-OTP hook state。 */

@@ -4,18 +4,13 @@
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Card, CardContent, Separator } from '@www-template/ui/components';
 
-  const RECOVERY_SNAPSHOT_KEY = 'www-template:recovery-snapshot';
+  import { removeQueryParamFromUrl } from '../../../../lib/auth/url';
 
   const { data, actions } = useRecoveryFlow();
 
   /** URL から token を取得し consume する。 */
   async function consumeTokenFromUrl() {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    const token = removeQueryParamFromUrl('token');
 
     if (token === null || token === '') {
       await goto('/login/recovery');
@@ -24,11 +19,10 @@
 
     const result = await actions.consumeToken(token);
     if (result === '/login/recovery/register') {
-      /* フルリロード遷移で module state が消えるため sessionStorage に snapshot を保存 */
-      const snapshot = actions.getReadySnapshot();
-      if (snapshot !== null) {
-        sessionStorage.setItem(RECOVERY_SNAPSHOT_KEY, JSON.stringify(snapshot));
-      }
+      /*
+       * consume → register は SvelteKit client-side routing で同一 module instance の
+       * domain singleton state を共有する。sessionStorage には recovery secret を保存しない。
+       */
       await goto('/login/recovery/register');
     } else if (result === '/login/recovery') {
       /* 画面に retry guidance を表示するのでそのまま留まる */

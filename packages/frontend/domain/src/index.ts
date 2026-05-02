@@ -17,7 +17,6 @@ export type {
   PasskeyManagementData,
   RecoveryFlowActions,
   RecoveryFlowData,
-  RecoveryReadySnapshot,
   SessionGuardActions,
   SessionGuardData,
   SessionGuardOptions,

@@ -2,6 +2,8 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"time"
@@ -27,19 +29,54 @@ func (r *AuthStateRepository) Close() error {
 	return r.store.Close()
 }
 
+// SaveReauthenticationSession は再認証セッションを TTL 付きで Valkey に保存する。
+func (r *AuthStateRepository) SaveReauthenticationSession(ctx context.Context, session domain.ReauthenticationSession, ttl time.Duration) error {
+	record := reauthenticationSessionRecord{
+		ID:               session.ID(),
+		AccountID:        session.AccountID(),
+		IssuingSessionID: session.IssuingSessionID(),
+		OperationKind:    session.OperationKind(),
+		RequestID:        session.RequestID(),
+		ExpiresAt:        session.ExpiresAt(),
+		ConsumedAt:       session.ConsumedAt(),
+	}
+	return r.setJSON(ctx, r.key("auth", "reauth-session", session.ID()), record, ttl)
+}
+
+// ConsumeReauthenticationSession は再認証セッションを GETDEL でアトミックに取得・削除する。
+// キーが存在しない場合は domain.ErrReauthSessionNotFound を返す。
+func (r *AuthStateRepository) ConsumeReauthenticationSession(ctx context.Context, reauthID string) (domain.ReauthenticationSession, error) {
+	result, err := r.store.GetDel(ctx, r.key("auth", "reauth-session", reauthID))
+	if err != nil {
+		if errors.Is(err, errRESPNil) {
+			return emptyReauthenticationSession(), domain.ErrReauthSessionNotFound
+		}
+		return emptyReauthenticationSession(), domain.ErrAuthStoreUnavailable
+	}
+	var record reauthenticationSessionRecord
+	if err := json.Unmarshal([]byte(result), &record); err != nil {
+		return emptyReauthenticationSession(), domain.ErrAuthStoreUnavailable
+	}
+	return normalizeReauthenticationSessionRecord(record)
+}
+
 func (r *AuthStateRepository) SaveChallenge(ctx context.Context, challenge domain.AuthChallenge, ttl time.Duration) error {
 	return r.setJSON(ctx, r.key("auth", "challenge", challenge.Challenge()), challengeRecordFromDomain(challenge), ttl)
 }
 
 func (r *AuthStateRepository) ConsumeChallenge(ctx context.Context, secret string) (domain.AuthChallenge, error) {
-	challenge, err := r.getChallenge(ctx, secret)
+	result, err := r.store.GetDel(ctx, r.key("auth", "challenge", secret))
 	if err != nil {
-		return emptyChallenge(), err
-	}
-	if err := r.store.Delete(ctx, r.key("auth", "challenge", secret)); err != nil {
+		if errors.Is(err, errRESPNil) {
+			return emptyChallenge(), domain.ErrChallengeNotFound
+		}
 		return emptyChallenge(), domain.ErrAuthStoreUnavailable
 	}
-	return challenge, nil
+	var record challengeRecord
+	if err := json.Unmarshal([]byte(result), &record); err != nil {
+		return emptyChallenge(), domain.ErrAuthStoreUnavailable
+	}
+	return normalizeChallengeRecord(record)
 }
 
 func (r *AuthStateRepository) SaveSession(ctx context.Context, session domain.Session, ttl time.Duration) error {
@@ -66,7 +103,8 @@ func (r *AuthStateRepository) RevokeSession(ctx context.Context, session domain.
 }
 
 func (r *AuthStateRepository) IssueRecoveryToken(ctx context.Context, token domain.RecoveryToken, ttl time.Duration) error {
-	return r.setJSON(ctx, r.key("auth", "recovery-token", token.Secret()), recoveryTokenRecordFromDomain(token), ttl)
+	record := recoveryTokenRecordFromDomain(token)
+	return r.setJSON(ctx, r.key("auth", "recovery-token", token.ID()), record, ttl)
 }
 
 func (r *AuthStateRepository) SaveRecoveryDeliveryFailure(ctx context.Context, failure domain.RecoveryDeliveryFailure, ttl time.Duration) error {
@@ -86,6 +124,32 @@ func (r *AuthStateRepository) GetRecoveryTokenBySecret(ctx context.Context, secr
 
 func (r *AuthStateRepository) ConsumeRecoveryToken(ctx context.Context, token domain.RecoveryToken) error {
 	return r.setJSON(ctx, r.key("auth", "recovery-token", token.Secret()), recoveryTokenRecordFromDomain(token), time.Until(token.ExpiresAt()))
+}
+
+// ConsumeRecoveryTokenAtomic は recovery token を tokenID でアトミックに取得・削除（GETDEL）し、
+// クライアントから送信された secret のハッシュを記録済みハッシュと照合する。
+// キーが存在しない・ハッシュが一致しない・期限切れ・消費済みの場合はエラーを返す。
+// 検証に成功した場合、secret を含む domain.RecoveryToken を返す。
+func (r *AuthStateRepository) ConsumeRecoveryTokenAtomic(ctx context.Context, tokenID string, secret string) (domain.RecoveryToken, error) {
+	result, err := r.store.GetDel(ctx, r.key("auth", "recovery-token", tokenID))
+	if err != nil {
+		if errors.Is(err, errRESPNil) {
+			return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
+		}
+		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
+	}
+	var record recoveryTokenRecord
+	if err := json.Unmarshal([]byte(result), &record); err != nil {
+		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
+	}
+	if record.SecretHash != hashSecret(secret) {
+		return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
+	}
+	token, err := record.toDomain(secret)
+	if err != nil {
+		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
+	}
+	return token, nil
 }
 
 func (r *AuthStateRepository) SaveRecoverySession(ctx context.Context, session domain.RecoverySession, ttl time.Duration) error {
@@ -149,7 +213,7 @@ func (r *AuthStateRepository) SavePasskeyOtp(ctx context.Context, otpKey string,
 // 存在しない・期限切れの場合は domain.ErrOtpNotFound を返す。
 func (r *AuthStateRepository) ConsumePasskeyOtp(ctx context.Context, otpKey string) (string, error) {
 	k := r.key("auth", "passkey-otp", otpKey)
-	accountID, err := r.store.Get(ctx, k)
+	accountID, err := r.store.GetDel(ctx, k)
 	if err != nil {
 		if errors.Is(err, errRESPNil) {
 			return "", domain.ErrOtpNotFound
@@ -158,9 +222,6 @@ func (r *AuthStateRepository) ConsumePasskeyOtp(ctx context.Context, otpKey stri
 	}
 	if accountID == "" {
 		return "", domain.ErrOtpNotFound
-	}
-	if err := r.store.Delete(ctx, k); err != nil {
-		return "", domain.ErrAuthStoreUnavailable
 	}
 	return accountID, nil
 }
@@ -179,17 +240,6 @@ func (r *AuthStateRepository) GetPasskeyOtp(ctx context.Context, otpKey string) 
 		return "", domain.ErrOtpNotFound
 	}
 	return accountID, nil
-}
-
-func (r *AuthStateRepository) getChallenge(ctx context.Context, secret string) (domain.AuthChallenge, error) {
-	var record challengeRecord
-	if err := r.getJSON(ctx, r.key("auth", "challenge", secret), &record); err != nil {
-		if errors.Is(err, errRESPNil) {
-			return emptyChallenge(), domain.ErrChallengeNotFound
-		}
-		return emptyChallenge(), domain.ErrAuthStoreUnavailable
-	}
-	return normalizeChallengeRecord(record)
 }
 
 func (r *AuthStateRepository) setJSON(ctx context.Context, key string, value any, ttl time.Duration) error {
@@ -271,7 +321,7 @@ func normalizeSessionRecord(record sessionRecord) (domain.Session, error) {
 type recoveryTokenRecord struct {
 	ID         string     `json:"id"`
 	AccountID  string     `json:"accountId"`
-	Secret     string     `json:"secret"`
+	SecretHash string     `json:"secretHash"`
 	ExpiresAt  time.Time  `json:"expiresAt"`
 	ConsumedAt *time.Time `json:"consumedAt,omitempty"`
 }
@@ -301,19 +351,27 @@ func recoveryDeliveryFailureRecordFromDomain(failure domain.RecoveryDeliveryFail
 }
 
 func recoveryTokenRecordFromDomain(token domain.RecoveryToken) recoveryTokenRecord {
-	return recoveryTokenRecord{ID: token.ID(), AccountID: token.AccountID(), Secret: token.Secret(), ExpiresAt: token.ExpiresAt(), ConsumedAt: token.ConsumedAt()}
+	return recoveryTokenRecord{ID: token.ID(), AccountID: token.AccountID(), SecretHash: hashSecret(token.Secret()), ExpiresAt: token.ExpiresAt(), ConsumedAt: token.ConsumedAt()}
 }
 
-func (r recoveryTokenRecord) toDomain() (domain.RecoveryToken, error) {
-	return domain.ReconstituteRecoveryToken(r.ID, r.AccountID, r.Secret, r.ExpiresAt, r.ConsumedAt)
+func (r recoveryTokenRecord) toDomain(secret string) (domain.RecoveryToken, error) {
+	return domain.ReconstituteRecoveryToken(r.ID, r.AccountID, secret, r.ExpiresAt, r.ConsumedAt)
 }
 
 func normalizeRecoveryTokenRecord(record recoveryTokenRecord) (domain.RecoveryToken, error) {
-	token, err := record.toDomain()
+	// secret が必要だが記録にない場合はプレースホルダーを渡す（呼び出し側で上書きすること）。
+	token, err := record.toDomain("")
 	if err != nil {
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
 	return token, nil
+}
+
+// hashSecret は secret の SHA-256 ハッシュを base64 エンコードして返す。
+// 本番環境ではペッパーを追加してハッシュすることを推奨する。
+func hashSecret(secret string) string {
+	h := sha256.Sum256([]byte(secret))
+	return base64.StdEncoding.EncodeToString(h[:])
 }
 
 type recoverySessionRecord struct {
@@ -361,4 +419,143 @@ func emptyRecoveryToken() domain.RecoveryToken {
 func emptyRecoverySession() domain.RecoverySession {
 	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
 	return session
+}
+
+type reauthenticationSessionRecord struct {
+	ID               string     `json:"id"`
+	AccountID        string     `json:"accountId"`
+	IssuingSessionID string     `json:"issuingSessionId"`
+	OperationKind    string     `json:"operationKind"`
+	RequestID        string     `json:"requestId"`
+	ExpiresAt        time.Time  `json:"expiresAt"`
+	ConsumedAt       *time.Time `json:"consumedAt,omitempty"`
+}
+
+func normalizeReauthenticationSessionRecord(record reauthenticationSessionRecord) (domain.ReauthenticationSession, error) {
+	session, err := domain.ReconstituteReauthenticationSession(
+		record.ID, record.AccountID, record.IssuingSessionID, record.OperationKind, record.RequestID,
+		record.ExpiresAt, record.ConsumedAt,
+	)
+	if err != nil {
+		return emptyReauthenticationSession(), domain.ErrAuthStoreUnavailable
+	}
+	return session, nil
+}
+
+func emptyReauthenticationSession() domain.ReauthenticationSession {
+	session, _ := domain.NewReauthenticationSession(
+		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+		"otp-issue", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+	)
+	return session
+}
+
+// ─── DeviceLoginHandoff ─────────────────────────────────────────────────────
+
+type deviceLoginHandoffRecord struct {
+	HandoffID        string     `json:"handoffId"`
+	AccountID        string     `json:"accountId"`
+	IssuingSessionID string     `json:"issuingSessionId"`
+	EmailHash        string     `json:"emailHash"`
+	OtpHash          string     `json:"otpHash"`
+	ChallengeID      string     `json:"challengeId,omitempty"`
+	ExpiresAt        time.Time  `json:"expiresAt"`
+	AttemptCount     int        `json:"attemptCount"`
+	ConsumedAt       *time.Time `json:"consumedAt,omitempty"`
+}
+
+// SaveDeviceLoginHandoff は namespaced device handoff record とその secondary index を TTL 付きで保存する。
+// 単一 record は auth:handoff:{handoffID} に、OTP 検索用 secondary index は auth:handoff-otp-idx:{emailHash}:{otpHash} に保存される。
+func (r *AuthStateRepository) SaveDeviceLoginHandoff(ctx context.Context, handoff domain.DeviceLoginHandoff, ttl time.Duration) error {
+	record := deviceLoginHandoffRecord{
+		HandoffID:        handoff.ID(),
+		AccountID:        handoff.AccountID(),
+		IssuingSessionID: handoff.IssuingSessionID(),
+		EmailHash:        handoff.EmailHash(),
+		OtpHash:          handoff.OtpHash(),
+		ChallengeID:      handoff.ChallengeID(),
+		ExpiresAt:        handoff.ExpiresAt(),
+		AttemptCount:     handoff.AttemptCount(),
+		ConsumedAt:       handoff.ConsumedAt(),
+	}
+	if err := r.setJSON(ctx, r.key("auth", "handoff", handoff.ID()), record, ttl); err != nil {
+		return err
+	}
+	// secondary index: auth:handoff-otp-idx:{emailHash}:{otpHash} → handoffID
+	idxKey := r.key("auth", "handoff-otp-idx", handoff.EmailHash(), handoff.OtpHash())
+	if err := r.store.Set(ctx, idxKey, handoff.ID(), ttl); err != nil {
+		return domain.ErrAuthStoreUnavailable
+	}
+	return nil
+}
+
+// FindDeviceLoginHandoffByEmailAndOtp は emailHash と otpHash から secondary index を経由して handoff を検索する。
+// 見つからない場合は domain.ErrDeviceLoginHandoffNotFound を返す。
+func (r *AuthStateRepository) FindDeviceLoginHandoffByEmailAndOtp(ctx context.Context, emailHash string, otpHash string) (domain.DeviceLoginHandoff, error) {
+	idxKey := r.key("auth", "handoff-otp-idx", emailHash, otpHash)
+	handoffID, err := r.store.Get(ctx, idxKey)
+	if err != nil {
+		if errors.Is(err, errRESPNil) {
+			return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
+		}
+		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
+	}
+	if handoffID == "" {
+		return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
+	}
+	return r.GetDeviceLoginHandoff(ctx, handoffID)
+}
+
+// GetDeviceLoginHandoff は handoffID から device login handoff record を取得する。
+func (r *AuthStateRepository) GetDeviceLoginHandoff(ctx context.Context, handoffID string) (domain.DeviceLoginHandoff, error) {
+	var record deviceLoginHandoffRecord
+	if err := r.getJSON(ctx, r.key("auth", "handoff", handoffID), &record); err != nil {
+		if errors.Is(err, errRESPNil) {
+			return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
+		}
+		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
+	}
+	return normalizeDeviceLoginHandoffRecord(record)
+}
+
+// ConsumeDeviceLoginHandoff は handoff record を GETDEL でアトミックに取得・削除する。
+// 成功した場合、secondary index もベストエフォートで削除する。
+func (r *AuthStateRepository) ConsumeDeviceLoginHandoff(ctx context.Context, handoffID string) (domain.DeviceLoginHandoff, error) {
+	result, err := r.store.GetDel(ctx, r.key("auth", "handoff", handoffID))
+	if err != nil {
+		if errors.Is(err, errRESPNil) {
+			return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
+		}
+		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
+	}
+	var record deviceLoginHandoffRecord
+	if err := json.Unmarshal([]byte(result), &record); err != nil {
+		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
+	}
+	// secondary index も削除する（ベストエフォート）
+	idxKey := r.key("auth", "handoff-otp-idx", record.EmailHash, record.OtpHash)
+	_ = r.store.Delete(ctx, idxKey)
+	return normalizeDeviceLoginHandoffRecord(record)
+}
+
+func normalizeDeviceLoginHandoffRecord(record deviceLoginHandoffRecord) (domain.DeviceLoginHandoff, error) {
+	handoff, err := domain.NewDeviceLoginHandoff(record.HandoffID, record.AccountID, record.IssuingSessionID, record.EmailHash, record.OtpHash, record.ExpiresAt)
+	if err != nil {
+		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
+	}
+	if record.ChallengeID != "" {
+		handoff = handoff.BindChallenge(record.ChallengeID)
+	}
+	for i := 0; i < record.AttemptCount; i++ {
+		handoff = handoff.IncrementAttempt()
+	}
+	if record.ConsumedAt != nil {
+		handoff = handoff.Consume(*record.ConsumedAt)
+	}
+	return handoff, nil
+}
+
+func emptyDeviceLoginHandoff() domain.DeviceLoginHandoff {
+	h, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", "placeholder", time.Unix(1, 0).UTC())
+	return h
 }

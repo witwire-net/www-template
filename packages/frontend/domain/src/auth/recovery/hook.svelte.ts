@@ -13,7 +13,7 @@ import { toRecoveryErrorMessage } from '../passkey/state';
 
 import { useAuthSession } from '../session/hook.svelte';
 
-import type { RecoveryFlowState } from '../types';
+import type { AuthFailureState, RecoveryFlowState } from '../types';
 
 const CACHE_CONTROL_HEADER = 'cache-control';
 
@@ -21,24 +21,11 @@ interface RecoveryFlowData {
   state: RecoveryFlowState;
 }
 
-/** consume → register 間で保存する snapshot の型。 */
-interface RecoveryReadySnapshot {
-  requestId: string;
-  recoveryTokenId: string;
-  recoverySessionId: string;
-  recoverySession: string;
-  expiresAt: string;
-}
-
 interface RecoveryFlowActions {
   setEmail: (email: string) => void;
   submitRecoveryRequest: () => Promise<'/login/recovery/sent' | null>;
   consumeToken: (token: string) => Promise<'/login/recovery/register' | '/login/recovery' | null>;
   registerRecoveryPasskey: () => Promise<null>;
-  /** ready state の snapshot を取得する。フルリロード遷移前に app 層が永続化に使う。 */
-  getReadySnapshot: () => RecoveryReadySnapshot | null;
-  /** app 層が永続化から復元した snapshot で ready state を再構成する。 */
-  restoreReadyState: (snapshot: RecoveryReadySnapshot) => void;
   reset: () => void;
 }
 
@@ -150,8 +137,9 @@ const createRegisterRecoveryPasskeyAction =
         return null;
       }
       if (startResponse.status !== 200) {
+        // status === 400 は上で処理済みのため、ここは 503 (AuthFailure) のみ
         authSession.actions.handleFailure(
-          startResponse.data.error,
+          startResponse.data.error as AuthFailureState,
           'パスキー再登録を開始できませんでした。'
         );
         state.phase = 'idle';
@@ -222,28 +210,6 @@ function useRecoveryFlow(): { data: RecoveryFlowData; actions: RecoveryFlowActio
     submitRecoveryRequest: createSubmitRecoveryRequestAction(state, authSession),
     consumeToken: createConsumeTokenAction(state, authSession),
     registerRecoveryPasskey: createRegisterRecoveryPasskeyAction(state, authSession),
-    getReadySnapshot: () => {
-      if (
-        state.phase !== 'ready' ||
-        state.requestId === null ||
-        state.recoveryTokenId === null ||
-        state.recoverySessionId === null ||
-        state.recoverySession === null ||
-        state.expiresAt === null
-      ) {
-        return null;
-      }
-      return {
-        requestId: state.requestId,
-        recoveryTokenId: state.recoveryTokenId,
-        recoverySessionId: state.recoverySessionId,
-        recoverySession: state.recoverySession,
-        expiresAt: state.expiresAt,
-      };
-    },
-    restoreReadyState: (snapshot) => {
-      applyRecoveryReady(state, snapshot, null);
-    },
     reset: () => {
       clearRecoveryState(state);
     },
@@ -257,5 +223,5 @@ function useRecoveryFlow(): { data: RecoveryFlowData; actions: RecoveryFlowActio
   };
 }
 
-export type { RecoveryFlowActions, RecoveryFlowData, RecoveryReadySnapshot };
+export type { RecoveryFlowActions, RecoveryFlowData };
 export { useRecoveryFlow };

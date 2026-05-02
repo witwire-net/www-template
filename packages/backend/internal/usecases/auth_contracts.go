@@ -98,6 +98,34 @@ type FinishPasskeyAuthenticationInput struct {
 	ClientIP   string
 }
 
+// StartReauthenticationInput は WebAuthn 再認証セレモニー開始時の入力パラメータを表す。
+// AccountID、SessionID、Kind、ClientIP を含む。
+type StartReauthenticationInput struct {
+	AccountID string
+	SessionID string
+	Kind      string
+	ClientIP  string
+}
+
+// FinishReauthenticationInput は WebAuthn 再認証完了時の入力パラメータを表す。
+// AccountID、SessionID、Kind、Credential、ClientIP を含む。
+type FinishReauthenticationInput struct {
+	AccountID  string
+	SessionID  string
+	Kind       string
+	Credential WebAuthnAssertionCredentialDTO
+	ClientIP   string
+}
+
+// ReauthenticationSession は再認証セッションの結果を表す。
+// RequestID、ReauthSessionID、Kind、ExpiresAt を含む。
+type ReauthenticationSession struct {
+	RequestID       string
+	ReauthSessionID string
+	Kind            string
+	ExpiresAt       time.Time
+}
+
 type RequestPasskeyRecoveryInput struct {
 	Email    string
 	ClientIP string
@@ -138,6 +166,8 @@ type AuthStateRepository interface {
 	SaveRecoveryDeliveryFailure(context.Context, domain.RecoveryDeliveryFailure, time.Duration) error
 	GetRecoveryTokenBySecret(context.Context, string) (domain.RecoveryToken, error)
 	ConsumeRecoveryToken(context.Context, domain.RecoveryToken) error
+	// ConsumeRecoveryTokenAtomic は recovery token を tokenID でアトミックに取得・削除し、secret のハッシュを検証する。
+	ConsumeRecoveryTokenAtomic(ctx context.Context, tokenID string, secret string) (domain.RecoveryToken, error)
 	SaveRecoverySession(context.Context, domain.RecoverySession, time.Duration) error
 	GetRecoverySession(context.Context, string) (domain.RecoverySession, error)
 	ConsumeRecoverySession(context.Context, domain.RecoverySession) error
@@ -150,12 +180,24 @@ type AuthStateRepository interface {
 	ConsumePasskeyOtp(ctx context.Context, otpKey string) (string, error)
 	// GetPasskeyOtp は OTP を消費せずに accountID を取得する。TTL 切れ・存在しない場合は domain.ErrOtpNotFound を返す。
 	GetPasskeyOtp(ctx context.Context, otpKey string) (string, error)
+	// SaveReauthenticationSession は再認証セッションを TTL 付きで保存する。
+	SaveReauthenticationSession(ctx context.Context, session domain.ReauthenticationSession, ttl time.Duration) error
+	// ConsumeReauthenticationSession は再認証セッションをアトミックに取得・削除する。
+	ConsumeReauthenticationSession(ctx context.Context, reauthID string) (domain.ReauthenticationSession, error)
+	// SaveDeviceLoginHandoff は namespaced device handoff record と secondary index を TTL 付きで保存する。
+	SaveDeviceLoginHandoff(ctx context.Context, handoff domain.DeviceLoginHandoff, ttl time.Duration) error
+	// FindDeviceLoginHandoffByEmailAndOtp は emailHash と otpHash から secondary index を経由して handoff を検索する。
+	FindDeviceLoginHandoffByEmailAndOtp(ctx context.Context, emailHash string, otpHash string) (domain.DeviceLoginHandoff, error)
+	// ConsumeDeviceLoginHandoff は handoff record を GETDEL でアトミックに取得・削除する。
+	ConsumeDeviceLoginHandoff(ctx context.Context, handoffID string) (domain.DeviceLoginHandoff, error)
 }
 
 type AuthAccountRepository interface {
 	FindByIdentifier(context.Context, string) (domain.AuthAccount, error)
 	FindByCredential(context.Context, string) (domain.AuthAccount, error)
 	FindByEmail(context.Context, string) (domain.AuthAccount, error)
+	// FindByID は accountID（ULID）でアカウントを検索する。
+	FindByID(ctx context.Context, accountID string) (domain.AuthAccount, error)
 	// AddPasskey は既存パスキーを保持したまま 1 件追加する。
 	// credData に WebAuthn credential record のデータを渡す（provider なしの場合は zero value で可）。
 	AddPasskey(ctx context.Context, accountID string, credentialID string, handle string, credData domain.WebAuthnCredentialData) (domain.AuthAccount, error)
@@ -197,15 +239,38 @@ type AccountRecoverySender interface {
 	SendAccountRecovery(context.Context, RecoveryDelivery) error
 }
 
+// PasskeyOtpSender は device login handoff 用の 6 桁 OTP を secure mail transport で送信するインターフェース。
+type PasskeyOtpSender interface {
+	// SendPasskeyOtp は登録済みメールアドレスへ OTP を送信する。
+	// email は宛先、otp は 6 桁のコード、requestID は audit 用のリクエスト ID。
+	SendPasskeyOtp(ctx context.Context, email string, otp string, requestID string) error
+}
+
 type InvitationPasskeyRegistrar interface {
 	RegisterInvitationPasskey(context.Context, InvitationPasskeyRegistrationInput) (AuthSession, error)
+}
+
+// AuditNotifier は認証関連の重要イベントを通知・記録するためのポートである。
+// 現時点ではハンドラー注入方式とし、structured logger 導入までの橋渡しとする。
+// secret（OTP、credential raw data）は含めず、安全な識別子のみを渡す。
+type AuditNotifier interface {
+	// EmitPasskeyAddedByOTP は OTP handoff による新規パスキー追加成功時に呼び出される。
+	// accountID は対象アカウント、passkeyID は追加されたパスキー、requestID は発行されたリクエスト ID。
+	// 呼び出し元は ctx がキャンセルされていても処理を継続すべき（fire-and-forget）。
+	EmitPasskeyAddedByOTP(ctx context.Context, accountID string, passkeyID string, requestID string)
+	// EmitCredentialStateUpdateFailure は WebAuthn credential state の更新失敗時に呼び出される。
+	// credentialHandle は対象 credential の識別子、err は発生したエラー。
+	// secret（OTP、credential raw data）は含めない。
+	EmitCredentialStateUpdateFailure(ctx context.Context, credentialHandle string, err error)
 }
 
 type AuthService struct {
 	stateRepo           AuthStateRepository
 	accountRepo         AuthAccountRepository
 	recoverySender      AccountRecoverySender
+	passkeyOtpSender    PasskeyOtpSender
 	invitationRegistrar InvitationPasskeyRegistrar
+	auditNotifier       AuditNotifier
 	webauthn            WebAuthnProvider
 	clock               func() time.Time
 	policy              types.AuthIDPolicy
@@ -232,4 +297,18 @@ func NewAuthService(stateRepo AuthStateRepository, accountRepo AuthAccountReposi
 // provider が nil の場合はすべての WebAuthn 操作が ErrInternalError を返す。
 func (s *AuthService) UseWebAuthnProvider(provider WebAuthnProvider) {
 	s.webauthn = provider
+}
+
+// UsePasskeyOtpSender は OTP 送信器を注入する（app 層から呼び出す）。
+// sender が nil の場合、IssuePasskeyOtp はメール送信をスキップする（テスト時）。
+func (s *AuthService) UsePasskeyOtpSender(sender PasskeyOtpSender) {
+	s.passkeyOtpSender = sender
+}
+
+// UseAuditNotifier は audit notifier を注入する（app 層から呼び出す）。
+// notifier が nil の場合、audit event emit はスキップされる（テスト時・未設定時）。
+// notifier は認証関連の重要イベントを記録・通知するためのポートである。
+// secret（OTP、credential raw data）は含めず、accountID・passkeyID・requestID のみを渡す必要がある。
+func (s *AuthService) UseAuditNotifier(notifier AuditNotifier) {
+	s.auditNotifier = notifier
 }

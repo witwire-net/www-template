@@ -159,6 +159,52 @@ namespace WWWTemplate.ApiV1 {
 
 namespace WWWTemplate.ApiV1App {
   @tag("app-auth")
+  @summary("Starts a WebAuthn reauthentication ceremony for a high-risk operation")
+  @operationId("startReauthentication")
+  @post
+  @route("/auth/reauth/start")
+  op startReauthentication(@body body: WWWTemplate.ReauthenticationStartRequest): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.PasskeyStartResponse;
+  } | {
+    @statusCode statusCode: 400;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthOperationErrorResponse;
+  } | {
+    @statusCode statusCode: 401;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
+
+  @tag("app-auth")
+  @summary("Finishes a WebAuthn reauthentication ceremony and issues a reauthentication session")
+  @operationId("finishReauthentication")
+  @post
+  @route("/auth/reauth/finish")
+  op finishReauthentication(@body body: WWWTemplate.ReauthenticationFinishRequest): {
+    @statusCode statusCode: 200;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.ReauthenticationSessionResponse;
+  } | {
+    @statusCode statusCode: 400;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthOperationErrorResponse;
+  } | {
+    @statusCode statusCode: 401;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  } | {
+    @statusCode statusCode: 503;
+    @header("Cache-Control") cacheControl: "no-store";
+    @body body: WWWTemplate.AuthFailureResponse;
+  };
+
+  @tag("app-auth")
   @summary("Revokes the current bearer session")
   @operationId("logout")
   @post
@@ -247,10 +293,18 @@ namespace WWWTemplate.ApiV1App {
   @operationId("deletePasskey")
   @delete
   @route("/passkeys/{id}")
-  op deletePasskey(@path id: WWWTemplate.UlidId):
+  op deletePasskey(
+    @path id: WWWTemplate.UlidId,
+    @header("X-Reauth-Session") reauthSession: string,
+  ):
     | {
         @statusCode statusCode: 204;
         @header("Cache-Control") cacheControl: "no-store";
+      }
+    | {
+        @statusCode statusCode: 400;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthOperationErrorResponse;
       }
     | {
         @statusCode statusCode: 401;
@@ -278,7 +332,9 @@ namespace WWWTemplate.ApiV1App {
   @operationId("issuePasskeyOtp")
   @post
   @route("/passkeys/otp")
-  op issuePasskeyOtp():
+  op issuePasskeyOtp(
+    @header("X-Reauth-Session") reauthSession: string,
+  ):
     | {
         @statusCode statusCode: 200;
         @header("Cache-Control") cacheControl: "no-store";
@@ -293,6 +349,11 @@ namespace WWWTemplate.ApiV1App {
         @statusCode statusCode: 401;
         @header("Cache-Control") cacheControl: "no-store";
         @body body: WWWTemplate.AuthFailureResponse;
+      }
+    | {
+        @statusCode statusCode: 403;
+        @header("Cache-Control") cacheControl: "no-store";
+        @body body: WWWTemplate.AuthOperationErrorResponse;
       }
     | {
         @statusCode statusCode: 503;

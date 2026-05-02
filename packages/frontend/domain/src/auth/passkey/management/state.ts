@@ -6,7 +6,13 @@ function createPasskeyManagementInitialState(): PasskeyManagementState {
     passkeys: [],
     loading: false,
     error: null,
+    reauthSession: null,
   };
+}
+
+/** 再認証セッション ID を state に設定する。 */
+function applyReauthSession(state: PasskeyManagementState, reauthSession: string | null): void {
+  state.reauthSession = reauthSession;
 }
 
 /** 削除成功後に対象パスキーを state から除去する。 */
@@ -37,6 +43,7 @@ export {
   applyPasskeyDeleted,
   applyPasskeyError,
   applyPasskeyList,
+  applyReauthSession,
   createPasskeyManagementInitialState,
   toPasskeyManagementErrorMessage,
 };
