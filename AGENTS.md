@@ -51,13 +51,13 @@
 ## Architecture Notes
 
 - Client dependency direction: `web -> frontend/ui` (web is a public LP; it MUST NOT depend on domain or api), `frontend/app -> frontend/domain -> frontend/api` (also `frontend/app -> frontend/ui`)
-- Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/http|backend/internal/persistence|backend/internal/usecases) -> backend/internal/domain -> backend/internal/types`
+- Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/adapters/http|backend/internal/adapters/persistence/postgres|backend/internal/adapters/persistence/valkey|backend/internal/adapters/webauthn|backend/internal/adapters/mailer|backend/internal/auth/application|backend/internal/platform/*) -> backend/internal/auth/domain -> backend/internal/platform/*`
 - API contract direction: implementation must follow TypeSpec; do not generate OpenAPI from server routes for SDK input.
 
 ## Backend Guardrails
 
 - API path policy: all routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*` and `api/v1/auth/logout`
-- GORM imports are allowed only under `packages/backend/internal/persistence/**`
+- GORM imports are allowed only under `packages/backend/internal/adapters/persistence/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow
 

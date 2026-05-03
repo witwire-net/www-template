@@ -35,10 +35,10 @@
 - app surface は `Authorization: Bearer <token>` 境界を必須にする
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` を必須にする
 - OpenAPI は Spectral lint で path policy と bearer security declaration を検証する
-- GORM は `packages/backend/internal/persistence/**` のみ
+- GORM は `packages/backend/internal/adapters/persistence/**` のみ
 - `AutoMigrate` は禁止。`golang-migrate` 用 SQL を `packages/backend/db/migrations/**` に置く
-- domain / usecases は Gin, GORM, generated, HTTP infra に依存しない
-- http は persistence を直 import しない
+- auth/domain / auth/application は Gin, GORM, generated, HTTP infra に依存しない
+- adapters/http は adapters/persistence を直 import しない
 
 ## Hooks
 

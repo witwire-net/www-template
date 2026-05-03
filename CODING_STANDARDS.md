@@ -504,7 +504,7 @@ Note: `.husky/pre-commit` の実体は `pnpm lint-staged` のみです。`pnpm c
 - required: `commit-msg` は `pnpm commitlint --edit $1` を実行し、type は `feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert` のどれかにする
 - Enforcement point: `.husky/commit-msg`; `commitlint.config.js` (`@commitlint/config-conventional`)
 - NG例: `update stuff`
-- OK例: `fix: prevent write usecases from bypassing domain validation`
+- OK例: `fix: prevent write application services from bypassing domain validation`
 
 ## 9. 設定参照
 
