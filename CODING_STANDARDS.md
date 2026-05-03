@@ -52,14 +52,14 @@
 ### app endpoint は BearerAuth を宣言する
 
 - required: `/api/v1/auth/*` と `/api/v1/status` 以外の `/api/v1/*` 各 operation は `security: [{ BearerAuth: [] }]` を持つ
-- Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/app-security.js`; `pnpm test:run` -> `packages/backend/internal/http/openapi_contract_test.go`
+- Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/app-security.js`; `pnpm test:run` -> `packages/backend/internal/adapters/http/openapi_contract_test.go`
 - NG例: `/api/v1/passkeys` の `security` を消す
 - OK例: app endpoint ごとに `BearerAuth` を宣言する
 
 ### BearerAuth security scheme は `type=http` + `scheme=bearer` にする
 
 - required: `components.securitySchemes.BearerAuth` は `type=http` かつ `scheme=bearer` にする
-- Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/bearer-scheme.js`; `pnpm test:run` -> `packages/backend/internal/http/openapi_contract_test.go`
+- Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/bearer-scheme.js`; `pnpm test:run` -> `packages/backend/internal/adapters/http/openapi_contract_test.go`
 - NG例: `BearerAuth` を `apiKey` にする / `scheme` を `basic` にする
 - OK例: `BearerAuth` を `type=http`, `scheme=bearer` で宣言する
 
@@ -273,80 +273,101 @@
 
 ### Go file は許可された backend layer にだけ置く
 
-- must live under ...: `packages/backend/**/*.go` は `cmd/api`, `internal/app`, `internal/http`, `internal/persistence`, `internal/usecases`, `internal/domain`, `internal/types`, `internal/generated`, `tools/analyzers` のどれかに置く
+- must live under ...: `packages/backend/**/*.go` は `cmd/api`、`internal/app`、`internal/platform/**`、`internal/{feature}/domain`、`internal/{feature}/application`、`internal/adapters/**`、`internal/generated`、`tools/analyzers` のいずれかに置く
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`verifyGoFilePlacement`)
 - NG例: `packages/backend/pkg/http/server.go`
-- OK例: `packages/backend/internal/http/router.go`
+- OK例: `packages/backend/internal/adapters/http/router.go`
+
+### package 名は配置パスと一致させる
+
+- required: 各ディレクトリに置く `.go` ファイルの `package` 名は、配置パスに対応する決められた名前にする（`internal/adapters/http/` → `http`、`internal/auth/domain/` → `domain`、`internal/platform/config/` → `config` など）
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkPackageName`)
+- NG例: `internal/adapters/persistence/postgres/repository.go` に `package http` を書く
+- OK例: `internal/adapters/persistence/postgres/repository.go` に `package postgres` を書く
 
 ### backend の内部依存方向を守る
 
-- required: `cmd/api -> internal/app`; `internal/app -> internal/http|internal/persistence|internal/usecases|internal/domain|internal/types`; `internal/http -> internal/usecases|internal/domain|internal/types|internal/generated/openapi`; `internal/persistence -> internal/domain|internal/types|internal/persistence`; `internal/usecases -> internal/domain|internal/types|internal/usecases`
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
-- NG例: `internal/persistence` から `internal/usecases` を import する / `cmd/api` から `internal/http` を直接 import する
-- OK例: `cmd/api` は `internal/app` を起点にし、handler は usecase を呼ぶ
+- required: `cmd` → `app`; `app` → `platform` / `adapters-*` / `application` / `domain`; `platform` → `platform`; `domain` → `platform`; `application` → `domain` / `platform` / `application`; `adapters-http` → `generated` / `application` / `platform` / `domain`; `adapters-persistence` → `domain` / `application` / `platform`; `adapters-other` → `domain` / `application` / `platform`
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
+- NG例: `internal/auth/domain` から `internal/auth/application` を import する / `internal/platform/config` から `internal/auth/domain` を import する
+- OK例: `cmd/api` は `internal/app` を起点にし、handler は application を呼ぶ
+
+### domain 層は他 feature の domain を import しない
+
+- forbidden: `internal/{feature}/domain` から `internal/{other-feature}/domain` を import しない
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
+- NG例: `internal/billing/domain/invoice.go` から `internal/auth/domain` を import する
+- OK例: feature 間の連携は application 層で行う
+
+### generated/openapi は adapters-http のみ import 可能
+
+- forbidden: `internal/generated/openapi` を `internal/adapters/http` 以外から import しない
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
+- NG例: `internal/app` から `internal/generated/openapi` を import する
+- OK例: `internal/adapters/http/router.go` だけが `internal/generated/openapi` を import する
 
 ### layer ごとの外部依存を守る
 
-- required: Gin / CORS / oapi runtime は `internal/http` だけ、GORM / Postgres driver / Redis は `internal/persistence` だけ、`types` は `github.com/oklog/ulid/v2` のみ、他 layer は stdlib と許可された internal package を使う; 例外として `internal/app` は `github.com/go-webauthn/webauthn` を使用可能（WebAuthnProvider 実装のため）
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
-- NG例: `internal/domain` で `github.com/gin-gonic/gin` を import する
-- OK例: `internal/domain` は stdlib と domain/types に閉じる; `internal/app/webauthn_provider.go` で `github.com/go-webauthn/webauthn` を import する
+- required: Gin / CORS / oapi runtime は `adapters-http` だけ、GORM / Postgres driver / Redis は `adapters-persistence` だけ、WebAuthn ライブラリは `adapters-webauthn` だけ、go-toml / OTel / ULID は `platform` だけ、他 layer は stdlib と許可された internal package を使う
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
+- NG例: `internal/auth/domain` で `github.com/gin-gonic/gin` を import する
+- OK例: `internal/auth/domain` は stdlib と `internal/platform/id` に閉じる
 
-### http は domain の entity / command / error に直接依存しない
+### adapters-http は domain の entity / command / error に直接依存しない
 
-- forbidden: `packages/backend/internal/http/**` で `domain.<entity|input|Err*>` を直接使わず、transport DTO は usecase DTO に変換する（Repository / Port 型は例外）
+- forbidden: `internal/adapters/http/**` で `domain.<entity|input|Err*>` を直接使わず、transport DTO は application DTO に変換する（Repository / Port 型は例外）
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkHTTPDomainBoundary`)
 - NG例: handler で `domain.CreateProfileInput{...}` を組み立てる
-- OK例: handler は `usecases.CreateProfileInput` を作る
+- OK例: handler は `application.CreateProfileInput` を作る
 
-### exported usecase API は usecase DTO を公開する
+### exported application API は application DTO を公開する
 
-- required: `packages/backend/internal/usecases/**` の exported API は `domain.Profile` や `domain.*Input` を引数・戻り値に出さない（`New*` コンストラクタは除外）
+- required: `internal/{feature}/application/**` の exported API は `domain.Profile` や `domain.*Input` を引数・戻り値に出さない（`New*` コンストラクタは除外）
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkUsecaseExportedAPIBoundary`)
 - NG例: `func (s *ProfilesService) CreateProfile(ctx context.Context, input domain.CreateProfileInput) (domain.Profile, error)`
 - OK例: `func (s *ProfilesService) CreateProfile(ctx context.Context, input CreateProfileInput) (Profile, error)`
 
-### domain / usecases の port interface は transport / persistence 型を混ぜない
+### domain / application の port interface は transport / persistence 型を混ぜない
 
-- forbidden: `packages/backend/internal/domain/**` と `packages/backend/internal/usecases/**` の interface に `internal/http`, `internal/persistence`, `internal/generated`, Gin, oapi runtime, GORM 型を入れない
+- forbidden: `internal/{feature}/domain/**` と `internal/{feature}/application/**` の interface に `internal/adapters/http`、`internal/adapters/persistence`、`internal/generated`、Gin、oapi runtime、GORM 型を入れない
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkPortPurity`)
 - NG例: `type ProfileRepository interface { Save(gin.Context, persistence.ProfileRecord) error }`
 - OK例: `type ProfileRepository interface { Save(context.Context, Profile) error }`
 
 ### domain entity は constructor / reconstitution helper 経由で作る
 
-- forbidden: `packages/backend/internal/domain/**` の外で `domain.Entity{...}` を直接組み立てない（テストは除外）
+- forbidden: `internal/{feature}/domain/**` の外で `domain.Entity{...}` を直接組み立てない（テストは除外）
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkDomainCompositeLiterals`)
 - NG例: `profile := domain.Profile{ID: 1, Name: "Ada"}`
 - OK例: `profile, err := domain.NewProfile(...)` / `domain.ReconstituteProfile(...)`
 
-### write usecase は domain を必ず通し、field validation を inline しない
+### write application は domain を必ず通し、field validation を inline しない
 
-- required: `Create*`, `Update*`, `Change*`, `Rename*`, `Set*`, `Add*` で始まる exported usecase は本文で `internal/domain` を直接呼び、`strings.Trim*`, `regexp.*`, `== ""` などの入力検証を inline で書かない
+- required: `Create*`, `Update*`, `Change*`, `Rename*`, `Set*`, `Add*` で始まる exported application 関数は本文で `internal/{feature}/domain` を直接呼び、`strings.Trim*`, `regexp.*`, `== ""` などの入力検証を inline で書かない
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkWriteUsecasesTouchDomain`, `checkUsecaseInlineBusinessValidation`)
-- NG例: usecase 内で `strings.TrimSpace(input.Name)` や `if input.Email == ""` を書く
-- OK例: usecase は `domain.NewCreateProfileInput(...)` や `domain.NewProfile(...)` に処理を委譲する
+- NG例: application 内で `strings.TrimSpace(input.Name)` や `if input.Email == ""` を書く
+- OK例: application は `domain.NewCreateProfileInput(...)` や `domain.NewProfile(...)` に処理を委譲する
 
 ## 5. バックエンドの API / 認証 / 永続化
 
 ### non-generated Gin route は literal かつ `/health` か `/api/v1/*` だけにする
 
-- required: `internal/http` の non-generated route は string literal で書き、`/health` または `/api/v1/*` だけにする; custom Gin group も `/api/v1/*` 配下だけにする
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
+- required: `internal/adapters/http` の non-generated route は string literal で書き、`/health` または `/api/v1/*` だけにする; custom Gin group も `/api/v1/*` 配下だけにする
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/adapters/http/router_test.go` (`TestRoutePolicy`)
 - NG例: `router.GET(basePath + "/profiles", ...)` / `router.Group("/admin")`
 - OK例: `router.GET("/health", ...)` / `router.Group("/api/v1/passkeys")`
 
 ### runtime route policy をテストで守る
 
 - required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register/start`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`, `/api/v1/auth/passkey/add/start`, `/api/v1/auth/passkey/add/finish` に限定し、whitelist 外の `/api/v1/*` は bearer を要求する
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestRoutePolicy`)
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapters/http/router_test.go` (`TestRoutePolicy`)
 - NG例: runtime route に `/api/v1/admin/users` を増やす
 - OK例: app surface の custom route は `/api/v1/passkeys/*` に置く
 
 ### app API は Bearer token 必須にする
 
 - required: whitelist 外の `/api/v1/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する（例: `/api/v1/passkeys/*`, `/api/v1/auth/logout`）
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/http/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapters/http/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/adapters/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
 - NG例: `/api/v1/passkeys` を認証なしで通す
 - OK例: bearer middleware で保護し、OpenAPI に `security: [{ BearerAuth: [] }]` を残す
 
@@ -357,12 +378,12 @@
 - NG例: `APP_ENV=production` なのに token 空で起動を許す
 - OK例: production / staging では `APP_BEARER_TOKEN` を必須にする
 
-### GORM は `internal/persistence` に閉じ込める
+### GORM は `adapters-persistence` に閉じ込める
 
-- required: `gorm.io/gorm` と `gorm.io/driver/postgres` の import は `packages/backend/internal/persistence/**` だけにする
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `packages/backend/.golangci.yml` (`depguard`); `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
-- NG例: `internal/usecases/service.go` で GORM を import する
-- OK例: DB 実装は `internal/persistence` に置く
+- required: `gorm.io/gorm` と `gorm.io/driver/postgres` の import は `packages/backend/internal/adapters/persistence/**` だけにする
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
+- NG例: `internal/auth/application/service.go` で GORM を import する
+- OK例: DB 実装は `internal/adapters/persistence/postgres` に置く
 
 ### `AutoMigrate` は禁止し、SQL migration を置く
 
@@ -394,11 +415,11 @@
 - NG例: import 順や空白が崩れたまま commit する
 - OK例: `gofmt -w` と `goimports -w` 後の状態で commit する
 
-### domain / usecases は time・env・logger・rand の副作用源を直に読まない
+### domain / application は time・env・logger・rand の副作用源を直に読まない
 
-- forbidden: `packages/backend/internal/domain/**` と `packages/backend/internal/usecases/**` で `time.Now`, `os.Getenv`, `os.LookupEnv`, `os.Environ`, `log`, `log/slog`, `math/rand`, `math/rand/v2` を直接使わない（テストは除外）
+- forbidden: `internal/{feature}/domain/**` と `internal/{feature}/application/**` で `time.Now`, `os.Getenv`, `os.LookupEnv`, `os.Environ`, `log`, `log/slog`, `math/rand`, `math/rand/v2` を直接使わない（テストは除外）
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkCoreSideEffects`)
-- NG例: usecase で `time.Now()` を呼ぶ / domain で `os.Getenv("APP_ENV")` を読む
+- NG例: application で `time.Now()` を呼ぶ / domain で `os.Getenv("APP_ENV")` を読む
 - OK例: clock や config を outer layer から渡す
 
 ### `err.Error()` の文字列比較で分岐しない
@@ -470,7 +491,7 @@
 
 | 対象パターン                           | 実行内容                                                                                                              |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `*.{ts,tsx,js,jsx}`                    | `eslint --fix --no-inline-config --max-warnings 0` -> `prettier --write`                                              |
+| `*.{ts,tsx,js,jsx}`                    | `eslint --fix --no-inline-config --no-warn-ignored --max-warnings 0` -> `prettier --write`                            |
 | `*.css`                                | `stylelint --fix --max-warnings 0` -> `prettier --write`                                                              |
 | `*.{json,md,yml,yaml}`                 | `prettier --write`                                                                                                    |
 | `*.go`                                 | `bash scripts/hooks/format-staged-go.sh` = `gofmt -w` + `goimports -local www-template -w`                            |
@@ -491,5 +512,5 @@ Note: `.husky/pre-commit` の実体は `pnpm lint-staged` のみです。`pnpm c
 - root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`, `stylelint.config.js`
 - TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
 - frontend CSS: `packages/frontend/ui/src/styles/base/global.css`, `packages/frontend/ui/src/styles/tokens.css`, `packages/frontend/ui/src/styles/theme.css`, `packages/frontend/ui/src/styles/base-styles.css`, `packages/frontend/ui/src/styles/components/*.css`, `packages/frontend/ui/src/styles/utilities.css`
-- backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/http/router_test.go`, `packages/backend/internal/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
+- backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapters/http/router_test.go`, `packages/backend/internal/adapters/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
 - helper scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`, `scripts/codegen/check.sh`, `scripts/hooks/format-staged-go.sh`, `scripts/hooks/verify-staged-migrations.sh`

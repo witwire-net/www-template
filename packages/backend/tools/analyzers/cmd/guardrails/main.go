@@ -19,24 +19,58 @@ const modulePath = "www-template/packages/backend"
 
 var migrationFilePattern = regexp.MustCompile(`^\d{6}_[a-z0-9_]+\.(up|down)\.sql$`)
 
+// allowedInternalImports は層間の依存方向を定義する。
+// 新しい feature を増やしてもこのマップに変更は不要。
 var allowedInternalImports = map[string][]string{
-	"app":           {"app", "domain", "http", "observability", "persistence", "types", "usecases"},
-	"cmd":           {"app"},
-	"domain":        {"domain", "types"},
-	"http":          {"domain", "generated", "http", "observability", "types", "usecases"},
-	"observability": {"observability", "types"},
-	"persistence":   {"domain", "persistence", "types"},
-	"tools":         {"tools"},
-	"types":         {"types"},
-	"usecases":      {"domain", "types", "usecases"},
+	"cmd":                  {"app"},
+	"app":                  {"platform", "adapters-http", "adapters-persistence", "adapters-other", "application", "domain"},
+	"platform":             {"platform"},
+	"domain":               {"platform"},
+	"application":          {"domain", "platform", "application"},
+	"adapters-http":        {"generated", "application", "platform", "domain"},
+	"adapters-persistence": {"domain", "application", "platform"},
+	"adapters-other":       {"domain", "application", "platform"},
+	"generated":            {},
 }
 
+// allowedExternalImports は各層が使ってよい外部ライブラリを定義する。
 var allowedExternalImports = map[string][]string{
-	"app":           {"github.com/pelletier/go-toml/v2", "github.com/go-webauthn/webauthn/webauthn", "github.com/go-webauthn/webauthn/protocol"},
-	"http":          {"github.com/gin-contrib/cors", "github.com/gin-gonic/gin", "github.com/oapi-codegen/runtime/types"},
-	"observability": {"github.com/gin-gonic/gin", "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin", "go.opentelemetry.io/contrib/instrumentation/runtime", "go.opentelemetry.io/otel", "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc", "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc", "go.opentelemetry.io/otel/propagation", "go.opentelemetry.io/otel/sdk/metric", "go.opentelemetry.io/otel/sdk/resource", "go.opentelemetry.io/otel/sdk/trace", "go.opentelemetry.io/otel/semconv/v1.26.0", "go.opentelemetry.io/otel/trace"},
-	"persistence":   {"github.com/redis/go-redis/v9", "gorm.io/driver/postgres", "gorm.io/gorm"},
-	"types":         {"github.com/oklog/ulid/v2"},
+	"app": {
+		"github.com/pelletier/go-toml/v2",
+		"github.com/go-webauthn/webauthn/webauthn",
+		"github.com/go-webauthn/webauthn/protocol",
+	},
+	"adapters-http": {
+		"github.com/gin-contrib/cors",
+		"github.com/gin-gonic/gin",
+		"github.com/oapi-codegen/runtime/types",
+		"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
+	},
+	"adapters-persistence": {
+		"github.com/redis/go-redis/v9",
+		"gorm.io/driver/postgres",
+		"gorm.io/gorm",
+	},
+	"adapters-other": {
+		"github.com/go-webauthn/webauthn/protocol",
+		"github.com/go-webauthn/webauthn/webauthn",
+	},
+	"platform": {
+		"github.com/gin-gonic/gin",
+		"github.com/oklog/ulid/v2",
+		"github.com/pelletier/go-toml/v2",
+		"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
+		"go.opentelemetry.io/contrib/instrumentation/runtime",
+		"go.opentelemetry.io/otel",
+		"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
+		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+		"go.opentelemetry.io/otel/propagation",
+		"go.opentelemetry.io/otel/sdk/metric",
+		"go.opentelemetry.io/otel/sdk/resource",
+		"go.opentelemetry.io/otel/sdk/trace",
+		"go.opentelemetry.io/otel/semconv/v1.26.0",
+		"go.opentelemetry.io/otel/trace",
+	},
 }
 
 var routeSelectors = map[string]struct{}{
@@ -52,17 +86,51 @@ var routeSelectors = map[string]struct{}{
 	"PUT":     {},
 }
 
+// allowedPackageNames は配置パスと許可される package 名の対応を定義する。
+// これにより「ディレクトリに適当なファイルを置いて層を偽装する」回避を防ぐ。
+var allowedPackageNames = []struct {
+	pathPattern string // 前方一致または正規表現
+	isRegex     bool
+	packageName string
+}{
+	{pathPattern: "cmd/", isRegex: false, packageName: "main"},
+	{pathPattern: "internal/app/", isRegex: false, packageName: "app"},
+	{pathPattern: "internal/platform/config/", isRegex: false, packageName: "config"},
+	{pathPattern: "internal/platform/observability/", isRegex: false, packageName: "observability"},
+	{pathPattern: "internal/platform/health/", isRegex: false, packageName: "health"},
+	{pathPattern: "internal/platform/id/", isRegex: false, packageName: "id"},
+	{pathPattern: "internal/generated/openapi/", isRegex: false, packageName: "openapi"},
+	{pathPattern: "tools/analyzers/", isRegex: false, packageName: "main"},
+	// internal/{feature}/domain/
+	{pathPattern: `^internal/[^/]+/domain/`, isRegex: true, packageName: "domain"},
+	// internal/{feature}/application/
+	{pathPattern: `^internal/[^/]+/application/`, isRegex: true, packageName: "application"},
+	// internal/adapters/http/
+	{pathPattern: "internal/adapters/http/", isRegex: false, packageName: "http"},
+	// internal/adapters/persistence/postgres/
+	{pathPattern: "internal/adapters/persistence/postgres/", isRegex: false, packageName: "postgres"},
+	// internal/adapters/persistence/valkey/
+	{pathPattern: "internal/adapters/persistence/valkey/", isRegex: false, packageName: "valkey"},
+	// internal/adapters/webauthn/
+	{pathPattern: "internal/adapters/webauthn/", isRegex: false, packageName: "webauthn"},
+	// internal/adapters/mailer/
+	{pathPattern: "internal/adapters/mailer/", isRegex: false, packageName: "mailer"},
+}
+
 var usecaseDomainTouchPrefixes = []string{"Create", "Update", "Change", "Rename", "Set", "Add"}
 
 var forbiddenPortTypeImportPrefixes = []string{
 	modulePath + "/internal/generated",
-	modulePath + "/internal/http",
-	modulePath + "/internal/persistence",
+	modulePath + "/internal/adapters/http",
+	modulePath + "/internal/adapters/persistence",
 	"github.com/gin-contrib/cors",
 	"github.com/gin-gonic/gin",
 	"github.com/oapi-codegen/runtime/types",
 	"gorm.io/",
 }
+
+// domainImportPattern は feature-based domain パッケージの import path にマッチする。
+var domainImportPattern = regexp.MustCompile(`^` + regexp.QuoteMeta(modulePath+"/internal/") + `([^/]+)/domain`)
 
 func main() {
 	flag.Parse()
@@ -116,6 +184,7 @@ func collectViolations(root string) ([]string, error) {
 				return fmt.Errorf("parse %s: %w", path, err)
 			}
 
+			violations = append(violations, checkPackageName(relativePath, file)...)
 			violations = append(violations, checkImports(relativePath, file)...)
 			violations = append(violations, checkAutoMigrate(relativePath, file)...)
 			violations = append(violations, checkCoreSideEffects(relativePath, file)...)
@@ -147,13 +216,9 @@ func verifyGoFilePlacement(path string) []string {
 	allowedPrefixes := []string{
 		"cmd/api/",
 		"internal/app/",
-		"internal/domain/",
+		"internal/platform/",
+		"internal/adapters/",
 		"internal/generated/",
-		"internal/http/",
-		"internal/observability/",
-		"internal/persistence/",
-		"internal/types/",
-		"internal/usecases/",
 		"tools/analyzers/",
 	}
 
@@ -163,7 +228,13 @@ func verifyGoFilePlacement(path string) []string {
 		}
 	}
 
-	return []string{fmt.Sprintf("%s: go files must live under cmd/api, internal/*, or tools/analyzers", path)}
+	// internal/{feature}/domain/ または internal/{feature}/application/ を許可
+	if regexp.MustCompile(`^internal/[^/]+/domain/`).MatchString(path) ||
+		regexp.MustCompile(`^internal/[^/]+/application/`).MatchString(path) {
+		return nil
+	}
+
+	return []string{fmt.Sprintf("%s: go files must live under cmd/api, internal/app, internal/platform, internal/{feature}/domain, internal/{feature}/application, internal/adapters, or internal/generated", path)}
 }
 
 func verifyGeneratedFile(path string) []string {
@@ -236,7 +307,7 @@ func splitMigrationName(name string) (string, string) {
 }
 
 func checkImports(path string, file *ast.File) []string {
-	layer := layerFromPath(path)
+	layer, sourceFeature := layerFromPath(path)
 	if layer == "generated" || layer == "" {
 		return nil
 	}
@@ -246,9 +317,21 @@ func checkImports(path string, file *ast.File) []string {
 		importPath := strings.Trim(imported.Path.Value, "\"")
 
 		if strings.HasPrefix(importPath, modulePath+"/") {
-			targetLayer := layerFromImport(importPath)
+			targetLayer, targetFeature := layerFromPath(strings.TrimPrefix(importPath, modulePath+"/"))
 			if targetLayer == "" {
 				violations = append(violations, fmt.Sprintf("%s: internal import %s does not map to an allowed backend layer", path, importPath))
+				continue
+			}
+
+			// generated/openapi は adapters-http のみ import 可能
+			if importPath == modulePath+"/internal/generated/openapi" && layer != "adapters-http" {
+				violations = append(violations, fmt.Sprintf("%s: only adapters-http may import internal/generated/openapi", path))
+				continue
+			}
+
+			// domain 層は他 feature の domain を import 禁止
+			if layer == "domain" && targetLayer == "domain" && sourceFeature != "" && targetFeature != "" && sourceFeature != targetFeature {
+				violations = append(violations, fmt.Sprintf("%s: domain must not import other feature's domain (%s)", path, targetFeature))
 				continue
 			}
 
@@ -262,8 +345,8 @@ func checkImports(path string, file *ast.File) []string {
 			continue
 		}
 
-		if strings.HasPrefix(importPath, "gorm.io/") && layer != "persistence" {
-			violations = append(violations, fmt.Sprintf("%s: gorm imports are only allowed in internal/persistence", path))
+		if strings.HasPrefix(importPath, "gorm.io/") && layer != "adapters-persistence" {
+			violations = append(violations, fmt.Sprintf("%s: gorm imports are only allowed in adapters-persistence", path))
 			continue
 		}
 
@@ -274,6 +357,50 @@ func checkImports(path string, file *ast.File) []string {
 	}
 
 	return violations
+}
+
+func checkPackageName(path string, file *ast.File) []string {
+	violations := make([]string, 0)
+
+	// AST から package 名を取得
+	pkgName := file.Name.Name
+
+	// テストファイルの場合は "xxx_test" または "xxx" を許可
+	if isTestFile(path) {
+		basePkg := strings.TrimSuffix(pkgName, "_test")
+		if !checkPackageNameViolation(path, basePkg) {
+			// 基本パッケージ名が許可されている → OK
+			return nil
+		}
+		// 基本パッケージ名が許可されていない → 違反
+		violations = append(violations, fmt.Sprintf("%s: test package name %q does not match allowed package for this directory layout", path, pkgName))
+		return violations
+	}
+
+	if checkPackageNameViolation(path, pkgName) {
+		violations = append(violations, fmt.Sprintf("%s: package name %q does not match allowed package for this directory layout", path, pkgName))
+	}
+
+	return violations
+}
+
+// checkPackageNameViolation は指定パッケージ名が配置パスに許可されているか判定する。
+// 違反があれば true を返す。
+func checkPackageNameViolation(path, pkgName string) bool {
+	for _, rule := range allowedPackageNames {
+		if rule.isRegex {
+			if matched, _ := regexp.MatchString(rule.pathPattern, path); matched {
+				return pkgName != rule.packageName
+			}
+		} else {
+			if strings.HasPrefix(path, rule.pathPattern) {
+				return pkgName != rule.packageName
+			}
+		}
+	}
+
+	// どのルールにもマッチしない場合は不明な配置なので違反とみなさない（verifyGoFilePlacement で別途検査）
+	return false
 }
 
 func checkAutoMigrate(path string, file *ast.File) []string {
@@ -289,8 +416,8 @@ func checkAutoMigrate(path string, file *ast.File) []string {
 }
 
 func checkCoreSideEffects(path string, file *ast.File) []string {
-	layer := layerFromPath(path)
-	if isTestFile(path) || (layer != "domain" && layer != "usecases") {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || (layer != "domain" && layer != "application") {
 		return nil
 	}
 
@@ -337,7 +464,8 @@ func checkCoreSideEffects(path string, file *ast.File) []string {
 }
 
 func checkDomainCompositeLiterals(path string, file *ast.File) []string {
-	if isTestFile(path) || layerFromPath(path) == "domain" {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || layer == "domain" {
 		return nil
 	}
 
@@ -355,7 +483,17 @@ func checkDomainCompositeLiterals(path string, file *ast.File) []string {
 		}
 
 		ident, ok := selector.X.(*ast.Ident)
-		if !ok || imports[ident.Name] != modulePath+"/internal/domain" {
+		if !ok {
+			return true
+		}
+
+		importPath, ok := imports[ident.Name]
+		if !ok {
+			return true
+		}
+
+		// internal/{feature}/domain の import かどうかをチェック
+		if !domainImportPattern.MatchString(importPath) {
 			return true
 		}
 
@@ -405,7 +543,8 @@ func checkErrorStringMatching(path string, file *ast.File) []string {
 }
 
 func checkHTTPDomainBoundary(path string, file *ast.File) []string {
-	if isTestFile(path) || layerFromPath(path) != "http" {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || layer != "adapters-http" {
 		return nil
 	}
 
@@ -418,7 +557,17 @@ func checkHTTPDomainBoundary(path string, file *ast.File) []string {
 		}
 
 		ident, ok := selector.X.(*ast.Ident)
-		if !ok || imports[ident.Name] != modulePath+"/internal/domain" {
+		if !ok {
+			return true
+		}
+
+		importPath, ok := imports[ident.Name]
+		if !ok {
+			return true
+		}
+
+		// internal/{feature}/domain の import かどうか
+		if !domainImportPattern.MatchString(importPath) {
 			return true
 		}
 
@@ -426,7 +575,7 @@ func checkHTTPDomainBoundary(path string, file *ast.File) []string {
 			return true
 		}
 
-		violations = append(violations, fmt.Sprintf("%s: http must not depend on domain.%s directly; map transport DTOs to usecase DTOs instead", path, selector.Sel.Name))
+		violations = append(violations, fmt.Sprintf("%s: adapters-http must not depend on domain.%s directly; map transport DTOs to application DTOs instead", path, selector.Sel.Name))
 		return true
 	})
 
@@ -434,8 +583,8 @@ func checkHTTPDomainBoundary(path string, file *ast.File) []string {
 }
 
 func checkPortPurity(path string, file *ast.File) []string {
-	layer := layerFromPath(path)
-	if isTestFile(path) || (layer != "domain" && layer != "usecases") {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || (layer != "domain" && layer != "application") {
 		return nil
 	}
 
@@ -523,7 +672,8 @@ func checkUnitTestDeterminism(path string, file *ast.File) []string {
 }
 
 func checkUsecaseExportedAPIBoundary(path string, file *ast.File) []string {
-	if isTestFile(path) || layerFromPath(path) != "usecases" {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || layer != "application" {
 		return nil
 	}
 
@@ -536,7 +686,7 @@ func checkUsecaseExportedAPIBoundary(path string, file *ast.File) []string {
 		}
 
 		if containsForbiddenUsecaseDomainType(funcDecl.Type.Params, imports) || containsForbiddenUsecaseDomainType(funcDecl.Type.Results, imports) {
-			violations = append(violations, fmt.Sprintf("%s: exported usecase API %s must use usecase DTOs instead of domain entities or commands", path, funcDecl.Name.Name))
+			violations = append(violations, fmt.Sprintf("%s: exported application API %s must use application DTOs instead of domain entities or commands", path, funcDecl.Name.Name))
 		}
 	}
 
@@ -544,7 +694,8 @@ func checkUsecaseExportedAPIBoundary(path string, file *ast.File) []string {
 }
 
 func checkWriteUsecasesTouchDomain(path string, file *ast.File) []string {
-	if isTestFile(path) || layerFromPath(path) != "usecases" {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || layer != "application" {
 		return nil
 	}
 
@@ -557,7 +708,7 @@ func checkWriteUsecasesTouchDomain(path string, file *ast.File) []string {
 		}
 
 		if !functionBodyTouchesDomain(funcDecl.Body, imports) {
-			violations = append(violations, fmt.Sprintf("%s: exported write usecase %s must call into internal/domain directly so business rules cannot bypass the domain layer", path, funcDecl.Name.Name))
+			violations = append(violations, fmt.Sprintf("%s: exported write application %s must call into domain directly so business rules cannot bypass the domain layer", path, funcDecl.Name.Name))
 		}
 	}
 
@@ -565,7 +716,8 @@ func checkWriteUsecasesTouchDomain(path string, file *ast.File) []string {
 }
 
 func checkUsecaseInlineBusinessValidation(path string, file *ast.File) []string {
-	if isTestFile(path) || layerFromPath(path) != "usecases" {
+	layer, _ := layerFromPath(path)
+	if isTestFile(path) || layer != "application" {
 		return nil
 	}
 
@@ -583,7 +735,7 @@ func checkUsecaseInlineBusinessValidation(path string, file *ast.File) []string 
 		}
 
 		if hasInlineUsecaseValidation(funcDecl.Body, imports, paramNames) {
-			violations = append(violations, fmt.Sprintf("%s: exported write usecase %s must delegate trimming and validation to internal/domain instead of validating request fields inline", path, funcDecl.Name.Name))
+			violations = append(violations, fmt.Sprintf("%s: exported write application %s must delegate trimming and validation to domain instead of validating request fields inline", path, funcDecl.Name.Name))
 		}
 	}
 
@@ -591,7 +743,8 @@ func checkUsecaseInlineBusinessValidation(path string, file *ast.File) []string 
 }
 
 func checkRoutePolicy(path string, file *ast.File) []string {
-	if layerFromPath(path) != "http" {
+	layer, _ := layerFromPath(path)
+	if layer != "adapters-http" {
 		return nil
 	}
 
@@ -774,7 +927,16 @@ func containsForbiddenUsecaseDomainType(fields *ast.FieldList, imports map[strin
 			}
 
 			ident, ok := selector.X.(*ast.Ident)
-			if !ok || imports[ident.Name] != modulePath+"/internal/domain" {
+			if !ok {
+				return false
+			}
+
+			importPath, ok := imports[ident.Name]
+			if !ok {
+				return false
+			}
+
+			if !domainImportPattern.MatchString(importPath) {
 				return false
 			}
 
@@ -811,7 +973,12 @@ func functionBodyTouchesDomain(body *ast.BlockStmt, imports map[string]string) b
 			return true
 		}
 
-		if imports[ident.Name] == modulePath+"/internal/domain" {
+		importPath, ok := imports[ident.Name]
+		if !ok {
+			return true
+		}
+
+		if domainImportPattern.MatchString(importPath) {
 			found = true
 			return false
 		}
@@ -1055,33 +1222,35 @@ func isExternalImport(importPath string) bool {
 	return strings.Contains(firstSegment, ".")
 }
 
-func layerFromImport(importPath string) string {
-	return layerFromPath(strings.TrimPrefix(importPath, modulePath+"/"))
-}
-
-func layerFromPath(path string) string {
+// layerFromPath はファイルパスから層名と feature 名を抽出する。
+// 配置規約に基づき、feature 名に依存せず機械的に判定する。
+func layerFromPath(path string) (layer string, feature string) {
 	switch {
-	case path == "cmd/api" || strings.HasPrefix(path, "cmd/api/"):
-		return "cmd"
-	case path == "internal/app" || strings.HasPrefix(path, "internal/app/"):
-		return "app"
-	case path == "internal/domain" || strings.HasPrefix(path, "internal/domain/"):
-		return "domain"
-	case path == "internal/generated" || strings.HasPrefix(path, "internal/generated/"):
-		return "generated"
-	case path == "internal/http" || strings.HasPrefix(path, "internal/http/"):
-		return "http"
-	case path == "internal/observability" || strings.HasPrefix(path, "internal/observability/"):
-		return "observability"
-	case path == "internal/persistence" || strings.HasPrefix(path, "internal/persistence/"):
-		return "persistence"
-	case path == "internal/types" || strings.HasPrefix(path, "internal/types/"):
-		return "types"
-	case path == "internal/usecases" || strings.HasPrefix(path, "internal/usecases/"):
-		return "usecases"
-	case path == "tools/analyzers" || strings.HasPrefix(path, "tools/analyzers/"):
-		return "tools"
-	default:
-		return ""
+	case strings.HasPrefix(path, "cmd/") || path == "cmd":
+		return "cmd", ""
+	case strings.HasPrefix(path, "internal/app/") || path == "internal/app":
+		return "app", ""
+	case strings.HasPrefix(path, "internal/platform/") || path == "internal/platform":
+		return "platform", ""
+	case strings.HasPrefix(path, "internal/generated/") || path == "internal/generated":
+		return "generated", ""
+	case strings.HasPrefix(path, "internal/adapters/http/") || path == "internal/adapters/http":
+		return "adapters-http", ""
+	case strings.HasPrefix(path, "internal/adapters/persistence/") || path == "internal/adapters/persistence":
+		return "adapters-persistence", ""
+	case strings.HasPrefix(path, "internal/adapters/") || path == "internal/adapters":
+		return "adapters-other", ""
 	}
+
+	// internal/{feature}/domain/
+	if m := regexp.MustCompile(`^internal/([^/]+)/domain($|/)`).FindStringSubmatch(path); m != nil {
+		return "domain", m[1]
+	}
+
+	// internal/{feature}/application/
+	if m := regexp.MustCompile(`^internal/([^/]+)/application($|/)`).FindStringSubmatch(path); m != nil {
+		return "application", m[1]
+	}
+
+	return "", ""
 }

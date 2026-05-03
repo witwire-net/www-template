@@ -6,27 +6,30 @@ import (
 	"log/slog"
 	"time"
 
-	"www-template/packages/backend/internal/observability"
-	"www-template/packages/backend/internal/persistence"
-	"www-template/packages/backend/internal/types"
-	"www-template/packages/backend/internal/usecases"
+	"www-template/packages/backend/internal/adapters/mailer"
+	"www-template/packages/backend/internal/adapters/persistence/postgres"
+	"www-template/packages/backend/internal/adapters/persistence/valkey"
+	"www-template/packages/backend/internal/adapters/webauthn"
+	"www-template/packages/backend/internal/auth/application"
+	"www-template/packages/backend/internal/platform/config"
+	"www-template/packages/backend/internal/platform/observability"
 )
 
 const defaultReadHeaderTimeout = 5 * time.Second
 
 type Container struct {
-	Auth  *usecases.AuthService
+	Auth  *application.AuthService
 	close func(context.Context) error
 }
 
-type authAccountRepositoryFactory func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error)
-type authStateRepositoryFactory func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error)
-type challengeStoreFactory func(context.Context, types.ValkeyConfig) (challengeStore, func(context.Context) error, error)
+type authAccountRepositoryFactory func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error)
+type authStateRepositoryFactory func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error)
+type challengeStoreFactory func(context.Context, config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error)
 
 type rejectingInvitationPasskeyRegistrar struct{}
 
-func (rejectingInvitationPasskeyRegistrar) RegisterInvitationPasskey(context.Context, usecases.InvitationPasskeyRegistrationInput) (usecases.AuthSession, error) {
-	return usecases.AuthSession{}, usecases.ErrBadRequest
+func (rejectingInvitationPasskeyRegistrar) RegisterInvitationPasskey(context.Context, application.InvitationPasskeyRegistrationInput) (application.AuthSession, error) {
+	return application.AuthSession{}, application.ErrBadRequest
 }
 
 // slogAuditNotifier は slog を使って認証 audit event を標準出力に出力する実装。
@@ -56,11 +59,11 @@ func (n *slogAuditNotifier) EmitCredentialStateUpdateFailure(ctx context.Context
 	)
 }
 
-func BuildContainer(ctx context.Context, cfg types.Config) (*Container, error) {
+func BuildContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	return buildContainer(ctx, cfg, newGormAuthAccountRepository, newValkeyAuthStateRepository, newValkeyChallengeStore)
 }
 
-func buildContainer(ctx context.Context, cfg types.Config, newAuthAccountRepository authAccountRepositoryFactory, newAuthStateRepository authStateRepositoryFactory, newChallengeStore challengeStoreFactory) (*Container, error) {
+func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountRepository authAccountRepositoryFactory, newAuthStateRepository authStateRepositoryFactory, newChallengeStore challengeStoreFactory) (*Container, error) {
 	authConfig := cfg.AuthRuntime()
 	idPolicy := newAuthIDPolicy()
 
@@ -82,10 +85,10 @@ func buildContainer(ctx context.Context, cfg types.Config, newAuthAccountReposit
 		return nil, fmt.Errorf("challenge store init: %w", challengeStoreErr)
 	}
 
-	smtpSender := NewSMTPSender(cfg.Infra)
-	recoverySender := NewAccountRecoverySender(smtpSender, cfg.Infra)
+	smtpSender := mailer.NewSMTPSender(cfg.Infra)
+	recoverySender := mailer.NewAccountRecoverySender(smtpSender, cfg.Infra)
 
-	authSvc := usecases.NewAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, func() time.Time {
+	authSvc := application.NewAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, func() time.Time {
 		return time.Now().UTC()
 	}, idPolicy, authConfig)
 	authSvc.UsePasskeyOtpSender(recoverySender)
@@ -97,7 +100,7 @@ func buildContainer(ctx context.Context, cfg types.Config, newAuthAccountReposit
 		return nil, fmt.Errorf("webauthn RPID is required: set AUTH_WEBAUTHN_RPID")
 	}
 
-	webAuthnProv, webAuthnErr := newWebAuthnProvider(authConfig.WebAuthnRPID, cfg.AllowedOrigins, authConfig.ChallengeTTL, challengeStore)
+	webAuthnProv, webAuthnErr := webauthn.NewWebAuthnProvider(authConfig.WebAuthnRPID, cfg.AllowedOrigins, authConfig.ChallengeTTL, challengeStore)
 	if webAuthnErr != nil {
 		_ = composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
 		return nil, fmt.Errorf("webauthn provider init: %w", webAuthnErr)
@@ -111,20 +114,20 @@ func buildContainer(ctx context.Context, cfg types.Config, newAuthAccountReposit
 }
 
 // newValkeyChallengeStore は production 用の Valkey challengeStore を構築する。
-func newValkeyChallengeStore(_ context.Context, config types.ValkeyConfig) (challengeStore, func(context.Context) error, error) {
-	store, err := persistence.NewValkeyStore(config)
+func newValkeyChallengeStore(_ context.Context, config config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error) {
+	store, err := valkey.NewStore(config)
 	if err != nil {
 		return nil, nil, err
 	}
 	return store, func(context.Context) error { return store.Close() }, nil
 }
 
-func newGormAuthAccountRepository(ctx context.Context, databaseURL string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
-	db, err := persistence.OpenGormDatabase(databaseURL)
+func newGormAuthAccountRepository(ctx context.Context, databaseURL string) (application.AuthAccountRepository, func(context.Context) error, error) {
+	db, err := postgres.OpenDatabase(databaseURL)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := persistence.PingGormDatabase(ctx, db); err != nil {
+	if err := postgres.PingDatabase(ctx, db); err != nil {
 		sqlDB, dbErr := db.DB()
 		if dbErr == nil {
 			_ = sqlDB.Close()
@@ -137,13 +140,13 @@ func newGormAuthAccountRepository(ctx context.Context, databaseURL string) (usec
 		return nil, nil, err
 	}
 
-	return persistence.NewGormAuthAccountRepository(db), func(context.Context) error {
+	return postgres.NewGormAuthAccountRepository(db), func(context.Context) error {
 		return sqlDB.Close()
 	}, nil
 }
 
-func newValkeyAuthStateRepository(ctx context.Context, config types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
-	store, err := persistence.NewValkeyStore(config)
+func newValkeyAuthStateRepository(ctx context.Context, config config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
+	store, err := valkey.NewStore(config)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,7 +155,7 @@ func newValkeyAuthStateRepository(ctx context.Context, config types.ValkeyConfig
 		return nil, nil, err
 	}
 
-	repo, err := persistence.NewAuthStateRepository(store)
+	repo, err := valkey.NewAuthStateRepository(store)
 	if err != nil {
 		_ = store.Close()
 		return nil, nil, err

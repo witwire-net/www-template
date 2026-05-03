@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
-	"www-template/packages/backend/internal/types"
+	"www-template/packages/backend/internal/platform/config"
 )
 
 func TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewRuntimeWithConfig(context.Background(), types.Config{
+	_, err := NewRuntimeWithConfig(context.Background(), config.Config{
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		Environment:    "production",
 		Port:           "8080",
@@ -23,7 +23,7 @@ func TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment(t *testin
 func TestNewRuntimeWithConfigFailsClosedWhenRequiredInfrastructureIsMissing(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewRuntimeWithConfig(context.Background(), types.Config{
+	_, err := NewRuntimeWithConfig(context.Background(), config.Config{
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Environment:    "development",

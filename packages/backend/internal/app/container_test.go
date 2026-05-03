@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"www-template/packages/backend/internal/domain"
-	"www-template/packages/backend/internal/types"
-	"www-template/packages/backend/internal/usecases"
+	"www-template/packages/backend/internal/adapters/webauthn"
+	"www-template/packages/backend/internal/auth/application"
+	"www-template/packages/backend/internal/auth/domain"
+	"www-template/packages/backend/internal/platform/config"
 )
 
 func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
@@ -18,11 +19,11 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	fakeRepo := fakeAuthStateRepository{}
 	_, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: types.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
+		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
-		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			called = true
 			return fakeRepo, func(context.Context) error { return nil }, nil
 		},
@@ -40,11 +41,11 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	t.Parallel()
 	container, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}}, Auth: types.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
+		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
-		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return fakeAuthStateRepository{}, func(context.Context) error { return nil }, nil
 		},
 		fakeChallengeStoreFactory,
@@ -53,7 +54,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 		t.Fatalf("build container: %v", err)
 	}
 
-	challenge, err := container.Auth.StartPasskeyAuthentication(context.Background(), usecases.StartPasskeyAuthenticationInput{Identifier: "member@example.com", ClientIP: "192.0.2.10"})
+	challenge, err := container.Auth.StartPasskeyAuthentication(context.Background(), application.StartPasskeyAuthenticationInput{Identifier: "member@example.com", ClientIP: "192.0.2.10"})
 	if err != nil {
 		t.Fatalf("start passkey authentication: %v", err)
 	}
@@ -68,14 +69,14 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 	closed := false
 	_, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
-		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
+		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error {
 				closed = true
 				return nil
 			}, nil
 		},
-		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return nil, nil, errors.New("valkey unavailable")
 		},
 		fakeChallengeStoreFactory,
@@ -264,6 +265,6 @@ func (f *fakeChallengeStore) GetDel(_ context.Context, key string) (string, erro
 	return v, nil
 }
 
-func fakeChallengeStoreFactory(context.Context, types.ValkeyConfig) (challengeStore, func(context.Context) error, error) {
+func fakeChallengeStoreFactory(context.Context, config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error) {
 	return &fakeChallengeStore{data: map[string]string{}}, func(context.Context) error { return nil }, nil
 }

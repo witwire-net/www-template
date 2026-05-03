@@ -4,24 +4,26 @@ import (
 	"context"
 	stdhttp "net/http"
 
-	backendhttp "www-template/packages/backend/internal/http"
-	"www-template/packages/backend/internal/observability"
-	"www-template/packages/backend/internal/persistence"
-	"www-template/packages/backend/internal/types"
+	backendhttp "www-template/packages/backend/internal/adapters/http"
+	"www-template/packages/backend/internal/adapters/persistence/postgres"
+	"www-template/packages/backend/internal/adapters/persistence/valkey"
+	"www-template/packages/backend/internal/platform/config"
+	"www-template/packages/backend/internal/platform/health"
+	"www-template/packages/backend/internal/platform/observability"
 )
 
 type Runtime struct {
-	config    types.Config
+	config    config.Config
 	container *Container
 	server    *stdhttp.Server
 	closeObs  func(context.Context) error
 }
 
 func NewRuntime(ctx context.Context) (*Runtime, error) {
-	return NewRuntimeWithConfig(ctx, LoadConfig())
+	return NewRuntimeWithConfig(ctx, config.LoadConfig())
 }
 
-func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, error) {
+func NewRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Runtime, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -71,12 +73,12 @@ func NewRuntimeWithConfig(ctx context.Context, cfg types.Config) (*Runtime, erro
 	}, nil
 }
 
-func verifyInfrastructure(ctx context.Context, cfg types.Config) error {
-	db, err := persistence.OpenGormDatabase(cfg.Infra.Database.URL)
+func verifyInfrastructure(ctx context.Context, cfg config.Config) error {
+	db, err := postgres.OpenDatabase(cfg.Infra.Database.URL)
 	if err != nil {
 		return err
 	}
-	if err := persistence.PingGormDatabase(ctx, db); err != nil {
+	if err := postgres.PingDatabase(ctx, db); err != nil {
 		return err
 	}
 	sqlDB, err := db.DB()
@@ -86,7 +88,7 @@ func verifyInfrastructure(ctx context.Context, cfg types.Config) error {
 		}()
 	}
 
-	store, err := persistence.NewValkeyStore(cfg.Infra.Valkey)
+	store, err := valkey.NewStore(cfg.Infra.Valkey)
 	if err != nil {
 		return err
 	}
@@ -97,10 +99,10 @@ func verifyInfrastructure(ctx context.Context, cfg types.Config) error {
 		return err
 	}
 
-	if err := persistence.CheckOpenSearch(ctx, cfg.Infra.OpenSearch); err != nil {
+	if err := health.CheckOpenSearch(ctx, cfg.Infra.OpenSearch); err != nil {
 		return err
 	}
-	return persistence.CheckObjectStorage(ctx, cfg.Infra.ObjectStorage)
+	return health.CheckObjectStorage(ctx, cfg.Infra.ObjectStorage)
 }
 
 func (r *Runtime) Close(ctx context.Context) error {
@@ -110,7 +112,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 	return r.container.Close(ctx)
 }
 
-func (r *Runtime) Config() types.Config {
+func (r *Runtime) Config() config.Config {
 	return r.config
 }
 
