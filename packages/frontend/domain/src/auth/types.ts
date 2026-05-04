@@ -10,9 +10,9 @@ export interface AuthSessionSummary {
   accountId: string;
   passkeyCredentialId: string;
   sessionId: string;
-  sessionToken: string;
+  accessToken: string;
   expiresAt: string;
-  /** リフレッシュトークン（オプション）。JWT 導入後のセッションで使用。 */
+  /** セッション継続に使用するリフレッシュトークン。 */
   refreshToken?: string;
 }
 

@@ -1786,7 +1786,6 @@
           "accountId",
           "passkeyCredentialId",
           "sessionId",
-          "sessionToken",
           "accessToken",
           "refreshToken",
           "expiresAt"
@@ -1803,9 +1802,6 @@
           },
           "sessionId": {
             "$ref": "#/components/schemas/UlidId"
-          },
-          "sessionToken": {
-            "type": "string"
           },
           "accessToken": {
             "type": "string"

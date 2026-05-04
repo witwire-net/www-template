@@ -103,8 +103,7 @@ type AuthSessionResponse struct {
 	RequestId UlidId `json:"requestId"`
 
 	// SessionId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	SessionId    UlidId `json:"sessionId"`
-	SessionToken string `json:"sessionToken"`
+	SessionId UlidId `json:"sessionId"`
 }
 
 // BearerAuth JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。

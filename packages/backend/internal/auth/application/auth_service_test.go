@@ -19,7 +19,6 @@ import (
 
 type stubStateRepo struct {
 	challenges       map[string]domain.AuthChallenge
-	sessions         map[string]domain.Session
 	recoveryTokens   map[string]domain.RecoveryToken
 	recoverySessions map[string]domain.RecoverySession
 	counters         map[string]int
@@ -48,10 +47,103 @@ func (n *stubAuditNotifier) EmitPasskeyAddedByOTP(_ context.Context, accountID s
 func (n *stubAuditNotifier) EmitCredentialStateUpdateFailure(_ context.Context, _ string, _ error) {
 }
 
+// stubRefreshTokenStore はテスト用のインメモリ RefreshTokenStore。
+type stubRefreshTokenStore struct {
+	data      map[string]application.RefreshTokenRecord
+	saveFails bool
+}
+
+func newStubRefreshTokenStore() *stubRefreshTokenStore {
+	return &stubRefreshTokenStore{data: make(map[string]application.RefreshTokenRecord)}
+}
+
+func (s *stubRefreshTokenStore) Save(_ context.Context, hash string, record application.RefreshTokenRecord, _ time.Duration) error {
+	if s.saveFails {
+		return domain.ErrAuthStoreUnavailable
+	}
+	s.data[hash] = record
+	return nil
+}
+
+func (s *stubRefreshTokenStore) Consume(_ context.Context, hash string) (application.RefreshTokenRecord, error) {
+	record, ok := s.data[hash]
+	if !ok {
+		return application.RefreshTokenRecord{}, domain.ErrSessionNotFound
+	}
+	delete(s.data, hash)
+	return record, nil
+}
+
+func (s *stubRefreshTokenStore) GetConsumed(_ context.Context, hash string) (application.RefreshTokenRecord, error) {
+	_, ok := s.data[hash]
+	if ok {
+		return application.RefreshTokenRecord{}, domain.ErrSessionNotFound
+	}
+	return application.RefreshTokenRecord{}, domain.ErrSessionNotFound
+}
+
+func (s *stubRefreshTokenStore) RevokeAllForFingerprint(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (s *stubRefreshTokenStore) RevokeBySessionID(_ context.Context, _, sessionID string) error {
+	for h, r := range s.data {
+		if r.SessionID == sessionID {
+			delete(s.data, h)
+		}
+	}
+	return nil
+}
+
+// stubSessionStore はテスト用のインメモリ SessionStore。
+type stubSessionStore struct {
+	sessions map[string]application.SessionMetadata
+}
+
+func newStubSessionStore() *stubSessionStore {
+	return &stubSessionStore{sessions: make(map[string]application.SessionMetadata)}
+}
+
+func (s *stubSessionStore) SaveSession(_ context.Context, sessionID, _ string, metadata application.SessionMetadata, _ time.Duration) error {
+	s.sessions[sessionID] = metadata
+	return nil
+}
+
+func (s *stubSessionStore) GetSession(_ context.Context, sessionID string) (application.SessionMetadata, error) {
+	sess, ok := s.sessions[sessionID]
+	if !ok {
+		return application.SessionMetadata{}, domain.ErrSessionNotFound
+	}
+	return sess, nil
+}
+
+func (s *stubSessionStore) ListSessions(_ context.Context, _ string) ([]application.SessionMetadata, error) {
+	result := make([]application.SessionMetadata, 0, len(s.sessions))
+	for _, v := range s.sessions {
+		result = append(result, v)
+	}
+	return result, nil
+}
+
+func (s *stubSessionStore) RevokeSession(_ context.Context, _, sessionID string) error {
+	delete(s.sessions, sessionID)
+	return nil
+}
+
+func (s *stubSessionStore) RevokeOthers(_ context.Context, _, currentSessionID string) ([]string, error) {
+	deleted := make([]string, 0)
+	for id := range s.sessions {
+		if id != currentSessionID {
+			delete(s.sessions, id)
+			deleted = append(deleted, id)
+		}
+	}
+	return deleted, nil
+}
+
 func newStubStateRepo(clock func() time.Time) *stubStateRepo {
 	return &stubStateRepo{
 		challenges:       map[string]domain.AuthChallenge{},
-		sessions:         map[string]domain.Session{},
 		recoveryTokens:   map[string]domain.RecoveryToken{},
 		recoverySessions: map[string]domain.RecoverySession{},
 		counters:         map[string]int{},
@@ -73,25 +165,6 @@ func (r *stubStateRepo) ConsumeChallenge(_ context.Context, secret string) (doma
 	}
 	delete(r.challenges, secret)
 	return c, nil
-}
-func (r *stubStateRepo) SaveSession(_ context.Context, s domain.Session, _ time.Duration) error {
-	r.sessions[s.Token()] = s
-	return nil
-}
-func (r *stubStateRepo) RefreshSession(_ context.Context, s domain.Session, _ time.Duration) error {
-	r.sessions[s.Token()] = s
-	return nil
-}
-func (r *stubStateRepo) GetSessionByToken(_ context.Context, token string) (domain.Session, error) {
-	s, ok := r.sessions[token]
-	if !ok {
-		return emptySession(), domain.ErrSessionNotFound
-	}
-	return s, nil
-}
-func (r *stubStateRepo) RevokeSession(_ context.Context, s domain.Session, _ time.Duration) error {
-	r.sessions[s.Token()] = s
-	return nil
 }
 func (r *stubStateRepo) IssueRecoveryToken(_ context.Context, t domain.RecoveryToken, _ time.Duration) error {
 	r.recoveryTokens[t.Secret()] = t
@@ -323,10 +396,6 @@ func emptyChallenge() domain.AuthChallenge {
 	c, _ := domain.NewAuthChallenge("01ARZ3NDEKTSV4RRFFQ69G5FAV", "placeholder", "placeholder", time.Unix(0, 0).UTC())
 	return c
 }
-func emptySession() domain.Session {
-	s, _ := domain.NewSession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", time.Unix(1, 0).UTC(), time.Unix(2, 0).UTC())
-	return s
-}
 func emptyRecoveryToken() domain.RecoveryToken {
 	t, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", time.Unix(1, 0).UTC())
 	return t
@@ -417,7 +486,7 @@ func accountWithOnePasskey(t *testing.T) (domain.AuthAccount, *stubAccountRepo) 
 }
 
 func newTestAuthService(stateRepo application.AuthStateRepository, accountRepo application.AuthAccountRepository) *application.AuthService {
-	return application.NewAuthService(stateRepo, accountRepo, nil, nil, fixedClock(), newSeqPolicy(), config.AuthConfig{
+	cfg := config.AuthConfig{
 		ChallengeTTL:                    5 * time.Minute,
 		SessionIdleTTL:                  30 * time.Minute,
 		SessionAbsoluteTTL:              24 * time.Hour,
@@ -437,7 +506,14 @@ func newTestAuthService(stateRepo application.AuthStateRepository, accountRepo a
 		FailureLockWindow:               time.Minute,
 		WebAuthnRPID:                    "example.com",
 		AccountRecoveryURLBase:          "https://example.com/recover",
-	})
+		JWTSecret:                       "test-jwt-secret-key-must-be-at-least-32bytes",
+	}
+	auth := application.NewAuthService(stateRepo, accountRepo, nil, nil, fixedClock(), newSeqPolicy(), cfg)
+	refreshStore := newStubRefreshTokenStore()
+	sessionStore := newStubSessionStore()
+	tokenService := application.NewTokenService(refreshStore, sessionStore, cfg, fixedClock(), newSeqPolicy())
+	auth.UseTokenService(tokenService)
+	return auth
 }
 
 // ─── MockWebAuthnProvider ─────────────────────────────────────────────────────
@@ -556,8 +632,11 @@ func TestFinishPasskeyAuthenticationWithProvider(t *testing.T) {
 	if result.AccountID != account.AccountID() {
 		t.Errorf("expected AccountID=%q, got %q", account.AccountID(), result.AccountID)
 	}
-	if result.SessionToken == "" {
-		t.Error("expected non-empty SessionToken")
+	if result.AccessToken == "" {
+		t.Error("expected non-empty AccessToken")
+	}
+	if result.RefreshToken == "" {
+		t.Error("expected non-empty RefreshToken")
 	}
 }
 
@@ -828,7 +907,7 @@ func TestFinishAddPasskeyByOtpRejectsConsumedOtp(t *testing.T) {
 	}
 
 	// Step 3: 1 回目の FinishAddPasskeyByOtp を成功させる
-	// legacy path: ID に handle、Response.ClientDataJSON に challenge を格納
+	// challenge を credential ID / clientDataJSON に格納して FinishAddPasskeyByOtp を呼び出す。
 	credential := application.WebAuthnAttestationCredentialDTO{
 		ID:    "handle-new",
 		RawID: "handle-new",
@@ -1071,10 +1150,6 @@ func TestFinishPasskeyAuthenticationRejectsUVLessAssertion(t *testing.T) {
 		t.Fatalf("expected ErrBadRequest for UV-less assertion, got %v", err)
 	}
 
-	// session が発行されていないことを確認
-	if len(stateRepo.sessions) != 0 {
-		t.Fatalf("expected no session issued for UV-less assertion, got %d sessions", len(stateRepo.sessions))
-	}
 }
 
 // [AUTH-BE-S029] UV-less new-device registration は拒否される

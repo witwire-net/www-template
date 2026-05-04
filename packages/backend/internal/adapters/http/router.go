@@ -229,13 +229,12 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 		AccountId:           result.AccountID,
 		PasskeyCredentialId: result.PasskeyCredentialID,
 		SessionId:           result.SessionID,
-		SessionToken:        result.SessionToken,
 		AccessToken:         result.AccessToken,
 		RefreshToken:        result.RefreshToken,
 		ExpiresAt:           result.ExpiresAt,
 	}
-	// fail-closed: TokenService が有効な場合、空の access/refresh token は許容しない
-	if s.tokenService != nil && (body.AccessToken == "" || body.RefreshToken == "") {
+	// fail-closed: 空の access/refresh token は許容しない
+	if body.AccessToken == "" || body.RefreshToken == "" {
 		return openapi.FinishPasskeyAuthentication503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.FinishPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 	return openapi.FinishPasskeyAuthentication200JSONResponse{
@@ -326,13 +325,12 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 		AccountId:           result.AccountID,
 		PasskeyCredentialId: result.PasskeyCredentialID,
 		SessionId:           result.SessionID,
-		SessionToken:        result.SessionToken,
 		AccessToken:         result.AccessToken,
 		RefreshToken:        result.RefreshToken,
 		ExpiresAt:           result.ExpiresAt,
 	}
-	// fail-closed: TokenService が有効な場合、空の access/refresh token は許容しない
-	if s.tokenService != nil && (body.AccessToken == "" || body.RefreshToken == "") {
+	// fail-closed: 空の access/refresh token は許容しない
+	if body.AccessToken == "" || body.RefreshToken == "" {
 		return openapi.RegisterPasskey503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RegisterPasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 	return openapi.RegisterPasskey200JSONResponse{

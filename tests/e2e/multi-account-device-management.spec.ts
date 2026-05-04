@@ -47,7 +47,7 @@ const mockPasskeyLogin = async (
   page: Page,
   accountId: string,
   sessionId: string,
-  sessionToken: string
+  token: string
 ) => {
   await page.route('**/api/v1/auth/passkey/start', async (route) => {
     await fulfillJson(route, 200, {
@@ -64,8 +64,7 @@ const mockPasskeyLogin = async (
       accountId,
       passkeyCredentialId: TEST_ULID.passkeyCredentialId,
       sessionId,
-      sessionToken,
-      accessToken: sessionToken,
+      accessToken: token,
       refreshToken: `refresh-${sessionId}`,
       expiresAt: '2026-04-04T00:00:00.000Z',
     });
@@ -80,9 +79,9 @@ const loginSecondAccountViaPasskeyUi = async (
   page: Page,
   accountId: string,
   sessionId: string,
-  sessionToken: string
+  token: string
 ) => {
-  await mockPasskeyLogin(page, accountId, sessionId, sessionToken);
+  await mockPasskeyLogin(page, accountId, sessionId, token);
   await page.getByRole('link', { name: '別アカウントを追加' }).click();
   await expect(page).toHaveURL(/localhost:5174\/login$/);
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
@@ -94,10 +93,10 @@ const loginViaPasskeyUi = async (
   page: Page,
   accountId: string,
   sessionId: string,
-  sessionToken: string
+  token: string
 ) => {
   await mockWebAuthn(page);
-  await mockPasskeyLogin(page, accountId, sessionId, sessionToken);
+  await mockPasskeyLogin(page, accountId, sessionId, token);
   await page.goto('http://localhost:5174/login');
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
   await expect(page).toHaveURL(/localhost:5174\/?$/);

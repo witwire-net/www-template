@@ -17,17 +17,6 @@ var (
 	ErrOtpExpiredOrConsumed       = errors.New("otp expired or consumed")
 )
 
-func toAuthSession(requestID string, session domain.Session) AuthSession {
-	return AuthSession{
-		RequestID:           requestID,
-		AccountID:           session.AccountID(),
-		PasskeyCredentialID: session.PasskeyCredentialID(),
-		SessionID:           session.ID(),
-		SessionToken:        session.Token(),
-		ExpiresAt:           session.AbsoluteExpiresAt(),
-	}
-}
-
 func opaqueValue(id string) string {
 	return "opaque-" + id
 }
@@ -57,19 +46,6 @@ func failureLockKey(subject string, clientIP string) string {
 
 func failureWindowKey(key string) string {
 	return "failures:" + key
-}
-
-func (s *AuthService) mapSessionError(err error) error {
-	switch {
-	case errors.Is(err, domain.ErrSessionNotFound):
-		return ErrUnauthenticated
-	case errors.Is(err, domain.ErrSessionExpired), errors.Is(err, domain.ErrSessionRevoked):
-		return ErrSessionExpired
-	case errors.Is(err, domain.ErrAuthStoreUnavailable):
-		return ErrInternalError
-	default:
-		return ErrInternalError
-	}
 }
 
 func (s *AuthService) mapRecoveryConsumeError(err error) error {

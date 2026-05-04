@@ -79,29 +79,6 @@ func (r *AuthStateRepository) ConsumeChallenge(ctx context.Context, secret strin
 	return normalizeChallengeRecord(record)
 }
 
-func (r *AuthStateRepository) SaveSession(ctx context.Context, session domain.Session, ttl time.Duration) error {
-	return r.setJSON(ctx, r.key("auth", "session", session.Token()), sessionRecordFromDomain(session), ttl)
-}
-
-func (r *AuthStateRepository) RefreshSession(ctx context.Context, session domain.Session, ttl time.Duration) error {
-	return r.setJSON(ctx, r.key("auth", "session", session.Token()), sessionRecordFromDomain(session), ttl)
-}
-
-func (r *AuthStateRepository) GetSessionByToken(ctx context.Context, token string) (domain.Session, error) {
-	var record sessionRecord
-	if err := r.getJSON(ctx, r.key("auth", "session", token), &record); err != nil {
-		if errors.Is(err, errRESPNil) {
-			return emptySession(), domain.ErrSessionNotFound
-		}
-		return emptySession(), domain.ErrAuthStoreUnavailable
-	}
-	return normalizeSessionRecord(record)
-}
-
-func (r *AuthStateRepository) RevokeSession(ctx context.Context, session domain.Session, ttl time.Duration) error {
-	return r.setJSON(ctx, r.key("auth", "session", session.Token()), sessionRecordFromDomain(session), ttl)
-}
-
 func (r *AuthStateRepository) IssueRecoveryToken(ctx context.Context, token domain.RecoveryToken, ttl time.Duration) error {
 	record := recoveryTokenRecordFromDomain(token)
 	return r.setJSON(ctx, r.key("auth", "recovery-token", token.ID()), record, ttl)
@@ -292,32 +269,6 @@ func normalizeChallengeRecord(record challengeRecord) (domain.AuthChallenge, err
 	return challenge, nil
 }
 
-type sessionRecord struct {
-	ID                  string     `json:"id"`
-	AccountID           string     `json:"accountId"`
-	PasskeyCredentialID string     `json:"passkeyCredentialId"`
-	Token               string     `json:"token"`
-	IdleExpiresAt       time.Time  `json:"idleExpiresAt"`
-	AbsoluteExpiresAt   time.Time  `json:"absoluteExpiresAt"`
-	RevokedAt           *time.Time `json:"revokedAt,omitempty"`
-}
-
-func sessionRecordFromDomain(session domain.Session) sessionRecord {
-	return sessionRecord{ID: session.ID(), AccountID: session.AccountID(), PasskeyCredentialID: session.PasskeyCredentialID(), Token: session.Token(), IdleExpiresAt: session.IdleExpiresAt(), AbsoluteExpiresAt: session.AbsoluteExpiresAt(), RevokedAt: session.RevokedAt()}
-}
-
-func (r sessionRecord) toDomain() (domain.Session, error) {
-	return domain.ReconstituteSession(r.ID, r.AccountID, r.PasskeyCredentialID, r.Token, r.IdleExpiresAt, r.AbsoluteExpiresAt, r.RevokedAt)
-}
-
-func normalizeSessionRecord(record sessionRecord) (domain.Session, error) {
-	session, err := record.toDomain()
-	if err != nil {
-		return emptySession(), domain.ErrAuthStoreUnavailable
-	}
-	return session, nil
-}
-
 type recoveryTokenRecord struct {
 	ID         string     `json:"id"`
 	AccountID  string     `json:"accountId"`
@@ -404,11 +355,6 @@ type lockRecord struct {
 func emptyChallenge() domain.AuthChallenge {
 	challenge, _ := domain.NewAuthChallenge("01ARZ3NDEKTSV4RRFFQ69G5FAV", "placeholder", "placeholder", time.Unix(0, 0).UTC())
 	return challenge
-}
-
-func emptySession() domain.Session {
-	session, _ := domain.NewSession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", time.Unix(1, 0).UTC(), time.Unix(2, 0).UTC())
-	return session
 }
 
 func emptyRecoveryToken() domain.RecoveryToken {

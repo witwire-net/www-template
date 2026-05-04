@@ -134,18 +134,6 @@ func (fakeAuthStateRepository) SaveChallenge(context.Context, domain.AuthChallen
 func (fakeAuthStateRepository) ConsumeChallenge(context.Context, string) (domain.AuthChallenge, error) {
 	return emptyChallengeForContainerTest(), nil
 }
-func (fakeAuthStateRepository) SaveSession(context.Context, domain.Session, time.Duration) error {
-	return nil
-}
-func (fakeAuthStateRepository) RefreshSession(context.Context, domain.Session, time.Duration) error {
-	return nil
-}
-func (fakeAuthStateRepository) GetSessionByToken(context.Context, string) (domain.Session, error) {
-	return emptySessionForContainerTest(), nil
-}
-func (fakeAuthStateRepository) RevokeSession(context.Context, domain.Session, time.Duration) error {
-	return nil
-}
 func (fakeAuthStateRepository) IssueRecoveryToken(context.Context, domain.RecoveryToken, time.Duration) error {
 	return nil
 }
@@ -207,11 +195,6 @@ func (fakeAuthStateRepository) ConsumeDeviceLoginHandoff(context.Context, string
 func emptyChallengeForContainerTest() domain.AuthChallenge {
 	challenge, _ := domain.NewAuthChallenge("01ARZ3NDEKTSV4RRFFQ69G5FAV", "placeholder", "placeholder", time.Unix(0, 0).UTC())
 	return challenge
-}
-
-func emptySessionForContainerTest() domain.Session {
-	session, _ := domain.NewSession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", time.Unix(1, 0).UTC(), time.Unix(2, 0).UTC())
-	return session
 }
 
 func emptyRecoveryTokenForContainerTest() domain.RecoveryToken {

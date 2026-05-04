@@ -14,7 +14,6 @@ type AuthSession struct {
 	AccountID           string
 	PasskeyCredentialID string
 	SessionID           string
-	SessionToken        string
 	AccessToken         string
 	RefreshToken        string
 	ExpiresAt           time.Time
@@ -163,10 +162,6 @@ type InvitationPasskeyRegistrationInput struct {
 type AuthStateRepository interface {
 	SaveChallenge(context.Context, domain.AuthChallenge, time.Duration) error
 	ConsumeChallenge(context.Context, string) (domain.AuthChallenge, error)
-	SaveSession(context.Context, domain.Session, time.Duration) error
-	RefreshSession(context.Context, domain.Session, time.Duration) error
-	GetSessionByToken(context.Context, string) (domain.Session, error)
-	RevokeSession(context.Context, domain.Session, time.Duration) error
 	IssueRecoveryToken(context.Context, domain.RecoveryToken, time.Duration) error
 	SaveRecoveryDeliveryFailure(context.Context, domain.RecoveryDeliveryFailure, time.Duration) error
 	GetRecoveryTokenBySecret(context.Context, string) (domain.RecoveryToken, error)
@@ -385,7 +380,8 @@ func (s *AuthService) UseAuditNotifier(notifier AuditNotifier) {
 }
 
 // UseTokenService は TokenService を注入する（app 層から呼び出す）。
-// tokenService が nil の場合、従来の opaque session token 方式で動作する。
+// TokenService は JWT ペアの発行・検証・失効を担い、認証の必須コンポーネントである。
+// nil を渡した場合、認証フローは内部エラーで失敗する（fail-closed）。
 func (s *AuthService) UseTokenService(tokenService *TokenService) {
 	s.tokenService = tokenService
 }

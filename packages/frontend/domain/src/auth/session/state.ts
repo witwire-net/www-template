@@ -26,8 +26,15 @@ function createAuthSessionInitialState(): AuthSessionState {
   };
 }
 
-/** active bearer session を state に反映する。
- *  既存の単一セッション用途との互換性のため、sessions 配列を上書きする。 */
+/**
+ * active bearer session を state に反映する。
+ * 受け取ったセッションを sessions 配列の唯一の要素として設定し、
+ * activeSessionId や phase などの関連 state も同時に更新する。
+ *
+ * @param state - 更新対象の認証セッション state
+ * @param session - 反映する認証セッション概要
+ * @param cacheControl - レスポンスの cache-control 値（任意）
+ */
 function applyAuthenticatedSession(
   state: AuthSessionState,
   session: AuthSessionSummary,
@@ -162,7 +169,7 @@ function createAuthorizationHeaders(state: AuthSessionState): Record<string, str
   }
 
   return {
-    Authorization: `Bearer ${state.session.sessionToken}`,
+    Authorization: `Bearer ${state.session.accessToken}`,
   };
 }
 

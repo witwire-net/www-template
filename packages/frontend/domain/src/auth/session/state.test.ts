@@ -36,7 +36,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-      sessionToken: 'opaque-token',
+      accessToken: 'jwt-access-token',
       expiresAt: '2026-03-21T00:00:00.000Z',
     };
 
@@ -59,14 +59,14 @@ describe('authSessionState', () => {
         accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
         passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
         sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-        sessionToken: 'opaque-bearer-token',
+        accessToken: 'jwt-bearer-token',
         expiresAt: '2026-03-21T00:00:00.000Z',
       },
       'no-store'
     );
 
     expect(state.phase).toBe('authenticated');
-    expect(state.session?.sessionToken).toBe('opaque-bearer-token');
+    expect(state.session?.accessToken).toBe('jwt-bearer-token');
     expect(setItemSpy).not.toHaveBeenCalled();
 
     setItemSpy.mockRestore();
@@ -79,7 +79,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-      sessionToken: 'token-a',
+      accessToken: 'token-a',
       expiresAt: '2026-03-21T00:00:00.000Z',
     };
 
@@ -92,14 +92,14 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
-      sessionToken: 'token-b',
+      accessToken: 'token-b',
       expiresAt: '2026-03-21T01:00:00.000Z',
     };
 
     addAuthenticatedSession(state, sessionB, 'no-store');
     expect(state.sessions).toHaveLength(2);
     expect(state.activeSessionId).toBe(sessionB.sessionId);
-    expect(state.session?.sessionToken).toBe('token-b');
+    expect(state.session?.accessToken).toBe('token-b');
   });
 
   it('[AUTH-FE-S028] switchActiveSession changes the active session', () => {
@@ -109,7 +109,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-      sessionToken: 'token-a',
+      accessToken: 'token-a',
       expiresAt: '2026-03-21T00:00:00.000Z',
     };
     const sessionB = {
@@ -117,7 +117,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
-      sessionToken: 'token-b',
+      accessToken: 'token-b',
       expiresAt: '2026-03-21T01:00:00.000Z',
     };
 
@@ -127,7 +127,7 @@ describe('authSessionState', () => {
     const switched = switchActiveSession(state, sessionA.sessionId);
     expect(switched).toBe(true);
     expect(state.activeSessionId).toBe(sessionA.sessionId);
-    expect(state.session?.sessionToken).toBe('token-a');
+    expect(state.session?.accessToken).toBe('token-a');
 
     const missing = switchActiveSession(state, 'nonexistent');
     expect(missing).toBe(false);
@@ -140,7 +140,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-      sessionToken: 'token-a',
+      accessToken: 'token-a',
       expiresAt: '2026-03-21T00:00:00.000Z',
     };
     const sessionB = {
@@ -148,7 +148,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
-      sessionToken: 'token-b',
+      accessToken: 'token-b',
       expiresAt: '2026-03-21T01:00:00.000Z',
     };
 
@@ -158,7 +158,7 @@ describe('authSessionState', () => {
     const intent = removeActiveSession(state);
     expect(state.sessions).toHaveLength(1);
     expect(state.activeSessionId).toBe(sessionA.sessionId);
-    expect(state.session?.sessionToken).toBe('token-a');
+    expect(state.session?.accessToken).toBe('token-a');
     expect(state.phase).toBe('authenticated');
     expect(intent).toBeNull();
   });
@@ -170,7 +170,7 @@ describe('authSessionState', () => {
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-      sessionToken: 'token-a',
+      accessToken: 'token-a',
       expiresAt: '2026-03-21T00:00:00.000Z',
     };
 
@@ -192,7 +192,7 @@ describe('authSessionState', () => {
         accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
         passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
         sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-        sessionToken: 'token-a',
+        accessToken: 'token-a',
         expiresAt: '2026-03-21T00:00:00.000Z',
       },
       'no-store'
@@ -214,7 +214,7 @@ describe('authSessionState', () => {
         accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
         passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
         sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
-        sessionToken: 'token-a',
+        accessToken: 'token-a',
         expiresAt: '2026-03-21T00:00:00.000Z',
       },
       'no-store'

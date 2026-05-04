@@ -75,7 +75,7 @@ async function ensureFreshAuthorizationHeaders(
     return {};
   }
 
-  const claims = decodeAccessToken(active.sessionToken);
+  const claims = decodeAccessToken(active.accessToken);
   if (claims != null && isRefreshNeeded(claims.exp, Date.now())) {
     const sessionId = active.sessionId;
     let inflight = refreshInFlight.get(sessionId);
@@ -108,7 +108,7 @@ async function attemptRefreshForLogout(authState: AuthSessionState): Promise<voi
     return;
   }
 
-  const claims = decodeAccessToken(active.sessionToken);
+  const claims = decodeAccessToken(active.accessToken);
   if (claims == null || !isRefreshNeeded(claims.exp, Date.now())) {
     return;
   }
@@ -125,7 +125,7 @@ async function attemptRefreshForLogout(authState: AuthSessionState): Promise<voi
 
       const updatedSession: AuthSessionSummary = {
         ...active,
-        sessionToken: accessToken,
+        accessToken,
         refreshToken: newRefreshToken,
         expiresAt: expToIsoString(newClaims.exp),
       };
@@ -184,20 +184,14 @@ async function executeLogoutCurrentSession(
 }
 
 /**
- * 指定されたセッションのリフレッシュトークンを消費し、新しいトークンペアを取得する。
- * 成功時は対象セッションのみを更新し、現在アクティブなセッションが同じ場合に限り
- * `state.session` を差し替える。
- * いかなる失敗（ネットワーク含む）でも対象セッションは失効扱いとし、
- * `/session-expired` へ遷移する（OpenSpec auth-fe 仕様準拠）。
+ * リフレッシュ失敗時に対象セッションの状態を整える。
+ * 非アクティブなセッションが失敗した場合は配列からのみ除去し、
+ * アクティブなセッションが失敗した場合は `applyExpiredSession` を呼んで
+ * 失効状態に遷移させる。
  *
  * @param authState - 認証セッション state
- * @param targetSessionId - リフレッシュ対象のセッション ID
- * @param refreshTokenValue - 消費するリフレッシュトークン
- * @returns 成功時 `null`、失敗時は遷移先 route intent
- */
-/**
- * 非アクティブなセッションのリフレッシュ失敗時に、対象セッションのみを配列から除去する。
- * アクティブセッションの失敗時は従来通り `applyExpiredSession` を呼ぶ。
+ * @param targetSessionId - 失敗したセッションの ID
+ * @returns 非アクティブセッション除去時は `null`、アクティブセッション失効時は遷移先 route intent
  */
 function handleRefreshFailureForTarget(
   authState: AuthSessionState,
@@ -210,6 +204,18 @@ function handleRefreshFailureForTarget(
   return applyExpiredSession(authState);
 }
 
+/**
+ * 指定されたセッションのリフレッシュトークンを消費し、新しいトークンペアを取得する。
+ * 成功時は対象セッションのみを更新し、現在アクティブなセッションが同じ場合に限り
+ * `state.session` を差し替える。
+ * いかなる失敗（ネットワーク含む）でも対象セッションは失効扱いとし、
+ * `/session-expired` へ遷移する。
+ *
+ * @param authState - 認証セッション state
+ * @param targetSessionId - リフレッシュ対象のセッション ID
+ * @param refreshTokenValue - 消費するリフレッシュトークン
+ * @returns 成功時 `null`、失敗時は遷移先 route intent
+ */
 async function executeRefreshActiveSession(
   authState: AuthSessionState,
   targetSessionId: string,
@@ -234,7 +240,7 @@ async function executeRefreshActiveSession(
 
       const updatedSession: AuthSessionSummary = {
         ...targetSession,
-        sessionToken: accessToken,
+        accessToken,
         refreshToken: newRefreshToken,
         expiresAt: expToIsoString(claims.exp),
       };
@@ -340,7 +346,7 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
         accountId: session.accountId,
         passkeyCredentialId: session.passkeyCredentialId,
         sessionId: session.sessionId,
-        sessionToken: session.sessionToken,
+        accessToken: session.accessToken,
         expiresAt: session.expiresAt,
         refreshToken: session.refreshToken,
       };

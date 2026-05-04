@@ -37,7 +37,7 @@ func TestAppSurfaceFallsBackToNotFound(t *testing.T) {
 	challenge := decodeJSONBody(t, challengeRecorder)
 	finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
 	finishBody := decodeJSONBody(t, finishRecorder)
-	request.Header.Set("Authorization", "Bearer "+finishBody["sessionToken"].(string))
+	request.Header.Set("Authorization", "Bearer "+finishBody["accessToken"].(string))
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, request)
@@ -77,9 +77,9 @@ func TestAppAuthEndpointSucceedsWithBearerToken(t *testing.T) {
 	}
 
 	finishBody := decodeJSONBody(t, finishRecorder)
-	bearer, ok := finishBody["sessionToken"].(string)
+	bearer, ok := finishBody["accessToken"].(string)
 	if !ok || bearer == "" {
-		t.Fatalf("expected sessionToken in response, got %v", finishBody["sessionToken"])
+		t.Fatalf("expected accessToken in response, got %v", finishBody["accessToken"])
 	}
 	logoutRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/logout", nil, bearer)
 
@@ -153,7 +153,13 @@ func newTestRouter(t *testing.T) *gin.Engine {
 	auth := application.NewAuthService(newStubAuthStateRepository(clock), stubAuthAccountRepositoryWithMember(), nil, nil, clock, newSequentialPolicy(), testConfig().AuthRuntime())
 	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
 
-	return NewRouter(testConfig(), Dependencies{Auth: auth})
+	refreshStore := newStubRefreshTokenStore()
+	sessionStore := newStubSessionStore()
+	tokenService := application.NewTokenService(refreshStore, sessionStore, testConfig().AuthRuntime(), clock, newSequentialPolicy())
+	auth.UseTokenService(tokenService)
+	sessionService := application.NewSessionService(sessionStore, refreshStore)
+
+	return NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService, SessionService: sessionService})
 }
 
 func testConfig() config.Config {

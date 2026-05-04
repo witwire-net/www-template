@@ -61,7 +61,7 @@ const loginViaApi = async (request: APIRequestContext, clientIp: string) => {
   expectNoStore(finishResponse.headers()['cache-control'] ?? null);
 
   const finishBody = (await parseJsonBody(finishResponse)) as {
-    sessionToken: string;
+    accessToken: string;
   };
 
   return { finishBody, finishResponse, startBody, startResponse };
@@ -112,7 +112,8 @@ test.describe('auth api contract', () => {
     const { startBody, finishBody } = await loginViaApi(request, '198.51.100.10');
 
     expect(startBody.challenge).toContain('opaque-');
-    expect(finishBody.sessionToken).toContain('opaque-');
+    // accessToken は短命 JWT（header.payload.signature の 3 セグメント形式）であることを検証する
+    expect(finishBody.accessToken.split('.')).toHaveLength(3);
   });
 
   test('recovery request / invalid consume / invalid register は no-store で返る', async ({
@@ -155,7 +156,7 @@ test.describe('auth api contract', () => {
 
     const logoutResponse = await request.post('/api/v1/auth/logout', {
       headers: {
-        Authorization: `Bearer ${finishBody.sessionToken}`,
+        Authorization: `Bearer ${finishBody.accessToken}`,
       },
     });
 
@@ -164,7 +165,7 @@ test.describe('auth api contract', () => {
 
     const expiredResponse = await request.post('/api/v1/auth/logout', {
       headers: {
-        Authorization: `Bearer ${finishBody.sessionToken}`,
+        Authorization: `Bearer ${finishBody.accessToken}`,
       },
     });
 
@@ -266,7 +267,7 @@ test.describe('auth api internal-error classification', () => {
 
     const result = await fetchJsonInBrowser(page, '/api/v1/auth/logout', {
       method: 'POST',
-      headers: { Authorization: 'Bearer opaque-session-token' },
+      headers: { Authorization: 'Bearer jwt-invalid-token' },
     });
 
     expect(result.status).toBe(503);

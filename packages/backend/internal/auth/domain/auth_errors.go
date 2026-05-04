@@ -25,6 +25,11 @@ var (
 	ErrAuthBranchAmbiguous       = errors.New("exactly one auth branch selector is required")
 	ErrRecoveryStateRequired     = errors.New("recovery session is required")
 	ErrInvalidOpaqueSecret       = errors.New("opaque secret is required")
+	ErrInvalidAccountID          = errors.New("account id is required")
+	ErrInvalidPasskeyCredential  = errors.New("passkey credential id is required")
+	ErrInvalidSessionID          = errors.New("session id is required")
+	ErrInvalidToken              = errors.New("token is required")
+	ErrInvalidSessionExpiry      = errors.New("session expiry is required")
 	// ErrOtpNotFound は OTP が存在しない・期限切れ・消費済みの場合に返す。
 	ErrOtpNotFound = errors.New("otp not found or expired")
 )

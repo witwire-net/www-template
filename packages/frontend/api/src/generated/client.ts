@@ -29,7 +29,6 @@ export interface AuthSessionResponse {
   accountId: UlidId;
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
-  sessionToken: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: string;

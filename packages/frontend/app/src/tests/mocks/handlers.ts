@@ -43,7 +43,8 @@ const handlers = [
         accountId: TEST_ULID.accountId,
         passkeyCredentialId: TEST_ULID.passkeyCredentialId,
         sessionId: TEST_ULID.sessionId,
-        sessionToken: 'opaque-bearer-token',
+        accessToken: 'jwt-access-token',
+        refreshToken: 'jwt-refresh-token',
         expiresAt: '2026-04-04T00:00:00.000Z',
       },
       {
@@ -76,7 +77,7 @@ const handlers = [
           requestId: TEST_ULID.requestId,
           recoveryTokenId: TEST_ULID.recoveryTokenId,
           recoverySessionId: TEST_ULID.recoverySessionId,
-          recovery_session: 'recovery-session-opaque',
+          recovery_session: 'recovery-session-value',
           expiresAt: '2026-03-21T00:15:00.000Z',
         },
         {
@@ -106,7 +107,8 @@ const handlers = [
         accountId: TEST_ULID.accountId,
         passkeyCredentialId: TEST_ULID.passkeyCredentialId,
         sessionId: TEST_ULID.sessionId,
-        sessionToken: 'opaque-bearer-token-recovery',
+        accessToken: 'jwt-access-token-recovery',
+        refreshToken: 'jwt-refresh-token-recovery',
         expiresAt: '2026-04-04T00:00:00.000Z',
       },
       {

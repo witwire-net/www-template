@@ -24,7 +24,7 @@ function createSession(id: string, token: string, refresh?: string) {
     accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
     passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
     sessionId: `01ARZ3NDEKTSV4RRFFQ69G5F${id}`,
-    sessionToken: token,
+    accessToken: token,
     expiresAt: '2026-03-21T00:00:00.000Z',
     refreshToken: refresh,
   };
@@ -59,7 +59,7 @@ describe('useAuthSession hook', () => {
     actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
     actions.switchSession(sidA);
     expect(data.state.activeSessionId).toBe(sidA);
-    expect(data.state.session?.sessionToken).toBe('token-a');
+    expect(data.state.session?.accessToken).toBe('token-a');
   });
 
   it('[AUTH-FE-S030] logoutCurrentSession removes only active session', async () => {
@@ -102,7 +102,7 @@ describe('useAuthSession hook', () => {
     const result = await actions.refreshActiveSession();
     expect(apiModule.refreshToken).toHaveBeenCalledWith({ refreshToken: 'refresh-1' });
     expect(result).toBeNull();
-    expect(data.state.session?.sessionToken).not.toBe(accessToken);
+    expect(data.state.session?.accessToken).not.toBe(accessToken);
     expect(data.state.session?.refreshToken).toBe('refresh-2');
   });
 
@@ -304,11 +304,11 @@ describe('useAuthSession hook', () => {
 
     // B should remain active
     expect(data.state.activeSessionId).toBe(sidB);
-    expect(data.state.session?.sessionToken).toBe(tokenB);
+    expect(data.state.session?.accessToken).toBe(tokenB);
 
     // But A's token in the sessions array should be updated
     const sessionA = data.state.sessions?.find((s) => s.sessionId === sidA);
-    expect(sessionA?.sessionToken).not.toBe(tokenA);
+    expect(sessionA?.accessToken).not.toBe(tokenA);
     expect(sessionA?.refreshToken).toBe('refresh-a2');
   });
 
@@ -366,7 +366,7 @@ describe('useAuthSession hook', () => {
 
     // B should remain active
     expect(data.state.activeSessionId).toBe(sidB);
-    expect(data.state.session?.sessionToken).toBe(tokenB);
+    expect(data.state.session?.accessToken).toBe(tokenB);
     expect(data.state.phase).toBe('authenticated');
 
     // A should be removed from sessions array
