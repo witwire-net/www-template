@@ -397,13 +397,14 @@ func TestAuthRepeatedFailuresEnterTemporaryLock(t *testing.T) {
 }
 
 type authTestEnv struct {
-	router    *gin.Engine
-	stateRepo *stubAuthStateRepository
-	sender    *capturingAccountRecoverySender
-	invite    *stubInvitationPasskeyRegistrar
-	auth      *application.AuthService
-	now       func() time.Time
-	advance   func(time.Duration)
+	router       *gin.Engine
+	stateRepo    *stubAuthStateRepository
+	sender       *capturingAccountRecoverySender
+	invite       *stubInvitationPasskeyRegistrar
+	auth         *application.AuthService
+	now          func() time.Time
+	advance      func(time.Duration)
+	refreshStore *stubRefreshTokenStore
 }
 
 // saveTestReauthSession はテスト用の再認証セッションを stateRepo に保存する。

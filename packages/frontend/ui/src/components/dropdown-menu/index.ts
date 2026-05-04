@@ -13,6 +13,7 @@ import Shortcut from './dropdown-menu-shortcut.svelte';
 import SubContent from './dropdown-menu-sub-content.svelte';
 import SubTrigger from './dropdown-menu-sub-trigger.svelte';
 import Sub from './dropdown-menu-sub.svelte';
+import TriggerButton from './dropdown-menu-trigger-button.svelte';
 import Trigger from './dropdown-menu-trigger.svelte';
 import Root from './dropdown-menu.svelte';
 
@@ -36,6 +37,7 @@ export {
   Sub as DropdownMenuSub,
   SubContent as DropdownMenuSubContent,
   SubTrigger as DropdownMenuSubTrigger,
+  TriggerButton as DropdownMenuTriggerButton,
   Trigger as DropdownMenuTrigger,
   GroupHeading as DropdownMenuGroupHeading,
   Group,

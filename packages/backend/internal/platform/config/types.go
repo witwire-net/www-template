@@ -70,6 +70,7 @@ type AuthConfig struct {
 	ReauthSessionTTL                time.Duration
 	SessionIdleTTL                  time.Duration
 	SessionAbsoluteTTL              time.Duration
+	RefreshTokenTTL                 time.Duration
 	PasskeyStartThrottleLimit       int
 	PasskeyStartGlobalThrottleLimit int
 	PasskeyStartThrottleWindow      time.Duration
@@ -85,6 +86,7 @@ type AuthConfig struct {
 	WebAuthnRPID                    string
 	AccountRecoveryURLBase          string
 	AuthBodyLimitBytes              int
+	JWTSecret                       string
 }
 
 type Config struct {
@@ -205,6 +207,20 @@ func (c Config) validateProductionSecretHashKey(errs []string) []string {
 	}
 	if len(secret) < 32 {
 		return append(errs, "secret_hash_key must be at least 32 characters in production")
+	}
+
+	jwtSecret := strings.TrimSpace(c.Auth.JWTSecret)
+	if jwtSecret == "" {
+		return append(errs, "jwt_secret is required in production")
+	}
+	if jwtSecret == "change-this-to-a-long-random-jwt-secret-in-production" {
+		return append(errs, "jwt_secret must not use the default dev value in production")
+	}
+	if len(jwtSecret) < 32 {
+		return append(errs, "jwt_secret must be at least 32 characters in production")
+	}
+	if jwtSecret == secret {
+		return append(errs, "jwt_secret must not be the same as secret_hash_key in production")
 	}
 	return errs
 }
@@ -362,6 +378,7 @@ func (c Config) AuthRuntime() AuthConfig {
 	configured.WebAuthnRPID = defaultString(configured.WebAuthnRPID, defaults.WebAuthnRPID)
 	configured.AccountRecoveryURLBase = defaultString(configured.AccountRecoveryURLBase, defaults.AccountRecoveryURLBase)
 	configured.AuthBodyLimitBytes = defaultInt(configured.AuthBodyLimitBytes, defaults.AuthBodyLimitBytes)
+	configured.JWTSecret = defaultString(configured.JWTSecret, defaults.JWTSecret)
 
 	return configured
 }
@@ -378,6 +395,7 @@ func defaultAuthConfig() AuthConfig {
 		PasskeyStartThrottleWindow:      5 * time.Minute,
 		HandoffGlobalThrottleLimit:      1000,
 		SecretHashKey:                   "dev-pepper-change-in-production",
+		JWTSecret:                       "change-this-to-a-long-random-jwt-secret-in-production",
 		RecoveryEmailThrottleLimit:      3,
 		RecoveryEmailThrottleWindow:     time.Hour,
 		RecoveryIPThrottleLimit:         10,

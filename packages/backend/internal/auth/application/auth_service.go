@@ -14,6 +14,26 @@ import (
 	"www-template/packages/backend/internal/auth/domain"
 )
 
+// deviceMetadata は clientIP と userAgent から fingerprint、deviceName、ipHash を生成する。
+// fingerprint はデバイス/セッション指紋として使用し、ipHash は生 IP を保持せずにセッションメタデータに保存する。
+// いずれも SecretHashKey を HMAC キーとして使用し、総当たり耐性を確保する。
+func (s *AuthService) deviceMetadata(clientIP, userAgent string) (fingerprint, deviceName, ipHash string) {
+	secret := s.authConfig.SecretHashKey
+	ipHash = hmacString(clientIP, secret)
+	fingerprint = hmacString(userAgent+"|"+clientIP, secret)
+	deviceName = userAgent
+	if len(deviceName) > 255 {
+		deviceName = deviceName[:255]
+	}
+	return
+}
+
+func hmacString(s, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(s))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
 // StartPasskeyAuthentication は公開認証セレモニーを開始する。
 // identifier-based throttle は完全に廃止し、IP bucket と global bucket のみを適用する。
 // これにより identifier rotation で challenge issuance budget を回避できないようにする。
@@ -219,16 +239,27 @@ func (s *AuthService) finishPasskeyAuthenticationWebAuthn(ctx context.Context, i
 		return AuthSession{}, ErrBadRequest
 	}
 
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return AuthSession{}, ErrInternalError
+	}
+
+	// JWT 方式が有効な場合は opaque session を発行せず、JWT のみを返す
+	if s.tokenService != nil {
+		authSession := AuthSession{
+			RequestID:           requestID,
+			AccountID:           account.AccountID(),
+			PasskeyCredentialID: account.PasskeyCredentialID(),
+		}
+		return s.issueJWTIfEnabled(ctx, authSession, account.AccountID(), input.ClientIP, input.UserAgent)
+	}
+
+	// フォールバック: 従来の opaque session token 方式
 	session, err := s.issueSession(account)
 	if err != nil {
 		return AuthSession{}, ErrInternalError
 	}
 	if err := s.stateRepo.SaveSession(ctx, session, s.authConfig.SessionAbsoluteTTL); err != nil {
-		return AuthSession{}, ErrInternalError
-	}
-
-	requestID, err := s.policy.Next()
-	if err != nil {
 		return AuthSession{}, ErrInternalError
 	}
 
@@ -425,16 +456,27 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 		return AuthSession{}, ErrInternalError
 	}
 
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return AuthSession{}, ErrInternalError
+	}
+
+	// JWT 方式が有効な場合は opaque session を発行せず、JWT のみを返す
+	if s.tokenService != nil {
+		authSession := AuthSession{
+			RequestID:           requestID,
+			AccountID:           account.AccountID(),
+			PasskeyCredentialID: account.PasskeyCredentialID(),
+		}
+		return s.issueJWTIfEnabled(ctx, authSession, account.AccountID(), input.ClientIP, input.UserAgent)
+	}
+
+	// フォールバック: 従来の opaque session token 方式
 	session, err := s.issueSession(account)
 	if err != nil {
 		return AuthSession{}, ErrInternalError
 	}
 	if err := s.stateRepo.SaveSession(ctx, session, s.authConfig.SessionAbsoluteTTL); err != nil {
-		return AuthSession{}, ErrInternalError
-	}
-
-	requestID, err := s.policy.Next()
-	if err != nil {
 		return AuthSession{}, ErrInternalError
 	}
 
@@ -472,16 +514,44 @@ func (s *AuthService) registerInvitationPasskey(ctx context.Context, input Regis
 }
 
 func (s *AuthService) Logout(ctx context.Context, token string) (string, error) {
+	if strings.TrimSpace(token) == "" {
+		return "", ErrUnauthenticated
+	}
+
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return "", ErrInternalError
+	}
+
+	// JWT 方式が有効な場合、JWT のセッションも失効させる
+	if s.tokenService != nil {
+		claims, err := s.tokenService.VerifyAccessToken(token)
+		if err == nil {
+			// セッションが既に失効していないか確認する
+			_, err := s.tokenService.sessionStore.GetSession(ctx, claims.SessionID)
+			if err != nil {
+				if errors.Is(err, domain.ErrSessionNotFound) {
+					return "", ErrSessionExpired
+				}
+				return "", ErrInternalError
+			}
+			if revokeErr := s.tokenService.RevokeSession(ctx, claims.AccountID, claims.SessionID); revokeErr != nil {
+				return "", ErrInternalError
+			}
+			return requestID, nil
+		}
+		// JWT 検証失敗（期限切れ・改竄・失効など）は全て session-expired とする
+		// 情報漏洩防止のため、invalid と expired の区別は外部に出さない
+		return "", ErrSessionExpired
+	}
+
+	// フォールバック: 従来の opaque session token 方式
 	session, err := s.stateRepo.GetSessionByToken(ctx, token)
 	if err != nil {
 		return "", s.mapSessionError(err)
 	}
 	if err := session.EnsureActive(s.clock()); err != nil {
 		return "", s.mapSessionError(err)
-	}
-	requestID, err := s.policy.Next()
-	if err != nil {
-		return "", ErrInternalError
 	}
 	if err := s.stateRepo.RevokeSession(ctx, session.Revoke(s.clock()), session.RevocationTTL(s.clock())); err != nil {
 		return "", ErrInternalError
@@ -494,6 +564,30 @@ func (s *AuthService) AuthorizeSession(ctx context.Context, token string) (AuthS
 	if strings.TrimSpace(token) == "" {
 		return AuthSession{}, ErrUnauthenticated
 	}
+
+	// JWT 方式が有効な場合、JWT アクセストークンを検証する
+	if s.tokenService != nil {
+		claims, err := s.tokenService.VerifyAccessToken(token)
+		if err == nil {
+			// セッションが既に失効していないか確認する
+			_, err := s.tokenService.sessionStore.GetSession(ctx, claims.SessionID)
+			if err != nil {
+				if errors.Is(err, domain.ErrSessionNotFound) {
+					return AuthSession{}, ErrSessionExpired
+				}
+				return AuthSession{}, ErrInternalError
+			}
+			return AuthSession{
+				AccountID: claims.AccountID,
+				SessionID: claims.SessionID,
+			}, nil
+		}
+		// JWT 検証失敗（期限切れ・改竄・失効など）は全て session-expired とする
+		// 情報漏洩防止のため、invalid と expired の区別は外部に出さない
+		return AuthSession{}, ErrSessionExpired
+	}
+
+	// フォールバック: 従来の opaque session token 方式
 	session, err := s.stateRepo.GetSessionByToken(ctx, token)
 	if err != nil {
 		return AuthSession{}, s.mapSessionError(err)
@@ -535,6 +629,29 @@ func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID strin
 		RecoveryURL:     fmt.Sprintf("%s?token=%s", strings.TrimSpace(s.authConfig.AccountRecoveryURLBase), secret),
 		ExpiresAt:       recoveryToken.ExpiresAt(),
 	}, nil
+}
+
+// issueJWTIfEnabled は TokenService が有効な場合に JWT ペアを発行し、AuthSession に付与する。
+// JWT 有効時は sessionToken に accessToken を設定し、backward compatibility を保つ。
+func (s *AuthService) issueJWTIfEnabled(ctx context.Context, authSession AuthSession, accountID, clientIP, userAgent string) (AuthSession, error) {
+	if s.tokenService == nil {
+		return authSession, nil
+	}
+	fp, devName, ipHash := s.deviceMetadata(clientIP, userAgent)
+	accessToken, refreshToken, sessionID, err := s.tokenService.Issue(ctx, accountID, fp, devName, ipHash, "")
+	if err != nil {
+		return AuthSession{}, ErrInternalError
+	}
+	// fail-closed: JWT モードで空トークンが返った場合は内部エラーとする
+	if accessToken == "" || refreshToken == "" {
+		return AuthSession{}, ErrInternalError
+	}
+	authSession.SessionID = sessionID
+	authSession.SessionToken = accessToken
+	authSession.AccessToken = accessToken
+	authSession.RefreshToken = refreshToken
+	authSession.ExpiresAt = s.clock().Add(domain.AccessTokenTTL)
+	return authSession, nil
 }
 
 func (s *AuthService) issueSession(account domain.AuthAccount) (domain.Session, error) {

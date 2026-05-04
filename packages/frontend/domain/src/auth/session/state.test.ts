@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  addAuthenticatedSession,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyMissingSession,
+  clearAuthSession,
   createAuthSessionInitialState,
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
+  removeActiveSession,
+  switchActiveSession,
 } from './state';
 
 describe('authSessionState', () => {
@@ -66,5 +70,169 @@ describe('authSessionState', () => {
     expect(setItemSpy).not.toHaveBeenCalled();
 
     setItemSpy.mockRestore();
+  });
+
+  it('[AUTH-FE-S027] addAuthenticatedSession appends a new session and keeps existing ones', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      sessionToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    expect(state.sessions).toHaveLength(1);
+    expect(state.activeSessionId).toBe(sessionA.sessionId);
+
+    const sessionB = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+      sessionToken: 'token-b',
+      expiresAt: '2026-03-21T01:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionB, 'no-store');
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe(sessionB.sessionId);
+    expect(state.session?.sessionToken).toBe('token-b');
+  });
+
+  it('[AUTH-FE-S028] switchActiveSession changes the active session', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      sessionToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+    const sessionB = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+      sessionToken: 'token-b',
+      expiresAt: '2026-03-21T01:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    addAuthenticatedSession(state, sessionB, 'no-store');
+
+    const switched = switchActiveSession(state, sessionA.sessionId);
+    expect(switched).toBe(true);
+    expect(state.activeSessionId).toBe(sessionA.sessionId);
+    expect(state.session?.sessionToken).toBe('token-a');
+
+    const missing = switchActiveSession(state, 'nonexistent');
+    expect(missing).toBe(false);
+  });
+
+  it('[AUTH-FE-S030] removeActiveSession clears only the active session and promotes another', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      sessionToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+    const sessionB = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+      sessionToken: 'token-b',
+      expiresAt: '2026-03-21T01:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    addAuthenticatedSession(state, sessionB, 'no-store'); // active = B
+
+    const intent = removeActiveSession(state);
+    expect(state.sessions).toHaveLength(1);
+    expect(state.activeSessionId).toBe(sessionA.sessionId);
+    expect(state.session?.sessionToken).toBe('token-a');
+    expect(state.phase).toBe('authenticated');
+    expect(intent).toBeNull();
+  });
+
+  it('[AUTH-FE-S031] removeActiveSession returns to unauthenticated when no sessions remain', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      sessionToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    const intent = removeActiveSession(state);
+    expect(state.sessions).toHaveLength(0);
+    expect(state.activeSessionId).toBeNull();
+    expect(state.session).toBeNull();
+    expect(state.phase).toBe('anonymous');
+    expect(intent).toBe('/login');
+  });
+
+  it('[AUTH-FE-S006] applyExpiredSession routes to session-expired and clears all sessions', () => {
+    const state = createAuthSessionInitialState();
+    addAuthenticatedSession(
+      state,
+      {
+        requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+        passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+        sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+        sessionToken: 'token-a',
+        expiresAt: '2026-03-21T00:00:00.000Z',
+      },
+      'no-store'
+    );
+
+    const intent = applyExpiredSession(state, 'no-store');
+    expect(intent).toBe('/session-expired');
+    expect(state.phase).toBe('session-expired');
+    expect(state.sessions).toHaveLength(0);
+    expect(state.activeSessionId).toBeNull();
+  });
+
+  it('[AUTH-FE-S007] clearAuthSession returns to anonymous route', () => {
+    const state = createAuthSessionInitialState();
+    addAuthenticatedSession(
+      state,
+      {
+        requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+        passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+        sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+        sessionToken: 'token-a',
+        expiresAt: '2026-03-21T00:00:00.000Z',
+      },
+      'no-store'
+    );
+
+    const intent = clearAuthSession(state, 'no-store');
+    expect(intent).toBe('/login');
+    expect(state.phase).toBe('anonymous');
+    expect(state.session).toBeNull();
+    expect(state.sessions).toHaveLength(0);
+  });
+
+  it('[AUTH-FE-S008] applyMissingSession stays on normal login flow', () => {
+    const state = createAuthSessionInitialState();
+    const intent = applyMissingSession(state, 'no-store');
+    expect(intent).toBe('/login');
+    expect(state.routeIntent).toBe('/login');
+    expect(state.lastFailure).toBe('unauthenticated');
+    expect(state.phase).toBe('anonymous');
   });
 });

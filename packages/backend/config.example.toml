@@ -62,7 +62,9 @@ auth_body_limit_bytes = 1048576
 # MUST be at least 32 characters and changed from default in production.
 secret_hash_key = "change-this-to-a-long-random-pepper-in-production"
 
-# JWT signing secret. MUST be at least 32 characters and changed from default in production.
+# JWT signing secret for HS256 access tokens.
+# MUST be at least 32 characters, changed from default in production,
+# and MUST NOT be the same value as secret_hash_key.
 jwt_secret = "change-this-to-a-long-random-jwt-secret-in-production"
 
 [database]

@@ -16,13 +16,15 @@
 
   async function performLogout() {
     try {
-      await actions.logoutCurrentSession();
-      await goto('/login');
+      const intent = await actions.logoutCurrentSession();
+      // 残りセッションがある場合は intent が null となり認証状態を維持する
+      await goto(intent ?? '/');
     } catch {
       logoutError = 'ログアウトに失敗しました。';
       isLoggingOut = false;
       /* fail-safe: state 消去して login へ */
       actions.clearInMemorySession();
+      await goto('/login');
     }
   }
 </script>

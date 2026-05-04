@@ -17,6 +17,8 @@ function createAuthSessionInitialState(): AuthSessionState {
   return {
     phase: 'anonymous',
     session: null,
+    sessions: [],
+    activeSessionId: null,
     routeIntent: '/login',
     lastFailure: null,
     lastError: null,
@@ -24,7 +26,8 @@ function createAuthSessionInitialState(): AuthSessionState {
   };
 }
 
-/** active bearer session を state に反映する。 */
+/** active bearer session を state に反映する。
+ *  既存の単一セッション用途との互換性のため、sessions 配列を上書きする。 */
 function applyAuthenticatedSession(
   state: AuthSessionState,
   session: AuthSessionSummary,
@@ -32,10 +35,65 @@ function applyAuthenticatedSession(
 ): void {
   state.phase = 'authenticated';
   state.session = session;
+  state.sessions = [session];
+  state.activeSessionId = session.sessionId;
   state.routeIntent = '/login';
   state.lastFailure = null;
   state.lastError = null;
   state.lastCacheControl = cacheControl;
+}
+
+/** 新しいセッションを追加し、アクティブセッションとして設定する。
+ *  同じ sessionId が存在する場合は上書きする。 */
+function addAuthenticatedSession(
+  state: AuthSessionState,
+  session: AuthSessionSummary,
+  cacheControl: string | null
+): void {
+  const sessions = state.sessions ?? [];
+  const filtered = sessions.filter((s) => s.sessionId !== session.sessionId);
+  filtered.push(session);
+  state.sessions = filtered;
+  state.activeSessionId = session.sessionId;
+  state.session = session;
+  state.phase = 'authenticated';
+  state.routeIntent = '/login';
+  state.lastFailure = null;
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+}
+
+/** アクティブセッションを指定した sessionId に切り替える。
+ *  該当セッションが存在しない場合は何もしない。 */
+function switchActiveSession(state: AuthSessionState, sessionId: string): boolean {
+  const target = state.sessions?.find((s) => s.sessionId === sessionId);
+  if (target == null) {
+    return false;
+  }
+  state.session = target;
+  state.activeSessionId = target.sessionId;
+  return true;
+}
+
+/** アクティブセッションを除去する。
+ *  残りのセッションがある場合は最初のセッションをアクティブにする。
+ *  セッションが空になった場合は未認証状態に戻す。 */
+function removeActiveSession(state: AuthSessionState): AuthRouteIntent | null {
+  const remaining = (state.sessions ?? []).filter((s) => s.sessionId !== state.activeSessionId);
+  state.sessions = remaining;
+
+  if (remaining.length > 0) {
+    const next = remaining[0];
+    state.session = next;
+    state.activeSessionId = next.sessionId;
+    state.phase = 'authenticated';
+    state.routeIntent = '/login';
+    state.lastFailure = null;
+    state.lastError = null;
+    return null;
+  }
+
+  return clearAuthSession(state);
 }
 
 /** missing session を通常 login 導線へ正規化する。 */
@@ -45,6 +103,8 @@ function applyMissingSession(
 ): AuthRouteIntent {
   state.phase = 'anonymous';
   state.session = null;
+  state.sessions = [];
+  state.activeSessionId = null;
   state.routeIntent = '/login';
   state.lastFailure = 'unauthenticated';
   state.lastError = null;
@@ -59,6 +119,8 @@ function applyExpiredSession(
 ): AuthRouteIntent {
   state.phase = 'session-expired';
   state.session = null;
+  state.sessions = [];
+  state.activeSessionId = null;
   state.routeIntent = '/session-expired';
   state.lastFailure = 'session-expired';
   state.lastError = null;
@@ -84,6 +146,8 @@ function clearAuthSession(
 ): AuthRouteIntent {
   state.phase = 'anonymous';
   state.session = null;
+  state.sessions = [];
+  state.activeSessionId = null;
   state.routeIntent = '/login';
   state.lastFailure = null;
   state.lastError = null;
@@ -113,6 +177,7 @@ function hasUlidAuthSessionShape(session: AuthSessionSummary): boolean {
 }
 
 export {
+  addAuthenticatedSession,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyInternalError,
@@ -123,4 +188,6 @@ export {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
+  removeActiveSession,
+  switchActiveSession,
 };

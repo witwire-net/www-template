@@ -30,7 +30,39 @@ export interface AuthSessionResponse {
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
   sessionToken: string;
+  accessToken: string;
+  refreshToken: string;
   expiresAt: string;
+}
+
+/**
+ * Http authentication
+ */
+export type BearerAuthType = (typeof BearerAuthType)[keyof typeof BearerAuthType];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BearerAuthType = {
+  http: 'http',
+} as const;
+
+/**
+ * bearer auth scheme
+ */
+export type BearerAuthScheme = (typeof BearerAuthScheme)[keyof typeof BearerAuthScheme];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BearerAuthScheme = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。
+ */
+export interface BearerAuth {
+  /** Http authentication */
+  type: BearerAuthType;
+  /** bearer auth scheme */
+  scheme: BearerAuthScheme;
 }
 
 export interface ErrorResponse {
@@ -233,6 +265,41 @@ export interface RecoveryPasskeyStartRequest {
 
 export interface RecoveryRequest {
   email: string;
+}
+
+/**
+ * リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。
+ */
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+/**
+ * リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。
+ */
+export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+/**
+ * ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。
+ */
+export interface SessionItem {
+  sessionId: UlidId;
+  deviceName: string;
+  loginAt: string;
+  lastActiveAt: string;
+  ipHash: string;
+  isCurrentSession: boolean;
+}
+
+/**
+ * ログイン中のセッション一覧レスポンス。認証済みアカウントが所有する全セッションを含む。
+ */
+export interface SessionListResponse {
+  requestId: UlidId;
+  sessions: SessionItem[];
 }
 
 export interface StatusResponse {
@@ -913,6 +980,63 @@ export const consumeRecoveryToken = async (
 };
 
 /**
+ * @summary Refreshes an access token using a valid refresh token
+ */
+export type refreshTokenResponse200 = {
+  data: RefreshTokenResponse;
+  status: 200;
+};
+
+export type refreshTokenResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type refreshTokenResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type refreshTokenResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type refreshTokenResponseSuccess = refreshTokenResponse200 & {
+  headers: Headers;
+};
+export type refreshTokenResponseError = (
+  | refreshTokenResponse400
+  | refreshTokenResponse401
+  | refreshTokenResponse503
+) & {
+  headers: Headers;
+};
+
+export type refreshTokenResponse = refreshTokenResponseSuccess | refreshTokenResponseError;
+
+export const getRefreshTokenUrl = () => {
+  return `/api/v1/auth/refresh`;
+};
+
+export const refreshToken = async (
+  refreshTokenRequest: RefreshTokenRequest,
+  options?: RequestInit
+): Promise<refreshTokenResponse> => {
+  const res = await fetch(getRefreshTokenUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(refreshTokenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshTokenResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as refreshTokenResponse;
+};
+
+/**
  * @summary Lists registered passkeys for the current account
  */
 export type listPasskeysResponse200 = {
@@ -1187,6 +1311,154 @@ export const deletePasskey = async (
 
   const data: deletePasskeyResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as deletePasskeyResponse;
+};
+
+/**
+ * @summary Lists active sessions for the current account
+ */
+export type listSessionsResponse200 = {
+  data: SessionListResponse;
+  status: 200;
+};
+
+export type listSessionsResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type listSessionsResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type listSessionsResponseSuccess = listSessionsResponse200 & {
+  headers: Headers;
+};
+export type listSessionsResponseError = (listSessionsResponse401 | listSessionsResponse503) & {
+  headers: Headers;
+};
+
+export type listSessionsResponse = listSessionsResponseSuccess | listSessionsResponseError;
+
+export const getListSessionsUrl = () => {
+  return `/api/v1/sessions`;
+};
+
+export const listSessions = async (options?: RequestInit): Promise<listSessionsResponse> => {
+  const res = await fetch(getListSessionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSessionsResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listSessionsResponse;
+};
+
+/**
+ * @summary Revokes all other sessions except the current one
+ */
+export type revokeOtherSessionsResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type revokeOtherSessionsResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type revokeOtherSessionsResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type revokeOtherSessionsResponseSuccess = revokeOtherSessionsResponse204 & {
+  headers: Headers;
+};
+export type revokeOtherSessionsResponseError = (
+  | revokeOtherSessionsResponse401
+  | revokeOtherSessionsResponse503
+) & {
+  headers: Headers;
+};
+
+export type revokeOtherSessionsResponse =
+  | revokeOtherSessionsResponseSuccess
+  | revokeOtherSessionsResponseError;
+
+export const getRevokeOtherSessionsUrl = () => {
+  return `/api/v1/sessions/others`;
+};
+
+export const revokeOtherSessions = async (
+  options?: RequestInit
+): Promise<revokeOtherSessionsResponse> => {
+  const res = await fetch(getRevokeOtherSessionsUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeOtherSessionsResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as revokeOtherSessionsResponse;
+};
+
+/**
+ * @summary Revokes a specific session by ID
+ */
+export type revokeSessionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type revokeSessionResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type revokeSessionResponse403 = {
+  data: AuthOperationErrorResponse;
+  status: 403;
+};
+
+export type revokeSessionResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type revokeSessionResponseSuccess = revokeSessionResponse204 & {
+  headers: Headers;
+};
+export type revokeSessionResponseError = (
+  | revokeSessionResponse401
+  | revokeSessionResponse403
+  | revokeSessionResponse503
+) & {
+  headers: Headers;
+};
+
+export type revokeSessionResponse = revokeSessionResponseSuccess | revokeSessionResponseError;
+
+export const getRevokeSessionUrl = (id: UlidId) => {
+  return `/api/v1/sessions/${id}`;
+};
+
+export const revokeSession = async (
+  id: UlidId,
+  options?: RequestInit
+): Promise<revokeSessionResponse> => {
+  const res = await fetch(getRevokeSessionUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as revokeSessionResponse;
 };
 
 /**

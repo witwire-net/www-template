@@ -1,6 +1,8 @@
 export { useAuthSession } from './hook.svelte';
 export type { AuthSessionActions, AuthSessionData } from './hook.svelte';
+export type { DeviceSession, ListDevicesResult } from './session_api';
 export {
+  addAuthenticatedSession,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyInternalError,
@@ -11,4 +13,8 @@ export {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
+  removeActiveSession,
+  switchActiveSession,
 } from './state';
+export { decodeAccessToken, isRefreshNeeded, createEmptyTokenPair } from './token_state';
+export type { AccessTokenClaims, MemoryTokenPair } from './token_state';

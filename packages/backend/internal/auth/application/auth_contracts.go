@@ -15,6 +15,8 @@ type AuthSession struct {
 	PasskeyCredentialID string
 	SessionID           string
 	SessionToken        string
+	AccessToken         string
+	RefreshToken        string
 	ExpiresAt           time.Time
 }
 
@@ -97,6 +99,7 @@ type StartPasskeyAuthenticationInput struct {
 type FinishPasskeyAuthenticationInput struct {
 	Credential WebAuthnAssertionCredentialDTO
 	ClientIP   string
+	UserAgent  string
 }
 
 // StartReauthenticationInput は WebAuthn 再認証セレモニー開始時の入力パラメータを表す。
@@ -148,6 +151,7 @@ type RegisterPasskeyInput struct {
 	InvitationSession string
 	Credential        WebAuthnAttestationCredentialDTO
 	ClientIP          string
+	UserAgent         string
 }
 
 type InvitationPasskeyRegistrationInput struct {
@@ -251,6 +255,71 @@ type InvitationPasskeyRegistrar interface {
 	RegisterInvitationPasskey(context.Context, InvitationPasskeyRegistrationInput) (AuthSession, error)
 }
 
+// RefreshTokenRecord はリフレッシュトークンの永続化に使用するレコード。
+// Valkey 上では JSON シリアライズされ、キー auth:refresh:{hash} に保存される。
+type RefreshTokenRecord struct {
+	AccountID   string
+	SessionID   string
+	Fingerprint string
+	DeviceName  string
+	IPHash      string
+	IssuedAt    time.Time
+}
+
+// SessionMetadata はセッションのメタデータを表す DTO。
+// デバイス名、ログイン時刻、最終アクティブ時刻、IP ハッシュを含む。
+type SessionMetadata struct {
+	SessionID        string
+	AccountID        string
+	DeviceName       string
+	LoginAt          time.Time
+	LastActiveAt     time.Time
+	IPHash           string
+	IsCurrentSession bool
+}
+
+// TokenClaims は JWT アクセストークンから抽出したクレームの application DTO。
+// domain.Claims を transport / persistence 層から隔離するために使用する。
+type TokenClaims struct {
+	AccountID string
+	SessionID string
+	TokenID   string
+	IssuedAt  int64
+	ExpiresAt int64
+}
+
+// RefreshTokenStore はリフレッシュトークンの保存・消費・失効を抽象化するポート。
+type RefreshTokenStore interface {
+	// Save はリフレッシュトークンハッシュに対応するレコードを保存する。
+	// ttl が 0 の場合は無期限（NO EXPIRE）で保存する。
+	Save(ctx context.Context, hash string, record RefreshTokenRecord, ttl time.Duration) error
+	// Consume は指定したハッシュのリフレッシュトークンをアトミックに取得・削除する。
+	// 存在しない場合は domain.ErrRefreshTokenNotFound を返す。
+	// 成功時には消費済みキーに記録し、盗難検出のため一定期間保持する。
+	Consume(ctx context.Context, hash string) (RefreshTokenRecord, error)
+	// GetConsumed は指定したハッシュが既に消費されているか確認する。
+	// 消費済みの場合はそのレコードを返し、そうでない場合は domain.ErrSessionNotFound を返す。
+	GetConsumed(ctx context.Context, hash string) (RefreshTokenRecord, error)
+	// RevokeAllForFingerprint は同一アカウント・同一デバイス指紋の全リフレッシュトークンを失効する。
+	RevokeAllForFingerprint(ctx context.Context, accountID, fingerprint string) error
+	// RevokeBySessionID は指定されたセッション ID に紐づく全リフレッシュトークンを失効する。
+	RevokeBySessionID(ctx context.Context, accountID, sessionID string) error
+}
+
+// SessionStore はセッションメタデータの保存・一覧・失効を抽象化するポート。
+type SessionStore interface {
+	// SaveSession はセッションメタデータを保存する。
+	SaveSession(ctx context.Context, sessionID, accountID string, metadata SessionMetadata, ttl time.Duration) error
+	// GetSession はセッション ID からメタデータを取得する。
+	GetSession(ctx context.Context, sessionID string) (SessionMetadata, error)
+	// ListSessions はアカウントに紐づく全セッションのメタデータを返す。
+	ListSessions(ctx context.Context, accountID string) ([]SessionMetadata, error)
+	// RevokeSession は特定セッションを削除する。
+	RevokeSession(ctx context.Context, accountID, sessionID string) error
+	// RevokeOthers は現在のセッション以外を全て削除し、削除した session ID のスライスを返す。
+	RevokeOthers(ctx context.Context, accountID, currentSessionID string) ([]string, error)
+}
+
 // AuditNotifier は認証関連の重要イベントを通知・記録するためのポートである。
 // 現時点ではハンドラー注入方式とし、structured logger 導入までの橋渡しとする。
 // secret（OTP、credential raw data）は含めず、安全な識別子のみを渡す。
@@ -273,6 +342,7 @@ type AuthService struct {
 	invitationRegistrar InvitationPasskeyRegistrar
 	auditNotifier       AuditNotifier
 	webauthn            WebAuthnProvider
+	tokenService        *TokenService
 	clock               func() time.Time
 	policy              id.AuthIDPolicy
 	authConfig          config.AuthConfig
@@ -312,4 +382,10 @@ func (s *AuthService) UsePasskeyOtpSender(sender PasskeyOtpSender) {
 // secret（OTP、credential raw data）は含めず、accountID・passkeyID・requestID のみを渡す必要がある。
 func (s *AuthService) UseAuditNotifier(notifier AuditNotifier) {
 	s.auditNotifier = notifier
+}
+
+// UseTokenService は TokenService を注入する（app 層から呼び出す）。
+// tokenService が nil の場合、従来の opaque session token 方式で動作する。
+func (s *AuthService) UseTokenService(tokenService *TokenService) {
+	s.tokenService = tokenService
 }

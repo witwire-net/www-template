@@ -40,6 +40,7 @@ type tomlConfig struct {
 		ReauthSessionTTL       string `toml:"reauth_session_ttl"`
 		SessionIdleTTL         string `toml:"session_idle_ttl"`
 		SessionAbsoluteTTL     string `toml:"session_absolute_ttl"`
+		RefreshTokenTTL        string `toml:"refresh_token_ttl"`
 		PasskeyStartLimit      int    `toml:"passkey_start_limit"`
 		PasskeyStartWindow     string `toml:"passkey_start_window"`
 		RecoveryEmailLimit     int    `toml:"recovery_email_limit"`
@@ -51,6 +52,7 @@ type tomlConfig struct {
 		FailureDuration        string `toml:"failure_duration"`
 		AuthBodyLimitBytes     int    `toml:"auth_body_limit_bytes"`
 		SecretHashKey          string `toml:"secret_hash_key"`
+		JWTSecret              string `toml:"jwt_secret"`
 	} `toml:"auth"`
 	Database struct {
 		URL string `toml:"url"`
@@ -139,10 +141,15 @@ func LoadConfig() Config {
 		appBearerToken = defaultAppAuthValue
 	}
 
+	authCfg, err := buildAuthConfig(raw.Auth)
+	if err != nil {
+		panic(fmt.Sprintf("invalid auth config: %v", err))
+	}
+
 	return Config{
 		AllowedOrigins:     allowedOrigins,
 		AppBearerToken:     appBearerToken,
-		Auth:               buildAuthConfig(raw.Auth),
+		Auth:               authCfg,
 		Environment:        environment,
 		TrustedProxyCIDRs:  raw.Server.TrustedProxyCIDRs,
 		ServerReadTimeout:  parseDuration(raw.Server.ReadTimeout, defaultReadTimeout),
@@ -198,6 +205,7 @@ func buildAuthConfig(raw struct {
 	ReauthSessionTTL       string `toml:"reauth_session_ttl"`
 	SessionIdleTTL         string `toml:"session_idle_ttl"`
 	SessionAbsoluteTTL     string `toml:"session_absolute_ttl"`
+	RefreshTokenTTL        string `toml:"refresh_token_ttl"`
 	PasskeyStartLimit      int    `toml:"passkey_start_limit"`
 	PasskeyStartWindow     string `toml:"passkey_start_window"`
 	RecoveryEmailLimit     int    `toml:"recovery_email_limit"`
@@ -209,8 +217,14 @@ func buildAuthConfig(raw struct {
 	FailureDuration        string `toml:"failure_duration"`
 	AuthBodyLimitBytes     int    `toml:"auth_body_limit_bytes"`
 	SecretHashKey          string `toml:"secret_hash_key"`
-}) AuthConfig {
+	JWTSecret              string `toml:"jwt_secret"`
+}) (AuthConfig, error) {
 	defaults := defaultAuthConfig()
+
+	refreshTTL, err := parseRefreshTokenTTL(raw.RefreshTokenTTL)
+	if err != nil {
+		return AuthConfig{}, err
+	}
 
 	return AuthConfig{
 		ChallengeTTL:                parseDuration(raw.ChallengeTTL, defaults.ChallengeTTL),
@@ -219,6 +233,7 @@ func buildAuthConfig(raw struct {
 		ReauthSessionTTL:            parseDuration(raw.ReauthSessionTTL, defaults.ReauthSessionTTL),
 		SessionIdleTTL:              parseDuration(raw.SessionIdleTTL, defaults.SessionIdleTTL),
 		SessionAbsoluteTTL:          parseDuration(raw.SessionAbsoluteTTL, defaults.SessionAbsoluteTTL),
+		RefreshTokenTTL:             refreshTTL,
 		PasskeyStartThrottleLimit:   defaultInt(raw.PasskeyStartLimit, defaults.PasskeyStartThrottleLimit),
 		PasskeyStartThrottleWindow:  parseDuration(raw.PasskeyStartWindow, defaults.PasskeyStartThrottleWindow),
 		RecoveryEmailThrottleLimit:  defaultInt(raw.RecoveryEmailLimit, defaults.RecoveryEmailThrottleLimit),
@@ -232,7 +247,24 @@ func buildAuthConfig(raw struct {
 		AccountRecoveryURLBase:      defaultString(raw.AccountRecoveryURLBase, defaults.AccountRecoveryURLBase),
 		AuthBodyLimitBytes:          defaultInt(raw.AuthBodyLimitBytes, defaults.AuthBodyLimitBytes),
 		SecretHashKey:               defaultString(raw.SecretHashKey, defaults.SecretHashKey),
+		JWTSecret:                   defaultString(raw.JWTSecret, defaults.JWTSecret),
+	}, nil
+}
+
+// parseRefreshTokenTTL は refresh_token_ttl の strict パースを行う。
+// 空文字列の場合は 0（無期限）を返す。
+// 有効な duration 文字列の場合はその値を返す。
+// 無効な duration 文字列の場合はエラーを返し、fallback しない。
+func parseRefreshTokenTTL(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
 	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid refresh_token_ttl %q: %w", value, err)
+	}
+	return d, nil
 }
 
 func parseDuration(value string, fallback time.Duration) time.Duration {

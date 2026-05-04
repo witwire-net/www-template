@@ -7,6 +7,15 @@ using TypeSpec.OpenAPI;
 
 namespace WWWTemplate;
 
+@doc("JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。")
+model BearerAuth {
+  @doc("Http authentication")
+  type: AuthType.http;
+
+  @doc("bearer auth scheme")
+  scheme: "bearer";
+}
+
 @doc("Canonical ULID string used for auth-owned resource and correlation identifiers.")
 scalar UlidId extends string;
 
@@ -178,12 +187,14 @@ model PasskeyOtpResponse {
 model PasskeyAddByOtpStartRequest {
   @format("email")
   email: string;
+
   otp: string;
 }
 
 model PasskeyAddByOtpFinishRequest {
   @format("email")
   email: string;
+
   otp: string;
   credential: WebAuthnAttestationCredential;
 }
@@ -194,6 +205,8 @@ model AuthSessionResponse {
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
   sessionToken: string;
+  accessToken: string;
+  refreshToken: string;
   expiresAt: utcDateTime;
 }
 
@@ -285,4 +298,31 @@ model ReauthenticationSessionResponse {
 model LogoutResponse {
   requestId: UlidId;
   revoked: true;
+}
+
+@doc("リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。")
+model RefreshTokenRequest {
+  refreshToken: string;
+}
+
+@doc("リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。")
+model RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+@doc("ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。")
+model SessionItem {
+  sessionId: UlidId;
+  deviceName: string;
+  loginAt: utcDateTime;
+  lastActiveAt: utcDateTime;
+  ipHash: string;
+  isCurrentSession: boolean;
+}
+
+@doc("ログイン中のセッション一覧レスポンス。認証済みアカウントが所有する全セッションを含む。")
+model SessionListResponse {
+  requestId: UlidId;
+  sessions: SessionItem[];
 }

@@ -1,5 +1,6 @@
 export * from './api';
 export * from './types';
+export { listSessions, refreshToken, revokeOtherSessions, revokeSession } from './sdk';
 export type {
   AuthFailureClassification,
   AuthFailureResponse,
@@ -34,6 +35,7 @@ export type {
   finishPasskeyAuthenticationResponse,
   issuePasskeyOtpResponse,
   listPasskeysResponse,
+  listSessionsResponse,
   logoutResponse,
   registerPasskeyResponse,
   requestPasskeyRecoveryResponse,

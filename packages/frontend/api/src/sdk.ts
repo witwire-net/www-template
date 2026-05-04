@@ -8,9 +8,13 @@ import {
   getStatus,
   issuePasskeyOtp,
   listPasskeys,
+  listSessions,
   logout,
+  refreshToken,
   registerPasskey,
   requestPasskeyRecovery,
+  revokeOtherSessions,
+  revokeSession,
   startPasskeyAddition,
   startPasskeyAdditionByOtp,
   startPasskeyAuthentication,
@@ -25,6 +29,7 @@ import {
   type getStatusResponse,
   type issuePasskeyOtpResponse,
   type listPasskeysResponse,
+  type listSessionsResponse,
   type logoutResponse,
   type PasskeyAddByOtpFinishRequest,
   type PasskeyAddByOtpStartRequest,
@@ -241,3 +246,7 @@ const createApiSdk = (config?: ApiSdkConfig) => {
 
 export type { ApiSdkConfig };
 export { createApiSdk };
+
+export { listSessions, refreshToken, revokeOtherSessions, revokeSession };
+
+export type { listSessionsResponse };

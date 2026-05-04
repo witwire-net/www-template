@@ -27,6 +27,16 @@ const (
 	Unauthenticated AuthFailureClassification = "unauthenticated"
 )
 
+// Defines values for BearerAuthScheme.
+const (
+	Bearer BearerAuthScheme = "bearer"
+)
+
+// Defines values for BearerAuthType.
+const (
+	Http BearerAuthType = "http"
+)
+
 // Defines values for LogoutResponseRevoked.
 const (
 	LogoutResponseRevokedTrue LogoutResponseRevoked = true
@@ -79,12 +89,15 @@ type AuthOperationErrorResponse struct {
 
 // AuthSessionResponse defines model for AuthSessionResponse.
 type AuthSessionResponse struct {
+	AccessToken string `json:"accessToken"`
+
 	// AccountId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	AccountId UlidId    `json:"accountId"`
 	ExpiresAt time.Time `json:"expiresAt"`
 
 	// PasskeyCredentialId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	PasskeyCredentialId UlidId `json:"passkeyCredentialId"`
+	RefreshToken        string `json:"refreshToken"`
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
@@ -93,6 +106,21 @@ type AuthSessionResponse struct {
 	SessionId    UlidId `json:"sessionId"`
 	SessionToken string `json:"sessionToken"`
 }
+
+// BearerAuth JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。
+type BearerAuth struct {
+	// Scheme bearer auth scheme
+	Scheme BearerAuthScheme `json:"scheme"`
+
+	// Type Http authentication
+	Type BearerAuthType `json:"type"`
+}
+
+// BearerAuthScheme bearer auth scheme
+type BearerAuthScheme string
+
+// BearerAuthType Http authentication
+type BearerAuthType string
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
@@ -331,6 +359,36 @@ type RecoveryRequest struct {
 	Email openapi_types.Email `json:"email"`
 }
 
+// RefreshTokenRequest リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
+// RefreshTokenResponse リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+}
+
+// SessionItem ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。
+type SessionItem struct {
+	DeviceName       string    `json:"deviceName"`
+	IpHash           string    `json:"ipHash"`
+	IsCurrentSession bool      `json:"isCurrentSession"`
+	LastActiveAt     time.Time `json:"lastActiveAt"`
+	LoginAt          time.Time `json:"loginAt"`
+
+	// SessionId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	SessionId UlidId `json:"sessionId"`
+}
+
+// SessionListResponse ログイン中のセッション一覧レスポンス。認証済みアカウントが所有する全セッションを含む。
+type SessionListResponse struct {
+	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	RequestId UlidId        `json:"requestId"`
+	Sessions  []SessionItem `json:"sessions"`
+}
+
 // StatusResponse defines model for StatusResponse.
 type StatusResponse struct {
 	Message   string    `json:"message"`
@@ -457,6 +515,9 @@ type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
 // ConsumeRecoveryTokenJSONRequestBody defines body for ConsumeRecoveryToken for application/json ContentType.
 type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
 
+// RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
+type RefreshTokenJSONRequestBody = RefreshTokenRequest
+
 // FinishPasskeyAdditionJSONRequestBody defines body for FinishPasskeyAddition for application/json ContentType.
 type FinishPasskeyAdditionJSONRequestBody = PasskeyAddFinishRequest
 
@@ -557,6 +618,9 @@ type ServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(c *gin.Context)
+	// Refreshes an access token using a valid refresh token
+	// (POST /api/v1/auth/refresh)
+	RefreshToken(c *gin.Context)
 	// Lists registered passkeys for the current account
 	// (GET /api/v1/passkeys)
 	ListPasskeys(c *gin.Context)
@@ -572,6 +636,15 @@ type ServerInterface interface {
 	// Deletes a registered passkey for the current account
 	// (DELETE /api/v1/passkeys/{id})
 	DeletePasskey(c *gin.Context, id UlidId, params DeletePasskeyParams)
+	// Lists active sessions for the current account
+	// (GET /api/v1/sessions)
+	ListSessions(c *gin.Context)
+	// Revokes all other sessions except the current one
+	// (DELETE /api/v1/sessions/others)
+	RevokeOtherSessions(c *gin.Context)
+	// Revokes a specific session by ID
+	// (DELETE /api/v1/sessions/{id})
+	RevokeSession(c *gin.Context, id UlidId)
 	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(c *gin.Context)
@@ -735,6 +808,19 @@ func (siw *ServerInterfaceWrapper) ConsumeRecoveryToken(c *gin.Context) {
 	siw.Handler.ConsumeRecoveryToken(c)
 }
 
+// RefreshToken operation middleware
+func (siw *ServerInterfaceWrapper) RefreshToken(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RefreshToken(c)
+}
+
 // ListPasskeys operation middleware
 func (siw *ServerInterfaceWrapper) ListPasskeys(c *gin.Context) {
 
@@ -877,6 +963,62 @@ func (siw *ServerInterfaceWrapper) DeletePasskey(c *gin.Context) {
 	siw.Handler.DeletePasskey(c, id, params)
 }
 
+// ListSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListSessions(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListSessions(c)
+}
+
+// RevokeOtherSessions operation middleware
+func (siw *ServerInterfaceWrapper) RevokeOtherSessions(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RevokeOtherSessions(c)
+}
+
+// RevokeSession operation middleware
+func (siw *ServerInterfaceWrapper) RevokeSession(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id UlidId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RevokeSession(c, id)
+}
+
 // GetStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetStatus(c *gin.Context) {
 
@@ -928,11 +1070,15 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/api/v1/auth/reauth/start", wrapper.StartReauthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
+	router.POST(options.BaseURL+"/api/v1/auth/refresh", wrapper.RefreshToken)
 	router.GET(options.BaseURL+"/api/v1/passkeys", wrapper.ListPasskeys)
 	router.POST(options.BaseURL+"/api/v1/passkeys/finish", wrapper.FinishPasskeyAddition)
 	router.POST(options.BaseURL+"/api/v1/passkeys/otp", wrapper.IssuePasskeyOtp)
 	router.POST(options.BaseURL+"/api/v1/passkeys/start", wrapper.StartPasskeyAddition)
 	router.DELETE(options.BaseURL+"/api/v1/passkeys/:id", wrapper.DeletePasskey)
+	router.GET(options.BaseURL+"/api/v1/sessions", wrapper.ListSessions)
+	router.DELETE(options.BaseURL+"/api/v1/sessions/others", wrapper.RevokeOtherSessions)
+	router.DELETE(options.BaseURL+"/api/v1/sessions/:id", wrapper.RevokeSession)
 	router.GET(options.BaseURL+"/api/v1/status", wrapper.GetStatus)
 }
 
@@ -1615,6 +1761,82 @@ func (response ConsumeRecoveryToken503JSONResponse) VisitConsumeRecoveryTokenRes
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RefreshTokenRequestObject struct {
+	Body *RefreshTokenJSONRequestBody
+}
+
+type RefreshTokenResponseObject interface {
+	VisitRefreshTokenResponse(w http.ResponseWriter) error
+}
+
+type RefreshToken200ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken200JSONResponse struct {
+	Body    RefreshTokenResponse
+	Headers RefreshToken200ResponseHeaders
+}
+
+func (response RefreshToken200JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken400ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers RefreshToken400ResponseHeaders
+}
+
+func (response RefreshToken400JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken401ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RefreshToken401ResponseHeaders
+}
+
+func (response RefreshToken401JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RefreshToken503ResponseHeaders
+}
+
+func (response RefreshToken503JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ListPasskeysRequestObject struct {
 }
 
@@ -2008,6 +2230,192 @@ func (response DeletePasskey503JSONResponse) VisitDeletePasskeyResponse(w http.R
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListSessionsRequestObject struct {
+}
+
+type ListSessionsResponseObject interface {
+	VisitListSessionsResponse(w http.ResponseWriter) error
+}
+
+type ListSessions200ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListSessions200JSONResponse struct {
+	Body    SessionListResponse
+	Headers ListSessions200ResponseHeaders
+}
+
+func (response ListSessions200JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSessions401ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListSessions401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ListSessions401ResponseHeaders
+}
+
+func (response ListSessions401JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSessions503ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListSessions503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ListSessions503ResponseHeaders
+}
+
+func (response ListSessions503JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeOtherSessionsRequestObject struct {
+}
+
+type RevokeOtherSessionsResponseObject interface {
+	VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error
+}
+
+type RevokeOtherSessions204ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeOtherSessions204Response struct {
+	Headers RevokeOtherSessions204ResponseHeaders
+}
+
+func (response RevokeOtherSessions204Response) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeOtherSessions401ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeOtherSessions401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RevokeOtherSessions401ResponseHeaders
+}
+
+func (response RevokeOtherSessions401JSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeOtherSessions503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeOtherSessions503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RevokeOtherSessions503ResponseHeaders
+}
+
+func (response RevokeOtherSessions503JSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeSessionRequestObject struct {
+	Id UlidId `json:"id"`
+}
+
+type RevokeSessionResponseObject interface {
+	VisitRevokeSessionResponse(w http.ResponseWriter) error
+}
+
+type RevokeSession204ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeSession204Response struct {
+	Headers RevokeSession204ResponseHeaders
+}
+
+func (response RevokeSession204Response) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeSession401ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeSession401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RevokeSession401ResponseHeaders
+}
+
+func (response RevokeSession401JSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeSession403ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeSession403JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers RevokeSession403ResponseHeaders
+}
+
+func (response RevokeSession403JSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeSession503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeSession503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RevokeSession503ResponseHeaders
+}
+
+func (response RevokeSession503JSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type GetStatusRequestObject struct {
 }
 
@@ -2059,6 +2467,9 @@ type StrictServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(ctx context.Context, request ConsumeRecoveryTokenRequestObject) (ConsumeRecoveryTokenResponseObject, error)
+	// Refreshes an access token using a valid refresh token
+	// (POST /api/v1/auth/refresh)
+	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
 	// Lists registered passkeys for the current account
 	// (GET /api/v1/passkeys)
 	ListPasskeys(ctx context.Context, request ListPasskeysRequestObject) (ListPasskeysResponseObject, error)
@@ -2074,6 +2485,15 @@ type StrictServerInterface interface {
 	// Deletes a registered passkey for the current account
 	// (DELETE /api/v1/passkeys/{id})
 	DeletePasskey(ctx context.Context, request DeletePasskeyRequestObject) (DeletePasskeyResponseObject, error)
+	// Lists active sessions for the current account
+	// (GET /api/v1/sessions)
+	ListSessions(ctx context.Context, request ListSessionsRequestObject) (ListSessionsResponseObject, error)
+	// Revokes all other sessions except the current one
+	// (DELETE /api/v1/sessions/others)
+	RevokeOtherSessions(ctx context.Context, request RevokeOtherSessionsRequestObject) (RevokeOtherSessionsResponseObject, error)
+	// Revokes a specific session by ID
+	// (DELETE /api/v1/sessions/{id})
+	RevokeSession(ctx context.Context, request RevokeSessionRequestObject) (RevokeSessionResponseObject, error)
 	// Returns API status
 	// (GET /api/v1/status)
 	GetStatus(ctx context.Context, request GetStatusRequestObject) (GetStatusResponseObject, error)
@@ -2446,6 +2866,39 @@ func (sh *strictHandler) ConsumeRecoveryToken(ctx *gin.Context) {
 	}
 }
 
+// RefreshToken operation middleware
+func (sh *strictHandler) RefreshToken(ctx *gin.Context) {
+	var request RefreshTokenRequestObject
+
+	var body RefreshTokenJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshToken(ctx, request.(RefreshTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshToken")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RefreshTokenResponseObject); ok {
+		if err := validResponse.VisitRefreshTokenResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListPasskeys operation middleware
 func (sh *strictHandler) ListPasskeys(ctx *gin.Context) {
 	var request ListPasskeysRequestObject
@@ -2577,6 +3030,83 @@ func (sh *strictHandler) DeletePasskey(ctx *gin.Context, id UlidId, params Delet
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(DeletePasskeyResponseObject); ok {
 		if err := validResponse.VisitDeletePasskeyResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSessions operation middleware
+func (sh *strictHandler) ListSessions(ctx *gin.Context) {
+	var request ListSessionsRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSessions(ctx, request.(ListSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSessions")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(ListSessionsResponseObject); ok {
+		if err := validResponse.VisitListSessionsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeOtherSessions operation middleware
+func (sh *strictHandler) RevokeOtherSessions(ctx *gin.Context) {
+	var request RevokeOtherSessionsRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeOtherSessions(ctx, request.(RevokeOtherSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeOtherSessions")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RevokeOtherSessionsResponseObject); ok {
+		if err := validResponse.VisitRevokeOtherSessionsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeSession operation middleware
+func (sh *strictHandler) RevokeSession(ctx *gin.Context, id UlidId) {
+	var request RevokeSessionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeSession(ctx, request.(RevokeSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeSession")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RevokeSessionResponseObject); ok {
+		if err := validResponse.VisitRevokeSessionResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

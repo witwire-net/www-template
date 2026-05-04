@@ -27,6 +27,9 @@ func NewRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Runtime, err
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	if err := validateAuthConfig(cfg.Auth); err != nil {
+		return nil, err
+	}
 	if err := verifyInfrastructure(ctx, cfg); err != nil {
 		return nil, err
 	}
@@ -55,7 +58,11 @@ func NewRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Runtime, err
 		return nil, err
 	}
 
-	handler := backendhttp.NewRouter(cfg, backendhttp.Dependencies{Auth: container.Auth})
+	handler := backendhttp.NewRouter(cfg, backendhttp.Dependencies{
+		Auth:           container.Auth,
+		TokenService:   container.TokenService,
+		SessionService: container.SessionService,
+	})
 	server := &stdhttp.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,

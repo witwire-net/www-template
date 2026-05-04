@@ -18,8 +18,10 @@ import (
 const defaultReadHeaderTimeout = 5 * time.Second
 
 type Container struct {
-	Auth  *application.AuthService
-	close func(context.Context) error
+	Auth           *application.AuthService
+	TokenService   *application.TokenService
+	SessionService *application.SessionService
+	close          func(context.Context) error
 }
 
 type authAccountRepositoryFactory func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error)
@@ -94,6 +96,20 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 	authSvc.UsePasskeyOtpSender(recoverySender)
 	authSvc.UseAuditNotifier(newSlogAuditNotifier(observability.Logger()))
 
+	// Valkey-backed token/session stores を構築する
+	valkeyStore, err := valkey.NewStore(cfg.Infra.Valkey)
+	if err != nil {
+		_ = composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
+		return nil, fmt.Errorf("valkey store init: %w", err)
+	}
+	refreshStore := valkey.NewRefreshTokenStore(valkeyStore)
+	sessionStore := valkey.NewSessionStore(valkeyStore)
+	tokenService := application.NewTokenService(refreshStore, sessionStore, authConfig, func() time.Time {
+		return time.Now().UTC()
+	}, idPolicy)
+	authSvc.UseTokenService(tokenService)
+	sessionService := application.NewSessionService(sessionStore, refreshStore)
+
 	// RPID が未設定の場合は起動を拒否する（fail-closed）。
 	if authConfig.WebAuthnRPID == "" {
 		_ = composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
@@ -108,8 +124,10 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 	authSvc.UseWebAuthnProvider(webAuthnProv)
 
 	return &Container{
-		Auth:  authSvc,
-		close: composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo),
+		Auth:           authSvc,
+		TokenService:   tokenService,
+		SessionService: sessionService,
+		close:          composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo, func(context.Context) error { return valkeyStore.Close() }),
 	}, nil
 }
 

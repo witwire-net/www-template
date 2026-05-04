@@ -18,11 +18,15 @@ import (
 )
 
 type Dependencies struct {
-	Auth *application.AuthService
+	Auth           *application.AuthService
+	TokenService   *application.TokenService
+	SessionService *application.SessionService
 }
 
 type StrictServer struct {
-	auth *application.AuthService
+	auth           *application.AuthService
+	tokenService   *application.TokenService
+	sessionService *application.SessionService
 }
 
 // NewRouter は設定と依存関係をもとに Gin エンジンを構築する。
@@ -86,7 +90,11 @@ func authBodyLimitMiddleware(limit int64) gin.HandlerFunc {
 }
 
 func NewStrictServer(dependencies Dependencies) *StrictServer {
-	return &StrictServer{auth: dependencies.Auth}
+	return &StrictServer{
+		auth:           dependencies.Auth,
+		tokenService:   dependencies.TokenService,
+		sessionService: dependencies.SessionService,
+	}
 }
 
 func (s *StrictServer) GetStatus(ctx context.Context, _ openapi.GetStatusRequestObject) (openapi.GetStatusResponseObject, error) {
@@ -207,7 +215,7 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 		return openapi.FinishPasskeyAuthentication400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.FinishPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	result, err := s.auth.FinishPasskeyAuthentication(ctx, application.FinishPasskeyAuthenticationInput{Credential: mapAssertionCredentialToDTO(request.Body.Credential), ClientIP: clientIPFromContext(ctx)})
+	result, err := s.auth.FinishPasskeyAuthentication(ctx, application.FinishPasskeyAuthenticationInput{Credential: mapAssertionCredentialToDTO(request.Body.Credential), ClientIP: clientIPFromContext(ctx), UserAgent: userAgentFromContext(ctx)})
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, application.ErrInternalError) {
@@ -216,15 +224,22 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 		return openapi.FinishPasskeyAuthentication400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.FinishPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
+	body := openapi.AuthSessionResponse{
+		RequestId:           result.RequestID,
+		AccountId:           result.AccountID,
+		PasskeyCredentialId: result.PasskeyCredentialID,
+		SessionId:           result.SessionID,
+		SessionToken:        result.SessionToken,
+		AccessToken:         result.AccessToken,
+		RefreshToken:        result.RefreshToken,
+		ExpiresAt:           result.ExpiresAt,
+	}
+	// fail-closed: TokenService が有効な場合、空の access/refresh token は許容しない
+	if s.tokenService != nil && (body.AccessToken == "" || body.RefreshToken == "") {
+		return openapi.FinishPasskeyAuthentication503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.FinishPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
 	return openapi.FinishPasskeyAuthentication200JSONResponse{
-		Body: openapi.AuthSessionResponse{
-			RequestId:           result.RequestID,
-			AccountId:           result.AccountID,
-			PasskeyCredentialId: result.PasskeyCredentialID,
-			SessionId:           result.SessionID,
-			SessionToken:        result.SessionToken,
-			ExpiresAt:           result.ExpiresAt,
-		},
+		Body:    body,
 		Headers: openapi.FinishPasskeyAuthentication200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
 }
@@ -297,7 +312,7 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 	recovery, _ := request.Body.AsRecoveryPasskeyFinishRequest()
 	invitation, _ := request.Body.AsInvitationPasskeyFinishRequest()
 	credential := chooseAttestationCredential(recovery.Credential, invitation.Credential)
-	result, err := s.auth.RegisterPasskey(ctx, application.RegisterPasskeyInput{RecoverySession: string(recovery.RecoverySession), InvitationSession: string(invitation.InvitationSession), Credential: credential, ClientIP: clientIPFromContext(ctx)})
+	result, err := s.auth.RegisterPasskey(ctx, application.RegisterPasskeyInput{RecoverySession: string(recovery.RecoverySession), InvitationSession: string(invitation.InvitationSession), Credential: credential, ClientIP: clientIPFromContext(ctx), UserAgent: userAgentFromContext(ctx)})
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, application.ErrInternalError) {
@@ -306,8 +321,22 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 		return openapi.RegisterPasskey400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.RegisterPasskey400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
+	body := openapi.AuthSessionResponse{
+		RequestId:           result.RequestID,
+		AccountId:           result.AccountID,
+		PasskeyCredentialId: result.PasskeyCredentialID,
+		SessionId:           result.SessionID,
+		SessionToken:        result.SessionToken,
+		AccessToken:         result.AccessToken,
+		RefreshToken:        result.RefreshToken,
+		ExpiresAt:           result.ExpiresAt,
+	}
+	// fail-closed: TokenService が有効な場合、空の access/refresh token は許容しない
+	if s.tokenService != nil && (body.AccessToken == "" || body.RefreshToken == "") {
+		return openapi.RegisterPasskey503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RegisterPasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
 	return openapi.RegisterPasskey200JSONResponse{
-		Body:    openapi.AuthSessionResponse{RequestId: result.RequestID, AccountId: result.AccountID, PasskeyCredentialId: result.PasskeyCredentialID, SessionId: result.SessionID, SessionToken: result.SessionToken, ExpiresAt: result.ExpiresAt},
+		Body:    body,
 		Headers: openapi.RegisterPasskey200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
 }
@@ -558,6 +587,14 @@ func clientIPFromContext(ctx context.Context) string {
 	return requestIP(ginContext)
 }
 
+func userAgentFromContext(ctx context.Context) string {
+	ginContext, ok := ctx.(*gin.Context)
+	if !ok {
+		return ""
+	}
+	return ginContext.Request.UserAgent()
+}
+
 // ─── WebAuthn options helpers ────────────────────────────────────────────────
 
 // webAuthnLoginOptionsJSON は BeginLogin/BeginDiscoverableLogin が返す JSON の
@@ -726,4 +763,117 @@ func applyWebAuthnRegistrationOptions(resp *openapi.PasskeyAddStartResponse, opt
 		resp.UserVerification = openapi.PasskeyAddStartResponseUserVerificationRequired
 	}
 	return nil
+}
+
+// ─── Refresh token & session management handlers ────────────────────────────
+
+func (s *StrictServer) RefreshToken(ctx context.Context, request openapi.RefreshTokenRequestObject) (openapi.RefreshTokenResponseObject, error) {
+	if request.Body == nil {
+		return openapi.RefreshToken400JSONResponse{Body: authOperationError(nextAuthRequestID(), invalidRequestBodyMessage), Headers: openapi.RefreshToken400ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	if s.tokenService == nil {
+		return openapi.RefreshToken503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RefreshToken503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	accessToken, refreshToken, err := s.tokenService.Refresh(ctx, request.Body.RefreshToken, clientIPFromContext(ctx), userAgentFromContext(ctx))
+	if err != nil {
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrInternalError) {
+			return openapi.RefreshToken503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RefreshToken503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.RefreshToken401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RefreshToken401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	return openapi.RefreshToken200JSONResponse{
+		Body: openapi.RefreshTokenResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		},
+		Headers: openapi.RefreshToken200ResponseHeaders{CacheControl: noStoreValue},
+	}, nil
+}
+
+func (s *StrictServer) ListSessions(ctx context.Context, _ openapi.ListSessionsRequestObject) (openapi.ListSessionsResponseObject, error) {
+	if s.sessionService == nil {
+		return openapi.ListSessions503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.ListSessions503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
+	if err != nil {
+		return openapi.ListSessions401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.ListSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	sessions, err := s.sessionService.List(ctx, session.AccountID)
+	if err != nil {
+		if errors.Is(err, application.ErrInternalError) {
+			return openapi.ListSessions503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.ListSessions503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.ListSessions401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.ListSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	items := make([]openapi.SessionItem, 0, len(sessions))
+	for _, sess := range sessions {
+		items = append(items, openapi.SessionItem{
+			SessionId:        sess.SessionID,
+			DeviceName:       sess.DeviceName,
+			LoginAt:          sess.LoginAt,
+			LastActiveAt:     sess.LastActiveAt,
+			IpHash:           sess.IPHash,
+			IsCurrentSession: sess.SessionID == session.SessionID,
+		})
+	}
+
+	requestID := nextAuthRequestID()
+	return openapi.ListSessions200JSONResponse{
+		Body: openapi.SessionListResponse{
+			RequestId: requestID,
+			Sessions:  items,
+		},
+		Headers: openapi.ListSessions200ResponseHeaders{CacheControl: noStoreValue},
+	}, nil
+}
+
+func (s *StrictServer) RevokeSession(ctx context.Context, request openapi.RevokeSessionRequestObject) (openapi.RevokeSessionResponseObject, error) {
+	if s.sessionService == nil {
+		return openapi.RevokeSession503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RevokeSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
+	if err != nil {
+		return openapi.RevokeSession401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.RevokeSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	if err := s.sessionService.Revoke(ctx, session.AccountID, string(request.Id)); err != nil {
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrInternalError) {
+			return openapi.RevokeSession503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		if errors.Is(err, application.ErrBadRequest) {
+			return openapi.RevokeSession403JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.RevokeSession403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.RevokeSession401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	return openapi.RevokeSession204Response{Headers: openapi.RevokeSession204ResponseHeaders{CacheControl: noStoreValue}}, nil
+}
+
+func (s *StrictServer) RevokeOtherSessions(ctx context.Context, _ openapi.RevokeOtherSessionsRequestObject) (openapi.RevokeOtherSessionsResponseObject, error) {
+	if s.sessionService == nil {
+		return openapi.RevokeOtherSessions503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RevokeOtherSessions503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
+	if err != nil {
+		return openapi.RevokeOtherSessions401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.RevokeOtherSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	if err := s.sessionService.RevokeOthers(ctx, session.AccountID, session.SessionID); err != nil {
+		if errors.Is(err, application.ErrInternalError) {
+			return openapi.RevokeOtherSessions503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.RevokeOtherSessions503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.RevokeOtherSessions401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.RevokeOtherSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	return openapi.RevokeOtherSessions204Response{Headers: openapi.RevokeOtherSessions204ResponseHeaders{CacheControl: noStoreValue}}, nil
 }

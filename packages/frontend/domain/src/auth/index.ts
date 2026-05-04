@@ -31,6 +31,7 @@ export {
   createRecoveryFlowInitialState,
 } from './recovery/state';
 export {
+  addAuthenticatedSession,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyInternalError,
@@ -41,7 +42,11 @@ export {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
+  removeActiveSession,
+  switchActiveSession,
 } from './session/state';
+export { decodeAccessToken, isRefreshNeeded, createEmptyTokenPair } from './session/token_state';
+export type { AccessTokenClaims, MemoryTokenPair } from './session/token_state';
 export { createGenericRecoverySentView } from './recovery/state';
 export type {
   AuthFailureState,
@@ -57,6 +62,7 @@ export type {
 } from './types';
 export { useAuthSession } from './session/hook.svelte';
 export type { AuthSessionActions, AuthSessionData } from './session/hook.svelte';
+export type { DeviceSession, ListDevicesResult } from './session/session_api';
 export { usePasskeyLogin } from './passkey/hook.svelte';
 export type { PasskeyLoginActions, PasskeyLoginData } from './passkey/hook.svelte';
 export { usePasskeyAddByOtp } from './passkey/addByOtp/hook.svelte';

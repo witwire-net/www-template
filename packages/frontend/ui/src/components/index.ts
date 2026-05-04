@@ -17,6 +17,7 @@ export * as Collapsible from './collapsible';
 export * as Command from './command';
 export * as ContextMenu from './context-menu';
 export * as DataTable from './data-table';
+export * as DeviceManagerNS from './device-manager';
 export * as Dialog from './dialog';
 export * as Drawer from './drawer';
 export * as DropdownMenu from './dropdown-menu';
@@ -71,6 +72,7 @@ export {
 } from './card';
 export { Separator } from './separator';
 export { Badge } from './badge';
+export { DeviceManager } from './device-manager';
 export { Label } from './label';
 export { Spinner } from './spinner';
 export { Toaster } from './sonner';

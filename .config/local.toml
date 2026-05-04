@@ -19,6 +19,7 @@ recovery_token_ttl = "30m"
 recovery_session_ttl = "15m"
 session_idle_ttl = "12h"
 session_absolute_ttl = "336h"
+refresh_token_ttl = "168h"
 passkey_start_limit = 5
 passkey_start_window = "5m"
 recovery_email_limit = 3
@@ -28,6 +29,8 @@ recovery_ip_window = "1h"
 failure_threshold = 10
 failure_window = "15m"
 failure_duration = "15m"
+secret_hash_key = "dev-pepper-change-in-production"
+jwt_secret = "change-this-to-a-long-random-jwt-secret-in-production"
 
 [database]
 url = "postgres://template:template@postgres:5432/template?sslmode=disable"

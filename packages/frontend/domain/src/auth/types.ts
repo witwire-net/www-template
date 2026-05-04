@@ -12,12 +12,18 @@ export interface AuthSessionSummary {
   sessionId: string;
   sessionToken: string;
   expiresAt: string;
+  /** リフレッシュトークン（オプション）。JWT 導入後のセッションで使用。 */
+  refreshToken?: string;
 }
 
 /** 共有 auth session state。 */
 export interface AuthSessionState {
   phase: 'anonymous' | 'authenticating' | 'authenticated' | 'session-expired' | 'logging-out';
   session: AuthSessionSummary | null;
+  /** メモリ上の複数セッションリスト。マルチアカウント対応。 */
+  sessions?: AuthSessionSummary[];
+  /** 現在アクティブなセッションの sessionId。 */
+  activeSessionId?: string | null;
   routeIntent: AuthRouteIntent;
   lastFailure: AuthFailureState | null;
   lastError: string | null;

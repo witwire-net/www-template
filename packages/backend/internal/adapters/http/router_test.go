@@ -102,6 +102,7 @@ func TestRoutePolicy(t *testing.T) {
 		"POST /api/v1/auth/recovery/consume":       {},
 		"POST /api/v1/auth/passkey/add/start":      {},
 		"POST /api/v1/auth/passkey/add/finish":     {},
+		"POST /api/v1/auth/refresh":                {},
 	}
 	seenPublicRoutes := map[string]struct{}{}
 
@@ -156,9 +157,14 @@ func newTestRouter(t *testing.T) *gin.Engine {
 }
 
 func testConfig() config.Config {
-	return config.Config{
+	cfg := config.Config{
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Port:           "8080",
 	}
+	cfg.Auth.JWTSecret = "test-jwt-secret-key-must-be-at-least-32bytes"
+	cfg.Auth.RefreshTokenTTL = 0
+	cfg.Auth.SessionAbsoluteTTL = 14 * 24 * time.Hour
+	cfg.Auth.SessionIdleTTL = 12 * time.Hour
+	return cfg
 }

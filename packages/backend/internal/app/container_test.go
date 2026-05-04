@@ -41,7 +41,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	t.Parallel()
 	container, err := buildContainer(
 		context.Background(),
-		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
 		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
