@@ -2,7 +2,8 @@
 description: Build agent helper
 mode: subagent
 hidden: false
-model: opencode-go/kimi-k2.6
+model: opencode-go/deepseek-v4-pro
+reasoningEffort: 'high'
 permission:
   edit: allow
   webfetch: allow

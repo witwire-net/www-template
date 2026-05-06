@@ -2,7 +2,8 @@
 description: Frontend implementation specialist. Loads gpt-ux, coding-guardian, and orchestration-playbook skills to implement, fix, investigate, and iterate on `packages/web`, SvelteKit SPA app, and domain code until reviewer approval, then returns results to the caller.
 mode: subagent
 hidden: true
-model: opencode-go/kimi-k2.6
+model: opencode-go/deepseek-v4-pro
+reasoningEffort: 'high'
 temperature: 0.1
 permission:
   edit: allow
