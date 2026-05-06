@@ -3,8 +3,8 @@
 	import DialogPortal from "./dialog-portal.svelte";
 	import type { Snippet , ComponentProps } from "svelte";
 	import * as Dialog from "./index.js";
-	import { cn, type WithoutChildrenOrChild } from "@ui/lib/utils.js";
-		import { Button } from "@ui/components/button/index.js";
+	import { cn, type WithoutChildrenOrChild } from "@ui/lib/utils";
+		import { Button } from "@ui/components/button";
 	import XIcon from '@lucide/svelte/icons/x';
 
 	let {

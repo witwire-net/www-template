@@ -7,7 +7,6 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "svelte": "./src/index.ts",
       "default": "./src/index.ts"
     },
     "./components": {
@@ -39,10 +38,16 @@
       "types": "./src/styles/index.ts",
       "svelte": "./src/styles/index.ts",
       "default": "./src/styles/index.ts"
+    },
+    "./styles.css": {
+      "import": "./dist/styles.css",
+      "default": "./dist/styles.css"
     }
   },
   "svelte": "./src/index.ts",
   "scripts": {
+    "build:css": "tailwindcss -i ./src/styles/tailwind.css -o ./dist/styles.css --minify",
+    "build:css:watch": "tailwindcss -i ./src/styles/tailwind.css -o ./dist/styles.css --watch",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
@@ -67,6 +72,7 @@
     "@lucide/svelte": "^0.577.0",
     "@storybook/svelte-vite": "^10.2.17",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tailwindcss/cli": "^4.2.4",
     "@tailwindcss/vite": "latest",
     "@tanstack/table-core": "^8.21.3",
     "@testing-library/jest-dom": "^6.9.1",

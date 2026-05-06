@@ -7,7 +7,8 @@
 </svelte:head>
 <script lang="ts">
   import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
-  import '@www-template/ui/styles';
+  import '@www-template/ui/styles.css';
+  import '../app.css';
   import { useObservability } from '$lib/observability.svelte';
   import type { Snippet } from 'svelte';
 

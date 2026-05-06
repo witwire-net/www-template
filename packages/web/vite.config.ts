@@ -1,14 +1,11 @@
-import { fileURLToPath, URL } from 'node:url';
-
 import { sveltekit } from '@sveltejs/kit/vite';
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 const svelteRuntimeChunkPattern =
   /[/\\]svelte[/\\]src[/\\](?:internal[/\\]client[/\\]runtime|index-client)\.js$/;
 
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
+  plugins: [sveltekit()],
   build: {
     rollupOptions: {
       output: {
@@ -22,42 +19,11 @@ export default defineConfig({
       },
     },
   },
-  resolve: {
-    alias: [
-      {
-        find: '@www-template/ui/styles',
-        replacement: fileURLToPath(new URL('../frontend/ui/src/styles/index.ts', import.meta.url)),
-      },
-      {
-        find: '@www-template/ui/components',
-        replacement: fileURLToPath(
-          new URL('../frontend/ui/src/components/index.ts', import.meta.url)
-        ),
-      },
-      {
-        find: '@www-template/ui',
-        replacement: fileURLToPath(new URL('../frontend/ui/src/index.ts', import.meta.url)),
-      },
-      {
-        find: '@ui',
-        replacement: fileURLToPath(new URL('../frontend/ui/src', import.meta.url)),
-      },
-      {
-        find: '@',
-        replacement: fileURLToPath(new URL('../frontend/ui/src', import.meta.url)),
-      },
-      {
-        find: /^@www-template\/ui\/(.*)$/,
-        replacement: `${fileURLToPath(new URL('../frontend/ui/src/', import.meta.url))}$1`,
-      },
-      {
-        find: /^@\/(.*)$/,
-        replacement: `${fileURLToPath(new URL('../frontend/ui/src/', import.meta.url))}$1`,
-      },
-      {
-        find: /^@ui\/(.*)$/,
-        replacement: `${fileURLToPath(new URL('../frontend/ui/src/', import.meta.url))}$1`,
-      },
-    ],
+  optimizeDeps: {
+    exclude: ['@opentelemetry/sdk-trace-base'],
+  },
+  server: {
+    port: 5175,
+    host: '0.0.0.0',
   },
 });

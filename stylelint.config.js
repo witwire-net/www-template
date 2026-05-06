@@ -6,7 +6,7 @@ export default {
     'at-rule-no-unknown': [
       true,
       {
-        ignoreAtRules: ['theme', 'custom-variant', 'layer', 'import'],
+        ignoreAtRules: ['theme', 'custom-variant', 'layer', 'import', 'source'],
       },
     ],
     'block-no-empty': null,
@@ -17,6 +17,7 @@ export default {
     'import-notation': null,
     'lightness-notation': null,
     'no-duplicate-selectors': true,
+    'no-invalid-position-at-import-rule': null,
     'selector-class-pattern': null,
     'value-keyword-case': null,
   },
