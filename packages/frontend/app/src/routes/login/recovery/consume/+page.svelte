@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
+  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Card, CardContent, Separator } from '@www-template/ui/components';
 
@@ -33,43 +34,31 @@
   void consumeTokenFromUrl();
 </script>
 
-<div class="flex flex-col items-center min-h-screen px-4 py-8 font-sans bg-background text-foreground">
-  <header class="flex justify-center py-4">
-    <a href="/" class="no-underline text-inherit" aria-label="www-template トップページ">
-      <span class="font-bold tracking-[0.08em]">www-template</span>
-    </a>
-  </header>
+<AuthLayout>
+  <Card class="w-full">
+    <CardContent>
+      <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label="復旧リンク確認">
+        {#if data.state.phase === 'consuming'}
+          <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認中…</h1>
+          <p class="m-0 text-sm text-muted-foreground text-center">しばらくお待ちください。</p>
+        {:else if data.state.phase === 'invalid'}
+          <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認できません</h1>
+          <p class="m-0 text-sm text-muted-foreground text-center">
+            {data.state.error ?? '復旧リンクが無効または期限切れです。再度復旧をお試しください。'}
+          </p>
 
-  <Separator />
+          <Separator />
 
-  <main class="flex flex-1 w-full max-w-[400px] items-center justify-center py-8">
-    <Card class="w-full">
-      <CardContent>
-        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label="復旧リンク確認">
-          {#if data.state.phase === 'consuming'}
-            <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認中…</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">しばらくお待ちください。</p>
-          {:else if data.state.phase === 'invalid'}
-            <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認できません</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">
-              {data.state.error ?? '復旧リンクが無効または期限切れです。再度復旧をお試しください。'}
-            </p>
+          <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">復旧をやり直す</a>
+        {:else}
+          <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認中…</h1>
+          <p class="m-0 text-sm text-muted-foreground text-center">しばらくお待ちください。</p>
+        {/if}
+      </div>
+    </CardContent>
+  </Card>
 
-            <Separator />
-
-            <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">復旧をやり直す</a>
-          {:else}
-            <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認中…</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">しばらくお待ちください。</p>
-          {/if}
-        </div>
-      </CardContent>
-    </Card>
-  </main>
-
-  <Separator />
-
-  <footer class="flex justify-center py-4">
+  {#snippet footer()}
     <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトに戻る</a>
-  </footer>
-</div>
+  {/snippet}
+</AuthLayout>
