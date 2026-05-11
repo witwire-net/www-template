@@ -1,6 +1,7 @@
 import { authApi } from '@www-template/api';
 
 import {
+  applyDeviceLinkSent,
   applyPasskeyDeleted,
   applyPasskeyError,
   applyPasskeyList,
@@ -26,14 +27,15 @@ interface PasskeyManagementData {
   loading: boolean;
   error: string | null;
   reauthSession: string | null;
+  deviceLinkSent: boolean;
 }
 
 interface PasskeyManagementActions {
   listPasskeys: () => Promise<void>;
   addPasskey: () => Promise<void>;
   deletePasskey: (id: string, reauthSession: string) => Promise<void>;
-  issueOtp: (reauthSession: string) => Promise<boolean>;
-  performReauth: (kind: 'otp-issue' | 'passkey-delete') => Promise<string | null>;
+  sendDeviceLink: (reauthSession: string) => Promise<boolean>;
+  performReauth: (kind: 'device-link' | 'passkey-delete') => Promise<string | null>;
   clearReauthSession: () => void;
 }
 
@@ -155,17 +157,22 @@ const createDeletePasskey =
     }
   };
 
-const createIssueOtp =
+const createSendDeviceLink =
   (state: PasskeyManagementState, authSession: AuthSessionRef) =>
   async (reauthSession: string): Promise<boolean> => {
     state.loading = true;
     state.error = null;
     try {
-      const response = await authApi.issuePasskeyOtp(reauthSession, {
+      const response = await authApi.sendDeviceLink(reauthSession, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
       if (response.status === 401 || response.status === 503) {
-        handleApiError(response.data.error, 'OTP を発行できませんでした。', state, authSession);
+        handleApiError(
+          response.data.error,
+          'ログイン有効化リンクを送信できませんでした。',
+          state,
+          authSession
+        );
         return false;
       }
       if (response.status === 400 || response.status === 403) {
@@ -173,6 +180,7 @@ const createIssueOtp =
         return false;
       }
       if (response.status === 200) {
+        applyDeviceLinkSent(state, response.data.issued);
         return response.data.issued;
       }
       return false;
@@ -190,7 +198,7 @@ const createClearReauthSession = (state: PasskeyManagementState) => (): void => 
 
 const createPerformReauth =
   (state: PasskeyManagementState, authSession: AuthSessionRef) =>
-  async (kind: 'otp-issue' | 'passkey-delete'): Promise<string | null> => {
+  async (kind: 'device-link' | 'passkey-delete'): Promise<string | null> => {
     state.loading = true;
     state.error = null;
     try {
@@ -216,9 +224,14 @@ const createPerformReauth =
         return null;
       }
 
-      const finishResponse = await authApi.finishReauthentication(kind, credential, {
-        headers: authSession.actions.createAuthorizationHeaders(),
-      });
+      const finishResponse = await authApi.finishReauthentication(
+        startResponse.data.requestId,
+        kind,
+        credential,
+        {
+          headers: authSession.actions.createAuthorizationHeaders(),
+        }
+      );
       if (finishResponse.status === 401 || finishResponse.status === 503) {
         handleApiError(
           finishResponse.data.error,
@@ -241,7 +254,7 @@ const createPerformReauth =
     }
   };
 
-/** 認証済みユーザーのパスキー一覧・追加（WebAuthn）・削除・OTP 発行を扱う domain composable。 */
+/** 認証済みユーザーのパスキー一覧・追加（WebAuthn）・削除・デバイスリンク送信を扱う domain composable。 */
 function usePasskeyManagement(): {
   data: PasskeyManagementData;
   actions: PasskeyManagementActions;
@@ -253,7 +266,7 @@ function usePasskeyManagement(): {
     listPasskeys: createListPasskeys(state, authSession),
     addPasskey: createAddPasskey(state, authSession),
     deletePasskey: createDeletePasskey(state, authSession),
-    issueOtp: createIssueOtp(state, authSession),
+    sendDeviceLink: createSendDeviceLink(state, authSession),
     performReauth: createPerformReauth(state, authSession),
     clearReauthSession: createClearReauthSession(state),
   };
@@ -271,6 +284,9 @@ function usePasskeyManagement(): {
       },
       get reauthSession() {
         return state.reauthSession;
+      },
+      get deviceLinkSent() {
+        return state.deviceLinkSent;
       },
     },
     actions,

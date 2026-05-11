@@ -25,7 +25,7 @@ type Container struct {
 }
 
 type authAccountRepositoryFactory func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error)
-type authStateRepositoryFactory func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error)
+type authStateRepositoryFactory func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error)
 type challengeStoreFactory func(context.Context, config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error)
 
 type rejectingInvitationPasskeyRegistrar struct{}
@@ -34,23 +34,15 @@ func (rejectingInvitationPasskeyRegistrar) RegisterInvitationPasskey(context.Con
 	return application.AuthSession{}, application.ErrBadRequest
 }
 
-// slogAuditNotifier は slog を使って認証 audit event を標準出力に出力する実装。
-// secret（OTP、credential raw data）は含めず、accountID・passkeyID・requestID のみを記録する。
+//	slogAuditNotifier は slog を使って認証 audit event を標準出力に出力する実装。
+//
+// secret（credential raw data）は含めず、安全な識別子のみを記録する。
 type slogAuditNotifier struct {
 	logger *slog.Logger
 }
 
 func newSlogAuditNotifier(logger *slog.Logger) *slogAuditNotifier {
 	return &slogAuditNotifier{logger: logger}
-}
-
-func (n *slogAuditNotifier) EmitPasskeyAddedByOTP(ctx context.Context, accountID string, passkeyID string, requestID string) {
-	n.logger.InfoContext(ctx, "audit: passkey added by OTP",
-		slog.String("event_type", "passkey.added_by_otp"),
-		slog.String("account_id", accountID),
-		slog.String("passkey_id", passkeyID),
-		slog.String("request_id", requestID),
-	)
 }
 
 func (n *slogAuditNotifier) EmitCredentialStateUpdateFailure(ctx context.Context, credentialHandle string, err error) {
@@ -74,7 +66,7 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 		return nil, err
 	}
 
-	stateRepo, closeStateRepo, err := newAuthStateRepository(ctx, cfg.Infra.Valkey)
+	stateRepo, closeStateRepo, err := newAuthStateRepository(ctx, cfg.Infra.Valkey, authConfig)
 	if err != nil {
 		_ = closeAccountRepo(ctx)
 		return nil, err
@@ -93,7 +85,9 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 	authSvc := application.NewAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, func() time.Time {
 		return time.Now().UTC()
 	}, idPolicy, authConfig)
-	authSvc.UsePasskeyOtpSender(recoverySender)
+	authSvc.UseDeviceLinkSender(recoverySender)
+	authSvc.UseRecoveryCompleteSender(recoverySender)
+	authSvc.UseDeviceLinkCompleteSender(recoverySender)
 	authSvc.UseAuditNotifier(newSlogAuditNotifier(observability.Logger()))
 
 	// Valkey-backed token/session stores を構築する
@@ -163,8 +157,8 @@ func newGormAuthAccountRepository(ctx context.Context, databaseURL string) (appl
 	}, nil
 }
 
-func newValkeyAuthStateRepository(ctx context.Context, config config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
-	store, err := valkey.NewStore(config)
+func newValkeyAuthStateRepository(ctx context.Context, cfg config.ValkeyConfig, authConfig config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
+	store, err := valkey.NewStore(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,7 +167,7 @@ func newValkeyAuthStateRepository(ctx context.Context, config config.ValkeyConfi
 		return nil, nil, err
 	}
 
-	repo, err := valkey.NewAuthStateRepository(store)
+	repo, err := valkey.NewAuthStateRepository(store, authConfig.SecretHashKey)
 	if err != nil {
 		_ = store.Close()
 		return nil, nil, err

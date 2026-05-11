@@ -1,7 +1,10 @@
 package application
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"www-template/packages/backend/internal/auth/domain"
@@ -13,12 +16,21 @@ var (
 	ErrInternalError              = errors.New("internal-error")
 	ErrBadRequest                 = errors.New("bad auth request")
 	ErrLastPasskeyCannotBeDeleted = errors.New("last passkey cannot be deleted")
-	ErrInvalidOtp                 = errors.New("invalid otp")
-	ErrOtpExpiredOrConsumed       = errors.New("otp expired or consumed")
 )
 
-func opaqueValue(id string) string {
-	return "opaque-" + id
+// generateURLToken は tokenID に基づいて独立した暗号論的乱数 secret を生成し、
+// URL token（tokenID.hexSecret 形式）と平文 secret を返す。
+// secret は crypto/rand による 32 バイトの乱数を hex エンコードしたもの（64 文字）。
+// URL token はメールに埋め込まれ、平文 secret は Valkey に HMAC ハッシュとして保存される。
+// 生成に失敗した場合は error を返す。
+func generateURLToken(tokenID string) (string, string, error) {
+	secretBytes := make([]byte, 32)
+	if _, err := rand.Read(secretBytes); err != nil {
+		return "", "", fmt.Errorf("generateURLToken: crypto/rand.Read: %w", err)
+	}
+	plainSecret := hex.EncodeToString(secretBytes)
+	urlToken := tokenID + "." + plainSecret
+	return urlToken, plainSecret, nil
 }
 
 func selectorCount(recoverySession string, invitationSession string) int {
@@ -64,18 +76,19 @@ func (s *AuthService) mapRecoveryConsumeError(err error) error {
 	}
 }
 
-// parseOpaqueTokenID は opaque token（"opaque-<tokenID>"）から tokenID を抽出する。
+// parseURLToken は URL token（"tokenID.secret" 形式）から tokenID と平文 secret を抽出する。
 // 想定外の形式の場合はエラーを返す。
-func parseOpaqueTokenID(token string) (string, error) {
-	const prefix = "opaque-"
-	if !strings.HasPrefix(token, prefix) {
-		return "", errors.New("invalid token format")
+func parseURLToken(token string) (string, string, error) {
+	dotIdx := strings.Index(token, ".")
+	if dotIdx < 1 {
+		return "", "", errors.New("invalid token format")
 	}
-	tokenID := strings.TrimPrefix(token, prefix)
-	if tokenID == "" {
-		return "", errors.New("empty token id")
+	tokenID := token[:dotIdx]
+	secret := token[dotIdx+1:]
+	if tokenID == "" || secret == "" {
+		return "", "", errors.New("invalid token format")
 	}
-	return tokenID, nil
+	return tokenID, secret, nil
 }
 
 func (s *AuthService) mapAuthStoreError(err error) error {

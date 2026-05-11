@@ -120,43 +120,6 @@ namespace WWWTemplate.ApiV1 {
   };
 
   @tag("auth")
-  @summary("Starts adding a passkey on a new device by OTP handoff")
-  @operationId("startPasskeyAdditionByOtp")
-  @post
-  @route("/auth/passkey/add/start")
-  op startPasskeyAdditionByOtp(@body body: WWWTemplate.PasskeyAddByOtpStartRequest): {
-    @statusCode statusCode: 200;
-    @header("Cache-Control") cacheControl: "no-store";
-    @body body: WWWTemplate.PasskeyAddStartResponse;
-  } | {
-    @statusCode statusCode: 400;
-    @header("Cache-Control") cacheControl: "no-store";
-    @body body: WWWTemplate.AuthOperationErrorResponse;
-  } | {
-    @statusCode statusCode: 503;
-    @header("Cache-Control") cacheControl: "no-store";
-    @body body: WWWTemplate.AuthFailureResponse;
-  };
-
-  @tag("auth")
-  @summary("Finishes adding a passkey on a new device by OTP handoff")
-  @operationId("finishPasskeyAdditionByOtp")
-  @post
-  @route("/auth/passkey/add/finish")
-  op finishPasskeyAdditionByOtp(@body body: WWWTemplate.PasskeyAddByOtpFinishRequest): {
-    @statusCode statusCode: 200;
-    @header("Cache-Control") cacheControl: "no-store";
-  } | {
-    @statusCode statusCode: 400;
-    @header("Cache-Control") cacheControl: "no-store";
-    @body body: WWWTemplate.AuthOperationErrorResponse;
-  } | {
-    @statusCode statusCode: 503;
-    @header("Cache-Control") cacheControl: "no-store";
-    @body body: WWWTemplate.AuthFailureResponse;
-  };
-
-  @tag("auth")
   @summary("Refreshes an access token using a valid refresh token")
   @operationId("refreshToken")
   @post
@@ -363,15 +326,15 @@ namespace WWWTemplate.ApiV1App {
       };
 
   @tag("app-auth")
-  @summary("Issues a one-time password for adding a passkey on a new device")
-  @operationId("issuePasskeyOtp")
+  @summary("Sends a device-link URL to the registered email for adding a passkey on a new device")
+  @operationId("sendDeviceLink")
   @post
-  @route("/passkeys/otp")
-  op issuePasskeyOtp(@header("X-Reauth-Session") reauthSession: string):
+  @route("/passkeys/send-device-link")
+  op sendDeviceLink(@header("X-Reauth-Session") reauthSession: string):
     | {
         @statusCode statusCode: 200;
         @header("Cache-Control") cacheControl: "no-store";
-        @body body: WWWTemplate.PasskeyOtpResponse;
+        @body body: WWWTemplate.DeviceLinkResponse;
       }
     | {
         @statusCode statusCode: 400;

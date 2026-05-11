@@ -4,10 +4,33 @@ import (
 	"time"
 )
 
+// TokenKind はリカバリートークン・セッションの用途種別を表す。
+// "recovery"（アカウント復旧）または "device-link"（新規デバイス登録）を取る。
+type TokenKind string
+
+const (
+	// TokenKindRecovery はアカウント復旧用のトークン・セッション種別。
+	TokenKindRecovery TokenKind = "recovery"
+	// TokenKindDeviceLink は新規デバイスでのパスキー追加用のトークン・セッション種別。
+	TokenKindDeviceLink TokenKind = "device-link"
+)
+
+// ValidateTokenKind は TokenKind が有効な値（recovery または device-link）であることを検証する。
+// 空文字列または未定義の値の場合は ErrInvalidTokenKind を返す。
+func ValidateTokenKind(kind TokenKind) error {
+	switch kind {
+	case TokenKindRecovery, TokenKindDeviceLink:
+		return nil
+	default:
+		return ErrInvalidTokenKind
+	}
+}
+
 type RecoveryToken struct {
 	id         string
 	accountID  string
 	secret     string
+	kind       TokenKind
 	expiresAt  time.Time
 	consumedAt *time.Time
 }
@@ -15,11 +38,15 @@ type RecoveryToken struct {
 type RecoverySession struct {
 	id         string
 	accountID  string
+	kind       TokenKind
 	expiresAt  time.Time
 	consumedAt *time.Time
 }
 
-func NewRecoveryToken(id string, accountID string, secret string, expiresAt time.Time) (RecoveryToken, error) {
+// NewRecoveryToken は新しい RecoveryToken を生成する。
+// id と accountID は有効な ULID、secret は空でない、expiresAt はゼロ値でないことを検証する。
+// kind は空でないこと、かつ有効な TokenKind であることを検証する。
+func NewRecoveryToken(id string, accountID string, secret string, kind TokenKind, expiresAt time.Time) (RecoveryToken, error) {
 	if err := ValidateAuthID(id); err != nil {
 		return RecoveryToken{}, ErrInvalidAuthID
 	}
@@ -29,15 +56,20 @@ func NewRecoveryToken(id string, accountID string, secret string, expiresAt time
 	if secret == "" {
 		return RecoveryToken{}, ErrInvalidOpaqueSecret
 	}
+	if err := ValidateTokenKind(kind); err != nil {
+		return RecoveryToken{}, err
+	}
 	if expiresAt.IsZero() {
 		return RecoveryToken{}, ErrInvalidSessionExpiry
 	}
 
-	return RecoveryToken{id: id, accountID: accountID, secret: secret, expiresAt: expiresAt}, nil
+	return RecoveryToken{id: id, accountID: accountID, secret: secret, kind: kind, expiresAt: expiresAt}, nil
 }
 
-func ReconstituteRecoveryToken(id string, accountID string, secret string, expiresAt time.Time, consumedAt *time.Time) (RecoveryToken, error) {
-	token, err := NewRecoveryToken(id, accountID, secret, expiresAt)
+// ReconstituteRecoveryToken は永続化層からの復元用に RecoveryToken を再構成する。
+// consumedAt を含む全フィールドを設定する。
+func ReconstituteRecoveryToken(id string, accountID string, secret string, kind TokenKind, expiresAt time.Time, consumedAt *time.Time) (RecoveryToken, error) {
+	token, err := NewRecoveryToken(id, accountID, secret, kind, expiresAt)
 	if err != nil {
 		return RecoveryToken{}, err
 	}
@@ -66,25 +98,34 @@ func (t RecoveryToken) Consume(at time.Time) RecoveryToken {
 func (t RecoveryToken) ID() string             { return t.id }
 func (t RecoveryToken) AccountID() string      { return t.accountID }
 func (t RecoveryToken) Secret() string         { return t.secret }
+func (t RecoveryToken) Kind() TokenKind        { return t.kind }
 func (t RecoveryToken) ExpiresAt() time.Time   { return t.expiresAt }
 func (t RecoveryToken) ConsumedAt() *time.Time { return t.consumedAt }
 
-func NewRecoverySession(id string, accountID string, expiresAt time.Time) (RecoverySession, error) {
+// NewRecoverySession は新しい RecoverySession を生成する。
+// id と accountID は有効な ULID、expiresAt はゼロ値でないことを検証する。
+// kind は空でないこと、かつ有効な TokenKind であることを検証する。
+func NewRecoverySession(id string, accountID string, kind TokenKind, expiresAt time.Time) (RecoverySession, error) {
 	if err := ValidateAuthID(id); err != nil {
 		return RecoverySession{}, ErrInvalidAuthID
 	}
 	if err := ValidateAuthID(accountID); err != nil {
 		return RecoverySession{}, ErrInvalidAccountID
 	}
+	if err := ValidateTokenKind(kind); err != nil {
+		return RecoverySession{}, err
+	}
 	if expiresAt.IsZero() {
 		return RecoverySession{}, ErrInvalidSessionExpiry
 	}
 
-	return RecoverySession{id: id, accountID: accountID, expiresAt: expiresAt}, nil
+	return RecoverySession{id: id, accountID: accountID, kind: kind, expiresAt: expiresAt}, nil
 }
 
-func ReconstituteRecoverySession(id string, accountID string, expiresAt time.Time, consumedAt *time.Time) (RecoverySession, error) {
-	session, err := NewRecoverySession(id, accountID, expiresAt)
+// ReconstituteRecoverySession は永続化層からの復元用に RecoverySession を再構成する。
+// consumedAt を含む全フィールドを設定する。
+func ReconstituteRecoverySession(id string, accountID string, kind TokenKind, expiresAt time.Time, consumedAt *time.Time) (RecoverySession, error) {
+	session, err := NewRecoverySession(id, accountID, kind, expiresAt)
 	if err != nil {
 		return RecoverySession{}, err
 	}
@@ -112,5 +153,6 @@ func (s RecoverySession) Consume(at time.Time) RecoverySession {
 
 func (s RecoverySession) ID() string             { return s.id }
 func (s RecoverySession) AccountID() string      { return s.accountID }
+func (s RecoverySession) Kind() TokenKind        { return s.kind }
 func (s RecoverySession) ExpiresAt() time.Time   { return s.expiresAt }
 func (s RecoverySession) ConsumedAt() *time.Time { return s.consumedAt }

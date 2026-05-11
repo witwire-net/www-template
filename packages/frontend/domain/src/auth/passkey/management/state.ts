@@ -7,6 +7,7 @@ function createPasskeyManagementInitialState(): PasskeyManagementState {
     loading: false,
     error: null,
     reauthSession: null,
+    deviceLinkSent: false,
   };
 }
 
@@ -25,6 +26,11 @@ function applyPasskeyList(state: PasskeyManagementState, passkeys: PasskeyItem[]
   state.passkeys = passkeys;
 }
 
+/** デバイスリンク送信済みフラグを state に設定する。 */
+function applyDeviceLinkSent(state: PasskeyManagementState, sent: boolean): void {
+  state.deviceLinkSent = sent;
+}
+
 /** passkey operation エラーを state に反映する。 */
 function applyPasskeyError(state: PasskeyManagementState, message: string): void {
   state.error = message;
@@ -40,6 +46,7 @@ function toPasskeyManagementErrorMessage(error: unknown): string {
 }
 
 export {
+  applyDeviceLinkSent,
   applyPasskeyDeleted,
   applyPasskeyError,
   applyPasskeyList,

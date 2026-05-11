@@ -33,6 +33,8 @@ You are the `unit/build/reviewer` subagent. Based on the change summary and arti
   - `AGENTS.md`
   - `docs/**`
   - `.opencode/**`
+  - `package.json`
+  - `README.md`
 - Then load `orchestration-playbook` via `skill` and use its templates for acceptance
 
 ## Required inputs to verify first

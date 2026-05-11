@@ -12,9 +12,6 @@
       "@www-template/domain/auth": ["packages/frontend/domain/src/auth/index.ts"],
       "@www-template/domain/auth/session": ["packages/frontend/domain/src/auth/session/index.ts"],
       "@www-template/domain/auth/passkey": ["packages/frontend/domain/src/auth/passkey/index.ts"],
-      "@www-template/domain/auth/passkey/addByOtp": [
-        "packages/frontend/domain/src/auth/passkey/addByOtp/index.ts"
-      ],
       "@www-template/domain/auth/passkey/management": [
         "packages/frontend/domain/src/auth/passkey/management/index.ts"
       ],
@@ -26,8 +23,6 @@
       "@www-template/api/*": ["packages/frontend/api/src/*"],
       "@www-template/api": ["packages/frontend/api/src/index.ts"],
       "@www-template/ui/styles": ["packages/frontend/ui/src/styles/index.ts"],
-      "@ui": ["packages/frontend/ui/src"],
-      "@ui/*": ["packages/frontend/ui/src/*"],
       "@www-template/ui/components": ["packages/frontend/ui/src/components/index.ts"],
       "@www-template/ui/*": ["packages/frontend/ui/src/*"],
       "@www-template/ui": ["packages/frontend/ui/src/index.ts"]

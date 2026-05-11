@@ -179,26 +179,6 @@ model PasskeyAddFinishRequest {
   credential: WebAuthnAttestationCredential;
 }
 
-model PasskeyOtpResponse {
-  requestId: UlidId;
-  issued: true;
-}
-
-model PasskeyAddByOtpStartRequest {
-  @format("email")
-  email: string;
-
-  otp: string;
-}
-
-model PasskeyAddByOtpFinishRequest {
-  @format("email")
-  email: string;
-
-  otp: string;
-  credential: WebAuthnAttestationCredential;
-}
-
 model AuthSessionResponse {
   requestId: UlidId;
   accountId: UlidId;
@@ -223,6 +203,12 @@ model RecoveryConsumeRequest {
   token: string;
 }
 
+@doc("パスキー追加トークンの発行種別。recovery は紛失時復旧、device-link は認証済み端末からの新端末追加。")
+enum TokenKind {
+  recovery: "recovery",
+  deviceLink: "device-link",
+}
+
 model RecoveryConsumeResponse {
   requestId: UlidId;
   recoveryTokenId: UlidId;
@@ -232,6 +218,12 @@ model RecoveryConsumeResponse {
   recovery_session: UlidId;
 
   expiresAt: utcDateTime;
+  kind: TokenKind;
+}
+
+model DeviceLinkResponse {
+  requestId: UlidId;
+  issued: true;
 }
 
 @doc("Start passkey registration ceremony using a recovery session.")
@@ -270,7 +262,7 @@ union PasskeyRegisterRequest {
 
 @doc("Reauthentication session kind bound to a high-risk operation.")
 enum ReauthenticationSessionKind {
-  otpIssue: "otp-issue",
+  deviceLink: "device-link",
   passkeyDelete: "passkey-delete",
 }
 

@@ -100,8 +100,6 @@ func TestRoutePolicy(t *testing.T) {
 		"POST /api/v1/auth/passkey/register":       {},
 		"POST /api/v1/auth/recovery":               {},
 		"POST /api/v1/auth/recovery/consume":       {},
-		"POST /api/v1/auth/passkey/add/start":      {},
-		"POST /api/v1/auth/passkey/add/finish":     {},
 		"POST /api/v1/auth/refresh":                {},
 	}
 	seenPublicRoutes := map[string]struct{}{}

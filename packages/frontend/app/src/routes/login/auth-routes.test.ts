@@ -21,7 +21,6 @@ import {
 import { removeQueryParamFromUrl } from '../../lib/auth/url';
 import { TEST_ULID } from '../../tests/mocks/handlers';
 import { _AUTH_ROUTE_CACHE_POLICY as LOGOUT_CACHE_POLICY } from '../logout/+layout';
-import { _AUTH_ROUTE_CACHE_POLICY as PASSKEYS_ADD_CACHE_POLICY } from '../passkeys/add/+page';
 
 import { _AUTH_ROUTE_CACHE_POLICY } from './+layout';
 
@@ -404,10 +403,6 @@ describe('[AUTH-FE-S019] Recovery token は URL から除去される', () => {
 });
 
 describe('[AUTH-FE-S020] auth routes は security headers と no-store semantics を持つ', () => {
-  it('/passkeys/add route は no-store cache policy を宣言する', () => {
-    expect(PASSKEYS_ADD_CACHE_POLICY).toBe('no-store');
-  });
-
   it('bearer token は sessionStorage に永続化されない', () => {
     /* session hook は in-memory のみを維持し、sessionStorage への書き込みを行わない。
        これにより browser close 後に session が復元されることを防ぐ。 */

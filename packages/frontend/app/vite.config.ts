@@ -6,6 +6,7 @@ const svelteRuntimeChunkPattern =
 
 export default defineConfig({
   plugins: [sveltekit()],
+
   build: {
     rollupOptions: {
       output: {

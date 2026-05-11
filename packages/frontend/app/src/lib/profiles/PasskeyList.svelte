@@ -2,6 +2,10 @@
   import type { PasskeyItem } from '@www-template/domain/auth';
   import { Alert, Button, Item, Separator, Spinner } from '@www-template/ui/components';
 
+/**
+ * パスキー一覧と管理アクションを表示するコンポーネント。
+ * 登録済みパスキーの表示、追加、削除、およびデバイスリンク送信の UI を提供する。
+ */
   interface PasskeyListProps {
     /** List of registered passkeys. */
     passkeys: PasskeyItem[];
@@ -9,24 +13,24 @@
     loading: boolean;
     /** Error message to display, or null. */
     error: string | null;
-    /** Whether an OTP has been issued for new-device login enablement. */
-    otpIssued: boolean;
+    /** Whether a device-link has been sent for new-device login enablement. */
+    deviceLinkSent: boolean;
     /** Called when the user clicks "この端末でログインを有効にする" button. */
     onAddPasskey: () => void;
     /** Called when the user clicks "削除" on a passkey row. */
     onDeletePasskey: (id: string) => void;
-    /** Called when the user clicks "新しい端末でログインを有効にする" to issue OTP. */
-    onIssueOtp: () => void;
+    /** Called when the user clicks "新しい端末でログインを有効にする" to send a device-link. */
+    onSendDeviceLink: () => void;
   }
 
   let {
     passkeys,
     loading,
     error,
-    otpIssued,
+    deviceLinkSent,
     onAddPasskey,
     onDeletePasskey,
-    onIssueOtp,
+    onSendDeviceLink,
   }: PasskeyListProps = $props();
 
   let isLastPasskey = $derived(passkeys.length === 1);
@@ -87,17 +91,17 @@
     {/if}
   {/if}
 
-  {#if otpIssued}
+  {#if deviceLinkSent}
     <!--
-      平文 OTP は画面に表示せず、メール送信済み案内と共有禁止の注意喚起を表示する。
+      デバイスリンク URL は画面に表示せず、メール送信済み案内と共有禁止の注意喚起を表示する。
       これにより画面共有や覗き見による secret leakage を防ぐ。
     -->
     <Alert.Alert aria-live="polite">
-      <Alert.AlertTitle>ログイン有効化コードを送信しました</Alert.AlertTitle>
+      <Alert.AlertTitle>ログイン有効化リンクを送信しました</Alert.AlertTitle>
       <Alert.AlertDescription>
-        登録済みのメールアドレス宛にコードを送信しました。新しい端末でメールアドレスとコードを入力してください。コードは第三者と共有しないでください。
+        登録済みのメールアドレス宛にリンクを送信しました。新しい端末でメールのリンクを開いてパスキーを登録してください。リンクは第三者と共有しないでください。
         <br />
-        有効期限: 5分
+        有効期限: 30分
       </Alert.AlertDescription>
     </Alert.Alert>
   {/if}
@@ -106,10 +110,10 @@
 
   <div class="flex flex-wrap justify-end gap-2">
     <!--
-      新しい端末でのログインを有効にするため、再認証後に OTP を発行するアクション。
-      技術用語「OTPを発行」ではなく、利用者の目的に即したラベルを使用する。
+      新しい端末でのログインを有効にするため、再認証後にデバイスリンクを送信するアクション。
+      技術用語「デバイスリンク」ではなく、利用者の目的に即したラベルを使用する。
     -->
-    <Button variant="outline" disabled={loading} onclick={onIssueOtp}>
+    <Button variant="outline" disabled={loading} onclick={onSendDeviceLink}>
       新しい端末でログインを有効にする
     </Button>
     <!--

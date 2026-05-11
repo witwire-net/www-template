@@ -142,3 +142,23 @@ func (s *SessionStore) RevokeOthers(ctx context.Context, accountID, currentSessi
 	}
 	return deleted, nil
 }
+
+// RevokeAllForAccount は指定されたアカウントに紐づく全セッションを失効する。
+// account-sessions インデックスから全 sessionID を取得し、個別のセッションキーとインデックスを削除する。
+func (s *SessionStore) RevokeAllForAccount(ctx context.Context, accountID string) error {
+	idxKey := s.store.Key("auth", "account-sessions", accountID)
+	sessionIDs, err := s.store.client.SMembers(ctx, idxKey).Result()
+	if err != nil {
+		return domain.ErrAuthStoreUnavailable
+	}
+	for _, id := range sessionIDs {
+		key := s.store.Key("auth", "session", id)
+		if err := s.store.Delete(ctx, key); err != nil {
+			return domain.ErrAuthStoreUnavailable
+		}
+	}
+	if err := s.store.client.Del(ctx, idxKey).Err(); err != nil {
+		return domain.ErrAuthStoreUnavailable
+	}
+	return nil
+}

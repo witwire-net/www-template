@@ -105,6 +105,13 @@ func (m *mockSessionStore) RevokeOthers(_ context.Context, _, currentSessionID s
 	return deleted, nil
 }
 
+func (m *mockSessionStore) RevokeAllForAccount(_ context.Context, _ string) error {
+	for id := range m.sessions {
+		delete(m.sessions, id)
+	}
+	return nil
+}
+
 func testTokenService() *TokenService {
 	cfg := config.AuthConfig{
 		JWTSecret:     "test-jwt-secret-key-must-be-at-least-32bytes",

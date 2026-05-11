@@ -138,6 +138,13 @@ func (s *stubSessionStore) RevokeOthers(_ context.Context, _, currentSessionID s
 	return deleted, nil
 }
 
+func (s *stubSessionStore) RevokeAllForAccount(_ context.Context, _ string) error {
+	for id := range s.sessions {
+		delete(s.sessions, id)
+	}
+	return nil
+}
+
 // loginWithJWT はパスキー認証フローを実行して JWT access token と refresh token を返す helper。
 func loginWithJWT(t *testing.T, router *gin.Engine, identifier string) (accessToken, refreshToken string) {
 	t.Helper()

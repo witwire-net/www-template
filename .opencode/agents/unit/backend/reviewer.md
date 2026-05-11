@@ -40,6 +40,8 @@ You are the `unit/backend/reviewer` subagent. Based on the change summary and ar
   - `AGENTS.md`
   - `docs/**`
   - `.opencode/**`
+  - `package.json`
+  - `README.md`
 - Then load `coding-guardian` via `skill` and use it as an enforcement baseline
 - Then load `orchestration-playbook` via `skill` and use its templates for acceptance
 

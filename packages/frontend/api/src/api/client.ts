@@ -4,13 +4,11 @@ import {
   type AuthFailureResponse,
   type AuthOperationErrorResponse,
   type AuthSessionResponse,
-  type PasskeyAddByOtpFinishRequest,
-  type PasskeyAddByOtpStartRequest,
+  type DeviceLinkResponse,
   type PasskeyAddFinishRequest,
   type PasskeyAddStartResponse,
   type PasskeyItem,
   type PasskeyListResponse,
-  type PasskeyOtpResponse,
   type PasskeyRegisterStartRequest,
   type PasskeyStartResponse,
   type RecoveryAcceptedResponse,
@@ -83,12 +81,13 @@ const authApi = {
   ): Promise<AuthSuccess<PasskeyStartResponse, 200> | AuthOperationError | AuthFailure> =>
     sdk.auth.startReauthentication({ kind }, options),
   finishReauthentication: async (
+    requestId: UlidId,
     kind: ReauthenticationSessionKind,
     credential: WebAuthnAssertionCredential,
     options?: RequestInit
   ): Promise<
     AuthSuccess<ReauthenticationSessionResponse, 200> | AuthOperationError | AuthFailure
-  > => sdk.auth.finishReauthentication({ kind, credential }, options),
+  > => sdk.auth.finishReauthentication({ requestId, kind, credential }, options),
   requestPasskeyRecovery: async (
     email: string,
     options?: RequestInit
@@ -157,13 +156,13 @@ const authApi = {
     }
     return response as unknown as AuthSuccess<void, 204> | AuthFailure;
   },
-  issuePasskeyOtp: async (
+  sendDeviceLink: async (
     reauthSession: string,
     options?: RequestInit
-  ): Promise<AuthSuccess<PasskeyOtpResponse, 200> | AuthOperationError | AuthFailure> => {
+  ): Promise<AuthSuccess<DeviceLinkResponse, 200> | AuthOperationError | AuthFailure> => {
     const mergedHeaders = new Headers(options?.headers);
     mergedHeaders.set('X-Reauth-Session', reauthSession);
-    const response = await sdk.auth.issuePasskeyOtp({
+    const response = await sdk.auth.sendDeviceLink({
       ...options,
       headers: mergedHeaders,
     });
@@ -172,47 +171,9 @@ const authApi = {
     }
     return response;
   },
-
-  // OTP-based passkey addition (public surface: /api/v1/auth/passkey/add/*)
-  startPasskeyAdditionByOtp: async (
-    email: string,
-    otp: string,
-    options?: RequestInit
-  ): Promise<PasskeyAddStartResponse> => {
-    const response = await sdk.auth.startPasskeyAdditionByOtp({ email, otp }, options);
-    if (response.status === 200) {
-      return response.data;
-    }
-    if (response.status === 400) {
-      throw new Error(response.data.error);
-    }
-    throw new Error('passkey_add_by_otp_start_failed');
-  },
-  finishPasskeyAdditionByOtp: async (
-    email: string,
-    otp: string,
-    credential: WebAuthnAttestationCredential,
-    options?: RequestInit
-  ): Promise<void> => {
-    const response = await sdk.auth.finishPasskeyAdditionByOtp({ email, otp, credential }, options);
-    if (response.status === 200) {
-      return;
-    }
-    if (response.status === 400) {
-      throw new Error(response.data.error);
-    }
-    throw new Error('passkey_add_by_otp_finish_failed');
-  },
 };
 
-export type {
-  PasskeyAddByOtpFinishRequest,
-  PasskeyAddByOtpStartRequest,
-  PasskeyAddFinishRequest,
-  PasskeyItem,
-  PasskeyListResponse,
-  PasskeyOtpResponse,
-};
+export type { PasskeyAddFinishRequest, PasskeyItem, PasskeyListResponse, DeviceLinkResponse };
 export { authApi, statusApi };
 
 // SDK types are internal; consumers should use domain types

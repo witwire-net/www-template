@@ -37,7 +37,14 @@ type RecoverySession struct {
 	RecoveryTokenID    string
 	RecoverySessionID  string
 	RecoverySessionRef string
+	Kind               domain.TokenKind
 	ExpiresAt          time.Time
+}
+
+// DeviceLinkIssued は device-link URL の発行結果を表す DTO。
+type DeviceLinkIssued struct {
+	RequestID string
+	Issued    bool
 }
 
 type RecoveryDelivery struct {
@@ -46,6 +53,7 @@ type RecoveryDelivery struct {
 	AccountID       string
 	Email           string
 	RecoveryURL     string
+	Kind            domain.TokenKind
 	ExpiresAt       time.Time
 }
 
@@ -164,9 +172,7 @@ type AuthStateRepository interface {
 	ConsumeChallenge(context.Context, string) (domain.AuthChallenge, error)
 	IssueRecoveryToken(context.Context, domain.RecoveryToken, time.Duration) error
 	SaveRecoveryDeliveryFailure(context.Context, domain.RecoveryDeliveryFailure, time.Duration) error
-	GetRecoveryTokenBySecret(context.Context, string) (domain.RecoveryToken, error)
-	ConsumeRecoveryToken(context.Context, domain.RecoveryToken) error
-	// ConsumeRecoveryTokenAtomic は recovery token を tokenID でアトミックに取得・削除し、secret のハッシュを検証する。
+	// ConsumeRecoveryTokenAtomic は recovery token を tokenID で取得し、secret のハッシュを検証してから削除する。
 	ConsumeRecoveryTokenAtomic(ctx context.Context, tokenID string, secret string) (domain.RecoveryToken, error)
 	SaveRecoverySession(context.Context, domain.RecoverySession, time.Duration) error
 	GetRecoverySession(context.Context, string) (domain.RecoverySession, error)
@@ -174,22 +180,10 @@ type AuthStateRepository interface {
 	IncrementThrottle(context.Context, string, time.Duration) (int, error)
 	SetLock(context.Context, string, time.Time, time.Duration) error
 	GetLock(context.Context, string) (domain.AuthLock, bool, error)
-	// SavePasskeyOtp は OTP → accountID のマッピングを TTL 付きで保存する。
-	SavePasskeyOtp(ctx context.Context, otpKey string, accountID string, ttl time.Duration) error
-	// ConsumePasskeyOtp は OTP を検証し accountID を取得する。TTL 切れ・存在しない場合は domain.ErrOtpNotFound を返す。
-	ConsumePasskeyOtp(ctx context.Context, otpKey string) (string, error)
-	// GetPasskeyOtp は OTP を消費せずに accountID を取得する。TTL 切れ・存在しない場合は domain.ErrOtpNotFound を返す。
-	GetPasskeyOtp(ctx context.Context, otpKey string) (string, error)
 	// SaveReauthenticationSession は再認証セッションを TTL 付きで保存する。
 	SaveReauthenticationSession(ctx context.Context, session domain.ReauthenticationSession, ttl time.Duration) error
 	// ConsumeReauthenticationSession は再認証セッションをアトミックに取得・削除する。
 	ConsumeReauthenticationSession(ctx context.Context, reauthID string) (domain.ReauthenticationSession, error)
-	// SaveDeviceLoginHandoff は namespaced device handoff record と secondary index を TTL 付きで保存する。
-	SaveDeviceLoginHandoff(ctx context.Context, handoff domain.DeviceLoginHandoff, ttl time.Duration) error
-	// FindDeviceLoginHandoffByEmailAndOtp は emailHash と otpHash から secondary index を経由して handoff を検索する。
-	FindDeviceLoginHandoffByEmailAndOtp(ctx context.Context, emailHash string, otpHash string) (domain.DeviceLoginHandoff, error)
-	// ConsumeDeviceLoginHandoff は handoff record を GETDEL でアトミックに取得・削除する。
-	ConsumeDeviceLoginHandoff(ctx context.Context, handoffID string) (domain.DeviceLoginHandoff, error)
 }
 
 type AuthAccountRepository interface {
@@ -239,11 +233,23 @@ type AccountRecoverySender interface {
 	SendAccountRecovery(context.Context, RecoveryDelivery) error
 }
 
-// PasskeyOtpSender は device login handoff 用の 6 桁 OTP を secure mail transport で送信するインターフェース。
-type PasskeyOtpSender interface {
-	// SendPasskeyOtp は登録済みメールアドレスへ OTP を送信する。
-	// email は宛先、otp は 6 桁のコード、requestID は audit 用のリクエスト ID。
-	SendPasskeyOtp(ctx context.Context, email string, otp string, requestID string) error
+// SendDeviceLinkSender は device-link URL を secure mail transport で送信するインターフェース。
+type SendDeviceLinkSender interface {
+	// SendDeviceLink は登録済みメールアドレスへ device-link URL を送信する。
+	// delivery は device-link 用の RecoveryDelivery（Kind=device-link）。
+	SendDeviceLink(ctx context.Context, delivery RecoveryDelivery) error
+}
+
+// RecoveryCompleteSender はパスキー復旧完了通知メールを送信するインターフェース。
+type RecoveryCompleteSender interface {
+	// SendRecoveryComplete はアカウントのパスキー復旧完了後に通知メールを送信する。
+	SendRecoveryComplete(ctx context.Context, accountID, email string) error
+}
+
+// DeviceLinkCompleteSender は新規デバイスでのパスキー追加完了通知メールを送信するインターフェース。
+type DeviceLinkCompleteSender interface {
+	// SendDeviceLinkComplete は新規デバイスでのパスキー追加完了後に通知メールを送信する。
+	SendDeviceLinkComplete(ctx context.Context, accountID, email string) error
 }
 
 type InvitationPasskeyRegistrar interface {
@@ -313,36 +319,38 @@ type SessionStore interface {
 	RevokeSession(ctx context.Context, accountID, sessionID string) error
 	// RevokeOthers は現在のセッション以外を全て削除し、削除した session ID のスライスを返す。
 	RevokeOthers(ctx context.Context, accountID, currentSessionID string) ([]string, error)
+	// RevokeAllForAccount は指定されたアカウントに紐づく全セッションを失効する。
+	RevokeAllForAccount(ctx context.Context, accountID string) error
 }
 
 // AuditNotifier は認証関連の重要イベントを通知・記録するためのポートである。
 // 現時点ではハンドラー注入方式とし、structured logger 導入までの橋渡しとする。
-// secret（OTP、credential raw data）は含めず、安全な識別子のみを渡す。
+// secret（credential raw data）は含めず、安全な識別子のみを渡す。
 type AuditNotifier interface {
-	// EmitPasskeyAddedByOTP は OTP handoff による新規パスキー追加成功時に呼び出される。
-	// accountID は対象アカウント、passkeyID は追加されたパスキー、requestID は発行されたリクエスト ID。
-	// 呼び出し元は ctx がキャンセルされていても処理を継続すべき（fire-and-forget）。
-	EmitPasskeyAddedByOTP(ctx context.Context, accountID string, passkeyID string, requestID string)
 	// EmitCredentialStateUpdateFailure は WebAuthn credential state の更新失敗時に呼び出される。
 	// credentialHandle は対象 credential の識別子、err は発生したエラー。
-	// secret（OTP、credential raw data）は含めない。
+	// secret（credential raw data）は含めない。
 	EmitCredentialStateUpdateFailure(ctx context.Context, credentialHandle string, err error)
 }
 
 type AuthService struct {
-	stateRepo           AuthStateRepository
-	accountRepo         AuthAccountRepository
-	recoverySender      AccountRecoverySender
-	passkeyOtpSender    PasskeyOtpSender
-	invitationRegistrar InvitationPasskeyRegistrar
-	auditNotifier       AuditNotifier
-	webauthn            WebAuthnProvider
-	tokenService        *TokenService
-	clock               func() time.Time
-	policy              id.AuthIDPolicy
-	authConfig          config.AuthConfig
+	stateRepo                AuthStateRepository
+	accountRepo              AuthAccountRepository
+	recoverySender           AccountRecoverySender
+	deviceLinkSender         SendDeviceLinkSender
+	recoveryCompleteSender   RecoveryCompleteSender
+	deviceLinkCompleteSender DeviceLinkCompleteSender
+	invitationRegistrar      InvitationPasskeyRegistrar
+	auditNotifier            AuditNotifier
+	webauthn                 WebAuthnProvider
+	tokenService             *TokenService
+	clock                    func() time.Time
+	policy                   id.AuthIDPolicy
+	authConfig               config.AuthConfig
 }
 
+// NewAuthService は AuthService を生成する。
+// clock と policy は必須。nil の場合 panic する。
 func NewAuthService(stateRepo AuthStateRepository, accountRepo AuthAccountRepository, recoverySender AccountRecoverySender, invitationRegistrar InvitationPasskeyRegistrar, clock func() time.Time, policy id.AuthIDPolicy, authConfig config.AuthConfig) *AuthService {
 	if clock == nil {
 		panic("clock is required")
@@ -365,16 +373,28 @@ func (s *AuthService) UseWebAuthnProvider(provider WebAuthnProvider) {
 	s.webauthn = provider
 }
 
-// UsePasskeyOtpSender は OTP 送信器を注入する（app 層から呼び出す）。
-// sender が nil の場合、IssuePasskeyOtp はメール送信をスキップする（テスト時）。
-func (s *AuthService) UsePasskeyOtpSender(sender PasskeyOtpSender) {
-	s.passkeyOtpSender = sender
+// UseDeviceLinkSender は device-link 送信器を注入する（app 層から呼び出す）。
+// sender が nil の場合、executeDeviceLink はメール送信をスキップする（テスト時）。
+func (s *AuthService) UseDeviceLinkSender(sender SendDeviceLinkSender) {
+	s.deviceLinkSender = sender
+}
+
+// UseRecoveryCompleteSender は recovery 完了通知メール送信器を注入する（app 層から呼び出す）。
+// sender が nil の場合、RegisterPasskey の後処理で通知メールをスキップする（テスト時）。
+func (s *AuthService) UseRecoveryCompleteSender(sender RecoveryCompleteSender) {
+	s.recoveryCompleteSender = sender
+}
+
+// UseDeviceLinkCompleteSender は device-link 完了通知メール送信器を注入する（app 層から呼び出す）。
+// sender が nil の場合、RegisterPasskey の後処理で通知メールをスキップする（テスト時）。
+func (s *AuthService) UseDeviceLinkCompleteSender(sender DeviceLinkCompleteSender) {
+	s.deviceLinkCompleteSender = sender
 }
 
 // UseAuditNotifier は audit notifier を注入する（app 層から呼び出す）。
 // notifier が nil の場合、audit event emit はスキップされる（テスト時・未設定時）。
 // notifier は認証関連の重要イベントを記録・通知するためのポートである。
-// secret（OTP、credential raw data）は含めず、accountID・passkeyID・requestID のみを渡す必要がある。
+// secret（credential raw data）は含めず、accountID・passkeyID・requestID のみを渡す必要がある。
 func (s *AuthService) UseAuditNotifier(notifier AuditNotifier) {
 	s.auditNotifier = notifier
 }

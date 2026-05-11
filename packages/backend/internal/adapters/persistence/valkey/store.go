@@ -75,6 +75,16 @@ func (s *ValkeyStore) Delete(ctx context.Context, key string) error {
 	return s.client.Del(ctx, key).Err()
 }
 
+// Eval は指定された Lua スクリプトを Valkey サーバー上でアトミックに実行する。
+// script は実行する Lua スクリプト本体。
+// keys はスクリプト内で KEYS[1], KEYS[2], ... として参照されるキーの一覧。
+// args はスクリプト内で ARGV[1], ARGV[2], ... として参照される追加引数。
+// 戻り値は *redis.Cmd で、呼び出し側で .Result() や .Int64() を用いて結果を取得する。
+// スクリプトが redis.error_reply を返した場合、.Result() はエラーを返す。
+func (s *ValkeyStore) Eval(ctx context.Context, script string, keys []string, args ...interface{}) *redis.Cmd {
+	return s.client.Eval(ctx, script, keys, args...)
+}
+
 func (s *ValkeyStore) Increment(ctx context.Context, key string) (int64, error) {
 	return s.client.Incr(ctx, key).Result()
 }

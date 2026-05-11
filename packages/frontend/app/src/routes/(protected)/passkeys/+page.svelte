@@ -2,13 +2,12 @@
   import { usePasskeyManagement } from '@www-template/domain/auth/passkey/management';
   import PasskeyList from '../../../lib/profiles/PasskeyList.svelte';
 
+/**
+ * パスキー管理ページ。
+ * 登録済みパスキーの一覧表示、追加、削除、および新しい端末へのデバイスリンク送信を行う。
+ */
   const { data, actions } = usePasskeyManagement();
 
-  /*
-   * OTP 発行状態を boolean で保持する。
-   * 平文 OTP 値は画面に表示しないため、値本体は保存せず発行有無のみを管理する。
-   */
-  let otpIssued = $state(false);
   let localError = $state<string | null>(null);
 
   let displayError = $derived(data.error ?? localError);
@@ -50,25 +49,24 @@
     }
   }
 
-  async function handleIssueOtp(): Promise<void> {
+  async function handleSendDeviceLink(): Promise<void> {
     localError = null;
-    otpIssued = false;
-    const session = await actions.performReauth('otp-issue');
+    const session = await actions.performReauth('device-link');
     if (session === null) {
       localError = '再認証が必要です。';
       return;
     }
     try {
-      const result = await actions.issueOtp(session);
+      const result = await actions.sendDeviceLink(session);
       /*
-       * issueOtp が成功して true を返した場合、平文 OTP は UI に表示せず
-       * 「発行済み」フラグのみを立ててメール送信済み案内を表示する。
+       * sendDeviceLink が成功して true を返した場合、
+       * デバイスリンク送信済みフラグを立ててメール送信済み案内を表示する。
        */
-      if (result === true) {
-        otpIssued = true;
+      if (result !== true) {
+        localError = 'ログイン有効化リンクの送信に失敗しました。';
       }
     } catch {
-      localError = 'OTP の発行に失敗しました。';
+      localError = 'ログイン有効化リンクの送信に失敗しました。';
     } finally {
       actions.clearReauthSession();
     }
@@ -79,8 +77,8 @@
   passkeys={data.passkeys}
   loading={data.loading}
   error={displayError}
-  {otpIssued}
+  deviceLinkSent={data.deviceLinkSent}
   onAddPasskey={handleAddPasskey}
   onDeletePasskey={handleDeletePasskey}
-  onIssueOtp={handleIssueOtp}
+  onSendDeviceLink={handleSendDeviceLink}
 />

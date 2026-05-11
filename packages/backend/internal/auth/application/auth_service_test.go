@@ -2,9 +2,6 @@ package application_test
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -23,28 +20,7 @@ type stubStateRepo struct {
 	recoverySessions map[string]domain.RecoverySession
 	counters         map[string]int
 	locks            map[string]time.Time
-	otpStore         map[string]string
-	handoffs         map[string]domain.DeviceLoginHandoff
 	clock            func() time.Time
-}
-
-// stubAuditNotifier は AuditNotifier のテスト用スタブ。
-// EmitPasskeyAddedByOTP の呼び出し回数と引数を記録する。
-type stubAuditNotifier struct {
-	emitCount     int
-	lastAccountID string
-	lastPasskeyID string
-	lastRequestID string
-}
-
-func (n *stubAuditNotifier) EmitPasskeyAddedByOTP(_ context.Context, accountID string, passkeyID string, requestID string) {
-	n.emitCount++
-	n.lastAccountID = accountID
-	n.lastPasskeyID = passkeyID
-	n.lastRequestID = requestID
-}
-
-func (n *stubAuditNotifier) EmitCredentialStateUpdateFailure(_ context.Context, _ string, _ error) {
 }
 
 // stubRefreshTokenStore はテスト用のインメモリ RefreshTokenStore。
@@ -141,6 +117,11 @@ func (s *stubSessionStore) RevokeOthers(_ context.Context, _, currentSessionID s
 	return deleted, nil
 }
 
+func (s *stubSessionStore) RevokeAllForAccount(_ context.Context, _ string) error {
+	s.sessions = make(map[string]application.SessionMetadata)
+	return nil
+}
+
 func newStubStateRepo(clock func() time.Time) *stubStateRepo {
 	return &stubStateRepo{
 		challenges:       map[string]domain.AuthChallenge{},
@@ -148,8 +129,6 @@ func newStubStateRepo(clock func() time.Time) *stubStateRepo {
 		recoverySessions: map[string]domain.RecoverySession{},
 		counters:         map[string]int{},
 		locks:            map[string]time.Time{},
-		otpStore:         map[string]string{},
-		handoffs:         map[string]domain.DeviceLoginHandoff{},
 		clock:            clock,
 	}
 }
@@ -171,17 +150,6 @@ func (r *stubStateRepo) IssueRecoveryToken(_ context.Context, t domain.RecoveryT
 	return nil
 }
 func (r *stubStateRepo) SaveRecoveryDeliveryFailure(_ context.Context, _ domain.RecoveryDeliveryFailure, _ time.Duration) error {
-	return nil
-}
-func (r *stubStateRepo) GetRecoveryTokenBySecret(_ context.Context, secret string) (domain.RecoveryToken, error) {
-	t, ok := r.recoveryTokens[secret]
-	if !ok {
-		return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
-	}
-	return t, nil
-}
-func (r *stubStateRepo) ConsumeRecoveryToken(_ context.Context, t domain.RecoveryToken) error {
-	r.recoveryTokens[t.Secret()] = t
 	return nil
 }
 
@@ -223,26 +191,6 @@ func (r *stubStateRepo) GetLock(_ context.Context, key string) (domain.AuthLock,
 	}
 	return domain.NewAuthLock(until), true, nil
 }
-func (r *stubStateRepo) SavePasskeyOtp(_ context.Context, otpKey string, value string, _ time.Duration) error {
-	r.otpStore[otpKey] = value
-	return nil
-}
-func (r *stubStateRepo) ConsumePasskeyOtp(_ context.Context, otpKey string) (string, error) {
-	v, ok := r.otpStore[otpKey]
-	if !ok {
-		return "", domain.ErrOtpNotFound
-	}
-	delete(r.otpStore, otpKey)
-	return v, nil
-}
-func (r *stubStateRepo) GetPasskeyOtp(_ context.Context, otpKey string) (string, error) {
-	v, ok := r.otpStore[otpKey]
-	if !ok {
-		return "", domain.ErrOtpNotFound
-	}
-	return v, nil
-}
-
 func (r *stubStateRepo) SaveReauthenticationSession(_ context.Context, _ domain.ReauthenticationSession, _ time.Duration) error {
 	return nil
 }
@@ -250,32 +198,9 @@ func (r *stubStateRepo) SaveReauthenticationSession(_ context.Context, _ domain.
 func (r *stubStateRepo) ConsumeReauthenticationSession(_ context.Context, _ string) (domain.ReauthenticationSession, error) {
 	session, _ := domain.NewReauthenticationSession(
 		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
-		"otp-issue", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+		"device-link", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
 	)
 	return session, domain.ErrReauthSessionNotFound
-}
-
-func (r *stubStateRepo) SaveDeviceLoginHandoff(_ context.Context, handoff domain.DeviceLoginHandoff, _ time.Duration) error {
-	r.handoffs[handoff.ID()] = handoff
-	return nil
-}
-
-func (r *stubStateRepo) FindDeviceLoginHandoffByEmailAndOtp(_ context.Context, emailHash string, otpHash string) (domain.DeviceLoginHandoff, error) {
-	for _, h := range r.handoffs {
-		if h.EmailHash() == emailHash && h.OtpHash() == otpHash {
-			return h, nil
-		}
-	}
-	return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
-}
-
-func (r *stubStateRepo) ConsumeDeviceLoginHandoff(_ context.Context, handoffID string) (domain.DeviceLoginHandoff, error) {
-	h, ok := r.handoffs[handoffID]
-	if !ok {
-		return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
-	}
-	delete(r.handoffs, handoffID)
-	return h, nil
 }
 
 // stubAccountRepo は AuthAccountRepository の in-memory スタブ。
@@ -397,15 +322,11 @@ func emptyChallenge() domain.AuthChallenge {
 	return c
 }
 func emptyRecoveryToken() domain.RecoveryToken {
-	t, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", time.Unix(1, 0).UTC())
+	t, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return t
 }
-func emptyDeviceLoginHandoff() domain.DeviceLoginHandoff {
-	h, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", "placeholder", time.Unix(1, 0).UTC())
-	return h
-}
 func emptyRecoverySession() domain.RecoverySession {
-	s, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
+	s, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return s
 }
 func emptyAuthAccount() domain.AuthAccount {
@@ -498,7 +419,6 @@ func newTestAuthService(stateRepo application.AuthStateRepository, accountRepo a
 		RecoveryIPThrottleWindow:        time.Hour,
 		PasskeyStartThrottleLimit:       5,
 		PasskeyStartGlobalThrottleLimit: 1000,
-		HandoffGlobalThrottleLimit:      1000,
 		SecretHashKey:                   "test-pepper",
 		PasskeyStartThrottleWindow:      time.Minute,
 		FailureLockThreshold:            10,
@@ -673,7 +593,7 @@ func TestStartPasskeyRegistrationWithProvider(t *testing.T) {
 
 	// recovery session をセットアップ
 	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, domain.TokenKindRecovery, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("NewRecoverySession: %v", err)
 	}
@@ -708,7 +628,7 @@ func TestRegisterPasskeyWithProvider(t *testing.T) {
 	_, accountRepo := accountWithOnePasskey(t)
 
 	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, domain.TokenKindRecovery, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("NewRecoverySession: %v", err)
 	}
@@ -864,167 +784,6 @@ func TestDeletePasskeyRejectsCrossAccountCredential(t *testing.T) {
 	}
 }
 
-// ─── Task 4.12: StartAddPasskeyByOtp – expired/missing OTP ───────────────────
-
-// [AUTH-BE-4.12] StartAddPasskeyByOtp で存在しない OTP を指定すると ErrOtpExpiredOrConsumed を返す
-func TestStartAddPasskeyByOtpRejectsMissingOtp(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-	svc := newTestAuthService(stateRepo, newStubAccountRepoWithAccount(emptyAuthAccount()))
-
-	_, err := svc.StartAddPasskeyByOtp(context.Background(), "test@example.com", "999999", "127.0.0.1")
-	if err == nil {
-		t.Fatal("expected ErrOtpExpiredOrConsumed, got nil")
-	}
-	if err != application.ErrOtpExpiredOrConsumed {
-		t.Fatalf("expected ErrOtpExpiredOrConsumed, got %v", err)
-	}
-}
-
-// ─── Task 4.13: FinishAddPasskeyByOtp – consumed OTP ─────────────────────────
-
-// [AUTH-BE-4.13] FinishAddPasskeyByOtp で消費済み OTP を指定すると ErrOtpExpiredOrConsumed を返す。
-// 1 回目の FinishAddPasskeyByOtp を成功させて OTP が消費されることを確認し、
-// 2 回目の呼び出しで ErrOtpExpiredOrConsumed が返ることを確認する。
-func TestFinishAddPasskeyByOtpRejectsConsumedOtp(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-	_, accountRepo := accountWithOnePasskey(t)
-	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, &mockWebAuthnProvider{})
-
-	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-
-	// Step 1: OTP を発行する
-	otp, err := svc.IssuePasskeyOtp(context.Background(), accountID, "01ARZ3NDEKTSV4RRFFQ69G5FB1")
-	if err != nil {
-		t.Fatalf("IssuePasskeyOtp: %v", err)
-	}
-
-	// Step 2: StartAddPasskeyByOtp で OTP を使ってチャレンジを取得する（OTP は消費されない = GetPasskeyOtp）
-	passkeyChallenge, err := svc.StartAddPasskeyByOtp(context.Background(), "user@example.com", otp, "127.0.0.1")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp: %v", err)
-	}
-
-	// Step 3: 1 回目の FinishAddPasskeyByOtp を成功させる
-	// challenge を credential ID / clientDataJSON に格納して FinishAddPasskeyByOtp を呼び出す。
-	credential := application.WebAuthnAttestationCredentialDTO{
-		ID:    "handle-new",
-		RawID: "handle-new",
-		Type:  "public-key",
-		Response: application.WebAuthnAttestationResponseDTO{
-			ClientDataJSON: passkeyChallenge.Challenge,
-		},
-	}
-	if err := svc.FinishAddPasskeyByOtp(context.Background(), "user@example.com", otp, credential, "127.0.0.1"); err != nil {
-		t.Fatalf("FinishAddPasskeyByOtp (1st call) should succeed, got: %v", err)
-	}
-
-	// Step 4: 2 回目の FinishAddPasskeyByOtp: OTP は既に 1 回目で消費されている
-	if err := svc.FinishAddPasskeyByOtp(context.Background(), "user@example.com", otp, credential, "127.0.0.1"); err == nil {
-		t.Fatal("expected ErrOtpExpiredOrConsumed on 2nd call, got nil")
-	} else if err != application.ErrOtpExpiredOrConsumed {
-		t.Fatalf("expected ErrOtpExpiredOrConsumed, got %v", err)
-	}
-}
-
-// ─── Regression: challenge mismatch protects account B's session ─────────────
-
-// [AUTH-BE-REG-1] FinishAddPasskeyByOtp に別 OTP セッションの challengeValue を渡した場合、
-// ErrBadRequest を返す（差し替え攻撃への回帰テスト）。
-// 仕様: otpA の OTP/challenge は消費されるが、otpB 側のセッションは一切影響を受けない。
-func TestFinishAddPasskeyByOtpRejectsChallengeMismatch(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-
-	// アカウント A と B を個別に作成して repo に入れる
-	accountA, err := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAW", "user@example.com", "user@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "handle-one")
-	if err != nil {
-		t.Fatalf("NewAuthAccount A: %v", err)
-	}
-	accountB, err := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "other@example.com", "other@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "handle-b")
-	if err != nil {
-		t.Fatalf("NewAuthAccount B: %v", err)
-	}
-	accountRepo := &stubAccountRepo{accounts: map[string]domain.AuthAccount{
-		accountA.AccountID(): accountA,
-		accountB.AccountID(): accountB,
-	}}
-
-	// アカウント A と B でそれぞれ異なる challengeKey を返すように beginRegistrationFn をカスタマイズする。
-	// これにより challengeA.Challenge != challengeB.Challenge となり、
-	// provider の FinishRegistration で challenge mismatch を検出できる。
-	callCount := 0
-	provider := &mockWebAuthnProvider{
-		beginRegistrationFn: func(_ context.Context, _ string) (string, []byte, error) {
-			callCount++
-			key := fmt.Sprintf("challenge-key-reg-%d", callCount)
-			return key, []byte(`{"challenge":"` + key + `"}`), nil
-		},
-		finishRegistrationFn: func(_ context.Context, challengeKey string, _ string, credential application.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
-			// storedChallengeKey と credential の ClientDataJSON が一致しない場合は mismatch エラー
-			if challengeKey != "" && credential.Response.ClientDataJSON != challengeKey {
-				return "", domain.ZeroWebAuthnCredentialData(), fmt.Errorf("challenge mismatch: stored=%q, got=%q", challengeKey, credential.Response.ClientDataJSON)
-			}
-			return credential.ID, domain.ZeroWebAuthnCredentialData(), nil
-		},
-	}
-	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
-
-	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-
-	// Step 1: account A の OTP を発行し、チャレンジ C1 を取得する
-	otpA, err := svc.IssuePasskeyOtp(context.Background(), accountID, "01ARZ3NDEKTSV4RRFFQ69G5FB1")
-	if err != nil {
-		t.Fatalf("IssuePasskeyOtp A: %v", err)
-	}
-	challengeA, err := svc.StartAddPasskeyByOtp(context.Background(), "user@example.com", otpA, "127.0.0.1")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp A: %v", err)
-	}
-	_ = challengeA // challengeA は使用しない（チャレンジが生成されたことの確認のみ）
-
-	// Step 2: 別のアカウントで OTP を発行し、チャレンジ C2 を取得する
-	otherAccountID := "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-	otpB, err := svc.IssuePasskeyOtp(context.Background(), otherAccountID, "01ARZ3NDEKTSV4RRFFQ69G5FB2")
-	if err != nil {
-		t.Fatalf("IssuePasskeyOtp B: %v", err)
-	}
-	challengeB, err := svc.StartAddPasskeyByOtp(context.Background(), "other@example.com", otpB, "127.0.0.1")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp B: %v", err)
-	}
-
-	// mismatch 前に handoff の数を記録する（otpA と otpB の 2 件が存在する）
-	handoffCountBefore := len(stateRepo.handoffs)
-	if handoffCountBefore != 2 {
-		t.Fatalf("expected 2 handoff entries before mismatch, got %d", handoffCountBefore)
-	}
-
-	// Step 3: account A の OTP を使い、C2（別セッションの challenge）を credential に埋め込んで送る
-	// → provider の FinishRegistration で storedChallengeKey(C1) != credential.ClientDataJSON(C2) なので ErrBadRequest
-	// → otpA の handoff は消費されるが、otpB の handoff は残る
-	mismatchCredential := application.WebAuthnAttestationCredentialDTO{
-		ID:    "handle-new",
-		RawID: "handle-new",
-		Type:  "public-key",
-		Response: application.WebAuthnAttestationResponseDTO{
-			ClientDataJSON: challengeB.Challenge, // mismatch: A の OTP に B の challenge を渡す
-		},
-	}
-	if err := svc.FinishAddPasskeyByOtp(context.Background(), "user@example.com", otpA, mismatchCredential, "127.0.0.1"); err == nil {
-		t.Fatal("expected ErrBadRequest for challenge mismatch, got nil")
-	} else if err != application.ErrBadRequest {
-		t.Fatalf("expected ErrBadRequest, got %v", err)
-	}
-
-	// Step 4: otpA 側の handoff は消費されており、otpB 側は一切影響を受けていない（差し替え攻撃の影響が波及しないことの確認）
-	handoffCountAfter := len(stateRepo.handoffs)
-	if handoffCountAfter != 1 {
-		t.Fatalf("expected 1 handoff remaining after A's mismatch attempt (B only), got %d", handoffCountAfter)
-	}
-}
-
 // ─── WebAuthn failure lock / error classification tests ──────────────────────
 
 // [AUTH-BE-WA-8] FinishPasskeyAuthentication with provider: FinishLogin error increments failure lock.
@@ -1159,7 +918,7 @@ func TestRegisterPasskeyRejectsUVLessAttestation(t *testing.T) {
 	_, accountRepo := accountWithOnePasskey(t)
 
 	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, domain.TokenKindRecovery, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("NewRecoverySession: %v", err)
 	}
@@ -1204,17 +963,19 @@ func TestRecoveryTokenAtomicConsumeRejectsReplay(t *testing.T) {
 	_, accountRepo := accountWithOnePasskey(t)
 	svc := newTestAuthService(stateRepo, accountRepo)
 
-	// Recovery token を発行
+	// Recovery token を発行（新しい "tokenID.plainSecret" 形式）
 	account, _ := accountRepo.FindByEmail(context.Background(), "user@example.com")
-	secret := "opaque-01ARZ3NDEKTSV4RRFFQ69G5FAV" // #nosec G101
-	token, err := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", account.AccountID(), secret, fixedClock()().Add(30*time.Minute))
+	tokenID := "01ARZ3NDEKTSV4RRFFQ69G5FAV"                    // #nosec G101 -- test ULID, not a secret
+	plainSecret := "test-random-secret-b64url-encoded-32bytes" // #nosec G101
+	urlToken := tokenID + "." + plainSecret                    // #nosec G101
+	token, err := domain.NewRecoveryToken(tokenID, account.AccountID(), plainSecret, domain.TokenKindRecovery, fixedClock()().Add(30*time.Minute))
 	if err != nil {
 		t.Fatalf("NewRecoveryToken: %v", err)
 	}
-	stateRepo.recoveryTokens[secret] = token
+	stateRepo.recoveryTokens[plainSecret] = token
 
 	// 1 回目: 成功
-	result1, err := svc.ConsumeRecoveryToken(context.Background(), application.ConsumeRecoveryTokenInput{Token: secret, ClientIP: "127.0.0.1"})
+	result1, err := svc.ConsumeRecoveryToken(context.Background(), application.ConsumeRecoveryTokenInput{Token: urlToken, ClientIP: "127.0.0.1"})
 	if err != nil {
 		t.Fatalf("first consume should succeed, got: %v", err)
 	}
@@ -1223,7 +984,7 @@ func TestRecoveryTokenAtomicConsumeRejectsReplay(t *testing.T) {
 	}
 
 	// 2 回目: 拒否（アトミック consume により token が既に消費済み）
-	_, err = svc.ConsumeRecoveryToken(context.Background(), application.ConsumeRecoveryTokenInput{Token: secret, ClientIP: "127.0.0.1"})
+	_, err = svc.ConsumeRecoveryToken(context.Background(), application.ConsumeRecoveryTokenInput{Token: urlToken, ClientIP: "127.0.0.1"})
 	if err != application.ErrBadRequest {
 		t.Fatalf("expected ErrBadRequest for replay consume, got %v", err)
 	}
@@ -1250,175 +1011,5 @@ func TestIdentifierRotationCannotBypassPasskeyStartBudget(t *testing.T) {
 		if i >= 5 && err != application.ErrBadRequest {
 			t.Fatalf("expected ErrBadRequest for throttled attempt %d, got %v", i, err)
 		}
-	}
-}
-
-// [AUTH-BE-S032] OTP brute force は throttle により account takeover 前に抑制される
-func TestOtpBruteForceTriggersThrottle(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-	svc := newTestAuthService(stateRepo, newStubAccountRepoWithAccount(emptyAuthAccount()))
-
-	clientIP := "192.0.2.10"
-	// IP/email bucket limit (5) を超えるまで無効な OTP を試行する
-	for i := 0; i < 7; i++ {
-		_, err := svc.StartAddPasskeyByOtp(context.Background(), "user@example.com", fmt.Sprintf("%06d", i), clientIP)
-		if i < 5 {
-			// スロットル前は ErrOtpExpiredOrConsumed（generic）
-			if err != application.ErrOtpExpiredOrConsumed {
-				t.Fatalf("expected ErrOtpExpiredOrConsumed for attempt %d, got %v", i, err)
-			}
-		} else {
-			// スロットル後は ErrBadRequest（generic）
-			if err != application.ErrBadRequest {
-				t.Fatalf("expected ErrBadRequest for throttled attempt %d, got %v", i, err)
-			}
-		}
-	}
-}
-
-// hashSecretForTest は AuthService.hashSecret と同じロジックで HMAC-SHA256 ハッシュを計算する。
-func hashSecretForTest(secret string) string {
-	mac := hmac.New(sha256.New, []byte("test-pepper"))
-	mac.Write([]byte(secret))
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
-}
-
-// [AUTH-BE-S034] 同じ OTP 値は別アカウントの handoff state を上書きしない
-func TestSameOtpValueIsolatedAcrossAccounts(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-
-	// アカウント A と B を作成
-	accountA, err := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAW", "user@example.com", "user@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "handle-a")
-	if err != nil {
-		t.Fatalf("NewAuthAccount A: %v", err)
-	}
-	accountB, err := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "other@example.com", "other@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "handle-b")
-	if err != nil {
-		t.Fatalf("NewAuthAccount B: %v", err)
-	}
-	accountRepo := &stubAccountRepo{accounts: map[string]domain.AuthAccount{
-		accountA.AccountID(): accountA,
-		accountB.AccountID(): accountB,
-	}}
-	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, &mockWebAuthnProvider{})
-
-	// 同じ OTP 値（"123456"）で両アカウントに handoff を作成
-	otpValue := "123456"
-	emailHashA := hashSecretForTest("user@example.com")
-	emailHashB := hashSecretForTest("other@example.com")
-	otpHash := hashSecretForTest(otpValue)
-
-	handoffA, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FC1", accountA.AccountID(), "01ARZ3NDEKTSV4RRFFQ69G5FAY", emailHashA, otpHash, fixedClock()().Add(5*time.Minute))
-	handoffB, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FC2", accountB.AccountID(), "01ARZ3NDEKTSV4RRFFQ69G5FAZ", emailHashB, otpHash, fixedClock()().Add(5*time.Minute))
-	stateRepo.handoffs[handoffA.ID()] = handoffA
-	stateRepo.handoffs[handoffB.ID()] = handoffB
-
-	// アカウント A の email + OTP で検索 → A の handoff が返る（challenge 発行成功を確認）
-	_, err = svc.StartAddPasskeyByOtp(context.Background(), "user@example.com", otpValue, "127.0.0.1")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp A: %v", err)
-	}
-
-	// アカウント B の email + OTP で検索 → B の handoff が返る（challenge 発行成功を確認）
-	_, err = svc.StartAddPasskeyByOtp(context.Background(), "other@example.com", otpValue, "127.0.0.2")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp B: %v", err)
-	}
-
-	// 両方の handoff が独立して存在することを確認（一方が上書きされていない）
-	if len(stateRepo.handoffs) != 2 {
-		t.Fatalf("expected 2 independent handoffs, got %d", len(stateRepo.handoffs))
-	}
-}
-
-// [AUTH-BE-S035] handoff finish はアトミックであり、2 回目は拒否される
-func TestHandoffFinishAtomicRejectsReplay(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-	_, accountRepo := accountWithOnePasskey(t)
-	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, &mockWebAuthnProvider{})
-
-	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-
-	// OTP を発行
-	otp, err := svc.IssuePasskeyOtp(context.Background(), accountID, "01ARZ3NDEKTSV4RRFFQ69G5FB1")
-	if err != nil {
-		t.Fatalf("IssuePasskeyOtp: %v", err)
-	}
-
-	// StartAddPasskeyByOtp でチャレンジを取得
-	challenge, err := svc.StartAddPasskeyByOtp(context.Background(), "user@example.com", otp, "127.0.0.1")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp: %v", err)
-	}
-
-	// 1 回目: 成功
-	credential := application.WebAuthnAttestationCredentialDTO{
-		ID:    "handle-new",
-		RawID: "handle-new",
-		Type:  "public-key",
-		Response: application.WebAuthnAttestationResponseDTO{
-			ClientDataJSON: challenge.Challenge,
-		},
-	}
-	if err := svc.FinishAddPasskeyByOtp(context.Background(), "user@example.com", otp, credential, "127.0.0.1"); err != nil {
-		t.Fatalf("first finish should succeed, got: %v", err)
-	}
-
-	// 2 回目: 拒否（handoff が既に消費済み）
-	if err := svc.FinishAddPasskeyByOtp(context.Background(), "user@example.com", otp, credential, "127.0.0.1"); err == nil {
-		t.Fatal("expected error for replay finish, got nil")
-	} else if err != application.ErrOtpExpiredOrConsumed {
-		t.Fatalf("expected ErrOtpExpiredOrConsumed for replay finish, got %v", err)
-	}
-}
-
-// [AUTH-BE-S035-AUDIT] FinishAddPasskeyByOtp 成功時に audit event が emit される
-func TestFinishAddPasskeyByOtpEmitsAuditEvent(t *testing.T) {
-	t.Parallel()
-	stateRepo := newStubStateRepo(fixedClock())
-	_, accountRepo := accountWithOnePasskey(t)
-	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, &mockWebAuthnProvider{})
-
-	accountID := "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-
-	otp, err := svc.IssuePasskeyOtp(context.Background(), accountID, "01ARZ3NDEKTSV4RRFFQ69G5FB1")
-	if err != nil {
-		t.Fatalf("IssuePasskeyOtp: %v", err)
-	}
-
-	challenge, err := svc.StartAddPasskeyByOtp(context.Background(), "user@example.com", otp, "127.0.0.1")
-	if err != nil {
-		t.Fatalf("StartAddPasskeyByOtp: %v", err)
-	}
-
-	notifier := &stubAuditNotifier{}
-	svc.UseAuditNotifier(notifier)
-
-	credential := application.WebAuthnAttestationCredentialDTO{
-		ID:    "handle-new",
-		RawID: "handle-new",
-		Type:  "public-key",
-		Response: application.WebAuthnAttestationResponseDTO{
-			ClientDataJSON: challenge.Challenge,
-		},
-	}
-	if err := svc.FinishAddPasskeyByOtp(context.Background(), "user@example.com", otp, credential, "127.0.0.1"); err != nil {
-		t.Fatalf("FinishAddPasskeyByOtp: %v", err)
-	}
-
-	if notifier.emitCount != 1 {
-		t.Fatalf("expected 1 audit event, got %d", notifier.emitCount)
-	}
-	if notifier.lastAccountID != accountID {
-		t.Errorf("expected AccountID=%q, got %q", accountID, notifier.lastAccountID)
-	}
-	if notifier.lastPasskeyID == "" {
-		t.Error("expected non-empty PasskeyID")
-	}
-	if notifier.lastRequestID == "" {
-		t.Error("expected non-empty RequestID")
 	}
 }

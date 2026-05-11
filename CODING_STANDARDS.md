@@ -194,10 +194,10 @@
 
 ### frontend ui package では親 directory を `../` でたどらない
 
-- required: `packages/frontend/ui/src/**` の package 内参照は `@ui` alias を使う
+- required: `packages/frontend/ui/src/**` の package 内参照はパッケージ名 `@www-template/ui` を使う（短縮エイリアスは廃止済み）
 - Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:ui`) -> `eslint.config.js` (`no-restricted-imports`)
 - NG例: `import Card from '../molecules/Card/Card.svelte'`
-- OK例: `import Card from '@ui/components/molecules/Card/Card.svelte'`
+- OK例: `import { Button } from '@www-template/ui/components/button'`
 
 ### file / function の長さ制約を守る
 

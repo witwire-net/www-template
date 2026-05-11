@@ -88,153 +88,6 @@
         ]
       }
     },
-    "/api/v1/auth/passkey/add/finish": {
-      "post": {
-        "operationId": "finishPasskeyAdditionByOtp",
-        "summary": "Finishes adding a passkey on a new device by OTP handoff",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The server could not understand the request due to invalid syntax.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthFailureResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["auth"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PasskeyAddByOtpFinishRequest"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/passkey/add/start": {
-      "post": {
-        "operationId": "startPasskeyAdditionByOtp",
-        "summary": "Starts adding a passkey on a new device by OTP handoff",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasskeyAddStartResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The server could not understand the request due to invalid syntax.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthFailureResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["auth"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PasskeyAddByOtpStartRequest"
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/auth/passkey/finish": {
       "post": {
         "operationId": "finishPasskeyAuthentication",
@@ -1168,10 +1021,10 @@
         ]
       }
     },
-    "/api/v1/passkeys/otp": {
+    "/api/v1/passkeys/send-device-link": {
       "post": {
-        "operationId": "issuePasskeyOtp",
-        "summary": "Issues a one-time password for adding a passkey on a new device",
+        "operationId": "sendDeviceLink",
+        "summary": "Sends a device-link URL to the registered email for adding a passkey on a new device",
         "parameters": [
           {
             "name": "X-Reauth-Session",
@@ -1197,7 +1050,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PasskeyOtpResponse"
+                  "$ref": "#/components/schemas/DeviceLinkResponse"
                 }
               }
             }
@@ -1832,6 +1685,19 @@
         },
         "description": "JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。"
       },
+      "DeviceLinkResponse": {
+        "type": "object",
+        "required": ["requestId", "issued"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "issued": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "required": ["error"],
@@ -1874,35 +1740,6 @@
           "revoked": {
             "type": "boolean",
             "enum": [true]
-          }
-        }
-      },
-      "PasskeyAddByOtpFinishRequest": {
-        "type": "object",
-        "required": ["email", "otp", "credential"],
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "otp": {
-            "type": "string"
-          },
-          "credential": {
-            "$ref": "#/components/schemas/WebAuthnAttestationCredential"
-          }
-        }
-      },
-      "PasskeyAddByOtpStartRequest": {
-        "type": "object",
-        "required": ["email", "otp"],
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "otp": {
-            "type": "string"
           }
         }
       },
@@ -2017,19 +1854,6 @@
           }
         }
       },
-      "PasskeyOtpResponse": {
-        "type": "object",
-        "required": ["requestId", "issued"],
-        "properties": {
-          "requestId": {
-            "$ref": "#/components/schemas/UlidId"
-          },
-          "issued": {
-            "type": "boolean",
-            "enum": [true]
-          }
-        }
-      },
       "PasskeyRegisterRequest": {
         "oneOf": [
           {
@@ -2111,7 +1935,7 @@
       },
       "ReauthenticationSessionKind": {
         "type": "string",
-        "enum": ["otp-issue", "passkey-delete"],
+        "enum": ["device-link", "passkey-delete"],
         "description": "Reauthentication session kind bound to a high-risk operation."
       },
       "ReauthenticationSessionResponse": {
@@ -2173,7 +1997,8 @@
           "recoveryTokenId",
           "recoverySessionId",
           "recovery_session",
-          "expiresAt"
+          "expiresAt",
+          "kind"
         ],
         "properties": {
           "requestId": {
@@ -2196,6 +2021,9 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TokenKind"
           }
         }
       },
@@ -2317,6 +2145,11 @@
             "format": "date-time"
           }
         }
+      },
+      "TokenKind": {
+        "type": "string",
+        "enum": ["recovery", "device-link"],
+        "description": "パスキー追加トークンの発行種別。recovery は紛失時復旧、device-link は認証済み端末からの新端末追加。"
       },
       "UlidId": {
         "type": "string",

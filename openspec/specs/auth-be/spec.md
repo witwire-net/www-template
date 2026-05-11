@@ -59,49 +59,57 @@ Auth core backend requirements, covering bearer-compatible passkey authenticatio
 
 ### Requirement: recovery token は単回利用・期限付きで enumeration-safe に扱う
 
-recovery token は、単回利用・期限付き・enumeration-safe な復旧 credential として SHALL 扱われなければならない。
+recovery token は、単回利用・期限付き・enumeration-safe なパスキー追加用 credential として SHALL 扱われなければならない。
 
 **Customer Context**
 
-パスキー紛失時の復旧は登録済みメールアドレスだけで成立する必要がありますが、同時に recovery 導線はアカウント有無や token 状態を推測できないように保護されなければなりません。短命 token の保管、受理応答、temporary lock が曖昧だと、Auth コア全体の安全性が下がります。
+パスキー紛失時の復旧と新端末追加は、どちらも登録済みメールアドレスへの URL 送信によってパスキー再登録を可能にする必要がある。同時にこれらの導線は、アカウント有無や token 状態を推測できないように保護されなければならない。短命 token の保管、受理応答、temporary lock が曖昧だと、Auth コア全体の安全性が下がる。また、復旧と新端末追加では token 消費後の挙動（セッション失効の有無、通知文面）が異なるため、token 自体に kind を持たせる必要がある。
 
 **Requirement**
 
-- The system SHALL treat recovery tokens as single-use time-limited credentials and MUST keep recovery request responses enumeration-safe.
-- The system SHALL expose `POST /api/v1/auth/recovery` to accept a registered email address, issue a single-use time-limited RecoveryToken, and send a recovery URL to the registered address through SES.
-- RecoveryToken と `recovery_session` は Valkey-backed auth state store に MUST 保持される。
-- RecoveryToken 自体の resource ID、`recovery_session` の resource ID、delivery request ID、mail/audit correlation ID など recovery flow を追跡する識別子が必要な箇所は ULID を SHALL 使用する。
-- `POST /api/v1/auth/recovery` は account 有無や throttle 状態を外部から判別できない accepted response を SHALL 返す。
-- The system SHALL expose `POST /api/v1/auth/recovery/consume` to validate a RecoveryToken, mark the token consumed atomically, and create a passkey re-registration `recovery_session`.
-- RecoveryToken secret は平文 lookup 値として保存してはならず、server-side keyed hash または同等の one-way representation で MUST 保存・照合する。
-- RecoveryToken consume と `recovery_session` consume は atomic operation として MUST 実行され、同じ token または session から複数の有効結果を作成してはならない。
-- 無効、期限切れ、revoke 済み、または consumed 済みの RecoveryToken から recovery session を作成してはならない（MUST NOT）。
-- recovery request / consume response は `Cache-Control: no-store` を SHALL 保ち、temporary lock / throttle の state は Valkey-backed auth state store に MUST 保持される。
-- RecoveryToken を含む URL は response body、log、trace attribute、error message に MUST 出力されない。
+- The system SHALL treat recovery tokens and device-link tokens as single-use time-limited credentials and MUST keep issuance request responses enumeration-safe.
+- Token は `kind` フィールドを持ち、`"recovery"`（パスキー紛失時の復旧）または `"device-link"`（認証済み端末からの新端末追加）のいずれかを MUST 指定する。
+- The system SHALL expose `POST /api/v1/auth/recovery` to accept a registered email address and issue a single-use time-limited token with `kind=recovery`, then send a recovery URL to the registered address through SMTP.
+- The system SHALL expose `POST /api/v1/passkeys/send-device-link` to accept a bearer session with `X-Reauth-Session` header (operation kind `device-link`) and issue a single-use time-limited token with `kind=device-link`, then send a device-link URL to the registered email address through SMTP. This endpoint MUST require a valid bearer session and a consumed reauthentication session; bearer-only requests SHALL be rejected.
+- RecoveryToken と RecoverySession は Valkey-backed auth state store に MUST 保持され、`kind` を含む完全な状態で永続化される。
+- RecoveryToken 自体の resource ID、RecoverySession の resource ID、delivery request ID、mail/audit correlation ID など flow を追跡する識別子が必要な箇所は ULID を SHALL 使用する。
+- `POST /api/v1/auth/recovery` および `POST /api/v1/passkeys/send-device-link` は account 有無や throttle 状態を外部から判別できない accepted response を SHALL 返す。
+- The system SHALL expose `POST /api/v1/auth/recovery/consume` to validate a token, mark the token consumed atomically, and create a passkey re-registration RecoverySession that inherits the token's `kind`.
+- RecoveryToken secret は平文 lookup 値として保存してはならず、server-side keyed hash (HMAC-SHA256 with server-side pepper) で MUST 保存・照合する。
+- RecoveryToken consume と RecoverySession consume は atomic operation として MUST 実行され、同じ token または session から複数の有効結果を作成してはならない。
+- 無効、期限切れ、revoke 済み、または consumed 済みの token から RecoverySession を作成してはならない（MUST NOT）。
+- 発行・消費・登録 response は `Cache-Control: no-store` を SHALL 保ち、temporary lock / throttle の state は Valkey-backed auth state store に MUST 保持される。
+- Token を含む URL は response body、log、trace attribute、error message に MUST 出力されない。
 
-#### Scenario: 復旧依頼は token を発行して受理される (AUTH-BE-S004)
+#### Scenario: 復旧依頼は kind=recovery の token を発行して受理される (AUTH-BE-S004)
 
 - **GIVEN** 利用者が passkey recovery を依頼する
 - **WHEN** 利用者が `POST /api/v1/auth/recovery` を送信する
-- **THEN** system は accepted response を返し、対象アカウントが存在するときだけ time-limited な RecoveryToken を発行して recovery URL をメール送信する
+- **THEN** system は accepted response を返し、対象アカウントが存在するときだけ `kind=recovery` の time-limited token を発行して recovery URL をメール送信する
 
-#### Scenario: 有効な復旧 token は recovery session を作成する (AUTH-BE-S005)
+#### Scenario: 有効な復旧 token は kind を継承した RecoverySession を作成する (AUTH-BE-S005)
 
-- **GIVEN** recovery URL が valid な RecoveryToken を含んでいる
+- **GIVEN** recovery URL が valid な token (kind=recovery) を含んでいる
 - **WHEN** 利用者が `POST /api/v1/auth/recovery/consume` を送信する
-- **THEN** token は consumed となり、system は Valkey-backed auth state store 上の passkey 再登録用 `recovery_session` を返す
+- **THEN** token は consumed となり、system は `kind=recovery` を継承した RecoverySession を返す
+
+#### Scenario: 有効なデバイスリンク token は kind を継承した RecoverySession を作成する (AUTH-BE-S047)
+
+- **GIVEN** device-link URL が valid な token (kind=device-link) を含んでいる
+- **WHEN** 利用者が `POST /api/v1/auth/recovery/consume` を送信する
+- **THEN** token は consumed となり、system は `kind=device-link` を継承した RecoverySession を返す
 
 #### Scenario: 無効な復旧 token は拒否される (AUTH-BE-S006)
 
-- **GIVEN** recovery URL が invalid、expired、または consumed 済みの RecoveryToken を含んでいる
+- **GIVEN** recovery URL が invalid、expired、または consumed 済みの token を含んでいる
 - **WHEN** 利用者が `POST /api/v1/auth/recovery/consume` を送信する
-- **THEN** system は request を拒否し、recovery session を作成しない
+- **THEN** system は request を拒否し、RecoverySession を作成しない
 
-#### Scenario: recovery token の並行 consume は単一結果だけを許可する (AUTH-BE-S030)
+#### Scenario: token の並行 consume は単一結果だけを許可する (AUTH-BE-S030)
 
-- **GIVEN** 同じ valid RecoveryToken に対する複数の consume request が並行している
+- **GIVEN** 同じ valid token に対する複数の consume request が並行している
 - **WHEN** system が token consume を処理する
-- **THEN** ちょうど 1 つの request だけが recovery session を作成し、残りは generic failure として拒否される
+- **THEN** ちょうど 1 つの request だけが RecoverySession を作成し、残りは generic failure として拒否される
 
 ### Requirement: auth throttle と temporary lock は non-revealing に強制する
 
@@ -109,7 +117,7 @@ auth throttle と temporary lock は、abuse を抑止しつつ account existenc
 
 **Customer Context**
 
-Phase 3 の runtime decision は `passkey/start` throttle、recovery request throttle、finish / consume / register 失敗時の temporary lock を archive-ready 必須要件として定義しています。これらが dedicated requirement / scenario を持たないと、temporary lock や throttle が実装で弱まり、enumeration-safe な recovery と shared register seam の安全性が保証できません。
+runtime decision は `passkey/start` throttle、recovery request throttle、send-device-link throttle、finish / consume / register 失敗時の temporary lock を必須要件として定義しています。これらが dedicated requirement / scenario を持たないと、temporary lock や throttle が実装で弱まり、enumeration-safe な recovery/device-link と shared register seam の安全性が保証できません。
 
 **Requirement**
 
@@ -117,9 +125,8 @@ Phase 3 の runtime decision は `passkey/start` throttle、recovery request thr
 - `POST /api/v1/auth/passkey/start` は IP bucket と global bucket の rate limit を MUST 適用し、identifier の変化だけで challenge issuance budget を回避できてはならない。
 - `POST /api/v1/auth/passkey/start` は configured budget を超える request に追加 WebAuthn challenge を発行してはならない。
 - Public WebAuthn challenge state は all nodes で共有できる Valkey-backed auth state store に TTL 付きで保持され、in-memory only の unbounded pending state として保持されてはならない。
-- `POST /api/v1/auth/recovery` は email ごとに 3 回 / 1 時間、IP ごとに 10 回 / 1 時間の throttle を MUST 適用し、throttle 中でも generic accepted response と `Cache-Control: no-store` を SHALL 維持する。
-- `POST /api/v1/auth/passkey/add/start` と `POST /api/v1/auth/passkey/add/finish` は email、IP、email+IP、OTP handoff、account、global の configured buckets に rate limit と temporary lock を MUST 適用する。
-- `POST /api/v1/auth/passkey/finish`、`POST /api/v1/auth/recovery/consume`、recovery branch の `POST /api/v1/auth/passkey/register`、および device login handoff の add/start・add/finish に対する失敗は共有 failure counter を MUST 加算し、configured threshold に達した主体を temporary lock しなければならない。
+- `POST /api/v1/auth/recovery` および `POST /api/v1/passkeys/send-device-link` は email ごとに 3 回 / 1 時間、IP ごとに 10 回 / 1 時間の throttle を MUST 適用し、throttle 中でも generic accepted response と `Cache-Control: no-store` を SHALL 維持する。
+- `POST /api/v1/auth/passkey/finish`、`POST /api/v1/auth/recovery/consume`、recovery/device-link branch の `POST /api/v1/auth/passkey/register` に対する失敗は共有 failure counter を MUST 加算し、configured threshold に達した主体を temporary lock しなければならない。
 - throttle counter と temporary lock state は Valkey-backed auth state store に MUST 保持され、all nodes で共有される。
 - throttle counter record、temporary lock record、auth abuse event record、解除ジョブ参照 ID など guardrail state が持つ ID は ULID を SHALL 使用する。ただし email / IP 由来の bucket key 自体は resource ID ではないため ULID 変換対象に含めない。
 - temporary lock 中の guarded request は no-store boundary を保ったまま reject され、account existence、invite-only state、recovery-only state の有無を外部へ漏らしてはならない。
@@ -139,9 +146,9 @@ Phase 3 の runtime decision は `passkey/start` throttle、recovery request thr
 
 #### Scenario: repeated auth failures は temporary lock を発動する (AUTH-BE-S012)
 
-- **GIVEN** public auth completion、recovery consume、recovery registration、または device login handoff に対する失敗が configured window 内で累積している
+- **GIVEN** public auth completion、recovery/device-link consume、または registration に対する失敗が configured window 内で累積している
 - **WHEN** client が temporary lock 期間中に guarded endpoint を再試行する
-- **THEN** system は temporary lock として request を reject し、challenge completion、recovery consume、passkey re-registration、device login enablement を進めない
+- **THEN** system は temporary lock として request を reject し、challenge completion、token consume、passkey registration を進めない
 
 #### Scenario: identifier rotation では passkey start budget を回避できない (AUTH-BE-S031)
 
@@ -149,44 +156,47 @@ Phase 3 の runtime decision は `passkey/start` throttle、recovery request thr
 - **WHEN** IP または global challenge issuance budget が上限に達している
 - **THEN** system は追加 challenge を発行せず non-revealing に reject する
 
-#### Scenario: OTP brute force は account takeover 前に lock される (AUTH-BE-S032)
-
-- **GIVEN** client が同じ email または同じ IP から複数の OTP 値を試行している
-- **WHEN** configured handoff verification budget を超過する
-- **THEN** system は device login handoff を temporary lock し、valid OTP の有無を露出しない
-
 ### Requirement: recovery register branch は既存アカウントの再登録だけを許可する
 
-recovery register branch は、valid な `recovery_session` が指す既存アカウントの passkey 再登録だけを SHALL 許可し、invite や consent state を MUST 受け入れてはならない。
+recovery/device-link register branch は、valid な RecoverySession が指す既存アカウントの passkey 登録だけを SHALL 許可し、invite や consent state を MUST 受け入れてはならない。登録完了後はセッションの kind に応じた後処理（セッション失効・通知）を実行する。
 
 **Customer Context**
 
-Auth コアが扱うのは既存アカウントの passkey 回復であり、招待登録や規約同意や Guest state 変更ではありません。この境界が崩れると `/login/recovery/*` と `/invite/*` が混線し、後続フェーズの責務が不明確になります。
+Auth コアが扱うのは既存アカウントの passkey 回復・追加であり、招待登録や規約同意や Guest state 変更ではありません。この境界が崩れると `/login/recovery/*` と `/invite/*` が混線し、後続フェーズの責務が不明確になります。また、kind=recovery による復旧はアカウント乗っ取りの可能性があるため全既存セッションの強制失効が必要であり、kind=device-link による新端末追加ではその必要がない。
 
 **Requirement**
 
-- The system SHALL allow the recovery register branch to operate only on an existing account referenced by a valid `recovery_session`, and the shared register endpoint MUST keep an exactly-one selector boundary between recovery and invite state.
-- `POST /api/v1/auth/passkey/register` は shared endpoint として `recovery_session` または `invitation_session` の exactly-one を MUST 要求し、recovery branch は valid な `recovery_session` のみを持つときだけ SHALL 成立する。
-- recovery branch は `recovery_session` が指す既存アカウントへ新しい passkey を SHALL 登録し、new Account 作成、Guest / Member state 変更、base role 変更をしてはならない。
-- recovery branch は invitation-session validation、invite-token consume、invite consent completion、TermsConsent read / write を MUST NOT 要求しない。
-- `recovery_session` と `invitation_session` を同時に提示する request、または両方を欠く request は branch ambiguity として MUST reject しなければならない。
-- recovery branch が成功した後は、新しい active bearer session を SHALL 返す。
+- The system SHALL allow the register branch to operate only on an existing account referenced by a valid RecoverySession, and the shared register endpoint MUST keep an exactly-one selector boundary between recovery and invite state.
+- `POST /api/v1/auth/passkey/register` は shared endpoint として RecoverySession または InvitationSession の exactly-one を MUST 要求し、register branch は valid な RecoverySession のみを持つときだけ SHALL 成立する。
+- register branch は RecoverySession が指す既存アカウントへ新しい passkey を SHALL 登録し、new Account 作成、Guest / Member state 変更、base role 変更をしてはならない。
+- register branch は invitation-session validation、invite-token consume、invite consent completion、TermsConsent read / write を MUST NOT 要求しない。
+- RecoverySession と InvitationSession を同時に提示する request、または両方を欠く request は branch ambiguity として MUST reject しなければならない。
+- register branch が成功した後は、新しい active bearer session を SHALL 返す。
+- RecoverySession の `kind` が `"recovery"` である場合、system はパスキー登録成功後に該当アカウントの全既存セッションを強制失効しなければならない（SHALL revoke all sessions for the account）。その後、復旧完了を通知するメールを登録済みメールアドレスへ SHALL 送信する。
+- RecoverySession の `kind` が `"device-link"` である場合、system はパスキー登録成功後にセッションを失効してはならない（MUST NOT revoke any session）。新端末追加完了を通知するメールを登録済みメールアドレスへ SHALL 送信する。
+- 通知メールの送信失敗はパスキー登録の成功を妨げてはならない（MUST NOT block registration success）。失敗は fire-and-forget でログ記録する。
 - `POST /api/v1/auth/passkey/register` の response は `Cache-Control: no-store` を SHALL 保ち、cacheable な auth response を返してはならない。
-- consumed 済み recovery session を再利用してはならない（MUST NOT）。消費済み state は Valkey-backed auth state store に反映される。
-- recovery branch が参照・生成する account ID、passkey credential ID、session ID、`recovery_session` ID、関連 audit / notification / event ID は ULID を SHALL 使用する。
-- `/invite/*` onboarding flow は recovery branch から暗黙に起動されてはならない。
+- consumed 済み RecoverySession を再利用してはならない（MUST NOT）。消費済み state は Valkey-backed auth state store に反映される。
+- register branch が参照・生成する account ID、passkey credential ID、session ID、RecoverySession ID、関連 audit / notification / event ID は ULID を SHALL 使用する。
+- `/invite/*` onboarding flow は register branch から暗黙に起動されてはならない。
 
-#### Scenario: recovery session は既存アカウントへ passkey を再登録する (AUTH-BE-S007)
+#### Scenario: recovery session (kind=recovery) は既存アカウントへ passkey を再登録し全セッションを失効する (AUTH-BE-S007)
 
-- **GIVEN** 利用者が valid な recovery session を保持している
-- **WHEN** 利用者が recovery branch として `POST /api/v1/auth/passkey/register` を送信する
-- **THEN** system は既存アカウントへ新しい passkey を登録し、TermsConsent や role state を変更せずに active bearer session を返す
+- **GIVEN** 利用者が kind=recovery の valid な RecoverySession を保持している
+- **WHEN** 利用者が register branch として `POST /api/v1/auth/passkey/register` を送信する
+- **THEN** system は既存アカウントへ新しい passkey を登録し、該当アカウントの全既存セッションを強制失効し、復旧完了通知メールを送信し、新しい active bearer session を返す
 
-#### Scenario: invite-only state では recovery registration を完了できない (AUTH-BE-S008)
+#### Scenario: device-link session (kind=device-link) は passkey を追加しセッションは失効しない (AUTH-BE-S048)
 
-- **GIVEN** request が valid な recovery session なしで recovery registration を試みる
+- **GIVEN** 利用者が kind=device-link の valid な RecoverySession を保持している
+- **WHEN** 利用者が register branch として `POST /api/v1/auth/passkey/register` を送信する
+- **THEN** system は既存アカウントへ新しい passkey を登録し、既存セッションを一切失効せず、新端末追加完了通知メールを送信し、新しい active bearer session を返す
+
+#### Scenario: invite-only state では registration を完了できない (AUTH-BE-S008)
+
+- **GIVEN** request が valid な RecoverySession なしで registration を試みる
 - **WHEN** request が invite 向け state のみ、TermsConsent のみ、または利用可能な recovery state を持たない
-- **THEN** system は recovery registration を拒否し、`/login/recovery/*` と `/invite/*` の分離を維持する
+- **THEN** system は registration を拒否し、`/login/recovery/*` と `/invite/*` の分離を維持する
 
 ### Requirement: 認証済みアカウントは複数のパスキーを登録・管理できる
 
@@ -279,17 +289,15 @@ Auth コアが扱うのは既存アカウントの passkey 回復であり、招
 
 ### Requirement: WebAuthn ceremony は user verification を必須にする
 
-**Customer Context**
-
 Passkey は認証基盤の中核であり、端末所持だけでなく端末内の user verification によって利用者本人の操作であることを確認する必要がある。ログイン、新しい端末でのログイン有効化、復旧後の再登録などの高リスク操作で user verification が optional だと、端末盗難や弱い authenticator policy による不正利用リスクが残る。
 
 **Requirement**
 
 - システムは認証 ceremony と登録 ceremony で WebAuthn user verification を SHALL require する。
 - システムは high-risk な認証済み passkey 管理操作の前に、fresh な WebAuthn reauthentication session を SHALL require する。
-- `POST /api/v1/auth/passkey/start`、`POST /api/v1/auth/passkey/finish`、`POST /api/v1/passkeys/start`、`POST /api/v1/passkeys/finish`、`POST /api/v1/auth/passkey/register/start`、`POST /api/v1/auth/passkey/register`、`POST /api/v1/auth/passkey/add/start`、`POST /api/v1/auth/passkey/add/finish` は user verification required semantics を MUST enforce する。
-- `POST /api/v1/passkeys/otp` と `DELETE /api/v1/passkeys/{id}` は bearer session だけで成立してはならず、`X-Reauth-Session` HTTP header で提示された同一 account に紐づく短命 reauthentication session を MUST require する。
-- Reauthentication session は Valkey-backed auth state store に TTL 付きで保持され、対象 account、issuing session、operation kind（`otp-issue` または `passkey-delete`）、request ID を紐づけなければならない。
+- `POST /api/v1/auth/passkey/start`、`POST /api/v1/auth/passkey/finish`、`POST /api/v1/passkeys/start`、`POST /api/v1/passkeys/finish`、`POST /api/v1/auth/passkey/register/start`、`POST /api/v1/auth/passkey/register` は user verification required semantics を MUST enforce する。
+- `POST /api/v1/passkeys/send-device-link` と `DELETE /api/v1/passkeys/{id}` は bearer session だけで成立してはならず、`X-Reauth-Session` HTTP header で提示された同一 account に紐づく短命 reauthentication session を MUST require する。
+- Reauthentication session は Valkey-backed auth state store に TTL 付きで保持され、対象 account、issuing session、operation kind（`device-link` または `passkey-delete`）、request ID を紐づけなければならない。
 - Reauthentication session は high-risk operation completion 時に atomic consume されるか、短い有効期限で失効しなければならない。
 - 異なる operation kind の reauthentication session を使い回した場合は MUST reject する。
 - client に返す WebAuthn options が `userVerification` field を表現する場合、値は `"required"` でなければならない。
@@ -303,15 +311,15 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 #### Scenario: 新端末のログイン有効化は user verification を要求する (AUTH-BE-S029)
 
-- **GIVEN** valid な device login handoff が存在する
+- **GIVEN** valid な device-link RecoverySession が存在する
 - **WHEN** 新しい端末が required user verification なしで WebAuthn registration を完了しようとする
 - **THEN** system は registration を拒否し、account に credential を追加しない
 
-#### Scenario: OTP delivery は fresh な再認証を要求する (AUTH-BE-S036)
+#### Scenario: device-link delivery は fresh な再認証を要求する (AUTH-BE-S036)
 
 - **GIVEN** account は active bearer session を持つが fresh な reauthentication session を持たない
-- **WHEN** account が device login OTP delivery を要求する
-- **THEN** system は request を拒否し、OTP を発行または送信しない
+- **WHEN** account が device-link delivery を要求する
+- **THEN** system は request を拒否し、device-link token を発行または送信しない
 
 #### Scenario: passkey deletion は fresh な再認証を要求する (AUTH-BE-S037)
 
@@ -319,78 +327,69 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 - **WHEN** account が登録済み passkey credential の削除を要求する
 - **THEN** system は削除を拒否し、すべての credential を変更しない
 
-### Requirement: OTP ハンドオフによる新端末へのパスキー追加
+## ADDED Requirements
+
+### Requirement: 認証済み端末から新端末追加用トークンを発行できる
+
+認証済み端末は、既存パスキーによる再認証を完了した後、登録済みメールアドレスへ新端末追加用の単回利用 URL トークンを発行しなければならない。トークンは kind=device-link として管理され、消費後に新端末でのパスキー登録を可能にする。
 
 **Customer Context**
 
-利用者が新しい端末でログインを有効にしたい場合、すでにログイン済みの既存端末で本人確認を行い、登録メールアドレスへ届く短いコードを新しい端末で入力できればよい。コードを画面表示だけに依存すると bearer token 接収や画面共有による流出に弱いため、システムはメールボックス到達性、短命 OTP、厳密な rate limit、atomic な単回利用によって account takeover を防がなければならない。
+利用者が新しい端末でログインできるようにしたい場合、認証済み端末から安全に新端末追加リンクを発行できる必要がある。OTP 方式のように短い数字コードを手入力するのではなく、メール内の URL をクリックするだけで新端末でのパスキー追加を開始できる UX が求められる。
 
 **Requirement**
 
-- システムは `POST /api/v1/passkeys/otp` で device login handoff 用 OTP を発行し、登録メールアドレスへ送信しなければならない（SHALL）。このエンドポイントは bearer session と `X-Reauth-Session` header で提示された operation kind `otp-issue` の reauthentication session を MUST require し、bearer-only では成立してはならない。
-- `POST /api/v1/passkeys/otp` の response body は平文 OTP を含めてはならず、`issued: true` の acknowledgement のみを返さなければならない（MUST NOT return raw OTP）。
-- OTP は 6 桁の数字とし、有効期限は発行から 5 分以下とする（SHALL）。OTP は Valkey-backed auth state store に保存し、消費またはタイムアウト後は再利用できない（MUST NOT）。
-- OTP secret は平文保存してはならず、server-side keyed hash または同等の one-way representation で MUST 保存・照合する。
-- OTP state は account、issuing session、normalized email、handoff ID、expiration、attempt counters、challenge binding を含む namespace により、同じ 6 桁 OTP が別アカウントの state を上書きしてはならない。
-- OTP は API response body に含めてはならず、画面表示用の平文 OTP を backend から返してはならない（MUST NOT）。
-- OTP delivery は secure mail delivery を用い、delivery success/failure は account existence を露出しない no-store response として扱わなければならない。
-- システムは `POST /api/v1/auth/passkey/add/start` で**登録メールアドレスと OTP** を受け取り、検証後に WebAuthn 登録チャレンジを発行しなければならない（SHALL）。このエンドポイントは未認証（bearer session 不要）の公開エンドポイントとする。旧の OTP-only request body は廃止する。
-- システムは `POST /api/v1/auth/passkey/add/finish` で**登録メールアドレス、OTP、WebAuthn 登録クレデンシャル**を受け取り、OTP が指すアカウントへ新しい passkey credential を追加しなければならない（SHALL）。既存の passkey credential はすべて保持されなければならない（MUST）。旧の OTP-only request body は廃止する。
-- `POST /api/v1/auth/passkey/add/start` と `POST /api/v1/auth/passkey/add/finish` は email と OTP の組み合わせだけで account existence、OTP validity、lock state を外部へ露出してはならない。
-- OTP、handoff challenge、registration completion は atomic に consume されなければならず、同じ OTP または challenge から複数の credential を追加してはならない（MUST NOT）。
-- OTP の検証に失敗した場合、または OTP が有効期限切れ・消費済み・locked の場合はリクエストを generic に拒否しなければならない（SHALL）。
-- 新しい credential が追加された後、system は登録済みメールアドレスへ通知を SHALL 送信し、account ID、credential ID、handoff ID、request ID を関連付けた audit event を SHALL 記録する。
-- `POST /api/v1/auth/passkey/add/*` で用いる handoff ID、challenge ID、credential ID、request ID、audit event ID は ULID を使用しなければならない（SHALL）。OTP の 6 桁値自体は resource ID ではない。
+- `POST /api/v1/passkeys/send-device-link` は認証済み端末から新端末追加用の device-link token を発行し、登録済みメールアドレスへ送信しなければならない（SHALL）。このエンドポイントは bearer session と `X-Reauth-Session` header で提示された operation kind `device-link` の reauthentication session を MUST require し、bearer-only では成立してはならない。
+- device-link token は `kind=device-link` で RecoveryToken として管理され、既存の RecoveryToken と同一のライフサイクル（発行・ハッシュ保存・原子消費・TTL 管理）を SHALL 共有する。
+- device-link token の有効期限は発行から 30 分とし、Valkey-backed auth state store に HMAC-SHA256 + pepper でハッシュ化して保存されなければならない（MUST）。
+- `POST /api/v1/passkeys/send-device-link` の response は `Cache-Control: no-store` を SHALL 保つ。
+- メール送信の失敗は account existence を露出せず、accepted response を維持しなければならない。
 
-#### Scenario: OTP を発行できる (AUTH-BE-S021)
+#### Scenario: 認証済み端末からデバイスリンクを送信できる (AUTH-BE-S049)
 
-- **GIVEN** 認証済みアカウントが bearer session を持ち、既存パスキーで WebAuthn 再認証を完了している
-- **WHEN** `POST /api/v1/passkeys/otp` を呼び出す
-- **THEN** システムは登録メールアドレスへ 6 桁の OTP を送信し、OTP を response body に含めず、登録メールアドレスに紐づく短命 handoff state を保存する
+- **GIVEN** 認証済みアカウントが bearer session を持ち、device-link 用 reauthentication session を保持している
+- **WHEN** `POST /api/v1/passkeys/send-device-link` を呼び出す
+- **THEN** system は kind=device-link の token を発行し、新端末追加用 URL を含むメールを登録メールアドレスへ送信し、`{issued: true}` を返す
 
-#### Scenario: OTP を使って新端末にパスキーを追加できる (AUTH-BE-S022)
+#### Scenario: reauthentication なしではデバイスリンクを発行できない (AUTH-BE-S050)
 
-- **GIVEN** 有効な OTP が発行されている
-- **WHEN** 新端末が `POST /api/v1/auth/passkey/add/start` で登録メールアドレスと OTP を提示してチャレンジを取得し、`POST /api/v1/auth/passkey/add/finish` で WebAuthn 登録を完了する
-- **THEN** 新しい passkey credential がアカウントへ追加され、既存のパスキーは保持され、OTP と challenge は再利用できない
+- **GIVEN** 認証済みアカウントが bearer session を持つが reauthentication session を持たない
+- **WHEN** `POST /api/v1/passkeys/send-device-link` を呼び出す
+- **THEN** system は request を拒否し、token を発行しない
 
-#### Scenario: 有効期限切れの OTP は拒否される (AUTH-BE-S023)
+### Requirement: パスキー登録完了時に kind に応じた後処理を実行する
 
-- **GIVEN** 発行から許容 TTL を超えた OTP がある
-- **WHEN** 新端末が `POST /api/v1/auth/passkey/add/start` で登録メールアドレスと OTP を提示する
-- **THEN** システムはリクエストを generic に拒否する
+パスキー登録（`POST /api/v1/auth/passkey/register`）が成功した場合、使用された RecoverySession の kind に応じて、セッション失効と通知メールの後処理を実行しなければならない。
 
-#### Scenario: 消費済みの OTP は再利用できない (AUTH-BE-S024)
+**Customer Context**
 
-- **GIVEN** すでに使用された OTP がある
-- **WHEN** 同じ登録メールアドレスと OTP で再度 `POST /api/v1/auth/passkey/add/start` または `POST /api/v1/auth/passkey/add/finish` を呼び出す
-- **THEN** システムはリクエストを generic に拒否する
+パスキー紛失からの復旧（kind=recovery）はアカウント乗っ取りの可能性があるため、既存の全セッションを強制失効して攻撃者のアクセスを遮断する必要がある。一方、認証済み端末からの新端末追加（kind=device-link）ではセッション失効は不要だが、どちらの場合もアカウント所有者に通知して異常を検知できるようにする必要がある。
 
-#### Scenario: email と OTP の不一致は account existence を露出しない (AUTH-BE-S033)
+**Requirement**
 
-- **GIVEN** client が登録メールアドレスと OTP の組み合わせを提示している
-- **WHEN** email、OTP、またはその組み合わせが有効な handoff state と一致しない
-- **THEN** system は同じ response shape で generic に拒否し、email の登録有無や OTP の正否を露出しない
+- `POST /api/v1/auth/passkey/register` が RecoverySession を使用して成功した場合、system は登録を完了した後、RecoverySession の `kind` を MUST 評価する。
+- `kind` が `"recovery"` である場合、system は該当アカウントに紐づく全 active session を Valkey から即座に削除し SHALL 強制失効する。その後、登録済みメールアドレスへ復旧完了通知メールを SHALL 送信する。
+- `kind` が `"device-link"` である場合、system はセッションを一切失効してはならない（MUST NOT）。登録済みメールアドレスへ新端末追加完了通知メールを SHALL 送信する。
+- 通知メールの送信失敗はパスキー登録の成功を妨げてはならない（MUST NOT）。失敗時は fire-and-forget で structured log に記録する。
+- セッション失効操作は Valkey-backed auth state store に即座に反映され、node 間で共有されなければならない（MUST）。
 
-#### Scenario: 同じ OTP 値は別アカウントの handoff state を上書きしない (AUTH-BE-S034)
+#### Scenario: kind=recovery の登録完了で全セッションが失効する (AUTH-BE-S051)
 
-- **GIVEN** 複数アカウントが同じ 6 桁 OTP 値を持つ handoff を発行している
-- **WHEN** それぞれの登録メールアドレスと OTP が検証される
-- **THEN** system は各 handoff state を独立して扱い、別アカウントの credential を追加しない
+- **GIVEN** アカウントが 3 つの active session を持ち、kind=recovery の RecoverySession でパスキー登録を完了した
+- **WHEN** system が後処理を実行する
+- **THEN** 既存の 3 セッションはすべて削除され、新しい登録で発行された 1 セッションのみが有効である
 
-#### Scenario: handoff completion は concurrent finish requests でも atomic である (AUTH-BE-S035)
+#### Scenario: kind=device-link の登録完了でセッションは失効しない (AUTH-BE-S052)
 
-- **GIVEN** 同じ登録メールアドレスと OTP に対する複数の finish request が並行している
-- **WHEN** system が WebAuthn registration completion を処理する
-- **THEN** ちょうど 1 つの request だけが credential を追加し、残りは generic に拒否される
+- **GIVEN** アカウントが 2 つの active session を持ち、kind=device-link の RecoverySession でパスキー登録を完了した
+- **WHEN** system が後処理を実行する
+- **THEN** 既存の 2 セッションは維持され、新しい登録で発行されたセッションを含め 3 セッションが有効である
 
-#### Scenario: 消費済みの OTP は再利用できない (AUTH-BE-S024)
+#### Scenario: 通知メールの送信失敗は登録成功を妨げない (AUTH-BE-S053)
 
-- **GIVEN** すでに使用された OTP がある
-- **WHEN** 同じ OTP で再度 `POST /api/v1/auth/passkey/add/start` を呼び出す
-- **THEN** システムはリクエストを拒否する
-
-## ADDED Requirements
+- **GIVEN** kind=recovery または kind=device-link の RecoverySession でパスキー登録が成功している
+- **WHEN** 通知メールの送信が SMTP エラーで失敗する
+- **THEN** system は 200 で新しい認証セッションを返し、メール送信失敗は structured log に記録されるが registration は成功している
 
 ### Requirement: リフレッシュトークンは設定可能な TTL で管理される
 

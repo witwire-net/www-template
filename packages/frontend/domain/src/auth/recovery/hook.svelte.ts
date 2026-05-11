@@ -24,7 +24,12 @@ interface RecoveryFlowData {
 interface RecoveryFlowActions {
   setEmail: (email: string) => void;
   submitRecoveryRequest: () => Promise<'/login/recovery/sent' | null>;
-  consumeToken: (token: string) => Promise<'/login/recovery/register' | '/login/recovery' | null>;
+  consumeToken: (
+    token: string
+  ) => Promise<{
+    path: '/login/recovery/register' | '/login/recovery';
+    kind?: 'recovery' | 'device-link';
+  } | null>;
   registerRecoveryPasskey: () => Promise<null>;
   reset: () => void;
 }
@@ -66,7 +71,12 @@ const createSubmitRecoveryRequestAction =
 
 const createConsumeTokenAction =
   (state: RecoveryFlowState, authSession: ReturnType<typeof useAuthSession>) =>
-  async (token: string): Promise<'/login/recovery/register' | '/login/recovery' | null> => {
+  async (
+    token: string
+  ): Promise<{
+    path: '/login/recovery/register' | '/login/recovery';
+    kind?: 'recovery' | 'device-link';
+  } | null> => {
     state.phase = 'consuming';
     state.error = null;
 
@@ -75,6 +85,7 @@ const createConsumeTokenAction =
       state.lastCacheControl = response.headers.get(CACHE_CONTROL_HEADER);
 
       if (response.status === 200) {
+        const kind = response.data.kind as 'recovery' | 'device-link';
         applyRecoveryReady(
           state,
           {
@@ -83,10 +94,11 @@ const createConsumeTokenAction =
             recoverySessionId: response.data.recoverySessionId,
             recoverySession: response.data.recovery_session,
             expiresAt: response.data.expiresAt,
+            kind,
           },
           response.headers.get(CACHE_CONTROL_HEADER)
         );
-        return '/login/recovery/register';
+        return { path: '/login/recovery/register', kind };
       }
 
       if (response.status === 400) {
@@ -95,7 +107,7 @@ const createConsumeTokenAction =
           '復旧リンクを確認できませんでした。再度復旧をお試しください。',
           response.headers.get(CACHE_CONTROL_HEADER)
         );
-        return '/login/recovery';
+        return { path: '/login/recovery' };
       }
 
       if (response.status === 503) {
@@ -106,7 +118,7 @@ const createConsumeTokenAction =
       return null;
     } catch (error: unknown) {
       applyInvalidRecoveryToken(state, toRecoveryErrorMessage(error), state.lastCacheControl);
-      return '/login/recovery';
+      return { path: '/login/recovery' };
     }
   };
 

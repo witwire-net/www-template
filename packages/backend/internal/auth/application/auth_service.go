@@ -3,13 +3,12 @@ package application
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
-	"time"
 
 	"www-template/packages/backend/internal/auth/domain"
 )
@@ -110,6 +109,42 @@ func (s *AuthService) VerifyReauthSession(ctx context.Context, reauthID string, 
 		return ErrBadRequest
 	}
 	return nil
+}
+
+// ExecuteDeviceLink は device-link URL を発行し、登録済みメールアドレスへ送信する。
+// bearer token から得た account/session と reauth session（kind="device-link"）を検証した上で実行する。
+// メール送信は fire-and-forget とし、送信失敗はログ記録のみとする。
+func (s *AuthService) ExecuteDeviceLink(ctx context.Context, accountID, sessionID string) (DeviceLinkIssued, error) {
+	requestID, err := s.policy.Next()
+	if err != nil {
+		return DeviceLinkIssued{}, ErrInternalError
+	}
+
+	account, err := s.accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
+			return DeviceLinkIssued{}, ErrInternalError
+		}
+		return DeviceLinkIssued{}, ErrBadRequest
+	}
+
+	delivery, err := s.issueRecoveryDelivery(ctx, requestID, account, domain.TokenKindDeviceLink)
+	if err != nil {
+		return DeviceLinkIssued{}, err
+	}
+
+	// device-link メールを fire-and-forget で送信する。失敗しても issued=true を返す。
+	if s.deviceLinkSender != nil {
+		if err := s.deviceLinkSender.SendDeviceLink(ctx, delivery); err != nil {
+			slog.ErrorContext(ctx, "device-link delivery failed",
+				slog.String("request_id", requestID),
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+
+	return DeviceLinkIssued{RequestID: requestID, Issued: true}, nil
 }
 
 // StartReauthentication は高リスク操作に先立って WebAuthn 再認証セレモニーを開始する。
@@ -282,7 +317,7 @@ func (s *AuthService) RequestPasskeyRecovery(ctx context.Context, input RequestP
 		return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
 	}
 
-	delivery, err := s.issueRecoveryDelivery(ctx, requestID, account)
+	delivery, err := s.issueRecoveryDelivery(ctx, requestID, account, domain.TokenKindRecovery)
 	if err != nil {
 		return RecoveryAccepted{}, err
 	}
@@ -302,14 +337,14 @@ func (s *AuthService) ConsumeRecoveryToken(ctx context.Context, input ConsumeRec
 		return RecoverySession{}, err
 	}
 
-	tokenID, parseErr := parseOpaqueTokenID(input.Token)
+	tokenID, plainSecret, parseErr := parseURLToken(input.Token)
 	if parseErr != nil {
 		s.registerFailure(ctx, lockKey)
 		return RecoverySession{}, ErrBadRequest
 	}
 
-	// アトミックに GETDEL して secret ハッシュを検証する。
-	recoveryToken, err := s.stateRepo.ConsumeRecoveryTokenAtomic(ctx, tokenID, input.Token)
+	// アトミックに GET → hash 検証 → DEL で recovery token を消費する。
+	recoveryToken, err := s.stateRepo.ConsumeRecoveryTokenAtomic(ctx, tokenID, plainSecret)
 	if err != nil {
 		s.registerFailure(ctx, lockKey)
 		return RecoverySession{}, s.mapRecoveryConsumeError(err)
@@ -323,7 +358,7 @@ func (s *AuthService) ConsumeRecoveryToken(ctx context.Context, input ConsumeRec
 	if err != nil {
 		return RecoverySession{}, ErrInternalError
 	}
-	recoverySession, err := domain.NewRecoverySession(recoverySessionID, recoveryToken.AccountID(), s.clock().Add(s.authConfig.RecoverySessionTTL))
+	recoverySession, err := domain.NewRecoverySession(recoverySessionID, recoveryToken.AccountID(), recoveryToken.Kind(), s.clock().Add(s.authConfig.RecoverySessionTTL))
 	if err != nil {
 		return RecoverySession{}, ErrInternalError
 	}
@@ -336,6 +371,7 @@ func (s *AuthService) ConsumeRecoveryToken(ctx context.Context, input ConsumeRec
 		RecoveryTokenID:    recoveryToken.ID(),
 		RecoverySessionID:  recoverySession.ID(),
 		RecoverySessionRef: recoverySession.ID(),
+		Kind:               recoverySession.Kind(),
 		ExpiresAt:          recoverySession.ExpiresAt(),
 	}, nil
 }
@@ -444,6 +480,13 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 		return AuthSession{}, ErrInternalError
 	}
 
+	// recovery session の kind に応じた後処理を実行する。
+	// recovery kind の場合、全セッション失効に失敗したら fail-closed で内部エラーを返す（セキュリティ要件）。
+	// 通知メールは best-effort とし、失敗しても registration の成功を妨げない。
+	if err := s.runRegisterPasskeyPostProcess(ctx, recoverySession.Kind(), account.AccountID(), account.Email()); err != nil {
+		return AuthSession{}, ErrInternalError
+	}
+
 	requestID, err := s.policy.Next()
 	if err != nil {
 		return AuthSession{}, ErrInternalError
@@ -457,6 +500,47 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 		PasskeyCredentialID: account.PasskeyCredentialID(),
 	}
 	return s.issueAuthSession(ctx, authSession, account.AccountID(), input.ClientIP, input.UserAgent)
+}
+
+// runRegisterPasskeyPostProcess は RegisterPasskey 成功後の kind 別後処理を実行する。
+// recovery の場合は全セッションを失効させて recovery 完了メールを送信する。
+// セッション失効の失敗はセキュリティ要件のため fail-closed で error を返す。
+// 通知メールの送信失敗は best-effort とし、ログ記録のみで error は返さない。
+// device-link の場合は device-link 完了メールを best-effort で送信する。
+func (s *AuthService) runRegisterPasskeyPostProcess(ctx context.Context, kind domain.TokenKind, accountID, email string) error {
+	switch kind {
+	case domain.TokenKindRecovery:
+		// 全セッション失効はセキュリティ上必須。失敗時は registration 全体を fail させる。
+		if s.tokenService != nil {
+			if err := s.tokenService.RevokeAllForAccount(ctx, accountID); err != nil {
+				slog.ErrorContext(ctx, "failed to revoke all sessions after recovery",
+					slog.String("account_id", accountID),
+					slog.String("error", err.Error()),
+				)
+				return ErrInternalError
+			}
+		}
+		// 通知メールは best-effort
+		if s.recoveryCompleteSender != nil {
+			if err := s.recoveryCompleteSender.SendRecoveryComplete(ctx, accountID, email); err != nil {
+				slog.ErrorContext(ctx, "failed to send recovery complete notification",
+					slog.String("account_id", accountID),
+					slog.String("error", err.Error()),
+				)
+			}
+		}
+	case domain.TokenKindDeviceLink:
+		// device-link 完了通知は best-effort
+		if s.deviceLinkCompleteSender != nil {
+			if err := s.deviceLinkCompleteSender.SendDeviceLinkComplete(ctx, accountID, email); err != nil {
+				slog.ErrorContext(ctx, "failed to send device-link complete notification",
+					slog.String("account_id", accountID),
+					slog.String("error", err.Error()),
+				)
+			}
+		}
+	}
+	return nil
 }
 
 // resolveCredentialHandleAndData は WebAuthn FinishRegistration を呼んで credential handle と永続化データを返す。
@@ -554,13 +638,18 @@ func (s *AuthService) AuthorizeSession(ctx context.Context, token string) (AuthS
 	return AuthSession{}, ErrSessionExpired
 }
 
-func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID string, account domain.AuthAccount) (RecoveryDelivery, error) {
+// issueRecoveryDelivery は recovery token を発行し、指定された kind の RecoveryDelivery を生成する。
+// RecoveryURL は AccountRecoveryURLBase を使用する。kind が空の場合はエラーを返す。
+func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID string, account domain.AuthAccount, kind domain.TokenKind) (RecoveryDelivery, error) {
 	tokenID, err := s.policy.Next()
 	if err != nil {
 		return RecoveryDelivery{}, ErrInternalError
 	}
-	secret := opaqueValue(tokenID)
-	recoveryToken, err := domain.NewRecoveryToken(tokenID, account.AccountID(), secret, s.clock().Add(s.authConfig.RecoveryTokenTTL))
+	urlToken, plainSecret, err := generateURLToken(tokenID)
+	if err != nil {
+		return RecoveryDelivery{}, ErrInternalError
+	}
+	recoveryToken, err := domain.NewRecoveryToken(tokenID, account.AccountID(), plainSecret, kind, s.clock().Add(s.authConfig.RecoveryTokenTTL))
 	if err != nil {
 		return RecoveryDelivery{}, ErrInternalError
 	}
@@ -573,7 +662,8 @@ func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID strin
 		RecoveryTokenID: tokenID,
 		AccountID:       account.AccountID(),
 		Email:           account.Email(),
-		RecoveryURL:     fmt.Sprintf("%s?token=%s", strings.TrimSpace(s.authConfig.AccountRecoveryURLBase), secret),
+		RecoveryURL:     fmt.Sprintf("%s?token=%s", strings.TrimSpace(s.authConfig.AccountRecoveryURLBase), urlToken),
+		Kind:            kind,
 		ExpiresAt:       recoveryToken.ExpiresAt(),
 	}, nil
 }
@@ -739,255 +829,6 @@ func (s *AuthService) DeletePasskey(ctx context.Context, accountID string, crede
 		return ErrInternalError
 	}
 	return nil
-}
-
-// ─── OTP handoff ────────────────────────────────────────────────────────────
-
-const otpTTL = 5 * time.Minute
-
-// hashSecret は secret を server-side pepper（SecretHashKey）で HMAC-SHA256 し、
-// base64 エンコードして返す。低エントロピーな 6 桁 OTP や email をそのまま key にしないため、
-// offline brute-force を困難にする。
-func (s *AuthService) hashSecret(secret string) string {
-	mac := hmac.New(sha256.New, []byte(s.authConfig.SecretHashKey))
-	mac.Write([]byte(secret))
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
-}
-
-// IssuePasskeyOtp は 6 桁の OTP を生成し、namespaced device handoff state を作成して Valkey に保存する。
-// 平文 OTP は API response や Valkey に保存せず、呼び出し元（router）が secure mail transport で送信する。
-// 成功時には生成した OTP 文字列を返す（テスト・メール送信用途）。
-func (s *AuthService) IssuePasskeyOtp(ctx context.Context, accountID string, sessionID string) (string, error) {
-	account, err := s.accountRepo.FindByID(ctx, accountID)
-	if err != nil {
-		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
-			return "", ErrInternalError
-		}
-		return "", ErrBadRequest
-	}
-
-	var buf [4]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return "", ErrInternalError
-	}
-	n := int(buf[0])<<16 | int(buf[1])<<8 | int(buf[2])
-	n %= 1000000
-	otp := fmt.Sprintf("%06d", n)
-
-	requestID, handoffID, err := s.nextTwoIDs()
-	if err != nil {
-		return "", ErrInternalError
-	}
-
-	emailNorm := strings.ToLower(strings.TrimSpace(account.Email()))
-	emailHash := s.hashSecret(emailNorm)
-	otpHash := s.hashSecret(otp)
-
-	handoff, err := domain.NewDeviceLoginHandoff(handoffID, accountID, sessionID, emailHash, otpHash, s.clock().Add(otpTTL))
-	if err != nil {
-		return "", ErrInternalError
-	}
-
-	if err := s.stateRepo.SaveDeviceLoginHandoff(ctx, handoff, otpTTL); err != nil {
-		return "", ErrInternalError
-	}
-
-	// secure mail transport で OTP を送信する。送信失敗しても handoff は有効なため、
-	// 呼び出し元には成功を返す。送信失敗の記録は PasskeyOtpSender 実装側の責務とする（secret は log に含めない）。
-	if s.passkeyOtpSender != nil {
-		_ = s.passkeyOtpSender.SendPasskeyOtp(ctx, account.Email(), otp, requestID)
-	}
-
-	return otp, nil
-}
-
-// StartAddPasskeyByOtp は email + OTP を検証し、WebAuthn 登録チャレンジを生成して返す。
-// email/IP/email+IP/OTP/global の rate-limit/lock budget を適用する。
-func (s *AuthService) StartAddPasskeyByOtp(ctx context.Context, email string, otp string, clientIP string) (PasskeyChallenge, error) {
-	emailNorm := strings.ToLower(strings.TrimSpace(email))
-
-	emailHash := s.hashSecret(emailNorm)
-	otpHash := s.hashSecret(strings.TrimSpace(otp))
-
-	// rate-limit / lock budgets（平文 email/OTP/IP を key に含めず、hash 済みの irreversible bucket key を使用する）
-	ipHash := s.hashSecret(strings.TrimSpace(clientIP))
-	lockKey := failureLockKey(otpHash, ipHash)
-	if err := s.ensureNotLocked(ctx, lockKey); err != nil {
-		return PasskeyChallenge{}, err
-	}
-	if err := s.checkHandoffRateLimits(ctx, ipHash, emailHash, otpHash); err != nil {
-		return PasskeyChallenge{}, err
-	}
-
-	handoff, err := s.stateRepo.FindDeviceLoginHandoffByEmailAndOtp(ctx, emailHash, otpHash)
-	if err != nil {
-		return PasskeyChallenge{}, ErrOtpExpiredOrConsumed
-	}
-	if err := handoff.EnsureAvailable(s.clock()); err != nil {
-		s.registerFailure(ctx, lockKey)
-		return PasskeyChallenge{}, ErrOtpExpiredOrConsumed
-	}
-
-	// account の登録メールアドレスと一致することを検証する
-	account, err := s.accountRepo.FindByID(ctx, handoff.AccountID())
-	if err != nil {
-		return PasskeyChallenge{}, ErrOtpExpiredOrConsumed
-	}
-	if strings.ToLower(strings.TrimSpace(account.Email())) != emailNorm {
-		s.registerFailure(ctx, lockKey)
-		return PasskeyChallenge{}, ErrOtpExpiredOrConsumed
-	}
-
-	// WebAuthn provider 必須
-	if s.webauthn == nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-
-	challengeKey, optionsJSON, beginErr := s.webauthn.BeginRegistration(ctx, handoff.AccountID())
-	if beginErr != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-
-	// challenge を handoff に bind して保存する
-	handoff = handoff.BindChallenge(challengeKey)
-	ttl := handoff.ExpiresAt().Sub(s.clock())
-	if ttl <= 0 {
-		return PasskeyChallenge{}, ErrOtpExpiredOrConsumed
-	}
-	if err := s.stateRepo.SaveDeviceLoginHandoff(ctx, handoff, ttl); err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-
-	requestID, err := s.policy.Next()
-	if err != nil {
-		return PasskeyChallenge{}, ErrInternalError
-	}
-	return PasskeyChallenge{
-		RequestID:       requestID,
-		Challenge:       challengeKey,
-		ChallengeID:     challengeKey,
-		WebAuthnRPID:    s.authConfig.WebAuthnRPID,
-		WebAuthnOptions: optionsJSON,
-	}, nil
-}
-
-// FinishAddPasskeyByOtp は email + OTP を検証し、handoff record（内包 challenge）を GETDEL で atomic consume し、パスキーを追加する。
-// email/IP/email+IP/OTP/global の rate-limit/lock budget を適用する。
-// いかなる invalid state に対しても generic failure（ErrBadRequest）を返す。
-func (s *AuthService) FinishAddPasskeyByOtp(ctx context.Context, email string, otp string, credential WebAuthnAttestationCredentialDTO, clientIP string) error {
-	emailNorm := strings.ToLower(strings.TrimSpace(email))
-	otpNorm := strings.TrimSpace(otp)
-
-	emailHash := s.hashSecret(emailNorm)
-	otpHash := s.hashSecret(otpNorm)
-
-	// rate-limit / lock budgets（平文 email/OTP/IP を key に含めず、hash 済みの irreversible bucket key を使用する）
-	ipHash := s.hashSecret(strings.TrimSpace(clientIP))
-	lockKey := failureLockKey(otpHash, ipHash)
-	if err := s.ensureNotLocked(ctx, lockKey); err != nil {
-		return err
-	}
-	if err := s.checkHandoffRateLimits(ctx, ipHash, emailHash, otpHash); err != nil {
-		return err
-	}
-
-	consumedHandoff, err := s.resolveAndConsumeHandoff(ctx, emailHash, otpHash, emailNorm, lockKey)
-	if err != nil {
-		return err
-	}
-
-	storedChallengeKey := consumedHandoff.ChallengeID()
-	if storedChallengeKey == "" {
-		return ErrOtpExpiredOrConsumed
-	}
-
-	credentialHandle, credData, err := s.resolveCredentialHandleAndData(ctx, storedChallengeKey, consumedHandoff.AccountID(), credential)
-	if err != nil {
-		s.registerFailure(ctx, lockKey)
-		return ErrBadRequest
-	}
-
-	requestID, err := s.policy.Next()
-	if err != nil {
-		return ErrInternalError
-	}
-	passkeyID, err := s.policy.Next()
-	if err != nil {
-		return ErrInternalError
-	}
-	if _, err := s.accountRepo.AddPasskey(ctx, consumedHandoff.AccountID(), passkeyID, credentialHandle, credData); err != nil {
-		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
-			return ErrInternalError
-		}
-		return ErrBadRequest
-	}
-
-	// OTP handoff による新規パスキー追加が成功したため、audit event を emit する。
-	// auditNotifier が注入されていれば通知・記録を行う。nil の場合は no-op。
-	// secret（OTP、credential raw data）は含めない。
-	if s.auditNotifier != nil {
-		s.auditNotifier.EmitPasskeyAddedByOTP(ctx, consumedHandoff.AccountID(), passkeyID, requestID)
-	}
-
-	return nil
-}
-
-// checkHandoffRateLimits は handoff フローに対する複合 rate-limit bucket をインクリメントし、
-// いずれかの上限を超過している場合に ErrBadRequest を返す。
-// bucket key には平文を含まず、事前に hash 済みの値を使用する。
-func (s *AuthService) checkHandoffRateLimits(ctx context.Context, ipHash string, emailHash string, otpHash string) error {
-	buckets := []string{
-		"handoff:email:" + emailHash,
-		"handoff:ip:" + ipHash,
-		"handoff:email-ip:" + emailHash + ":" + ipHash,
-		"handoff:otp:" + otpHash,
-		"handoff:global",
-	}
-	for _, bucket := range buckets {
-		count, err := s.stateRepo.IncrementThrottle(ctx, bucket, s.authConfig.PasskeyStartThrottleWindow)
-		if err != nil {
-			return ErrInternalError
-		}
-		limit := s.authConfig.PasskeyStartThrottleLimit
-		if bucket == "handoff:global" {
-			limit = s.authConfig.HandoffGlobalThrottleLimit
-		}
-		if count > limit {
-			return ErrBadRequest
-		}
-	}
-	return nil
-}
-
-// resolveAndConsumeHandoff は emailHash/otpHash で handoff を検索し、
-// 有効期限・account メール一致を検証した上で atomic consume する。
-// いかなる invalid state に対しても generic failure（ErrOtpExpiredOrConsumed）を返す。
-func (s *AuthService) resolveAndConsumeHandoff(ctx context.Context, emailHash string, otpHash string, emailNorm string, lockKey string) (domain.DeviceLoginHandoff, error) {
-	handoff, err := s.stateRepo.FindDeviceLoginHandoffByEmailAndOtp(ctx, emailHash, otpHash)
-	if err != nil {
-		return domain.EmptyDeviceLoginHandoff(), ErrOtpExpiredOrConsumed
-	}
-	if err := handoff.EnsureAvailable(s.clock()); err != nil {
-		s.registerFailure(ctx, lockKey)
-		return domain.EmptyDeviceLoginHandoff(), ErrOtpExpiredOrConsumed
-	}
-
-	// account の登録メールアドレスと一致することを検証する
-	account, err := s.accountRepo.FindByID(ctx, handoff.AccountID())
-	if err != nil {
-		return domain.EmptyDeviceLoginHandoff(), ErrOtpExpiredOrConsumed
-	}
-	if strings.ToLower(strings.TrimSpace(account.Email())) != emailNorm {
-		s.registerFailure(ctx, lockKey)
-		return domain.EmptyDeviceLoginHandoff(), ErrOtpExpiredOrConsumed
-	}
-
-	// atomic consume handoff（challenge を含む）
-	consumedHandoff, err := s.stateRepo.ConsumeDeviceLoginHandoff(ctx, handoff.ID())
-	if err != nil {
-		return domain.EmptyDeviceLoginHandoff(), ErrOtpExpiredOrConsumed
-	}
-	return consumedHandoff, nil
 }
 
 // toPasskeyCredentialDTOs は domain.PasskeyCredential のスライスをユースケース DTO に変換する。

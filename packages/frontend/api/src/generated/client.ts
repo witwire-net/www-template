@@ -64,6 +64,11 @@ export interface BearerAuth {
   scheme: BearerAuthScheme;
 }
 
+export interface DeviceLinkResponse {
+  requestId: UlidId;
+  issued: boolean;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -86,17 +91,6 @@ export interface InvitationPasskeyStartRequest {
 export interface LogoutResponse {
   requestId: UlidId;
   revoked: boolean;
-}
-
-export interface PasskeyAddByOtpFinishRequest {
-  email: string;
-  otp: string;
-  credential: WebAuthnAttestationCredential;
-}
-
-export interface PasskeyAddByOtpStartRequest {
-  email: string;
-  otp: string;
 }
 
 export interface PasskeyAddFinishRequest {
@@ -145,11 +139,6 @@ export interface PasskeyItem {
 export interface PasskeyListResponse {
   requestId: UlidId;
   passkeys: PasskeyItem[];
-}
-
-export interface PasskeyOtpResponse {
-  requestId: UlidId;
-  issued: boolean;
 }
 
 /**
@@ -208,7 +197,7 @@ export type ReauthenticationSessionKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ReauthenticationSessionKind = {
-  'otp-issue': 'otp-issue',
+  'device-link': 'device-link',
   'passkey-delete': 'passkey-delete',
 } as const;
 
@@ -245,6 +234,7 @@ export interface RecoveryConsumeResponse {
   /** Alias of recoverySessionId for client convenience. */
   recovery_session: UlidId;
   expiresAt: string;
+  kind: TokenKind;
 }
 
 /**
@@ -305,6 +295,17 @@ export interface StatusResponse {
   message: string;
   timestamp: string;
 }
+
+/**
+ * パスキー追加トークンの発行種別。recovery は紛失時復旧、device-link は認証済み端末からの新端末追加。
+ */
+export type TokenKind = (typeof TokenKind)[keyof typeof TokenKind];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const TokenKind = {
+  recovery: 'recovery',
+  'device-link': 'device-link',
+} as const;
 
 /**
  * Canonical ULID string used for auth-owned resource and correlation identifiers.
@@ -436,112 +437,6 @@ export const logout = async (options?: RequestInit): Promise<logoutResponse> => 
 
   const data: logoutResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as logoutResponse;
-};
-
-/**
- * @summary Finishes adding a passkey on a new device by OTP handoff
- */
-export type finishPasskeyAdditionByOtpResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type finishPasskeyAdditionByOtpResponse400 = {
-  data: AuthOperationErrorResponse;
-  status: 400;
-};
-
-export type finishPasskeyAdditionByOtpResponse503 = {
-  data: AuthFailureResponse;
-  status: 503;
-};
-
-export type finishPasskeyAdditionByOtpResponseSuccess = finishPasskeyAdditionByOtpResponse200 & {
-  headers: Headers;
-};
-export type finishPasskeyAdditionByOtpResponseError = (
-  | finishPasskeyAdditionByOtpResponse400
-  | finishPasskeyAdditionByOtpResponse503
-) & {
-  headers: Headers;
-};
-
-export type finishPasskeyAdditionByOtpResponse =
-  | finishPasskeyAdditionByOtpResponseSuccess
-  | finishPasskeyAdditionByOtpResponseError;
-
-export const getFinishPasskeyAdditionByOtpUrl = () => {
-  return `/api/v1/auth/passkey/add/finish`;
-};
-
-export const finishPasskeyAdditionByOtp = async (
-  passkeyAddByOtpFinishRequest: PasskeyAddByOtpFinishRequest,
-  options?: RequestInit
-): Promise<finishPasskeyAdditionByOtpResponse> => {
-  const res = await fetch(getFinishPasskeyAdditionByOtpUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(passkeyAddByOtpFinishRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: finishPasskeyAdditionByOtpResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as finishPasskeyAdditionByOtpResponse;
-};
-
-/**
- * @summary Starts adding a passkey on a new device by OTP handoff
- */
-export type startPasskeyAdditionByOtpResponse200 = {
-  data: PasskeyAddStartResponse;
-  status: 200;
-};
-
-export type startPasskeyAdditionByOtpResponse400 = {
-  data: AuthOperationErrorResponse;
-  status: 400;
-};
-
-export type startPasskeyAdditionByOtpResponse503 = {
-  data: AuthFailureResponse;
-  status: 503;
-};
-
-export type startPasskeyAdditionByOtpResponseSuccess = startPasskeyAdditionByOtpResponse200 & {
-  headers: Headers;
-};
-export type startPasskeyAdditionByOtpResponseError = (
-  | startPasskeyAdditionByOtpResponse400
-  | startPasskeyAdditionByOtpResponse503
-) & {
-  headers: Headers;
-};
-
-export type startPasskeyAdditionByOtpResponse =
-  | startPasskeyAdditionByOtpResponseSuccess
-  | startPasskeyAdditionByOtpResponseError;
-
-export const getStartPasskeyAdditionByOtpUrl = () => {
-  return `/api/v1/auth/passkey/add/start`;
-};
-
-export const startPasskeyAdditionByOtp = async (
-  passkeyAddByOtpStartRequest: PasskeyAddByOtpStartRequest,
-  options?: RequestInit
-): Promise<startPasskeyAdditionByOtpResponse> => {
-  const res = await fetch(getStartPasskeyAdditionByOtpUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(passkeyAddByOtpStartRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: startPasskeyAdditionByOtpResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as startPasskeyAdditionByOtpResponse;
 };
 
 /**
@@ -1138,61 +1033,61 @@ export const finishPasskeyAddition = async (
 };
 
 /**
- * @summary Issues a one-time password for adding a passkey on a new device
+ * @summary Sends a device-link URL to the registered email for adding a passkey on a new device
  */
-export type issuePasskeyOtpResponse200 = {
-  data: PasskeyOtpResponse;
+export type sendDeviceLinkResponse200 = {
+  data: DeviceLinkResponse;
   status: 200;
 };
 
-export type issuePasskeyOtpResponse400 = {
+export type sendDeviceLinkResponse400 = {
   data: AuthOperationErrorResponse;
   status: 400;
 };
 
-export type issuePasskeyOtpResponse401 = {
+export type sendDeviceLinkResponse401 = {
   data: AuthFailureResponse;
   status: 401;
 };
 
-export type issuePasskeyOtpResponse403 = {
+export type sendDeviceLinkResponse403 = {
   data: AuthOperationErrorResponse;
   status: 403;
 };
 
-export type issuePasskeyOtpResponse503 = {
+export type sendDeviceLinkResponse503 = {
   data: AuthFailureResponse;
   status: 503;
 };
 
-export type issuePasskeyOtpResponseSuccess = issuePasskeyOtpResponse200 & {
+export type sendDeviceLinkResponseSuccess = sendDeviceLinkResponse200 & {
   headers: Headers;
 };
-export type issuePasskeyOtpResponseError = (
-  | issuePasskeyOtpResponse400
-  | issuePasskeyOtpResponse401
-  | issuePasskeyOtpResponse403
-  | issuePasskeyOtpResponse503
+export type sendDeviceLinkResponseError = (
+  | sendDeviceLinkResponse400
+  | sendDeviceLinkResponse401
+  | sendDeviceLinkResponse403
+  | sendDeviceLinkResponse503
 ) & {
   headers: Headers;
 };
 
-export type issuePasskeyOtpResponse = issuePasskeyOtpResponseSuccess | issuePasskeyOtpResponseError;
+export type sendDeviceLinkResponse = sendDeviceLinkResponseSuccess | sendDeviceLinkResponseError;
 
-export const getIssuePasskeyOtpUrl = () => {
-  return `/api/v1/passkeys/otp`;
+export const getSendDeviceLinkUrl = () => {
+  return `/api/v1/passkeys/send-device-link`;
 };
 
-export const issuePasskeyOtp = async (options?: RequestInit): Promise<issuePasskeyOtpResponse> => {
-  const res = await fetch(getIssuePasskeyOtpUrl(), {
+export const sendDeviceLink = async (options?: RequestInit): Promise<sendDeviceLinkResponse> => {
+  const res = await fetch(getSendDeviceLinkUrl(), {
     ...options,
     method: 'POST',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: issuePasskeyOtpResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as issuePasskeyOtpResponse;
+  const data: sendDeviceLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as sendDeviceLinkResponse;
 };
 
 /**

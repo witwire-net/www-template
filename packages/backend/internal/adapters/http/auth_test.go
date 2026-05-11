@@ -215,8 +215,6 @@ func TestPasskeyAppEndpointsInvalidJSONReturnsTypedNoStoreError(t *testing.T) {
 		path   string
 	}{
 		{stdhttp.MethodPost, "/api/v1/passkeys/finish"},
-		{stdhttp.MethodPost, "/api/v1/auth/passkey/add/start"},
-		{stdhttp.MethodPost, "/api/v1/auth/passkey/add/finish"},
 	} {
 		response := performRawJSON(t, env.router, tc.method, tc.path, []byte(`{"invalid":`), token)
 		assertStatus(t, response, stdhttp.StatusBadRequest)
@@ -496,6 +494,9 @@ func (failingSessionStore) RevokeSession(context.Context, string, string) error 
 func (failingSessionStore) RevokeOthers(context.Context, string, string) ([]string, error) {
 	return nil, domain.ErrAuthStoreUnavailable
 }
+func (failingSessionStore) RevokeAllForAccount(context.Context, string) error {
+	return domain.ErrAuthStoreUnavailable
+}
 
 type mutableClock struct{ current time.Time }
 
@@ -734,19 +735,12 @@ type stubAuthStateRepository struct {
 	reauthSessions          map[string]domain.ReauthenticationSession
 	counters                map[string]stubCounter
 	locks                   map[string]time.Time
-	otpStore                map[string]stubOtpEntry
-	handoffs                map[string]domain.DeviceLoginHandoff
 	clock                   func() time.Time
 	getRecoverySessionCalls int
 }
 
 type stubCounter struct {
 	count     int
-	expiresAt time.Time
-}
-
-type stubOtpEntry struct {
-	value     string
 	expiresAt time.Time
 }
 
@@ -759,8 +753,6 @@ func newStubAuthStateRepository(clock func() time.Time) *stubAuthStateRepository
 		reauthSessions:   map[string]domain.ReauthenticationSession{},
 		counters:         map[string]stubCounter{},
 		locks:            map[string]time.Time{},
-		otpStore:         map[string]stubOtpEntry{},
-		handoffs:         map[string]domain.DeviceLoginHandoff{},
 		clock:            clock,
 	}
 }
@@ -787,19 +779,6 @@ func (r *stubAuthStateRepository) IssueRecoveryToken(_ context.Context, token do
 func (r *stubAuthStateRepository) SaveRecoveryDeliveryFailure(_ context.Context, failure domain.RecoveryDeliveryFailure, ttl time.Duration) error {
 	r.recoveryFailures[failure.RequestID()] = failure
 	r.lastRecoveryFailureTTL = ttl
-	return nil
-}
-
-func (r *stubAuthStateRepository) GetRecoveryTokenBySecret(_ context.Context, secret string) (domain.RecoveryToken, error) {
-	token, ok := r.recoveryTokens[secret]
-	if !ok {
-		return emptyRecoveryTokenForTest(), domain.ErrRecoveryTokenNotFound
-	}
-	return token, nil
-}
-
-func (r *stubAuthStateRepository) ConsumeRecoveryToken(_ context.Context, token domain.RecoveryToken) error {
-	r.recoveryTokens[token.Secret()] = token
 	return nil
 }
 
@@ -866,45 +845,6 @@ func (r *stubAuthStateRepository) GetLock(_ context.Context, key string) (domain
 	return domain.NewAuthLock(until), true, nil
 }
 
-func (r *stubAuthStateRepository) SavePasskeyOtp(_ context.Context, otpKey string, accountID string, ttl time.Duration) error {
-	if r.otpStore == nil {
-		r.otpStore = map[string]stubOtpEntry{}
-	}
-	r.otpStore[otpKey] = stubOtpEntry{value: accountID, expiresAt: r.clock().Add(ttl)}
-	return nil
-}
-
-func (r *stubAuthStateRepository) ConsumePasskeyOtp(_ context.Context, otpKey string) (string, error) {
-	if r.otpStore == nil {
-		return "", domain.ErrOtpNotFound
-	}
-	entry, ok := r.otpStore[otpKey]
-	if !ok {
-		return "", domain.ErrOtpNotFound
-	}
-	if r.clock().After(entry.expiresAt) {
-		delete(r.otpStore, otpKey)
-		return "", domain.ErrOtpNotFound
-	}
-	delete(r.otpStore, otpKey)
-	return entry.value, nil
-}
-
-func (r *stubAuthStateRepository) GetPasskeyOtp(_ context.Context, otpKey string) (string, error) {
-	if r.otpStore == nil {
-		return "", domain.ErrOtpNotFound
-	}
-	entry, ok := r.otpStore[otpKey]
-	if !ok {
-		return "", domain.ErrOtpNotFound
-	}
-	if r.clock().After(entry.expiresAt) {
-		delete(r.otpStore, otpKey)
-		return "", domain.ErrOtpNotFound
-	}
-	return entry.value, nil
-}
-
 func (r *stubAuthStateRepository) SaveReauthenticationSession(_ context.Context, session domain.ReauthenticationSession, _ time.Duration) error {
 	if r.reauthSessions == nil {
 		r.reauthSessions = map[string]domain.ReauthenticationSession{}
@@ -923,38 +863,6 @@ func (r *stubAuthStateRepository) ConsumeReauthenticationSession(_ context.Conte
 	}
 	delete(r.reauthSessions, reauthID)
 	return session, nil
-}
-
-func (r *stubAuthStateRepository) SaveDeviceLoginHandoff(_ context.Context, handoff domain.DeviceLoginHandoff, _ time.Duration) error {
-	if r.handoffs == nil {
-		r.handoffs = map[string]domain.DeviceLoginHandoff{}
-	}
-	r.handoffs[handoff.ID()] = handoff
-	return nil
-}
-
-func (r *stubAuthStateRepository) FindDeviceLoginHandoffByEmailAndOtp(_ context.Context, emailHash string, otpHash string) (domain.DeviceLoginHandoff, error) {
-	if r.handoffs == nil {
-		return emptyDeviceLoginHandoffForTest(), domain.ErrDeviceLoginHandoffNotFound
-	}
-	for _, h := range r.handoffs {
-		if h.EmailHash() == emailHash && h.OtpHash() == otpHash {
-			return h, nil
-		}
-	}
-	return emptyDeviceLoginHandoffForTest(), domain.ErrDeviceLoginHandoffNotFound
-}
-
-func (r *stubAuthStateRepository) ConsumeDeviceLoginHandoff(_ context.Context, handoffID string) (domain.DeviceLoginHandoff, error) {
-	if r.handoffs == nil {
-		return emptyDeviceLoginHandoffForTest(), domain.ErrDeviceLoginHandoffNotFound
-	}
-	h, ok := r.handoffs[handoffID]
-	if !ok {
-		return emptyDeviceLoginHandoffForTest(), domain.ErrDeviceLoginHandoffNotFound
-	}
-	delete(r.handoffs, handoffID)
-	return h, nil
 }
 
 type stubAuthAccountRepository struct {
@@ -1064,25 +972,18 @@ func emptyChallengeForTest() domain.AuthChallenge {
 	return challenge
 }
 
-func emptyDeviceLoginHandoffForTest() domain.DeviceLoginHandoff {
-	h, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", "placeholder", time.Unix(1, 0).UTC())
-	return h
-}
-
 func emptyRecoveryTokenForTest() domain.RecoveryToken {
-	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", time.Unix(1, 0).UTC())
+	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return token
 }
-
 func emptyRecoverySessionForTest() domain.RecoverySession {
-	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
+	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return session
 }
-
 func emptyReauthenticationSessionForTest() domain.ReauthenticationSession {
 	session, _ := domain.NewReauthenticationSession(
 		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
-		"otp-issue", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+		"device-link", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
 	)
 	return session
 }
@@ -1104,12 +1005,6 @@ func (failingAuthStateRepository) IssueRecoveryToken(context.Context, domain.Rec
 	return domain.ErrAuthStoreUnavailable
 }
 func (failingAuthStateRepository) SaveRecoveryDeliveryFailure(context.Context, domain.RecoveryDeliveryFailure, time.Duration) error {
-	return domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) GetRecoveryTokenBySecret(context.Context, string) (domain.RecoveryToken, error) {
-	return emptyRecoveryTokenForTest(), domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) ConsumeRecoveryToken(context.Context, domain.RecoveryToken) error {
 	return domain.ErrAuthStoreUnavailable
 }
 func (failingAuthStateRepository) ConsumeRecoveryTokenAtomic(context.Context, string, string) (domain.RecoveryToken, error) {
@@ -1138,24 +1033,6 @@ func (failingAuthStateRepository) SaveReauthenticationSession(context.Context, d
 }
 func (failingAuthStateRepository) ConsumeReauthenticationSession(context.Context, string) (domain.ReauthenticationSession, error) {
 	return emptyReauthenticationSessionForTest(), domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) SavePasskeyOtp(context.Context, string, string, time.Duration) error {
-	return domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) ConsumePasskeyOtp(context.Context, string) (string, error) {
-	return "", domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) GetPasskeyOtp(context.Context, string) (string, error) {
-	return "", domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) SaveDeviceLoginHandoff(context.Context, domain.DeviceLoginHandoff, time.Duration) error {
-	return domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) FindDeviceLoginHandoffByEmailAndOtp(context.Context, string, string) (domain.DeviceLoginHandoff, error) {
-	return emptyDeviceLoginHandoffForTest(), domain.ErrAuthStoreUnavailable
-}
-func (failingAuthStateRepository) ConsumeDeviceLoginHandoff(context.Context, string) (domain.DeviceLoginHandoff, error) {
-	return emptyDeviceLoginHandoffForTest(), domain.ErrAuthStoreUnavailable
 }
 
 // ─── Multi-passkey management integration tests ─────────────────────────────
@@ -1438,7 +1315,6 @@ func TestPasskeyManagementUnauthenticatedReturns401(t *testing.T) {
 		{stdhttp.MethodPost, "/api/v1/passkeys/start", nil},
 		{stdhttp.MethodPost, "/api/v1/passkeys/finish", map[string]any{"credential": attestationCredentialJSON("x", "y")}},
 		{stdhttp.MethodDelete, "/api/v1/passkeys/01ARZ3NDEKTSV4RRFFQ69G5FB0", nil},
-		{stdhttp.MethodPost, "/api/v1/passkeys/otp", nil},
 	} {
 		resp := performJSON(t, env.router, tc.method, tc.path, tc.body, "")
 		assertStatus(t, resp, stdhttp.StatusUnauthorized)
@@ -1469,110 +1345,6 @@ func TestFinishPasskeyAdditionRetainsExistingOnList(t *testing.T) {
 	if len(passkeys) != 2 {
 		t.Fatalf("expected 2 passkeys, got %d", len(passkeys))
 	}
-}
-
-// [AUTH-BE-S021] POST /api/v1/passkeys/otp が issued: true を返す
-func TestIssuePasskeyOtpReturnsIssuedAcknowledgement(t *testing.T) {
-	t.Parallel()
-	env := newAuthTestEnv(t)
-	token := loginWithPasskey(t, env.router, "member@example.com")
-	session, _ := env.auth.AuthorizeSession(context.Background(), token)
-	saveTestReauthSession(t, env.stateRepo, session.AccountID, session.SessionID, "otp-issue", env.now)
-
-	resp := performJSONWithHeaders(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token, map[string]string{"X-Reauth-Session": "01ARZ3NDEKTSV4RRFFQ69G5FAY"})
-
-	assertStatus(t, resp, stdhttp.StatusOK)
-	assertNoStore(t, resp)
-	var body map[string]any
-	decodeJSON(t, resp, &body)
-	assertULIDField(t, body, "requestId")
-	issued, ok := body["issued"].(bool)
-	if !ok || !issued {
-		t.Fatalf("expected issued true, got %#v", body["issued"])
-	}
-}
-
-// [AUTH-BE-S022] 有効な OTP を使った新端末パスキー登録フロー（add/start → add/finish）が成功し既存パスキーが保持される
-func TestPasskeyAddByOtpFullFlowPreservesExisting(t *testing.T) {
-	t.Parallel()
-	env := newAuthTestEnv(t)
-	token := loginWithPasskey(t, env.router, "member@example.com")
-
-	// OTP は HTTP レスポンスに含まれないため、ユースケースを直接呼び出して取得する
-	session, _ := env.auth.AuthorizeSession(context.Background(), token)
-	otp, _ := env.auth.IssuePasskeyOtp(context.Background(), session.AccountID, session.SessionID)
-	saveTestReauthSession(t, env.stateRepo, session.AccountID, session.SessionID, "otp-issue", env.now)
-
-	// OTP を発行（acknowledgement のみ確認）
-	otpResp := performJSONWithHeaders(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token, map[string]string{"X-Reauth-Session": "01ARZ3NDEKTSV4RRFFQ69G5FAY"})
-	assertStatus(t, otpResp, stdhttp.StatusOK)
-	var otpBody map[string]any
-	decodeJSON(t, otpResp, &otpBody)
-	issued, ok := otpBody["issued"].(bool)
-	if !ok || !issued {
-		t.Fatalf("expected issued true, got %#v", otpBody["issued"])
-	}
-
-	// add/start: OTP を使ってチャレンジを取得
-	startResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start",
-		map[string]string{"email": "member@example.com", "otp": otp}, "")
-	assertStatus(t, startResp, stdhttp.StatusOK)
-	assertNoStore(t, startResp)
-	var startBody map[string]any
-	decodeJSON(t, startResp, &startBody)
-	assertULIDField(t, startBody, "requestId")
-
-	// add/finish: 新しい credential を登録
-	finishResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/finish",
-		map[string]any{"email": "member@example.com", "otp": otp, "credential": attestationCredentialJSON("otp-added-credential", challengeValue(startBody))}, "")
-	assertStatus(t, finishResp, stdhttp.StatusOK)
-	assertNoStore(t, finishResp)
-
-	// 既存パスキーが保持されていることを確認
-	listResp := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/passkeys", nil, token)
-	assertStatus(t, listResp, stdhttp.StatusOK)
-	var listBody map[string]any
-	decodeJSON(t, listResp, &listBody)
-	passkeys, _ := listBody["passkeys"].([]any)
-	if len(passkeys) != 2 {
-		t.Fatalf("expected 2 passkeys after otp-add, got %d", len(passkeys))
-	}
-}
-
-// [AUTH-BE-S023] 有効期限切れの OTP が add/start で拒否される
-func TestStartPasskeyAddByOtpRejectsExpiredOtp(t *testing.T) {
-	t.Parallel()
-	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
-	stateRepo := newStubAuthStateRepository(clock.Now)
-	accountRepo := stubAuthAccountRepositoryWithMember()
-	authService := application.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	authService.UseWebAuthnProvider(newMockWebAuthnProvider())
-	tokenService, sessionService := injectTestTokenService(authService, clock.Now)
-	router := NewRouter(testConfig(), Dependencies{Auth: authService, TokenService: tokenService, SessionService: sessionService})
-
-	// ログインして OTP を発行
-	token := loginWithPasskey(t, router, "member@example.com")
-	session, _ := authService.AuthorizeSession(context.Background(), token)
-	otp, _ := authService.IssuePasskeyOtp(context.Background(), session.AccountID, session.SessionID)
-	saveTestReauthSession(t, stateRepo, session.AccountID, session.SessionID, "otp-issue", clock.Now)
-
-	otpResp := performJSONWithHeaders(t, router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token, map[string]string{"X-Reauth-Session": "01ARZ3NDEKTSV4RRFFQ69G5FAY"})
-	assertStatus(t, otpResp, stdhttp.StatusOK)
-	var otpBody map[string]any
-	decodeJSON(t, otpResp, &otpBody)
-	issued, ok := otpBody["issued"].(bool)
-	if !ok || !issued {
-		t.Fatalf("expected issued true, got %#v", otpBody["issued"])
-	}
-
-	// OTP TTL（5 分）を超過させる
-	clock.Advance(6 * time.Minute)
-
-	// 期限切れ OTP で add/start を試みる
-	resp := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start",
-		map[string]string{"email": "member@example.com", "otp": otp}, "")
-	assertStatus(t, resp, stdhttp.StatusBadRequest)
-	assertNoStore(t, resp)
 }
 
 // assertPasskeyAddStartCreationFields は PasskeyAddStartResponse の
@@ -1630,37 +1402,6 @@ func TestStartPasskeyRegistrationReturnsWebAuthnCreationFields(t *testing.T) {
 
 	var body map[string]any
 	decodeJSON(t, resp, &body)
-	assertULIDField(t, body, "requestId")
-	assertPasskeyAddStartCreationFields(t, body)
-}
-
-// StartPasskeyAdditionByOtp が rpName / user / pubKeyCredParams を返す
-func TestStartPasskeyAddByOtpReturnsWebAuthnCreationFields(t *testing.T) {
-	t.Parallel()
-	env := newAuthTestEnv(t)
-	token := loginWithPasskey(t, env.router, "member@example.com")
-
-	// OTP は HTTP レスポンスに含まれないため、ユースケースを直接呼び出して取得する
-	session, _ := env.auth.AuthorizeSession(context.Background(), token)
-	otp, _ := env.auth.IssuePasskeyOtp(context.Background(), session.AccountID, session.SessionID)
-	saveTestReauthSession(t, env.stateRepo, session.AccountID, session.SessionID, "otp-issue", env.now)
-
-	otpResp := performJSONWithHeaders(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token, map[string]string{"X-Reauth-Session": "01ARZ3NDEKTSV4RRFFQ69G5FAY"})
-	assertStatus(t, otpResp, stdhttp.StatusOK)
-	var otpBody map[string]any
-	decodeJSON(t, otpResp, &otpBody)
-	issued, ok := otpBody["issued"].(bool)
-	if !ok || !issued {
-		t.Fatalf("expected issued true, got %#v", otpBody["issued"])
-	}
-
-	startResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start",
-		map[string]string{"email": "member@example.com", "otp": otp}, "")
-	assertStatus(t, startResp, stdhttp.StatusOK)
-	assertNoStore(t, startResp)
-
-	var body map[string]any
-	decodeJSON(t, startResp, &body)
 	assertULIDField(t, body, "requestId")
 	assertPasskeyAddStartCreationFields(t, body)
 }
@@ -1741,46 +1482,6 @@ func TestStartPasskeyRegistrationMissingDisplayNameReturns503(t *testing.T) {
 	assertNoStore(t, resp)
 }
 
-// [AUTH-BE-S024] 消費済みの OTP が再利用できない
-func TestPasskeyAddByOtpConsumedOtpRejected(t *testing.T) {
-	t.Parallel()
-	env := newAuthTestEnv(t)
-	token := loginWithPasskey(t, env.router, "member@example.com")
-
-	// OTP は HTTP レスポンスに含まれないため、ユースケースを直接呼び出して取得する
-	session, _ := env.auth.AuthorizeSession(context.Background(), token)
-	otp, _ := env.auth.IssuePasskeyOtp(context.Background(), session.AccountID, session.SessionID)
-	saveTestReauthSession(t, env.stateRepo, session.AccountID, session.SessionID, "otp-issue", env.now)
-
-	// OTP を発行（acknowledgement のみ確認）
-	otpResp := performJSONWithHeaders(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token, map[string]string{"X-Reauth-Session": "01ARZ3NDEKTSV4RRFFQ69G5FAY"})
-	assertStatus(t, otpResp, stdhttp.StatusOK)
-	var otpBody map[string]any
-	decodeJSON(t, otpResp, &otpBody)
-	issued, ok := otpBody["issued"].(bool)
-	if !ok || !issued {
-		t.Fatalf("expected issued true, got %#v", otpBody["issued"])
-	}
-
-	// start で OTP を使用
-	startResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start",
-		map[string]string{"email": "member@example.com", "otp": otp}, "")
-	assertStatus(t, startResp, stdhttp.StatusOK)
-	var startBody map[string]any
-	decodeJSON(t, startResp, &startBody)
-
-	// finish で OTP を消費
-	finishResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/finish",
-		map[string]any{"email": "member@example.com", "otp": otp, "credential": attestationCredentialJSON("first-new-cred", challengeValue(startBody))}, "")
-	assertStatus(t, finishResp, stdhttp.StatusOK)
-
-	// 同じ OTP で再度 start を試みる（OTP が消費済みのため 400）
-	replayResp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start",
-		map[string]string{"email": "member@example.com", "otp": otp}, "")
-	assertStatus(t, replayResp, stdhttp.StatusBadRequest)
-	assertNoStore(t, replayResp)
-}
-
 // [AUTH-BE-S026] oversized public auth request は state mutation 前に拒否される
 func TestOversizedPublicAuthRequestRejectedBeforeStateMutation(t *testing.T) {
 	t.Parallel()
@@ -1809,21 +1510,6 @@ func TestOversizedPublicAuthRequestRejectedBeforeStateMutation(t *testing.T) {
 	}
 }
 
-// [AUTH-BE-S036] bearer-only OTP delivery は再認証セッションなしで拒否される
-// OpenAPI generated code は必須ヘッダー欠落時に 400 を返す（handler 到達前に検証される）。
-func TestIssuePasskeyOtpWithoutReauthSessionRejected(t *testing.T) {
-	t.Parallel()
-	env := newAuthTestEnv(t)
-	token := loginWithPasskey(t, env.router, "member@example.com")
-
-	// X-Reauth-Session なしで OTP 発行を試みる
-	resp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/passkeys/otp", nil, token)
-
-	// OpenAPI ミドルウェアが必須ヘッダー欠落を 400 で拒否する
-	assertStatus(t, resp, stdhttp.StatusBadRequest)
-	assertNoStore(t, resp)
-}
-
 // [AUTH-BE-S037] bearer-only passkey deletion は再認証セッションなしで拒否される
 // OpenAPI generated code は必須ヘッダー欠落時に 400 を返す（handler 到達前に検証される）。
 func TestDeletePasskeyWithoutReauthSessionRejected(t *testing.T) {
@@ -1848,32 +1534,4 @@ func TestDeletePasskeyWithoutReauthSessionRejected(t *testing.T) {
 	// OpenAPI ミドルウェアが必須ヘッダー欠落を 400 で拒否する
 	assertStatus(t, resp, stdhttp.StatusBadRequest)
 	assertNoStore(t, resp)
-}
-
-// [AUTH-BE-S033] email と OTP の不一致は account existence を露出しない
-func TestPasskeyAddByOtpMismatchedEmailOtpReturnsGeneric(t *testing.T) {
-	t.Parallel()
-	env := newAuthTestEnv(t)
-
-	// 存在しない組み合わせでリクエストする
-	cases := []map[string]string{
-		{"email": "member@example.com", "otp": "000000"},
-		{"email": "missing@example.com", "otp": "000000"},
-		{"email": "missing@example.com", "otp": "123456"},
-	}
-
-	var firstError string
-	for i, body := range cases {
-		resp := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/add/start", body, "")
-		assertStatus(t, resp, stdhttp.StatusBadRequest)
-		assertNoStore(t, resp)
-		var respBody map[string]any
-		decodeJSON(t, resp, &respBody)
-		errMsg, _ := respBody["error"].(string)
-		if i == 0 {
-			firstError = errMsg
-		} else if errMsg != firstError {
-			t.Fatalf("expected identical generic error for mismatched email/otp, got %q vs %q", firstError, errMsg)
-		}
-	}
 }

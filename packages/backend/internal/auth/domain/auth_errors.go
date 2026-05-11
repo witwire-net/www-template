@@ -30,6 +30,6 @@ var (
 	ErrInvalidSessionID          = errors.New("session id is required")
 	ErrInvalidToken              = errors.New("token is required")
 	ErrInvalidSessionExpiry      = errors.New("session expiry is required")
-	// ErrOtpNotFound は OTP が存在しない・期限切れ・消費済みの場合に返す。
-	ErrOtpNotFound = errors.New("otp not found or expired")
+	// ErrInvalidTokenKind は recovery token/session の kind が空または無効な場合に返す。
+	ErrInvalidTokenKind = errors.New("token kind is required")
 )

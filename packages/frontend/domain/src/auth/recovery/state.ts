@@ -50,6 +50,7 @@ function applyRecoveryReady(
     recoverySessionId: string;
     recoverySession: string;
     expiresAt: string;
+    kind?: 'recovery' | 'device-link';
   },
   cacheControl: string | null
 ): void {
@@ -60,6 +61,7 @@ function applyRecoveryReady(
   state.recoverySessionId = payload.recoverySessionId;
   state.recoverySession = payload.recoverySession;
   state.expiresAt = payload.expiresAt;
+  state.kind = payload.kind;
   state.lastCacheControl = cacheControl;
   state.error = null;
 }

@@ -60,6 +60,8 @@ export interface RecoveryFlowState {
   lastCacheControl: string | null;
   error: string | null;
   sentView: RecoverySentView;
+  /** consumeRecoveryToken レスポンスの kind。recovery or device-link。 */
+  kind?: 'recovery' | 'device-link';
 }
 
 /** 登録済みパスキーの表示用モデル。 */
@@ -75,11 +77,6 @@ export interface PasskeyManagementState {
   loading: boolean;
   error: string | null;
   reauthSession: string | null;
-}
-
-/** passkey add-by-OTP hook state。 */
-export interface PasskeyAddByOtpState {
-  loading: boolean;
-  error: string | null;
-  done: boolean;
+  /** デバイスリンク送信済みフラグ。再認証後に sendDeviceLink が成功した場合に true になる。 */
+  deviceLinkSent: boolean;
 }

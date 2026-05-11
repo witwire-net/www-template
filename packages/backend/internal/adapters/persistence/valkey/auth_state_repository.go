@@ -2,24 +2,32 @@ package valkey
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"www-template/packages/backend/internal/auth/domain"
 )
 
 type AuthStateRepository struct {
-	store *ValkeyStore
+	store         *ValkeyStore
+	secretHashKey string
 }
 
-func NewAuthStateRepository(store *ValkeyStore) (*AuthStateRepository, error) {
+// NewAuthStateRepository は AuthStateRepository を生成する。
+// store と secretHashKey は必須。secretHashKey は recovery token secret の HMAC-SHA256 に使用する。
+func NewAuthStateRepository(store *ValkeyStore, secretHashKey string) (*AuthStateRepository, error) {
 	if store == nil {
 		return nil, errors.New("valkey store is required")
 	}
-	return &AuthStateRepository{store: store}, nil
+	if secretHashKey == "" {
+		return nil, errors.New("secret hash key is required")
+	}
+	return &AuthStateRepository{store: store, secretHashKey: secretHashKey}, nil
 }
 
 func (r *AuthStateRepository) Close() error {
@@ -79,8 +87,18 @@ func (r *AuthStateRepository) ConsumeChallenge(ctx context.Context, secret strin
 	return normalizeChallengeRecord(record)
 }
 
+// IssueRecoveryToken は recovery token を Valkey に保存する。
+// secret は平文のまま保存せず、hashSecret（HMAC-SHA256+pepper）でハッシュ化した SecretHash として保存する。
+// これにより Valkey が漏洩しても平文 secret は復元不可能であり、offline brute-force 攻撃を困難にする。
 func (r *AuthStateRepository) IssueRecoveryToken(ctx context.Context, token domain.RecoveryToken, ttl time.Duration) error {
-	record := recoveryTokenRecordFromDomain(token)
+	record := recoveryTokenRecord{
+		ID:         token.ID(),
+		AccountID:  token.AccountID(),
+		SecretHash: r.hashSecret(token.Secret()),
+		Kind:       string(token.Kind()),
+		ExpiresAt:  token.ExpiresAt(),
+		ConsumedAt: token.ConsumedAt(),
+	}
 	return r.setJSON(ctx, r.key("auth", "recovery-token", token.ID()), record, ttl)
 }
 
@@ -88,39 +106,62 @@ func (r *AuthStateRepository) SaveRecoveryDeliveryFailure(ctx context.Context, f
 	return r.setJSON(ctx, r.key("auth", "recovery-delivery-failure", failure.RequestID()), recoveryDeliveryFailureRecordFromDomain(failure), ttl)
 }
 
-func (r *AuthStateRepository) GetRecoveryTokenBySecret(ctx context.Context, secret string) (domain.RecoveryToken, error) {
-	var record recoveryTokenRecord
-	if err := r.getJSON(ctx, r.key("auth", "recovery-token", secret), &record); err != nil {
-		if errors.Is(err, errRESPNil) {
-			return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
-		}
-		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
-	}
-	return normalizeRecoveryTokenRecord(record)
-}
+// atomicConsumeRecoveryTokenScript は Valkey Lua スクリプトで recovery token をアトミックに検証・消費する。
+// 処理内容:
+//  1. GET でトークンレコード（JSON）を取得
+//  2. JSON をデコードし、保存済み SecretHash を抽出
+//  3. 与えられた expected_hash と比較
+//  4. 一致した場合のみ DEL でトークンを削除し、JSON を返す
+//
+// キー不在時は redis.error_reply('NOTFOUND')、ハッシュ不一致時は redis.error_reply('MISMATCH') を返す。
+// このスクリプトは Valkey サーバー内で単一のアトミック操作として実行されるため、
+// GET→比較→DEL の間に別のリクエストが割り込む TOCTOU race condition を防止する。
+//
+// #nosec G101 -- Lua script contains no credentials; gosec false-positives on 'secretHash' field name
+const atomicConsumeRecoveryTokenScript = `
+local value = redis.call('GET', KEYS[1])
+if not value then
+    return redis.error_reply('NOTFOUND')
+end
+local ok, decoded = pcall(cjson.decode, value)
+if not ok then
+    return redis.error_reply('INVALID')
+end
+if decoded['secretHash'] ~= ARGV[1] then
+    return redis.error_reply('MISMATCH')
+end
+redis.call('DEL', KEYS[1])
+return value
+`
 
-func (r *AuthStateRepository) ConsumeRecoveryToken(ctx context.Context, token domain.RecoveryToken) error {
-	return r.setJSON(ctx, r.key("auth", "recovery-token", token.Secret()), recoveryTokenRecordFromDomain(token), time.Until(token.ExpiresAt()))
-}
-
-// ConsumeRecoveryTokenAtomic は recovery token を tokenID でアトミックに取得・削除（GETDEL）し、
+// ConsumeRecoveryTokenAtomic は recovery token を tokenID で取得し、
 // クライアントから送信された secret のハッシュを記録済みハッシュと照合する。
+// ハッシュが一致した場合のみトークンを削除（DEL）する。これにより、誤った secret で
+// 正当な tokenID を指定された場合でもトークンが消失する DoS を防止する。
+// 検証と削除は Valkey Lua スクリプトでアトミックに実行され、並行リクエストによる
+// 二重消費（TOCTOU race condition）を完全に防止する。
 // キーが存在しない・ハッシュが一致しない・期限切れ・消費済みの場合はエラーを返す。
 // 検証に成功した場合、secret を含む domain.RecoveryToken を返す。
 func (r *AuthStateRepository) ConsumeRecoveryTokenAtomic(ctx context.Context, tokenID string, secret string) (domain.RecoveryToken, error) {
-	result, err := r.store.GetDel(ctx, r.key("auth", "recovery-token", tokenID))
+	key := r.key("auth", "recovery-token", tokenID)
+	expectedHash := r.hashSecret(secret)
+
+	result, err := r.store.Eval(ctx, atomicConsumeRecoveryTokenScript, []string{key}, expectedHash).Result()
 	if err != nil {
-		if errors.Is(err, errRESPNil) {
+		errStr := err.Error()
+		if strings.Contains(errStr, "NOTFOUND") || strings.Contains(errStr, "MISMATCH") {
 			return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
 		}
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
-	var record recoveryTokenRecord
-	if err := json.Unmarshal([]byte(result), &record); err != nil {
+
+	value, ok := result.(string)
+	if !ok {
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
-	if record.SecretHash != hashSecret(secret) {
-		return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
+	var record recoveryTokenRecord
+	if err := json.Unmarshal([]byte(value), &record); err != nil {
+		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
 	token, err := record.toDomain(secret)
 	if err != nil {
@@ -177,48 +218,6 @@ func (r *AuthStateRepository) GetLock(ctx context.Context, key string) (domain.A
 	return domain.NewAuthLock(record.LockedUntil), true, nil
 }
 
-// SavePasskeyOtp は OTP キーと accountID を Valkey に TTL 付きで保存する。
-func (r *AuthStateRepository) SavePasskeyOtp(ctx context.Context, otpKey string, accountID string, ttl time.Duration) error {
-	err := r.store.Set(ctx, r.key("auth", "passkey-otp", otpKey), accountID, ttl)
-	if err != nil {
-		return domain.ErrAuthStoreUnavailable
-	}
-	return nil
-}
-
-// ConsumePasskeyOtp は OTP を取得して削除する（1 回限りの消費）。
-// 存在しない・期限切れの場合は domain.ErrOtpNotFound を返す。
-func (r *AuthStateRepository) ConsumePasskeyOtp(ctx context.Context, otpKey string) (string, error) {
-	k := r.key("auth", "passkey-otp", otpKey)
-	accountID, err := r.store.GetDel(ctx, k)
-	if err != nil {
-		if errors.Is(err, errRESPNil) {
-			return "", domain.ErrOtpNotFound
-		}
-		return "", domain.ErrAuthStoreUnavailable
-	}
-	if accountID == "" {
-		return "", domain.ErrOtpNotFound
-	}
-	return accountID, nil
-}
-
-// GetPasskeyOtp は OTP を消費せずに accountID を取得する。
-// 存在しない・期限切れの場合は domain.ErrOtpNotFound を返す。
-func (r *AuthStateRepository) GetPasskeyOtp(ctx context.Context, otpKey string) (string, error) {
-	accountID, err := r.store.Get(ctx, r.key("auth", "passkey-otp", otpKey))
-	if err != nil {
-		if errors.Is(err, errRESPNil) {
-			return "", domain.ErrOtpNotFound
-		}
-		return "", domain.ErrAuthStoreUnavailable
-	}
-	if accountID == "" {
-		return "", domain.ErrOtpNotFound
-	}
-	return accountID, nil
-}
-
 func (r *AuthStateRepository) setJSON(ctx context.Context, key string, value any, ttl time.Duration) error {
 	payload, err := json.Marshal(value)
 	if err != nil {
@@ -273,6 +272,7 @@ type recoveryTokenRecord struct {
 	ID         string     `json:"id"`
 	AccountID  string     `json:"accountId"`
 	SecretHash string     `json:"secretHash"`
+	Kind       string     `json:"kind"`
 	ExpiresAt  time.Time  `json:"expiresAt"`
 	ConsumedAt *time.Time `json:"consumedAt,omitempty"`
 }
@@ -301,43 +301,33 @@ func recoveryDeliveryFailureRecordFromDomain(failure domain.RecoveryDeliveryFail
 	}
 }
 
-func recoveryTokenRecordFromDomain(token domain.RecoveryToken) recoveryTokenRecord {
-	return recoveryTokenRecord{ID: token.ID(), AccountID: token.AccountID(), SecretHash: hashSecret(token.Secret()), ExpiresAt: token.ExpiresAt(), ConsumedAt: token.ConsumedAt()}
-}
-
 func (r recoveryTokenRecord) toDomain(secret string) (domain.RecoveryToken, error) {
-	return domain.ReconstituteRecoveryToken(r.ID, r.AccountID, secret, r.ExpiresAt, r.ConsumedAt)
+	return domain.ReconstituteRecoveryToken(r.ID, r.AccountID, secret, domain.TokenKind(r.Kind), r.ExpiresAt, r.ConsumedAt)
 }
 
-func normalizeRecoveryTokenRecord(record recoveryTokenRecord) (domain.RecoveryToken, error) {
-	// secret が必要だが記録にない場合はプレースホルダーを渡す（呼び出し側で上書きすること）。
-	token, err := record.toDomain("")
-	if err != nil {
-		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
-	}
-	return token, nil
-}
-
-// hashSecret は secret の SHA-256 ハッシュを base64 エンコードして返す。
-// 本番環境ではペッパーを追加してハッシュすることを推奨する。
-func hashSecret(secret string) string {
-	h := sha256.Sum256([]byte(secret))
-	return base64.StdEncoding.EncodeToString(h[:])
+// hashSecret は secret を server-side pepper（SecretHashKey）で HMAC-SHA256 し、
+// base64 エンコードして返す。低エントロピーな secret をそのまま key にしないため、
+// offline brute-force を困難にする。
+func (r *AuthStateRepository) hashSecret(secret string) string {
+	mac := hmac.New(sha256.New, []byte(r.secretHashKey))
+	mac.Write([]byte(secret))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
 type recoverySessionRecord struct {
 	ID         string     `json:"id"`
 	AccountID  string     `json:"accountId"`
+	Kind       string     `json:"kind"`
 	ExpiresAt  time.Time  `json:"expiresAt"`
 	ConsumedAt *time.Time `json:"consumedAt,omitempty"`
 }
 
 func recoverySessionRecordFromDomain(session domain.RecoverySession) recoverySessionRecord {
-	return recoverySessionRecord{ID: session.ID(), AccountID: session.AccountID(), ExpiresAt: session.ExpiresAt(), ConsumedAt: session.ConsumedAt()}
+	return recoverySessionRecord{ID: session.ID(), AccountID: session.AccountID(), Kind: string(session.Kind()), ExpiresAt: session.ExpiresAt(), ConsumedAt: session.ConsumedAt()}
 }
 
 func (r recoverySessionRecord) toDomain() (domain.RecoverySession, error) {
-	return domain.ReconstituteRecoverySession(r.ID, r.AccountID, r.ExpiresAt, r.ConsumedAt)
+	return domain.ReconstituteRecoverySession(r.ID, r.AccountID, domain.TokenKind(r.Kind), r.ExpiresAt, r.ConsumedAt)
 }
 
 func normalizeRecoverySessionRecord(record recoverySessionRecord) (domain.RecoverySession, error) {
@@ -358,12 +348,12 @@ func emptyChallenge() domain.AuthChallenge {
 }
 
 func emptyRecoveryToken() domain.RecoveryToken {
-	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", time.Unix(1, 0).UTC())
+	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return token
 }
 
 func emptyRecoverySession() domain.RecoverySession {
-	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
+	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return session
 }
 
@@ -391,117 +381,7 @@ func normalizeReauthenticationSessionRecord(record reauthenticationSessionRecord
 func emptyReauthenticationSession() domain.ReauthenticationSession {
 	session, _ := domain.NewReauthenticationSession(
 		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
-		"otp-issue", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+		"device-link", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
 	)
 	return session
-}
-
-// ─── DeviceLoginHandoff ─────────────────────────────────────────────────────
-
-type deviceLoginHandoffRecord struct {
-	HandoffID        string     `json:"handoffId"`
-	AccountID        string     `json:"accountId"`
-	IssuingSessionID string     `json:"issuingSessionId"`
-	EmailHash        string     `json:"emailHash"`
-	OtpHash          string     `json:"otpHash"`
-	ChallengeID      string     `json:"challengeId,omitempty"`
-	ExpiresAt        time.Time  `json:"expiresAt"`
-	AttemptCount     int        `json:"attemptCount"`
-	ConsumedAt       *time.Time `json:"consumedAt,omitempty"`
-}
-
-// SaveDeviceLoginHandoff は namespaced device handoff record とその secondary index を TTL 付きで保存する。
-// 単一 record は auth:handoff:{handoffID} に、OTP 検索用 secondary index は auth:handoff-otp-idx:{emailHash}:{otpHash} に保存される。
-func (r *AuthStateRepository) SaveDeviceLoginHandoff(ctx context.Context, handoff domain.DeviceLoginHandoff, ttl time.Duration) error {
-	record := deviceLoginHandoffRecord{
-		HandoffID:        handoff.ID(),
-		AccountID:        handoff.AccountID(),
-		IssuingSessionID: handoff.IssuingSessionID(),
-		EmailHash:        handoff.EmailHash(),
-		OtpHash:          handoff.OtpHash(),
-		ChallengeID:      handoff.ChallengeID(),
-		ExpiresAt:        handoff.ExpiresAt(),
-		AttemptCount:     handoff.AttemptCount(),
-		ConsumedAt:       handoff.ConsumedAt(),
-	}
-	if err := r.setJSON(ctx, r.key("auth", "handoff", handoff.ID()), record, ttl); err != nil {
-		return err
-	}
-	// secondary index: auth:handoff-otp-idx:{emailHash}:{otpHash} → handoffID
-	idxKey := r.key("auth", "handoff-otp-idx", handoff.EmailHash(), handoff.OtpHash())
-	if err := r.store.Set(ctx, idxKey, handoff.ID(), ttl); err != nil {
-		return domain.ErrAuthStoreUnavailable
-	}
-	return nil
-}
-
-// FindDeviceLoginHandoffByEmailAndOtp は emailHash と otpHash から secondary index を経由して handoff を検索する。
-// 見つからない場合は domain.ErrDeviceLoginHandoffNotFound を返す。
-func (r *AuthStateRepository) FindDeviceLoginHandoffByEmailAndOtp(ctx context.Context, emailHash string, otpHash string) (domain.DeviceLoginHandoff, error) {
-	idxKey := r.key("auth", "handoff-otp-idx", emailHash, otpHash)
-	handoffID, err := r.store.Get(ctx, idxKey)
-	if err != nil {
-		if errors.Is(err, errRESPNil) {
-			return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
-		}
-		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
-	}
-	if handoffID == "" {
-		return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
-	}
-	return r.GetDeviceLoginHandoff(ctx, handoffID)
-}
-
-// GetDeviceLoginHandoff は handoffID から device login handoff record を取得する。
-func (r *AuthStateRepository) GetDeviceLoginHandoff(ctx context.Context, handoffID string) (domain.DeviceLoginHandoff, error) {
-	var record deviceLoginHandoffRecord
-	if err := r.getJSON(ctx, r.key("auth", "handoff", handoffID), &record); err != nil {
-		if errors.Is(err, errRESPNil) {
-			return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
-		}
-		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
-	}
-	return normalizeDeviceLoginHandoffRecord(record)
-}
-
-// ConsumeDeviceLoginHandoff は handoff record を GETDEL でアトミックに取得・削除する。
-// 成功した場合、secondary index もベストエフォートで削除する。
-func (r *AuthStateRepository) ConsumeDeviceLoginHandoff(ctx context.Context, handoffID string) (domain.DeviceLoginHandoff, error) {
-	result, err := r.store.GetDel(ctx, r.key("auth", "handoff", handoffID))
-	if err != nil {
-		if errors.Is(err, errRESPNil) {
-			return emptyDeviceLoginHandoff(), domain.ErrDeviceLoginHandoffNotFound
-		}
-		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
-	}
-	var record deviceLoginHandoffRecord
-	if err := json.Unmarshal([]byte(result), &record); err != nil {
-		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
-	}
-	// secondary index も削除する（ベストエフォート）
-	idxKey := r.key("auth", "handoff-otp-idx", record.EmailHash, record.OtpHash)
-	_ = r.store.Delete(ctx, idxKey)
-	return normalizeDeviceLoginHandoffRecord(record)
-}
-
-func normalizeDeviceLoginHandoffRecord(record deviceLoginHandoffRecord) (domain.DeviceLoginHandoff, error) {
-	handoff, err := domain.NewDeviceLoginHandoff(record.HandoffID, record.AccountID, record.IssuingSessionID, record.EmailHash, record.OtpHash, record.ExpiresAt)
-	if err != nil {
-		return emptyDeviceLoginHandoff(), domain.ErrAuthStoreUnavailable
-	}
-	if record.ChallengeID != "" {
-		handoff = handoff.BindChallenge(record.ChallengeID)
-	}
-	for i := 0; i < record.AttemptCount; i++ {
-		handoff = handoff.IncrementAttempt()
-	}
-	if record.ConsumedAt != nil {
-		handoff = handoff.Consume(*record.ConsumedAt)
-	}
-	return handoff, nil
-}
-
-func emptyDeviceLoginHandoff() domain.DeviceLoginHandoff {
-	h, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", "placeholder", time.Unix(1, 0).UTC())
-	return h
 }

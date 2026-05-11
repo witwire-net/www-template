@@ -192,6 +192,34 @@ func (s *TokenService) RevokeSession(ctx context.Context, accountID, sessionID s
 	return nil
 }
 
+// RevokeAllForAccount は指定されたアカウントに紐づく全セッションとリフレッシュトークンを失効する。
+// sessionStore.ListSessions で取得した各セッションに対し、RevokeSession と refreshStore の失効を実行する。
+// いずれかの失敗でも最初のエラーを返す（fail-closed）。
+func (s *TokenService) RevokeAllForAccount(ctx context.Context, accountID string) error {
+	sessions, err := s.sessionStore.ListSessions(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, domain.ErrAuthStoreUnavailable) {
+			return ErrInternalError
+		}
+		return err
+	}
+	for _, sess := range sessions {
+		if err := s.sessionStore.RevokeSession(ctx, accountID, sess.SessionID); err != nil {
+			if errors.Is(err, domain.ErrAuthStoreUnavailable) {
+				return ErrInternalError
+			}
+			return err
+		}
+		if err := s.refreshStore.RevokeBySessionID(ctx, accountID, sess.SessionID); err != nil {
+			if errors.Is(err, domain.ErrAuthStoreUnavailable) {
+				return ErrInternalError
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 // VerifyAccessToken は JWT アクセストークンの署名と有効期限を検証し、TokenClaims を返す。
 func (s *TokenService) VerifyAccessToken(token string) (TokenClaims, error) {
 	claims, err := domain.VerifyAccessToken(token, []byte(s.config.JWTSecret), s.clock())

@@ -274,7 +274,7 @@ func (s *StrictServer) ConsumeRecoveryToken(ctx context.Context, request openapi
 	}
 
 	return openapi.ConsumeRecoveryToken200JSONResponse{
-		Body:    openapi.RecoveryConsumeResponse{RequestId: result.RequestID, RecoveryTokenId: result.RecoveryTokenID, RecoverySessionId: result.RecoverySessionID, RecoverySession: result.RecoverySessionRef, ExpiresAt: result.ExpiresAt},
+		Body:    openapi.RecoveryConsumeResponse{RequestId: result.RequestID, RecoveryTokenId: result.RecoveryTokenID, RecoverySessionId: result.RecoverySessionID, RecoverySession: result.RecoverySessionRef, Kind: openapi.TokenKind(result.Kind), ExpiresAt: result.ExpiresAt},
 		Headers: openapi.ConsumeRecoveryToken200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
 }
@@ -502,71 +502,30 @@ func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.Delete
 	return openapi.DeletePasskey204Response{Headers: openapi.DeletePasskey204ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
-func (s *StrictServer) IssuePasskeyOtp(ctx context.Context, request openapi.IssuePasskeyOtpRequestObject) (openapi.IssuePasskeyOtpResponseObject, error) {
+func (s *StrictServer) SendDeviceLink(ctx context.Context, request openapi.SendDeviceLinkRequestObject) (openapi.SendDeviceLinkResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.IssuePasskeyOtp401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.IssuePasskeyOtp401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return openapi.SendDeviceLink401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.SendDeviceLink401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	// X-Reauth-Session header で提示された再認証セッションを検証・consume する。
-	if err := s.auth.VerifyReauthSession(ctx, request.Params.XReauthSession, session.AccountID, session.SessionID, "otp-issue"); err != nil {
+	if err := s.auth.VerifyReauthSession(ctx, request.Params.XReauthSession, session.AccountID, session.SessionID, "device-link"); err != nil {
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, application.ErrInternalError) {
-			return openapi.IssuePasskeyOtp503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.IssuePasskeyOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
+			return openapi.SendDeviceLink503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.SendDeviceLink503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
-		return openapi.IssuePasskeyOtp403JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.IssuePasskeyOtp403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return openapi.SendDeviceLink403JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.SendDeviceLink403ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	_, err = s.auth.IssuePasskeyOtp(ctx, session.AccountID, session.SessionID)
+	result, err := s.auth.ExecuteDeviceLink(ctx, session.AccountID, session.SessionID)
 	if err != nil {
-		return openapi.IssuePasskeyOtp503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.IssuePasskeyOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return openapi.SendDeviceLink503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.SendDeviceLink503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	requestID := nextAuthRequestID()
-	return openapi.IssuePasskeyOtp200JSONResponse{
-		Body:    openapi.PasskeyOtpResponse{RequestId: requestID, Issued: openapi.PasskeyOtpResponseIssuedTrue},
-		Headers: openapi.IssuePasskeyOtp200ResponseHeaders{CacheControl: noStoreValue},
+	return openapi.SendDeviceLink200JSONResponse{
+		Body:    openapi.DeviceLinkResponse{RequestId: result.RequestID, Issued: openapi.DeviceLinkResponseIssuedTrue},
+		Headers: openapi.SendDeviceLink200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
-}
-
-func (s *StrictServer) StartPasskeyAdditionByOtp(ctx context.Context, request openapi.StartPasskeyAdditionByOtpRequestObject) (openapi.StartPasskeyAdditionByOtpResponseObject, error) {
-	if request.Body == nil {
-		return openapi.StartPasskeyAdditionByOtp400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.StartPasskeyAdditionByOtp400ResponseHeaders{CacheControl: noStoreValue}}, nil
-	}
-
-	result, err := s.auth.StartAddPasskeyByOtp(ctx, string(request.Body.Email), request.Body.Otp, clientIPFromContext(ctx))
-	if err != nil {
-		failureRequestID := nextAuthRequestID()
-		if errors.Is(err, application.ErrInternalError) {
-			return openapi.StartPasskeyAdditionByOtp503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartPasskeyAdditionByOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
-		}
-		return openapi.StartPasskeyAdditionByOtp400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.StartPasskeyAdditionByOtp400ResponseHeaders{CacheControl: noStoreValue}}, nil
-	}
-
-	body := openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID}
-	if err := applyWebAuthnRegistrationOptions(&body, result.WebAuthnOptions); err != nil {
-		return openapi.StartPasskeyAdditionByOtp503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartPasskeyAdditionByOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
-	}
-	return openapi.StartPasskeyAdditionByOtp200JSONResponse{
-		Body:    body,
-		Headers: openapi.StartPasskeyAdditionByOtp200ResponseHeaders{CacheControl: noStoreValue},
-	}, nil
-}
-
-func (s *StrictServer) FinishPasskeyAdditionByOtp(ctx context.Context, request openapi.FinishPasskeyAdditionByOtpRequestObject) (openapi.FinishPasskeyAdditionByOtpResponseObject, error) {
-	if request.Body == nil {
-		return openapi.FinishPasskeyAdditionByOtp400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.FinishPasskeyAdditionByOtp400ResponseHeaders{CacheControl: noStoreValue}}, nil
-	}
-
-	if err := s.auth.FinishAddPasskeyByOtp(ctx, string(request.Body.Email), request.Body.Otp, mapAttestationCredentialToDTO(request.Body.Credential), clientIPFromContext(ctx)); err != nil {
-		failureRequestID := nextAuthRequestID()
-		if errors.Is(err, application.ErrInternalError) {
-			return openapi.FinishPasskeyAdditionByOtp503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishPasskeyAdditionByOtp503ResponseHeaders{CacheControl: noStoreValue}}, nil
-		}
-		return openapi.FinishPasskeyAdditionByOtp400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.FinishPasskeyAdditionByOtp400ResponseHeaders{CacheControl: noStoreValue}}, nil
-	}
-
-	return openapi.FinishPasskeyAdditionByOtp200Response{Headers: openapi.FinishPasskeyAdditionByOtp200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
 func bearerTokenFromContext(ctx context.Context) string {

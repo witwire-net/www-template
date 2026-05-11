@@ -4,10 +4,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "outDir": "./dist",
     "baseUrl": "./src",
-    "types": ["svelte", "vite/client"],
-    "paths": {
-      "@ui/*": ["./*"]
-    }
+    "types": ["svelte", "vite/client"]
   },
   "include": [
     "src/**/*.d.ts",

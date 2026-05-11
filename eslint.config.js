@@ -1037,7 +1037,6 @@ export default tseslint.config(
               group: 'internal',
               position: 'after',
             },
-            { pattern: '@ui/**', group: 'internal', position: 'after' },
           ],
           pathGroupsExcludedImportTypes: ['builtin'],
         },
@@ -2446,7 +2445,7 @@ export default tseslint.config(
           patterns: [
             {
               group: ['../**'],
-              message: '@ui エイリアスでパッケージ内の上位ディレクトリを参照してください。',
+              message: '@www-template/ui/* でパッケージ内の上位ディレクトリを参照してください。',
             },
             {
               group: [

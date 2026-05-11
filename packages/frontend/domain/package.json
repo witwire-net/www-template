@@ -12,7 +12,6 @@
     "./auth": "./src/auth/index.ts",
     "./auth/session": "./src/auth/session/index.ts",
     "./auth/passkey": "./src/auth/passkey/index.ts",
-    "./auth/passkey/addByOtp": "./src/auth/passkey/addByOtp/index.ts",
     "./auth/passkey/management": "./src/auth/passkey/management/index.ts",
     "./auth/recovery": "./src/auth/recovery/index.ts",
     "./auth/guard": "./src/auth/guard/index.ts",

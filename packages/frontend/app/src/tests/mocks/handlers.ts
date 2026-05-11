@@ -230,8 +230,8 @@ const handlers = [
     );
   }),
 
-  // POST /api/v1/passkeys/otp
-  http.post('/api/v1/passkeys/otp', ({ request }) => {
+  // POST /api/v1/passkeys/send-device-link
+  http.post('/api/v1/passkeys/send-device-link', ({ request }) => {
     const reauthSession = request.headers.get('X-Reauth-Session');
     if (reauthSession === null || reauthSession === '') {
       return HttpResponse.json(
@@ -253,53 +253,6 @@ const handlers = [
         headers: NO_STORE_HEADERS,
       }
     );
-  }),
-
-  // POST /api/v1/auth/passkey/add/start
-  http.post('/api/v1/auth/passkey/add/start', async ({ request }) => {
-    const body = (await request.json()) as { email: string; otp: string };
-    if (body.email === 'valid@example.com' && body.otp === 'valid-otp') {
-      return HttpResponse.json(
-        {
-          requestId: TEST_ULID.requestId,
-          challenge: 'otp-add-challenge-base64',
-          rpId: 'localhost',
-          rpName: 'Test RP',
-          user: {
-            id: 'dXNlcjE',
-            name: body.email,
-            displayName: 'Test User',
-          },
-          pubKeyCredParams: [
-            { type: 'public-key', alg: -7 },
-            { type: 'public-key', alg: -257 },
-          ],
-          userVerification: 'required',
-        },
-        {
-          status: 200,
-          headers: NO_STORE_HEADERS,
-        }
-      );
-    }
-    return HttpResponse.json(
-      {
-        requestId: TEST_ULID.requestId,
-        error: 'invalid_otp',
-      },
-      {
-        status: 400,
-        headers: NO_STORE_HEADERS,
-      }
-    );
-  }),
-
-  // POST /api/v1/auth/passkey/add/finish
-  http.post('/api/v1/auth/passkey/add/finish', () => {
-    return new HttpResponse(null, {
-      status: 200,
-      headers: NO_STORE_HEADERS,
-    });
   }),
 ];
 

@@ -53,7 +53,6 @@ export type {
   AuthRouteIntent,
   AuthSessionState,
   AuthSessionSummary,
-  PasskeyAddByOtpState,
   PasskeyItem,
   PasskeyLoginState,
   PasskeyManagementState,
@@ -65,8 +64,6 @@ export type { AuthSessionActions, AuthSessionData } from './session/hook.svelte'
 export type { DeviceSession, ListDevicesResult } from './session/session_api';
 export { usePasskeyLogin } from './passkey/hook.svelte';
 export type { PasskeyLoginActions, PasskeyLoginData } from './passkey/hook.svelte';
-export { usePasskeyAddByOtp } from './passkey/addByOtp/hook.svelte';
-export type { PasskeyAddByOtpActions, PasskeyAddByOtpData } from './passkey/addByOtp/hook.svelte';
 export { usePasskeyManagement } from './passkey/management/hook.svelte';
 export type {
   PasskeyManagementActions,

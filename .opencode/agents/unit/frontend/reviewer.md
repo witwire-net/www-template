@@ -41,6 +41,8 @@ You are the `unit/build/reviewer` subagent. Based on the change summary and arti
   - `docs/brand/**`
   - `docs/**`
   - `.opencode/**`
+  - `package.json`
+  - `README.md`
 - Then load `coding-guardian` via `skill` and use it as an enforcement baseline
 - Then load `.opencode/skills/uiux/claude-ux` via `skill` and use its guidance as a UI/UX review baseline
 - Then load `.opencode/skills/uiux/gpt-ux` via `skill` and use its guidance as a UI/UX review baseline

@@ -23,7 +23,7 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
-		func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			called = true
 			return fakeRepo, func(context.Context) error { return nil }, nil
 		},
@@ -45,7 +45,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
-		func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return fakeAuthStateRepository{}, func(context.Context) error { return nil }, nil
 		},
 		fakeChallengeStoreFactory,
@@ -76,7 +76,7 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 				return nil
 			}, nil
 		},
-		func(context.Context, config.ValkeyConfig) (application.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return nil, nil, errors.New("valkey unavailable")
 		},
 		fakeChallengeStoreFactory,
@@ -140,12 +140,6 @@ func (fakeAuthStateRepository) IssueRecoveryToken(context.Context, domain.Recove
 func (fakeAuthStateRepository) SaveRecoveryDeliveryFailure(context.Context, domain.RecoveryDeliveryFailure, time.Duration) error {
 	return nil
 }
-func (fakeAuthStateRepository) GetRecoveryTokenBySecret(context.Context, string) (domain.RecoveryToken, error) {
-	return emptyRecoveryTokenForContainerTest(), nil
-}
-func (fakeAuthStateRepository) ConsumeRecoveryToken(context.Context, domain.RecoveryToken) error {
-	return nil
-}
 func (fakeAuthStateRepository) ConsumeRecoveryTokenAtomic(context.Context, string, string) (domain.RecoveryToken, error) {
 	return emptyRecoveryTokenForContainerTest(), domain.ErrRecoveryTokenNotFound
 }
@@ -167,29 +161,11 @@ func (fakeAuthStateRepository) SetLock(context.Context, string, time.Time, time.
 func (fakeAuthStateRepository) GetLock(context.Context, string) (domain.AuthLock, bool, error) {
 	return domain.NewAuthLock(time.Time{}), false, nil
 }
-func (fakeAuthStateRepository) SavePasskeyOtp(context.Context, string, string, time.Duration) error {
-	return nil
-}
-func (fakeAuthStateRepository) ConsumePasskeyOtp(context.Context, string) (string, error) {
-	return "", nil
-}
-func (fakeAuthStateRepository) GetPasskeyOtp(context.Context, string) (string, error) {
-	return "", nil
-}
 func (fakeAuthStateRepository) SaveReauthenticationSession(context.Context, domain.ReauthenticationSession, time.Duration) error {
 	return nil
 }
 func (fakeAuthStateRepository) ConsumeReauthenticationSession(context.Context, string) (domain.ReauthenticationSession, error) {
 	return emptyReauthenticationSessionForContainerTest(), domain.ErrReauthSessionNotFound
-}
-func (fakeAuthStateRepository) SaveDeviceLoginHandoff(context.Context, domain.DeviceLoginHandoff, time.Duration) error {
-	return nil
-}
-func (fakeAuthStateRepository) FindDeviceLoginHandoffByEmailAndOtp(context.Context, string, string) (domain.DeviceLoginHandoff, error) {
-	return emptyDeviceLoginHandoffForContainerTest(), domain.ErrDeviceLoginHandoffNotFound
-}
-func (fakeAuthStateRepository) ConsumeDeviceLoginHandoff(context.Context, string) (domain.DeviceLoginHandoff, error) {
-	return emptyDeviceLoginHandoffForContainerTest(), domain.ErrDeviceLoginHandoffNotFound
 }
 
 func emptyChallengeForContainerTest() domain.AuthChallenge {
@@ -198,26 +174,21 @@ func emptyChallengeForContainerTest() domain.AuthChallenge {
 }
 
 func emptyRecoveryTokenForContainerTest() domain.RecoveryToken {
-	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", time.Unix(1, 0).UTC())
+	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return token
 }
 
 func emptyRecoverySessionForContainerTest() domain.RecoverySession {
-	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
+	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return session
 }
 
 func emptyReauthenticationSessionForContainerTest() domain.ReauthenticationSession {
 	session, _ := domain.NewReauthenticationSession(
 		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
-		"otp-issue", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+		"device-link", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
 	)
 	return session
-}
-
-func emptyDeviceLoginHandoffForContainerTest() domain.DeviceLoginHandoff {
-	h, _ := domain.NewDeviceLoginHandoff("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", "placeholder", time.Unix(1, 0).UTC())
-	return h
 }
 
 func emptyAuthAccountForContainerTest() domain.AuthAccount {

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [sveltekit()],
   resolve: {
-    conditions: ['browser'],
+    conditions: ['browser', 'svelte', 'import'],
   },
   test: {
     globals: true,

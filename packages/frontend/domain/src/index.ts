@@ -1,7 +1,6 @@
 export {
   useAuthSession,
   usePasskeyLogin,
-  usePasskeyAddByOtp,
   usePasskeyManagement,
   useRecoveryFlow,
   useSessionGuard,
@@ -11,8 +10,6 @@ export type {
   AuthSessionData,
   PasskeyLoginActions,
   PasskeyLoginData,
-  PasskeyAddByOtpActions,
-  PasskeyAddByOtpData,
   PasskeyManagementActions,
   PasskeyManagementData,
   RecoveryFlowActions,

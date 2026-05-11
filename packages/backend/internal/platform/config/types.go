@@ -74,7 +74,6 @@ type AuthConfig struct {
 	PasskeyStartThrottleLimit       int
 	PasskeyStartGlobalThrottleLimit int
 	PasskeyStartThrottleWindow      time.Duration
-	HandoffGlobalThrottleLimit      int
 	SecretHashKey                   string
 	RecoveryEmailThrottleLimit      int
 	RecoveryEmailThrottleWindow     time.Duration
@@ -366,7 +365,6 @@ func (c Config) AuthRuntime() AuthConfig {
 	configured.PasskeyStartThrottleLimit = defaultInt(configured.PasskeyStartThrottleLimit, defaults.PasskeyStartThrottleLimit)
 	configured.PasskeyStartGlobalThrottleLimit = defaultInt(configured.PasskeyStartGlobalThrottleLimit, defaults.PasskeyStartGlobalThrottleLimit)
 	configured.PasskeyStartThrottleWindow = defaultDuration(configured.PasskeyStartThrottleWindow, defaults.PasskeyStartThrottleWindow)
-	configured.HandoffGlobalThrottleLimit = defaultInt(configured.HandoffGlobalThrottleLimit, defaults.HandoffGlobalThrottleLimit)
 	configured.SecretHashKey = defaultString(configured.SecretHashKey, defaults.SecretHashKey)
 	configured.RecoveryEmailThrottleLimit = defaultInt(configured.RecoveryEmailThrottleLimit, defaults.RecoveryEmailThrottleLimit)
 	configured.RecoveryEmailThrottleWindow = defaultDuration(configured.RecoveryEmailThrottleWindow, defaults.RecoveryEmailThrottleWindow)
@@ -393,7 +391,6 @@ func defaultAuthConfig() AuthConfig {
 		PasskeyStartThrottleLimit:       5,
 		PasskeyStartGlobalThrottleLimit: 1000,
 		PasskeyStartThrottleWindow:      5 * time.Minute,
-		HandoffGlobalThrottleLimit:      1000,
 		SecretHashKey:                   "dev-pepper-change-in-production",
 		JWTSecret:                       "change-this-to-a-long-random-jwt-secret-in-production",
 		RecoveryEmailThrottleLimit:      3,

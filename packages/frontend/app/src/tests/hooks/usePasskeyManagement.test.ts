@@ -13,7 +13,7 @@ import { NO_STORE_HEADERS, TEST_ULID } from '../mocks/handlers';
 import { server } from '../mocks/server';
 
 /**
- * usePasskeyManagement の deletePasskey / issueOtp 挙動を検証する統合テスト。
+ * usePasskeyManagement の deletePasskey / sendDeviceLink 挙動を検証する統合テスト。
  *
  * テスト戦略:
  * - tasks 8.4 / 8.5 の正式証跡は domain/src/auth/passkeyManagementState.test.ts の
@@ -169,10 +169,10 @@ describe('usePasskeyManagement / API routes', () => {
     expect(body.error).toBe('session-expired');
   });
 
-  it('[AUTH-FE-S016] POST /api/v1/passkeys/otp が issued: true を返すとメール送信済み guidance を表示できる', async () => {
-    // Arrange: reauth session 付きで OTP 発行を依頼
+  it('[AUTH-FE-S016] POST /api/v1/passkeys/send-device-link が issued: true を返すとメール送信済み guidance を表示できる', async () => {
+    // Arrange: reauth session 付きでデバイスリンク送信を依頼
     server.use(
-      http.post('/api/v1/passkeys/otp', ({ request }) => {
+      http.post('/api/v1/passkeys/send-device-link', ({ request }) => {
         const reauthSession = request.headers.get('X-Reauth-Session');
         if (reauthSession === null || reauthSession === '') {
           return HttpResponse.json(
@@ -189,7 +189,7 @@ describe('usePasskeyManagement / API routes', () => {
 
     // Act: API を直接呼び出して issued: true を確認
     // （hook は $state rune を使うため純粋 helper + contract 検証のパターンで担保する）
-    const res = await fetch('/api/v1/passkeys/otp', {
+    const res = await fetch('/api/v1/passkeys/send-device-link', {
       method: 'POST',
       headers: {
         'X-Reauth-Session': 'valid-reauth-session',
@@ -198,7 +198,7 @@ describe('usePasskeyManagement / API routes', () => {
     });
     const data = (await res.json()) as { issued: boolean };
 
-    // Assert: issued: true が返り、UI 側は otpIssued フラグを立てて guidance を表示する
+    // Assert: issued: true が返り、UI 側は deviceLinkSent フラグを立てて guidance を表示する
     expect(res.status).toBe(200);
     expect(data.issued).toBe(true);
   });

@@ -3,10 +3,10 @@ package mailer
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"www-template/packages/backend/internal/auth/application"
+	"www-template/packages/backend/internal/auth/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
 
@@ -19,29 +19,60 @@ func NewAccountRecoverySender(sender *SMTPSender, config config.InfraConfig) *Ac
 	return &AccountRecoverySender{sender: sender, config: config}
 }
 
+// SendAccountRecovery は recovery または device-link のメールを送信する。
+// delivery.Kind に応じて件名と本文を切り替える。
+// 未知の kind の場合はセキュリティ上エラーを返す（fail-closed）。
 func (s *AccountRecoverySender) SendAccountRecovery(ctx context.Context, delivery application.RecoveryDelivery) error {
 	if s.sender == nil {
 		return nil
 	}
 
-	return s.sender.Send(ctx, []string{delivery.Email}, buildAccountRecoveryMessage(strings.TrimSpace(s.config.Mail.FromAddress), delivery))
+	var msg string
+	switch delivery.Kind {
+	case domain.TokenKindDeviceLink:
+		msg = buildDeviceLinkMessage(strings.TrimSpace(s.config.Mail.FromAddress), delivery.Email, delivery.RecoveryURL, delivery.RequestID)
+	case domain.TokenKindRecovery:
+		msg = buildAccountRecoveryMessage(strings.TrimSpace(s.config.Mail.FromAddress), delivery)
+	default:
+		return fmt.Errorf("account recovery sender: unknown token kind %q", delivery.Kind)
+	}
+	return s.sender.Send(ctx, []string{delivery.Email}, msg)
 }
 
-// SendPasskeyOtp は device login handoff 用の 6 桁 OTP を登録済みメールアドレスへ送信する。
-// 送信失敗時は OTP 平文を含めず、requestID とエラーのみを slog で記録する。
-func (s *AccountRecoverySender) SendPasskeyOtp(ctx context.Context, email string, otp string, requestID string) error {
+// SendDeviceLink は device-link URL を登録済みメールアドレスへ送信する。
+// SendAccountRecovery のラッパーとして動作する。
+func (s *AccountRecoverySender) SendDeviceLink(ctx context.Context, delivery application.RecoveryDelivery) error {
+	return s.SendAccountRecovery(ctx, delivery)
+}
+
+// SendRecoveryComplete はパスキー復旧完了の通知メールを送信する。
+func (s *AccountRecoverySender) SendRecoveryComplete(ctx context.Context, accountID, email string) error {
 	if s.sender == nil {
 		return nil
 	}
+	msg := strings.Join([]string{
+		fmt.Sprintf("From: %s", strings.TrimSpace(s.config.Mail.FromAddress)),
+		fmt.Sprintf("To: %s", email),
+		"Subject: www-template passkey recovered",
+		"",
+		"Your passkey has been successfully recovered.",
+	}, "\r\n")
+	return s.sender.Send(ctx, []string{email}, msg)
+}
 
-	if err := s.sender.Send(ctx, []string{email}, buildPasskeyOtpMessage(strings.TrimSpace(s.config.Mail.FromAddress), email, otp, requestID)); err != nil {
-		slog.ErrorContext(ctx, "passkey OTP delivery failed",
-			slog.String("request_id", requestID),
-			slog.String("error", err.Error()),
-		)
-		return err
+// SendDeviceLinkComplete は新規デバイスでのパスキー追加完了の通知メールを送信する。
+func (s *AccountRecoverySender) SendDeviceLinkComplete(ctx context.Context, accountID, email string) error {
+	if s.sender == nil {
+		return nil
 	}
-	return nil
+	msg := strings.Join([]string{
+		fmt.Sprintf("From: %s", strings.TrimSpace(s.config.Mail.FromAddress)),
+		fmt.Sprintf("To: %s", email),
+		"Subject: www-template passkey added on new device",
+		"",
+		"A new passkey has been successfully added to your account on a new device.",
+	}, "\r\n")
+	return s.sender.Send(ctx, []string{email}, msg)
 }
 
 func buildAccountRecoveryMessage(from string, delivery application.RecoveryDelivery) string {
@@ -54,13 +85,13 @@ func buildAccountRecoveryMessage(from string, delivery application.RecoveryDeliv
 	}, "\r\n")
 }
 
-func buildPasskeyOtpMessage(from string, email string, otp string, requestID string) string {
+func buildDeviceLinkMessage(from, email, url, requestID string) string {
 	return strings.Join([]string{
 		fmt.Sprintf("From: %s", from),
 		fmt.Sprintf("To: %s", email),
-		"Subject: www-template device login code",
+		"Subject: www-template device login link",
 		"",
-		fmt.Sprintf("Your device login code is: %s", otp),
+		fmt.Sprintf("Your device login link: %s", url),
 		fmt.Sprintf("Request ID: %s", requestID),
 	}, "\r\n")
 }

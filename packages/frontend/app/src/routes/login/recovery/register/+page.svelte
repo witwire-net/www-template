@@ -27,10 +27,17 @@
   <Card class="w-full">
     <CardContent>
       <div class="flex flex-col items-center gap-4 text-center">
-        <h1 class="m-0 text-2xl font-bold text-center">パスキー再登録</h1>
-        <p class="m-0 text-sm text-muted-foreground text-center">
-          新しいパスキーを登録して、アカウントへのアクセスを回復してください。
-        </p>
+        {#if data.state.kind === 'device-link'}
+          <h1 class="m-0 text-2xl font-bold text-center">新しい端末でパスキーを登録</h1>
+          <p class="m-0 text-sm text-muted-foreground text-center">
+            新しい端末でパスキーを登録して、ログインできるようにしてください。
+          </p>
+        {:else}
+          <h1 class="m-0 text-2xl font-bold text-center">パスキー再登録</h1>
+          <p class="m-0 text-sm text-muted-foreground text-center">
+            新しいパスキーを登録して、アカウントへのアクセスを回復してください。
+          </p>
+        {/if}
 
         {#if data.state.error}
           <p class="text-destructive text-sm m-0" role="alert">{data.state.error}</p>

@@ -41,6 +41,11 @@ describe('passkeyManagementState', () => {
     expect(state.error).toBeNull();
   });
 
+  it('[AUTH-FE-S013] 初期 state の deviceLinkSent は false', () => {
+    const state = createPasskeyManagementInitialState();
+    expect(state.deviceLinkSent).toBe(false);
+  });
+
   it('[AUTH-FE-S015] deletePasskey で API エラー時に data.passkeys が変化しない', () => {
     // Arrange: 1 件のパスキーが存在する状態
     const state = createPasskeyManagementInitialState();

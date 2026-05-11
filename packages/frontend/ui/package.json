@@ -15,9 +15,14 @@
       "default": "./src/components/index.ts"
     },
     "./components/*": {
-      "types": "./src/components/*",
-      "svelte": "./src/components/*",
-      "default": "./src/components/*"
+      "types": "./src/components/*/index.ts",
+      "svelte": "./src/components/*/index.ts",
+      "default": "./src/components/*/index.ts"
+    },
+    "./hooks/*": {
+      "types": "./src/hooks/*.ts",
+      "svelte": "./src/hooks/*.ts",
+      "default": "./src/hooks/*.ts"
     },
     "./assets": {
       "types": "./src/assets/index.ts",
