@@ -1,11 +1,12 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 const svelteRuntimeChunkPattern =
   /[/\\]svelte[/\\]src[/\\](?:internal[/\\]client[/\\]runtime|index-client)\.js$/;
 
 export default defineConfig({
-  plugins: [sveltekit()],
+  plugins: [tailwindcss(), sveltekit()],
 
   build: {
     rollupOptions: {
