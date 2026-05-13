@@ -58,7 +58,7 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 
 ## Backend Guardrails
 
-- API path policy: all routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*`, `api/v1/sessions*`, and `api/v1/auth/logout`
+- API path policy: all product/backend API routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*`, `api/v1/sessions*`, and `api/v1/auth/logout`. Admin Console package-local BFF routes are the only exception: `/api/admin/*` is allowed only under `packages/admin/src/routes/api/admin/**`, must not be exposed from Go backend, and must not be used by generated product SDKs.
 - GORM imports are allowed only under `packages/backend/internal/adapters/persistence/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow

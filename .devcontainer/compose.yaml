@@ -41,11 +41,11 @@ services:
   postgres:
     image: postgres:18.3
     environment:
-      POSTGRES_DB: template
-      POSTGRES_PASSWORD: template
-      POSTGRES_USER: template
+      POSTGRES_DB: www-template
+      POSTGRES_PASSWORD: www-template
+      POSTGRES_USER: www-template
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U template -d template']
+      test: ['CMD-SHELL', 'pg_isready -U www-template -d www-template']
       interval: 10s
       timeout: 5s
       retries: 10

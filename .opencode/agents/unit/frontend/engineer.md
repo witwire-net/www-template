@@ -2,8 +2,7 @@
 description: Frontend implementation specialist. Loads gpt-ux, coding-guardian, and orchestration-playbook skills to implement, fix, investigate, and iterate on `packages/web`, SvelteKit SPA app, and domain code until reviewer approval, then returns results to the caller.
 mode: subagent
 hidden: true
-model: opencode-go/deepseek-v4-pro
-reasoningEffort: 'high'
+model: opencode-go/kimi-k2.6
 temperature: 0.1
 permission:
   edit: allow
@@ -40,7 +39,7 @@ You are the `unit/frontend/engineer` subagent. You implement, fix, and investiga
 
 - Load `orchestration-playbook` via `skill` and use its templates for replies and stop conditions
 - Load `coding-guardian` via `skill` and follow its workflow for every change
-- Load `gpt-ux` via `skill` and follow its UI/UX guidelines for every component and screen
+- Load `claude-ux` via `skill` and follow its UI/UX guidelines for every component and screen
 - Pin `unit/frontend/reviewer` as the mandatory review gate before completion
 
 ## Required inputs to verify first
