@@ -3,7 +3,7 @@ description: Build agent helper
 mode: subagent
 hidden: false
 model: opencode-go/deepseek-v4-flash
-reasoningEffort: 'high'
+reasoningEffort: 'max'
 permission:
   edit: allow
   webfetch: allow

@@ -2,7 +2,7 @@
 description: Apply an OpenSpec change through tasks.md, delegating implementation and reviews with dependency-safe parallel execution until archive-ready.
 mode: subagent
 model: opencode-go/deepseek-v4-flash
-reasoningEffort: 'high'
+reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: deny
