@@ -1,0 +1,13 @@
+/**
+ * app パッケージのグローバルスタイルシート。
+ * Svelte ファイル内の <style> はプロジェクトルールで禁止されているため、
+ * スタイルは Tailwind ユーティリティクラスまたは @layer components を使用する。
+ */
+
+/* UI パッケージが提供するベース・トークン・テーマ層をインポート */
+@import '@www-template/ui/styles.css';
+
+/* Tailwind v4: app パッケージ内のソースコードをスキャンしてユーティリティを生成 */
+@import 'tailwindcss' source(none);
+@source "./routes";
+@source "./lib";

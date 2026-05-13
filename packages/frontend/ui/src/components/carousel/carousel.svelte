@@ -5,7 +5,7 @@
 		type EmblaContext,
 		setEmblaContext,
 	} from "./context.js";
-	import { cn, type WithElementRef } from "@ui/lib/utils.js";
+	import { cn, type WithElementRef } from "@www-template/ui/lib/utils";
 
 	const noopSetApi = (_api: CarouselAPI | undefined): void => undefined;
 

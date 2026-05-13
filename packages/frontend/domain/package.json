@@ -9,16 +9,25 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./hooks/auth/useAuthSession": "./src/hooks/auth/useAuthSession.svelte.ts",
-    "./hooks/auth/usePasskeyLogin": "./src/hooks/auth/usePasskeyLogin.svelte.ts",
-    "./hooks/auth/usePasskeyManagement": "./src/hooks/auth/usePasskeyManagement.svelte.ts",
-    "./hooks/auth/usePasskeyAddByOtp": "./src/hooks/auth/usePasskeyAddByOtp.svelte.ts",
-    "./hooks/auth/useRecoveryFlow": "./src/hooks/auth/useRecoveryFlow.svelte.ts",
-    "./hooks/auth/useSessionGuard": "./src/hooks/auth/useSessionGuard.svelte.ts",
-    "./hooks/status/useStatus": "./src/hooks/status/useStatus.svelte.ts",
-    "./types": "./src/types/index.ts"
+    "./auth": "./src/auth/index.ts",
+    "./auth/session": "./src/auth/session/index.ts",
+    "./auth/passkey": "./src/auth/passkey/index.ts",
+    "./auth/passkey/management": "./src/auth/passkey/management/index.ts",
+    "./auth/recovery": "./src/auth/recovery/index.ts",
+    "./auth/guard": "./src/auth/guard/index.ts",
+    "./status": "./src/status/index.ts",
+    "./observability": "./src/observability/index.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "^2.7.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
+    "@opentelemetry/instrumentation": "^0.215.0",
+    "@opentelemetry/instrumentation-fetch": "^0.215.0",
+    "@opentelemetry/resources": "^2.7.0",
+    "@opentelemetry/sdk-trace-base": "^2.7.0",
+    "@opentelemetry/sdk-trace-web": "^2.7.0",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
     "@www-template/api": "workspace:*"
   },
   "peerDependencies": {

@@ -39,7 +39,7 @@ interface PasskeyStartOptions {
   rpId: string;
   timeout?: number;
   allowCredentials?: WebAuthnCredentialDescriptorLocal[];
-  userVerification?: string;
+  userVerification: 'required';
 }
 
 /** Subset of PasskeyAddStartResponse needed by createWebAuthnAttestation. */
@@ -51,7 +51,7 @@ interface PasskeyAddStartOptions {
   pubKeyCredParams: WebAuthnCredentialParameterLocal[];
   timeout?: number;
   excludeCredentials?: WebAuthnCredentialDescriptorLocal[];
-  userVerification?: string;
+  userVerification: 'required';
   attestation?: string;
 }
 
@@ -160,8 +160,7 @@ async function getWebAuthnAssertion(
     challenge: base64urlToBuffer(options.challenge),
     rpId: options.rpId,
     timeout: options.timeout ?? 60000,
-    userVerification:
-      (options.userVerification as UserVerificationRequirement | undefined) ?? 'preferred',
+    userVerification: options.userVerification as UserVerificationRequirement,
     allowCredentials:
       options.allowCredentials?.map((c) => ({
         type: c.type as PublicKeyCredentialType,
@@ -224,8 +223,7 @@ async function createWebAuthnAttestation(
         transports: c.transports as AuthenticatorTransport[] | undefined,
       })) ?? [],
     authenticatorSelection: {
-      userVerification:
-        (options.userVerification as UserVerificationRequirement | undefined) ?? 'preferred',
+      userVerification: options.userVerification as UserVerificationRequirement,
     },
     attestation: (options.attestation as AttestationConveyancePreference | undefined) ?? 'none',
   };

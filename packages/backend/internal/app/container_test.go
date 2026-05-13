@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
-	"www-template/packages/backend/internal/domain"
-	"www-template/packages/backend/internal/types"
-	"www-template/packages/backend/internal/usecases"
+	"www-template/packages/backend/internal/adapters/webauthn"
+	"www-template/packages/backend/internal/auth/application"
+	"www-template/packages/backend/internal/auth/domain"
+	"www-template/packages/backend/internal/platform/config"
 )
 
 func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
@@ -17,14 +19,15 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	fakeRepo := fakeAuthStateRepository{}
 	_, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: types.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
+		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
-		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			called = true
 			return fakeRepo, func(context.Context) error { return nil }, nil
 		},
+		fakeChallengeStoreFactory,
 	)
 	if err != nil {
 		t.Fatalf("build container: %v", err)
@@ -38,19 +41,20 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	t.Parallel()
 	container, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}}, Auth: types.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
+		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
 		},
-		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return fakeAuthStateRepository{}, func(context.Context) error { return nil }, nil
 		},
+		fakeChallengeStoreFactory,
 	)
 	if err != nil {
 		t.Fatalf("build container: %v", err)
 	}
 
-	challenge, err := container.Auth.StartPasskeyAuthentication(context.Background(), usecases.StartPasskeyAuthenticationInput{Identifier: "member@example.com", ClientIP: "192.0.2.10"})
+	challenge, err := container.Auth.StartPasskeyAuthentication(context.Background(), application.StartPasskeyAuthenticationInput{Identifier: "member@example.com", ClientIP: "192.0.2.10"})
 	if err != nil {
 		t.Fatalf("start passkey authentication: %v", err)
 	}
@@ -65,16 +69,17 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 	closed := false
 	_, err := buildContainer(
 		context.Background(),
-		types.Config{AppBearerToken: "dev-app-auth", Infra: types.InfraConfig{Database: types.DatabaseConfig{URL: "postgres://example"}, Valkey: types.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
-		func(context.Context, string) (usecases.AuthAccountRepository, func(context.Context) error, error) {
+		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
+		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
 			return stubAuthAccountRepository{}, func(context.Context) error {
 				closed = true
 				return nil
 			}, nil
 		},
-		func(context.Context, types.ValkeyConfig) (usecases.AuthStateRepository, func(context.Context) error, error) {
+		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return nil, nil, errors.New("valkey unavailable")
 		},
+		fakeChallengeStoreFactory,
 	)
 	if err == nil {
 		t.Fatal("expected state repository error")
@@ -117,6 +122,9 @@ func (stubAuthAccountRepository) FindWebAuthnCredential(_ context.Context, _ str
 func (stubAuthAccountRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
 	return nil
 }
+func (stubAuthAccountRepository) FindByID(_ context.Context, _ string) (domain.AuthAccount, error) {
+	return emptyAuthAccountForContainerTest(), nil
+}
 
 type fakeAuthStateRepository struct{}
 
@@ -126,29 +134,14 @@ func (fakeAuthStateRepository) SaveChallenge(context.Context, domain.AuthChallen
 func (fakeAuthStateRepository) ConsumeChallenge(context.Context, string) (domain.AuthChallenge, error) {
 	return emptyChallengeForContainerTest(), nil
 }
-func (fakeAuthStateRepository) SaveSession(context.Context, domain.Session, time.Duration) error {
-	return nil
-}
-func (fakeAuthStateRepository) RefreshSession(context.Context, domain.Session, time.Duration) error {
-	return nil
-}
-func (fakeAuthStateRepository) GetSessionByToken(context.Context, string) (domain.Session, error) {
-	return emptySessionForContainerTest(), nil
-}
-func (fakeAuthStateRepository) RevokeSession(context.Context, domain.Session, time.Duration) error {
-	return nil
-}
 func (fakeAuthStateRepository) IssueRecoveryToken(context.Context, domain.RecoveryToken, time.Duration) error {
 	return nil
 }
 func (fakeAuthStateRepository) SaveRecoveryDeliveryFailure(context.Context, domain.RecoveryDeliveryFailure, time.Duration) error {
 	return nil
 }
-func (fakeAuthStateRepository) GetRecoveryTokenBySecret(context.Context, string) (domain.RecoveryToken, error) {
-	return emptyRecoveryTokenForContainerTest(), nil
-}
-func (fakeAuthStateRepository) ConsumeRecoveryToken(context.Context, domain.RecoveryToken) error {
-	return nil
+func (fakeAuthStateRepository) ConsumeRecoveryTokenAtomic(context.Context, string, string) (domain.RecoveryToken, error) {
+	return emptyRecoveryTokenForContainerTest(), domain.ErrRecoveryTokenNotFound
 }
 func (fakeAuthStateRepository) SaveRecoverySession(context.Context, domain.RecoverySession, time.Duration) error {
 	return nil
@@ -168,14 +161,11 @@ func (fakeAuthStateRepository) SetLock(context.Context, string, time.Time, time.
 func (fakeAuthStateRepository) GetLock(context.Context, string) (domain.AuthLock, bool, error) {
 	return domain.NewAuthLock(time.Time{}), false, nil
 }
-func (fakeAuthStateRepository) SavePasskeyOtp(context.Context, string, string, time.Duration) error {
+func (fakeAuthStateRepository) SaveReauthenticationSession(context.Context, domain.ReauthenticationSession, time.Duration) error {
 	return nil
 }
-func (fakeAuthStateRepository) ConsumePasskeyOtp(context.Context, string) (string, error) {
-	return "", nil
-}
-func (fakeAuthStateRepository) GetPasskeyOtp(context.Context, string) (string, error) {
-	return "", nil
+func (fakeAuthStateRepository) ConsumeReauthenticationSession(context.Context, string) (domain.ReauthenticationSession, error) {
+	return emptyReauthenticationSessionForContainerTest(), domain.ErrReauthSessionNotFound
 }
 
 func emptyChallengeForContainerTest() domain.AuthChallenge {
@@ -183,22 +173,52 @@ func emptyChallengeForContainerTest() domain.AuthChallenge {
 	return challenge
 }
 
-func emptySessionForContainerTest() domain.Session {
-	session, _ := domain.NewSession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "placeholder", time.Unix(1, 0).UTC(), time.Unix(2, 0).UTC())
-	return session
-}
-
 func emptyRecoveryTokenForContainerTest() domain.RecoveryToken {
-	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", time.Unix(1, 0).UTC())
+	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return token
 }
 
 func emptyRecoverySessionForContainerTest() domain.RecoverySession {
-	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", time.Unix(1, 0).UTC())
+	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
+	return session
+}
+
+func emptyReauthenticationSessionForContainerTest() domain.ReauthenticationSession {
+	session, _ := domain.NewReauthenticationSession(
+		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+		"device-link", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
+	)
 	return session
 }
 
 func emptyAuthAccountForContainerTest() domain.AuthAccount {
 	account, _ := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "member@example.com", "member@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential")
 	return account
+}
+
+// fakeChallengeStore はテスト用のインメモリ challengeStore 実装。
+type fakeChallengeStore struct {
+	data map[string]string
+}
+
+func (f *fakeChallengeStore) Key(parts ...string) string {
+	return strings.Join(parts, ":")
+}
+
+func (f *fakeChallengeStore) Set(_ context.Context, key string, value string, _ time.Duration) error {
+	f.data[key] = value
+	return nil
+}
+
+func (f *fakeChallengeStore) GetDel(_ context.Context, key string) (string, error) {
+	v, ok := f.data[key]
+	if !ok {
+		return "", errors.New("not found")
+	}
+	delete(f.data, key)
+	return v, nil
+}
+
+func fakeChallengeStoreFactory(context.Context, config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error) {
+	return &fakeChallengeStore{data: map[string]string{}}, func(context.Context) error { return nil }, nil
 }

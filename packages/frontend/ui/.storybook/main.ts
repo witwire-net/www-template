@@ -18,7 +18,6 @@ const config: StorybookConfig = {
       resolve: {
         alias: {
           '@': resolve(storybookDir, '../src'),
-          '@ui': resolve(storybookDir, '../src'),
         },
       },
     });

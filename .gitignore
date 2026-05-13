@@ -42,10 +42,16 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+devcontainer-lock.json
 
 # Testing
 coverage/
 .nyc_output/
+
+# Config files (only local.toml and example.toml are committed)
+.config/*.toml
+!.config/local.toml
+!.config/example.toml
 
 # Misc
 .turbo/

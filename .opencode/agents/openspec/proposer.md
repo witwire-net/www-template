@@ -1,7 +1,8 @@
 ---
 description: Create/update an OpenSpec change along the artifact graph; converge validate and drive analyzer and decisions.
 mode: subagent
-model: github-copilot/claude-opus-4.6
+model: opencode-go/deepseek-v4-pro
+reasoningEffort: 'high'
 temperature: 0.3
 permission:
   edit: allow

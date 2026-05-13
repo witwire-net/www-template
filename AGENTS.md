@@ -1,8 +1,29 @@
 ## Primary Rules
 
-- Think in English; MUST respond in **Japanese**.
+- Think in **English**; MUST respond in **Japanese**.
 - Before calling `task` for any subagent, you MUST read the target agent definition and verify both `permission.task` and any self-call prohibition such as `Do not self-call.`.
 - You MUST doubt your assumptions, verify factual claims against available evidence, and MUST NOT present unsupported statements as facts.
+
+## Credo
+
+you must translate the Credo below into English and **repeat it back verbatim.** Only after repeating it back should you begin the work.
+
+1. あらゆる意思決定は顧客ファーストで考えること。誰がどのように利用し、どうすれば喜ばれるかを常に考えること。
+2. セキュリティはなによりも優先されること。セキュリティ最優先が、なにより顧客のためになる。
+3. 常に完璧なプロダクトであること。妥協、横着、顧客にとって意味のないプロダクトを作ることは一切許されない。仮置きを残す、後回し、コメントにしておいて放置に決してしてはならない。
+4.
+5. すべてのルールには意図がある。必ず意図を理解すること。意図を理解しないまま改定したり、逆に遵守しようとしてはならない。
+6. 後方互換性は完全悪だ。後方互換性のためのコードや計画がある時点で、そのシステムは一切認められない。常に完璧なプロダクトであるために、不要な機能は即座に削除。
+
+## Code Comments
+
+- Leave detailed Japanese comments for every single process in the code.
+- Clarify the intent, input/output, and side effects of each step so that future readers (including yourself) can understand immediately.
+
+## Documentation Comments (TS Docs / Go Docs)
+
+- TSDoc (TypeScript) and GoDoc (Go) comments must be written in Japanese, providing detailed, multi-line explanations of their roles and parameter meanings.
+- Every public API (functions, methods, types, interfaces, and structs) must have a documentation comment in Japanese that describes what it does, the meaning of each argument and return value, error cases, and usage examples.
 
 ## Commands
 
@@ -31,18 +52,29 @@
 
 ## Architecture Notes
 
-- Client dependency direction: `frontend/web -> frontend/domain -> frontend/api` and `frontend/app -> frontend/domain -> frontend/api`
-- Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/http|backend/internal/persistence|backend/internal/usecases) -> backend/internal/domain -> backend/internal/types`
+- Client dependency direction: `web -> frontend/ui` (web is a public LP; it MUST NOT depend on domain or api), `frontend/app -> frontend/domain -> frontend/api` (also `frontend/app -> frontend/ui`)
+- Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/adapters/http|backend/internal/adapters/persistence/postgres|backend/internal/adapters/persistence/valkey|backend/internal/adapters/webauthn|backend/internal/adapters/mailer|backend/internal/auth/application|backend/internal/platform/*) -> backend/internal/auth/domain -> backend/internal/platform/*`
 - API contract direction: implementation must follow TypeSpec; do not generate OpenAPI from server routes for SDK input.
 
 ## Backend Guardrails
 
-- API path policy: all routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*` and `api/v1/auth/logout`
-- GORM imports are allowed only under `packages/backend/internal/persistence/**`
+- API path policy: all product/backend API routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*`, `api/v1/sessions*`, and `api/v1/auth/logout`. Admin Console package-local BFF routes are the only exception: `/api/admin/*` is allowed only under `packages/admin/src/routes/api/admin/**`, must not be exposed from Go backend, and must not be used by generated product SDKs.
+- GORM imports are allowed only under `packages/backend/internal/adapters/persistence/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow
 
+## Observability
+
+- Grafana: `http://localhost:3000` (admin/admin)
+- Prometheus: `http://localhost:9090`
+- Tempo (trace): `http://localhost:3200`
+- Loki (logs): `http://localhost:3100`
+- OTel Collector OTLP: `http://localhost:4317` (gRPC), `http://localhost:4318` (HTTP)
+- Start observability stack: `pnpm dev:observability`
+- Go backend exposes `/metrics` for Prometheus scraping
+- Frontend browsers send traces to Collector via `PUBLIC_OTEL_COLLECTOR_URL`
+
 ## OpenSpec
 
-- `openspec/**` is archived and not part of the default tooling loop
+- `openspec/**` is archived and is not part of the default tooling loop
 - Do not update OpenSpec artifacts for backend migration work unless explicitly requested

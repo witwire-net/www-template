@@ -1,0 +1,200 @@
+import type { AuthRouteIntent, AuthSessionState, AuthSessionSummary } from '../types';
+
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/u;
+
+/** ULID 形式かどうかを検証する。 */
+function isUlid(value: string): boolean {
+  return ULID_PATTERN.test(value);
+}
+
+/** auth response の cache-control を no-store として扱えるか判定する。 */
+function isNoStoreCacheControl(cacheControl: string | null): boolean {
+  return cacheControl?.toLowerCase().includes('no-store') ?? false;
+}
+
+/** auth session state の初期値を作る。 */
+function createAuthSessionInitialState(): AuthSessionState {
+  return {
+    phase: 'anonymous',
+    session: null,
+    sessions: [],
+    activeSessionId: null,
+    routeIntent: '/login',
+    lastFailure: null,
+    lastError: null,
+    lastCacheControl: null,
+  };
+}
+
+/**
+ * active bearer session を state に反映する。
+ * 受け取ったセッションを sessions 配列の唯一の要素として設定し、
+ * activeSessionId や phase などの関連 state も同時に更新する。
+ *
+ * @param state - 更新対象の認証セッション state
+ * @param session - 反映する認証セッション概要
+ * @param cacheControl - レスポンスの cache-control 値（任意）
+ */
+function applyAuthenticatedSession(
+  state: AuthSessionState,
+  session: AuthSessionSummary,
+  cacheControl: string | null
+): void {
+  state.phase = 'authenticated';
+  state.session = session;
+  state.sessions = [session];
+  state.activeSessionId = session.sessionId;
+  state.routeIntent = '/login';
+  state.lastFailure = null;
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+}
+
+/** 新しいセッションを追加し、アクティブセッションとして設定する。
+ *  同じ sessionId が存在する場合は上書きする。 */
+function addAuthenticatedSession(
+  state: AuthSessionState,
+  session: AuthSessionSummary,
+  cacheControl: string | null
+): void {
+  const sessions = state.sessions ?? [];
+  const filtered = sessions.filter((s) => s.sessionId !== session.sessionId);
+  filtered.push(session);
+  state.sessions = filtered;
+  state.activeSessionId = session.sessionId;
+  state.session = session;
+  state.phase = 'authenticated';
+  state.routeIntent = '/login';
+  state.lastFailure = null;
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+}
+
+/** アクティブセッションを指定した sessionId に切り替える。
+ *  該当セッションが存在しない場合は何もしない。 */
+function switchActiveSession(state: AuthSessionState, sessionId: string): boolean {
+  const target = state.sessions?.find((s) => s.sessionId === sessionId);
+  if (target == null) {
+    return false;
+  }
+  state.session = target;
+  state.activeSessionId = target.sessionId;
+  return true;
+}
+
+/** アクティブセッションを除去する。
+ *  残りのセッションがある場合は最初のセッションをアクティブにする。
+ *  セッションが空になった場合は未認証状態に戻す。 */
+function removeActiveSession(state: AuthSessionState): AuthRouteIntent | null {
+  const remaining = (state.sessions ?? []).filter((s) => s.sessionId !== state.activeSessionId);
+  state.sessions = remaining;
+
+  if (remaining.length > 0) {
+    const next = remaining[0];
+    state.session = next;
+    state.activeSessionId = next.sessionId;
+    state.phase = 'authenticated';
+    state.routeIntent = '/login';
+    state.lastFailure = null;
+    state.lastError = null;
+    return null;
+  }
+
+  return clearAuthSession(state);
+}
+
+/** missing session を通常 login 導線へ正規化する。 */
+function applyMissingSession(
+  state: AuthSessionState,
+  cacheControl: string | null = null
+): AuthRouteIntent {
+  state.phase = 'anonymous';
+  state.session = null;
+  state.sessions = [];
+  state.activeSessionId = null;
+  state.routeIntent = '/login';
+  state.lastFailure = 'unauthenticated';
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+  return state.routeIntent;
+}
+
+/** expired / revoked session を session-expired 導線へ正規化する。 */
+function applyExpiredSession(
+  state: AuthSessionState,
+  cacheControl: string | null = null
+): AuthRouteIntent {
+  state.phase = 'session-expired';
+  state.session = null;
+  state.sessions = [];
+  state.activeSessionId = null;
+  state.routeIntent = '/session-expired';
+  state.lastFailure = 'session-expired';
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+  return state.routeIntent;
+}
+
+/** internal error を fail-close として保持する。 */
+function applyInternalError(
+  state: AuthSessionState,
+  message: string,
+  cacheControl: string | null = null
+): void {
+  state.lastFailure = 'internal-error';
+  state.lastError = message;
+  state.lastCacheControl = cacheControl;
+}
+
+/** logout や tab close 時に in-memory session を破棄する。 */
+function clearAuthSession(
+  state: AuthSessionState,
+  cacheControl: string | null = null
+): AuthRouteIntent {
+  state.phase = 'anonymous';
+  state.session = null;
+  state.sessions = [];
+  state.activeSessionId = null;
+  state.routeIntent = '/login';
+  state.lastFailure = null;
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+  return state.routeIntent;
+}
+
+/** current bearer token を Authorization header へ写像する。 */
+function createAuthorizationHeaders(state: AuthSessionState): Record<string, string> {
+  if (state.session === null) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${state.session.accessToken}`,
+  };
+}
+
+/** auth summary が ULID 方針を満たすか確認する。 */
+function hasUlidAuthSessionShape(session: AuthSessionSummary): boolean {
+  return [
+    session.requestId,
+    session.accountId,
+    session.passkeyCredentialId,
+    session.sessionId,
+  ].every(isUlid);
+}
+
+export {
+  addAuthenticatedSession,
+  applyAuthenticatedSession,
+  applyExpiredSession,
+  applyInternalError,
+  applyMissingSession,
+  clearAuthSession,
+  createAuthSessionInitialState,
+  createAuthorizationHeaders,
+  hasUlidAuthSessionShape,
+  isNoStoreCacheControl,
+  isUlid,
+  removeActiveSession,
+  switchActiveSession,
+};

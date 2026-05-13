@@ -2,7 +2,7 @@
 description: Backend review subagent
 mode: subagent
 hidden: true
-model: github-copilot/gpt-5.4
+model: openai/gpt-5.5
 reasoningEffort: 'high'
 temperature: 0.1
 permission:
@@ -40,6 +40,8 @@ You are the `unit/backend/reviewer` subagent. Based on the change summary and ar
   - `AGENTS.md`
   - `docs/**`
   - `.opencode/**`
+  - `package.json`
+  - `README.md`
 - Then load `coding-guardian` via `skill` and use it as an enforcement baseline
 - Then load `orchestration-playbook` via `skill` and use its templates for acceptance
 

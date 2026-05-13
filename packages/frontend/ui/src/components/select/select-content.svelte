@@ -3,7 +3,7 @@
 	import SelectPortal from "./select-portal.svelte";
 	import SelectScrollUpButton from "./select-scroll-up-button.svelte";
 	import SelectScrollDownButton from "./select-scroll-down-button.svelte";
-	import { cn, type WithoutChild , type WithoutChildrenOrChild } from "@ui/lib/utils.js";
+	import { cn, type WithoutChild , type WithoutChildrenOrChild } from "@www-template/ui/lib/utils";
 	import type { ComponentProps } from "svelte";
 	
 	let {

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { cn, type WithElementRef } from "@ui/lib/utils.js";
+	import { cn, type WithElementRef } from "@www-template/ui/lib/utils";
 	import type { HTMLAttributes } from "svelte/elements";
 	import { Dialog as DialogPrimitive } from "bits-ui";
-	import { Button } from "@ui/components/button/index.js";
+	import { Button } from "@www-template/ui/components/button";
 
 	let {
 		ref = $bindable(null),

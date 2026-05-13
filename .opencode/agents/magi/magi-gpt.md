@@ -2,7 +2,7 @@
 description: MAGI deliberation member BALTHASAR (GPT)
 mode: subagent
 hidden: true
-model: github-copilot/gpt-5.4
+model: openai/gpt-5.5
 reasoningEffort: 'high'
 temperature: 0.3
 permission:

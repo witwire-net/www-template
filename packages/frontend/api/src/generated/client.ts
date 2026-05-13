@@ -29,8 +29,44 @@ export interface AuthSessionResponse {
   accountId: UlidId;
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
-  sessionToken: string;
+  accessToken: string;
+  refreshToken: string;
   expiresAt: string;
+}
+
+/**
+ * Http authentication
+ */
+export type BearerAuthType = (typeof BearerAuthType)[keyof typeof BearerAuthType];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BearerAuthType = {
+  http: 'http',
+} as const;
+
+/**
+ * bearer auth scheme
+ */
+export type BearerAuthScheme = (typeof BearerAuthScheme)[keyof typeof BearerAuthScheme];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BearerAuthScheme = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。
+ */
+export interface BearerAuth {
+  /** Http authentication */
+  type: BearerAuthType;
+  /** bearer auth scheme */
+  scheme: BearerAuthScheme;
+}
+
+export interface DeviceLinkResponse {
+  requestId: UlidId;
+  issued: boolean;
 }
 
 export interface ErrorResponse {
@@ -57,18 +93,17 @@ export interface LogoutResponse {
   revoked: boolean;
 }
 
-export interface PasskeyAddByOtpFinishRequest {
-  otp: string;
-  credential: WebAuthnAttestationCredential;
-}
-
-export interface PasskeyAddByOtpStartRequest {
-  otp: string;
-}
-
 export interface PasskeyAddFinishRequest {
   credential: WebAuthnAttestationCredential;
 }
+
+export type PasskeyAddStartResponseUserVerification =
+  (typeof PasskeyAddStartResponseUserVerification)[keyof typeof PasskeyAddStartResponseUserVerification];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PasskeyAddStartResponseUserVerification = {
+  required: 'required',
+} as const;
 
 /**
  * WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration.
@@ -87,7 +122,7 @@ export interface PasskeyAddStartResponse {
   /** Timeout in milliseconds suggested by the server. */
   timeout?: number;
   excludeCredentials?: WebAuthnCredentialDescriptor[];
-  userVerification?: string;
+  userVerification: PasskeyAddStartResponseUserVerification;
   attestation?: string;
 }
 
@@ -106,11 +141,6 @@ export interface PasskeyListResponse {
   passkeys: PasskeyItem[];
 }
 
-export interface PasskeyOtpResponse {
-  requestId: UlidId;
-  otp: string;
-}
-
 /**
  * Finish request for passkey register — exactly one selector must be present.
  */
@@ -127,6 +157,14 @@ export interface PasskeyStartRequest {
   identifier: string;
 }
 
+export type PasskeyStartResponseUserVerification =
+  (typeof PasskeyStartResponseUserVerification)[keyof typeof PasskeyStartResponseUserVerification];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PasskeyStartResponseUserVerification = {
+  required: 'required',
+} as const;
+
 /**
  * WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin.
  */
@@ -139,7 +177,45 @@ export interface PasskeyStartResponse {
   timeout?: number;
   /** Allowed credential descriptors (empty for usernameless flows). */
   allowCredentials?: WebAuthnCredentialDescriptor[];
-  userVerification?: string;
+  userVerification: PasskeyStartResponseUserVerification;
+}
+
+/**
+ * Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind.
+ */
+export interface ReauthenticationFinishRequest {
+  requestId: UlidId;
+  kind: ReauthenticationSessionKind;
+  credential: WebAuthnAssertionCredential;
+}
+
+/**
+ * Reauthentication session kind bound to a high-risk operation.
+ */
+export type ReauthenticationSessionKind =
+  (typeof ReauthenticationSessionKind)[keyof typeof ReauthenticationSessionKind];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ReauthenticationSessionKind = {
+  'device-link': 'device-link',
+  'passkey-delete': 'passkey-delete',
+} as const;
+
+/**
+ * Reauthentication session response issued after a fresh WebAuthn reauthentication.
+ */
+export interface ReauthenticationSessionResponse {
+  requestId: UlidId;
+  reauthSessionId: UlidId;
+  kind: ReauthenticationSessionKind;
+  expiresAt: string;
+}
+
+/**
+ * Reauthentication start request that binds the ceremony to a high-risk operation kind.
+ */
+export interface ReauthenticationStartRequest {
+  kind: ReauthenticationSessionKind;
 }
 
 export interface RecoveryAcceptedResponse {
@@ -158,6 +234,7 @@ export interface RecoveryConsumeResponse {
   /** Alias of recoverySessionId for client convenience. */
   recovery_session: UlidId;
   expiresAt: string;
+  kind: TokenKind;
 }
 
 /**
@@ -179,10 +256,56 @@ export interface RecoveryRequest {
   email: string;
 }
 
+/**
+ * リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。
+ */
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+/**
+ * リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。
+ */
+export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+/**
+ * ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。
+ */
+export interface SessionItem {
+  sessionId: UlidId;
+  deviceName: string;
+  loginAt: string;
+  lastActiveAt: string;
+  ipHash: string;
+  isCurrentSession: boolean;
+}
+
+/**
+ * ログイン中のセッション一覧レスポンス。認証済みアカウントが所有する全セッションを含む。
+ */
+export interface SessionListResponse {
+  requestId: UlidId;
+  sessions: SessionItem[];
+}
+
 export interface StatusResponse {
   message: string;
   timestamp: string;
 }
+
+/**
+ * パスキー追加トークンの発行種別。recovery は紛失時復旧、device-link は認証済み端末からの新端末追加。
+ */
+export type TokenKind = (typeof TokenKind)[keyof typeof TokenKind];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const TokenKind = {
+  recovery: 'recovery',
+  'device-link': 'device-link',
+} as const;
 
 /**
  * Canonical ULID string used for auth-owned resource and correlation identifiers.
@@ -314,112 +437,6 @@ export const logout = async (options?: RequestInit): Promise<logoutResponse> => 
 
   const data: logoutResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as logoutResponse;
-};
-
-/**
- * @summary Finishes adding a passkey on a new device by OTP handoff
- */
-export type finishPasskeyAdditionByOtpResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type finishPasskeyAdditionByOtpResponse400 = {
-  data: AuthOperationErrorResponse;
-  status: 400;
-};
-
-export type finishPasskeyAdditionByOtpResponse503 = {
-  data: AuthFailureResponse;
-  status: 503;
-};
-
-export type finishPasskeyAdditionByOtpResponseSuccess = finishPasskeyAdditionByOtpResponse200 & {
-  headers: Headers;
-};
-export type finishPasskeyAdditionByOtpResponseError = (
-  | finishPasskeyAdditionByOtpResponse400
-  | finishPasskeyAdditionByOtpResponse503
-) & {
-  headers: Headers;
-};
-
-export type finishPasskeyAdditionByOtpResponse =
-  | finishPasskeyAdditionByOtpResponseSuccess
-  | finishPasskeyAdditionByOtpResponseError;
-
-export const getFinishPasskeyAdditionByOtpUrl = () => {
-  return `/api/v1/auth/passkey/add/finish`;
-};
-
-export const finishPasskeyAdditionByOtp = async (
-  passkeyAddByOtpFinishRequest: PasskeyAddByOtpFinishRequest,
-  options?: RequestInit
-): Promise<finishPasskeyAdditionByOtpResponse> => {
-  const res = await fetch(getFinishPasskeyAdditionByOtpUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(passkeyAddByOtpFinishRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: finishPasskeyAdditionByOtpResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as finishPasskeyAdditionByOtpResponse;
-};
-
-/**
- * @summary Starts adding a passkey on a new device by OTP handoff
- */
-export type startPasskeyAdditionByOtpResponse200 = {
-  data: PasskeyAddStartResponse;
-  status: 200;
-};
-
-export type startPasskeyAdditionByOtpResponse400 = {
-  data: AuthOperationErrorResponse;
-  status: 400;
-};
-
-export type startPasskeyAdditionByOtpResponse503 = {
-  data: AuthFailureResponse;
-  status: 503;
-};
-
-export type startPasskeyAdditionByOtpResponseSuccess = startPasskeyAdditionByOtpResponse200 & {
-  headers: Headers;
-};
-export type startPasskeyAdditionByOtpResponseError = (
-  | startPasskeyAdditionByOtpResponse400
-  | startPasskeyAdditionByOtpResponse503
-) & {
-  headers: Headers;
-};
-
-export type startPasskeyAdditionByOtpResponse =
-  | startPasskeyAdditionByOtpResponseSuccess
-  | startPasskeyAdditionByOtpResponseError;
-
-export const getStartPasskeyAdditionByOtpUrl = () => {
-  return `/api/v1/auth/passkey/add/start`;
-};
-
-export const startPasskeyAdditionByOtp = async (
-  passkeyAddByOtpStartRequest: PasskeyAddByOtpStartRequest,
-  options?: RequestInit
-): Promise<startPasskeyAdditionByOtpResponse> => {
-  const res = await fetch(getStartPasskeyAdditionByOtpUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(passkeyAddByOtpStartRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: startPasskeyAdditionByOtpResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as startPasskeyAdditionByOtpResponse;
 };
 
 /**
@@ -633,6 +650,124 @@ export const startPasskeyAuthentication = async (
 };
 
 /**
+ * @summary Finishes a WebAuthn reauthentication ceremony and issues a reauthentication session
+ */
+export type finishReauthenticationResponse200 = {
+  data: ReauthenticationSessionResponse;
+  status: 200;
+};
+
+export type finishReauthenticationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type finishReauthenticationResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type finishReauthenticationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type finishReauthenticationResponseSuccess = finishReauthenticationResponse200 & {
+  headers: Headers;
+};
+export type finishReauthenticationResponseError = (
+  | finishReauthenticationResponse400
+  | finishReauthenticationResponse401
+  | finishReauthenticationResponse503
+) & {
+  headers: Headers;
+};
+
+export type finishReauthenticationResponse =
+  | finishReauthenticationResponseSuccess
+  | finishReauthenticationResponseError;
+
+export const getFinishReauthenticationUrl = () => {
+  return `/api/v1/auth/reauth/finish`;
+};
+
+export const finishReauthentication = async (
+  reauthenticationFinishRequest: ReauthenticationFinishRequest,
+  options?: RequestInit
+): Promise<finishReauthenticationResponse> => {
+  const res = await fetch(getFinishReauthenticationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reauthenticationFinishRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: finishReauthenticationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as finishReauthenticationResponse;
+};
+
+/**
+ * @summary Starts a WebAuthn reauthentication ceremony for a high-risk operation
+ */
+export type startReauthenticationResponse200 = {
+  data: PasskeyStartResponse;
+  status: 200;
+};
+
+export type startReauthenticationResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type startReauthenticationResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type startReauthenticationResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type startReauthenticationResponseSuccess = startReauthenticationResponse200 & {
+  headers: Headers;
+};
+export type startReauthenticationResponseError = (
+  | startReauthenticationResponse400
+  | startReauthenticationResponse401
+  | startReauthenticationResponse503
+) & {
+  headers: Headers;
+};
+
+export type startReauthenticationResponse =
+  | startReauthenticationResponseSuccess
+  | startReauthenticationResponseError;
+
+export const getStartReauthenticationUrl = () => {
+  return `/api/v1/auth/reauth/start`;
+};
+
+export const startReauthentication = async (
+  reauthenticationStartRequest: ReauthenticationStartRequest,
+  options?: RequestInit
+): Promise<startReauthenticationResponse> => {
+  const res = await fetch(getStartReauthenticationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reauthenticationStartRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startReauthenticationResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as startReauthenticationResponse;
+};
+
+/**
  * @summary Accepts a recovery request without revealing account existence
  */
 export type requestPasskeyRecoveryResponse202 = {
@@ -739,6 +874,63 @@ export const consumeRecoveryToken = async (
 };
 
 /**
+ * @summary Refreshes an access token using a valid refresh token
+ */
+export type refreshTokenResponse200 = {
+  data: RefreshTokenResponse;
+  status: 200;
+};
+
+export type refreshTokenResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type refreshTokenResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type refreshTokenResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type refreshTokenResponseSuccess = refreshTokenResponse200 & {
+  headers: Headers;
+};
+export type refreshTokenResponseError = (
+  | refreshTokenResponse400
+  | refreshTokenResponse401
+  | refreshTokenResponse503
+) & {
+  headers: Headers;
+};
+
+export type refreshTokenResponse = refreshTokenResponseSuccess | refreshTokenResponseError;
+
+export const getRefreshTokenUrl = () => {
+  return `/api/v1/auth/refresh`;
+};
+
+export const refreshToken = async (
+  refreshTokenRequest: RefreshTokenRequest,
+  options?: RequestInit
+): Promise<refreshTokenResponse> => {
+  const res = await fetch(getRefreshTokenUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(refreshTokenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshTokenResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as refreshTokenResponse;
+};
+
+/**
  * @summary Lists registered passkeys for the current account
  */
 export type listPasskeysResponse200 = {
@@ -841,55 +1033,61 @@ export const finishPasskeyAddition = async (
 };
 
 /**
- * @summary Issues a one-time password for adding a passkey on a new device
+ * @summary Sends a device-link URL to the registered email for adding a passkey on a new device
  */
-export type issuePasskeyOtpResponse200 = {
-  data: PasskeyOtpResponse;
+export type sendDeviceLinkResponse200 = {
+  data: DeviceLinkResponse;
   status: 200;
 };
 
-export type issuePasskeyOtpResponse400 = {
+export type sendDeviceLinkResponse400 = {
   data: AuthOperationErrorResponse;
   status: 400;
 };
 
-export type issuePasskeyOtpResponse401 = {
+export type sendDeviceLinkResponse401 = {
   data: AuthFailureResponse;
   status: 401;
 };
 
-export type issuePasskeyOtpResponse503 = {
+export type sendDeviceLinkResponse403 = {
+  data: AuthOperationErrorResponse;
+  status: 403;
+};
+
+export type sendDeviceLinkResponse503 = {
   data: AuthFailureResponse;
   status: 503;
 };
 
-export type issuePasskeyOtpResponseSuccess = issuePasskeyOtpResponse200 & {
+export type sendDeviceLinkResponseSuccess = sendDeviceLinkResponse200 & {
   headers: Headers;
 };
-export type issuePasskeyOtpResponseError = (
-  | issuePasskeyOtpResponse400
-  | issuePasskeyOtpResponse401
-  | issuePasskeyOtpResponse503
+export type sendDeviceLinkResponseError = (
+  | sendDeviceLinkResponse400
+  | sendDeviceLinkResponse401
+  | sendDeviceLinkResponse403
+  | sendDeviceLinkResponse503
 ) & {
   headers: Headers;
 };
 
-export type issuePasskeyOtpResponse = issuePasskeyOtpResponseSuccess | issuePasskeyOtpResponseError;
+export type sendDeviceLinkResponse = sendDeviceLinkResponseSuccess | sendDeviceLinkResponseError;
 
-export const getIssuePasskeyOtpUrl = () => {
-  return `/api/v1/passkeys/otp`;
+export const getSendDeviceLinkUrl = () => {
+  return `/api/v1/passkeys/send-device-link`;
 };
 
-export const issuePasskeyOtp = async (options?: RequestInit): Promise<issuePasskeyOtpResponse> => {
-  const res = await fetch(getIssuePasskeyOtpUrl(), {
+export const sendDeviceLink = async (options?: RequestInit): Promise<sendDeviceLinkResponse> => {
+  const res = await fetch(getSendDeviceLinkUrl(), {
     ...options,
     method: 'POST',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: issuePasskeyOtpResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as issuePasskeyOtpResponse;
+  const data: sendDeviceLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as sendDeviceLinkResponse;
 };
 
 /**
@@ -950,6 +1148,11 @@ export type deletePasskeyResponse204 = {
   status: 204;
 };
 
+export type deletePasskeyResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
 export type deletePasskeyResponse401 = {
   data: AuthFailureResponse;
   status: 401;
@@ -974,6 +1177,7 @@ export type deletePasskeyResponseSuccess = deletePasskeyResponse204 & {
   headers: Headers;
 };
 export type deletePasskeyResponseError = (
+  | deletePasskeyResponse400
   | deletePasskeyResponse401
   | deletePasskeyResponse403
   | deletePasskeyResponse409
@@ -1001,6 +1205,154 @@ export const deletePasskey = async (
 
   const data: deletePasskeyResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as deletePasskeyResponse;
+};
+
+/**
+ * @summary Lists active sessions for the current account
+ */
+export type listSessionsResponse200 = {
+  data: SessionListResponse;
+  status: 200;
+};
+
+export type listSessionsResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type listSessionsResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type listSessionsResponseSuccess = listSessionsResponse200 & {
+  headers: Headers;
+};
+export type listSessionsResponseError = (listSessionsResponse401 | listSessionsResponse503) & {
+  headers: Headers;
+};
+
+export type listSessionsResponse = listSessionsResponseSuccess | listSessionsResponseError;
+
+export const getListSessionsUrl = () => {
+  return `/api/v1/sessions`;
+};
+
+export const listSessions = async (options?: RequestInit): Promise<listSessionsResponse> => {
+  const res = await fetch(getListSessionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSessionsResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listSessionsResponse;
+};
+
+/**
+ * @summary Revokes all other sessions except the current one
+ */
+export type revokeOtherSessionsResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type revokeOtherSessionsResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type revokeOtherSessionsResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type revokeOtherSessionsResponseSuccess = revokeOtherSessionsResponse204 & {
+  headers: Headers;
+};
+export type revokeOtherSessionsResponseError = (
+  | revokeOtherSessionsResponse401
+  | revokeOtherSessionsResponse503
+) & {
+  headers: Headers;
+};
+
+export type revokeOtherSessionsResponse =
+  | revokeOtherSessionsResponseSuccess
+  | revokeOtherSessionsResponseError;
+
+export const getRevokeOtherSessionsUrl = () => {
+  return `/api/v1/sessions/others`;
+};
+
+export const revokeOtherSessions = async (
+  options?: RequestInit
+): Promise<revokeOtherSessionsResponse> => {
+  const res = await fetch(getRevokeOtherSessionsUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeOtherSessionsResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as revokeOtherSessionsResponse;
+};
+
+/**
+ * @summary Revokes a specific session by ID
+ */
+export type revokeSessionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type revokeSessionResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type revokeSessionResponse403 = {
+  data: AuthOperationErrorResponse;
+  status: 403;
+};
+
+export type revokeSessionResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type revokeSessionResponseSuccess = revokeSessionResponse204 & {
+  headers: Headers;
+};
+export type revokeSessionResponseError = (
+  | revokeSessionResponse401
+  | revokeSessionResponse403
+  | revokeSessionResponse503
+) & {
+  headers: Headers;
+};
+
+export type revokeSessionResponse = revokeSessionResponseSuccess | revokeSessionResponseError;
+
+export const getRevokeSessionUrl = (id: UlidId) => {
+  return `/api/v1/sessions/${id}`;
+};
+
+export const revokeSession = async (
+  id: UlidId,
+  options?: RequestInit
+): Promise<revokeSessionResponse> => {
+  const res = await fetch(getRevokeSessionUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as revokeSessionResponse;
 };
 
 /**

@@ -1,0 +1,15 @@
+@import 'tailwindcss' source(none);
+
+@source "../components";
+@source "../lib";
+
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
+
+@import './tokens.css';
+@import './theme.css';
+@import './base-styles.css';
+@import './components/shared.css';
+@import './components/web.css';
+@import './components/app.css';
+@import './utilities.css';

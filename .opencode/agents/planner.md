@@ -2,7 +2,7 @@
 description: Agent that produces work plans and detailed designs
 mode: subagent
 hidden: true
-model: github-copilot/gpt-5.4
+model: opencode-go/deepseek-v4-pro
 reasoningEffort: 'high'
 temperature: 0.1
 permission:

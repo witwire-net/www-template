@@ -4,23 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	stdhttp "net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"log"
 
 	"www-template/packages/backend/internal/app"
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatalf("api runtime failed: %v", err)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := run(logger); err != nil {
+		logger.Error("api runtime failed", slog.Any("error", err))
 	}
 }
 
-func run() error {
+func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
 	runtime, err := app.NewRuntime(ctx)
@@ -31,7 +32,7 @@ func run() error {
 	defer stop()
 	defer func() {
 		if closeErr := runtime.Close(context.Background()); closeErr != nil {
-			log.Printf("close runtime: %v", closeErr)
+			logger.Error("close runtime", slog.Any("error", closeErr))
 		}
 	}()
 
@@ -42,11 +43,11 @@ func run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {
-			log.Printf("shutdown server: %v", shutdownErr)
+			logger.Error("shutdown server", slog.Any("error", shutdownErr))
 		}
 	}()
 
-	log.Printf("www-template api listening on %s", runtime.Config().Port)
+	logger.Info("www-template api listening", slog.String("addr", runtime.Config().Port))
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, stdhttp.ErrServerClosed) {
 		return fmt.Errorf("listen and serve: %w", err)
 	}

@@ -3,101 +3,68 @@
 
   import { goto } from '$app/navigation';
 
-  import { useSessionGuard } from '@www-template/domain/hooks/auth/useSessionGuard';
+  import { useSessionGuard } from '@www-template/domain/auth/guard';
+  import { useAuthSession } from '@www-template/domain/auth/session';
+
+  import AccountSwitcher from '../../lib/components/AccountSwitcher.svelte';
 
   let { children }: { children: Snippet } = $props();
 
-  const { data } = useSessionGuard({
+  const { data: guardData } = useSessionGuard({
     readPathname: () => window.location.pathname,
     redirectTo: (intent) => {
       goto(intent);
     },
   });
+
+  const { data: sessionData, actions: sessionActions } = useAuthSession();
 </script>
 
-{#if data.state.phase === 'authenticated' && data.state.session !== null}
-  <section class="app-shell">
-    <div class="banner">
+{#if guardData.state.phase === 'authenticated' && guardData.state.session !== null}
+  <section class="app-layout">
+    <div class="app-layout__banner">
       <div>
-        <div class="eyebrow">SVELTEKIT SPA SHELL</div>
-        <h1>認証済みアプリ</h1>
+        <div class="app-layout__banner-eyebrow">SVELTEKIT SPA SHELL</div>
+        <h1 class="app-layout__banner-title">認証済みアプリ</h1>
       </div>
-      <div class="links">
+      <div class="app-layout__links">
         <a href="/">Overview</a>
         <a href="/passkeys/">パスキー管理</a>
+        <a href="/sessions">デバイス管理</a>
+        <!--
+          別アカウントを追加するための導線。
+          SvelteKit の client-side ナビゲーションによりページ遷移し、
+          メモリ上の既存セッションは保持される。
+          ログイン後は複数セッションが並存する状態になる。
+        -->
+        <a href="/login">別アカウントを追加</a>
         <a href="/logout">ログアウト</a>
       </div>
+      <!--
+        複数アカウントログイン時にアカウント切り替え UI を表示する。
+        AccountSwitcher は sessions.length > 1 の場合のみレンダリングされる。
+        切り替え操作はメモリ上の activeSessionId のみを変更し、永続化は行わない。
+      -->
+      <AccountSwitcher
+        sessions={sessionData.state.sessions ?? []}
+        activeSessionId={sessionData.state.activeSessionId ?? null}
+        onSwitch={sessionActions.switchSession}
+      />
     </div>
 
-    <div class="panel">
-      {@render children()}
+    <div class="app-layout__panel">
+      <!--
+        activeSessionId が変わった際に子コンポーネントを remount し、
+        各ページの初期化ロジック（例: デバイス一覧取得）を再実行する。
+        これによりアカウント切り替え後も正しいアカウントのデータが表示される。
+      -->
+      {#key sessionData.state.activeSessionId}
+        {@render children()}
+      {/key}
     </div>
   </section>
 {:else}
-  <div class="loading-shell">
+  <div class="app-layout__loading">
     <p>セッションを確認しています…</p>
   </div>
 {/if}
-
-<style>
-  .app-shell {
-    display: grid;
-    gap: 1.25rem;
-  }
-
-  .banner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1.2rem 1.3rem;
-    border-radius: var(--radius-xl);
-    background: var(--palette-neutral-900);
-    color: var(--palette-neutral-50);
-  }
-
-  .eyebrow {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    color: var(--color-text-muted);
-  }
-
-  h1 {
-    margin: 0.35rem 0 0;
-    font-size: clamp(1.5rem, 4vw, 2.4rem);
-  }
-
-  .links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.65rem;
-  }
-
-  .links a {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.55rem 0.85rem;
-    border-radius: var(--radius-full);
-    background: var(--color-surface-hover);
-    color: inherit;
-    font-weight: 600;
-  }
-
-  .panel {
-    padding: clamp(1.1rem, 3vw, 1.6rem);
-    border-radius: var(--radius-xl);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border-subtle);
-  }
-
-  .loading-shell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 200px;
-    color: var(--color-text-muted);
-    font-size: 0.875rem;
-  }
-</style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from "@ui/lib/utils.js";
+	import { cn } from "@www-template/ui/lib/utils";
 	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
 
 	let {

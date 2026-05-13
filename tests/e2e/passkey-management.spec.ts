@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+import { mockWebAuthn } from './support/webauthn';
+
 const NO_STORE_HEADERS = {
   'cache-control': 'private, no-store, max-age=0',
   'content-type': 'application/json',
@@ -23,12 +25,15 @@ const fulfillJson = async (route: Route, status: number, body: unknown) => {
 
 /** ログイン済み状態にして passkey 管理ページを開く */
 const loginAndGoToPasskeys = async (page: Page) => {
+  await mockWebAuthn(page);
+
   // passkey login mock
   await page.route('**/api/v1/auth/passkey/start', async (route) => {
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
-      challenge: 'test-challenge-base64',
+      challenge: 'dGVzdC1jaGFsbGVuZ2U',
       rpId: 'localhost',
+      userVerification: 'required',
     });
   });
   await page.route('**/api/v1/auth/passkey/finish', async (route) => {
@@ -37,7 +42,8 @@ const loginAndGoToPasskeys = async (page: Page) => {
       accountId: TEST_ULID.accountId,
       passkeyCredentialId: TEST_ULID.passkeyCredentialId,
       sessionId: TEST_ULID.sessionId,
-      sessionToken: 'opaque-bearer-token',
+      accessToken: 'jwt-access-token',
+      refreshToken: 'jwt-refresh-token',
       expiresAt: '2026-04-04T00:00:00.000Z',
     });
   });
@@ -66,7 +72,35 @@ const loginAndGoToPasskeys = async (page: Page) => {
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
   await expect(page).toHaveURL(/localhost:5174\/?$/);
 
-  await page.goto('http://localhost:5174/passkeys');
+  // client-side navigation で passkeys ページへ遷移（in-memory session を維持）
+  await page.getByRole('link', { name: 'パスキー管理' }).click();
+  await expect(page).toHaveURL(/localhost:5174\/passkeys$/);
+};
+
+/** reauth 用の API モックをセットアップする。
+ *  kind に応じたレスポンスを返し、request payload の検証も行う。
+ */
+const mockReauth = async (page: Page, kind: 'otp-issue' | 'passkey-delete' = 'otp-issue') => {
+  await page.route('**/api/v1/auth/reauth/start', async (route) => {
+    const body = route.request().postDataJSON() as { kind: string } | null;
+    expect(body?.kind).toBe(kind);
+    await fulfillJson(route, 200, {
+      requestId: TEST_ULID.requestId,
+      challenge: 'cmVhdXRoLWNoYWxsZW5nZQ',
+      rpId: 'localhost',
+      userVerification: 'required',
+    });
+  });
+  await page.route('**/api/v1/auth/reauth/finish', async (route) => {
+    const body = route.request().postDataJSON() as { kind: string } | null;
+    expect(body?.kind).toBe(kind);
+    await fulfillJson(route, 200, {
+      requestId: TEST_ULID.requestId,
+      reauthSessionId: '01ARZ3NDEKTSV4RRFFQ69G5FBA',
+      kind,
+      expiresAt: '2026-04-04T00:00:00.000Z',
+    });
+  });
 };
 
 test.describe('passkey management', () => {
@@ -95,8 +129,19 @@ test.describe('passkey management', () => {
     await page.route('**/api/v1/passkeys/start', async (route) => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
-        challenge: 'add-challenge-base64',
+        challenge: 'YWRkLWNoYWxsZW5nZQ',
         rpId: 'localhost',
+        rpName: 'www-template',
+        user: {
+          id: 'dXNlcjE',
+          name: 'test@example.com',
+          displayName: 'Test User',
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },
+          { type: 'public-key', alg: -257 },
+        ],
+        userVerification: 'required',
       });
     });
 
@@ -136,7 +181,7 @@ test.describe('passkey management', () => {
       }
     });
 
-    await page.getByRole('button', { name: '+ パスキーを追加' }).click();
+    await page.getByRole('button', { name: 'この端末でログインを有効にする' }).click();
 
     // 既存パスキーが保持されていることを確認
     await expect(page.getByText('MacBook Pro')).toBeVisible();
@@ -149,9 +194,12 @@ test.describe('passkey management', () => {
    */
   test('2件以上ある場合にパスキーを削除できる', async ({ page }) => {
     await loginAndGoToPasskeys(page);
+    await mockReauth(page, 'passkey-delete');
 
     // 削除後に1件のみを返す
     await page.route(`**/api/v1/passkeys/${TEST_ULID.passkeyCredentialId}`, async (route) => {
+      const reauthSession = route.request().headers()['x-reauth-session'];
+      expect(reauthSession).toBe('01ARZ3NDEKTSV4RRFFQ69G5FBA');
       await route.fulfill({
         status: 204,
         headers: { 'cache-control': 'private, no-store, max-age=0' },
@@ -175,12 +223,15 @@ test.describe('passkey management', () => {
    * AUTH-FE-S013: 最後の1件のパスキーは削除アクションが無効化される
    */
   test('最後の1件のパスキーの削除ボタンは無効化される', async ({ page }) => {
+    await mockWebAuthn(page);
+
     // 1件のみを返すようにモック上書き
     await page.route('**/api/v1/auth/passkey/start', async (route) => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
-        challenge: 'test-challenge-base64',
+        challenge: 'dGVzdC1jaGFsbGVuZ2U',
         rpId: 'localhost',
+        userVerification: 'required',
       });
     });
     await page.route('**/api/v1/auth/passkey/finish', async (route) => {
@@ -189,7 +240,8 @@ test.describe('passkey management', () => {
         accountId: TEST_ULID.accountId,
         passkeyCredentialId: TEST_ULID.passkeyCredentialId,
         sessionId: TEST_ULID.sessionId,
-        sessionToken: 'opaque-bearer-token',
+        accessToken: 'jwt-access-token',
+        refreshToken: 'jwt-refresh-token',
         expiresAt: '2026-04-04T00:00:00.000Z',
       });
     });
@@ -211,7 +263,10 @@ test.describe('passkey management', () => {
     await page.goto('http://localhost:5174/login');
     await page.getByRole('button', { name: 'パスキーでログイン' }).click();
     await expect(page).toHaveURL(/localhost:5174\/?$/);
-    await page.goto('http://localhost:5174/passkeys');
+
+    // client-side navigation で passkeys ページへ遷移
+    await page.getByRole('link', { name: 'パスキー管理' }).click();
+    await expect(page).toHaveURL(/localhost:5174\/passkeys$/);
 
     await expect(page.getByText('MacBook Pro')).toBeVisible();
 
@@ -233,7 +288,7 @@ test.describe('passkey management', () => {
       });
     });
 
-    await page.getByRole('button', { name: '+ パスキーを追加' }).click();
+    await page.getByRole('button', { name: 'この端末でログインを有効にする' }).click();
 
     await expect(page.getByRole('alert')).toBeVisible();
     await expect(page.getByRole('list')).toBeVisible();
@@ -244,8 +299,11 @@ test.describe('passkey management', () => {
    */
   test('パスキー削除でAPIエラーが返った場合にエラーメッセージが表示される', async ({ page }) => {
     await loginAndGoToPasskeys(page);
+    await mockReauth(page, 'passkey-delete');
 
     await page.route(`**/api/v1/passkeys/${TEST_ULID.passkeyCredentialId}`, async (route) => {
+      const reauthSession = route.request().headers()['x-reauth-session'];
+      expect(reauthSession).toBe('01ARZ3NDEKTSV4RRFFQ69G5FBA');
       await fulfillJson(route, 503, {
         requestId: TEST_ULID.requestId,
         error: 'internal-error',
@@ -264,20 +322,53 @@ test.describe('passkey management', () => {
   /**
    * AUTH-FE-S016: パスキー管理ページで OTP を発行できる
    */
-  test('OTP 発行ボタンを押すと 6 桁の OTP が表示される', async ({ page }) => {
+  test('OTP 発行ボタンを押すとメール送信済み guidance が表示される', async ({ page }) => {
     await loginAndGoToPasskeys(page);
+    await mockReauth(page, 'otp-issue');
 
     await page.route('**/api/v1/passkeys/otp', async (route) => {
+      const reauthSession = route.request().headers()['x-reauth-session'];
+      expect(reauthSession).toBe('01ARZ3NDEKTSV4RRFFQ69G5FBA');
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
-        otp: '123456',
+        issued: true,
       });
     });
 
-    await page.getByRole('button', { name: 'OTPを発行' }).click();
+    await page.getByRole('button', { name: '新しい端末でログインを有効にする' }).click();
 
-    await expect(page.getByText('123456')).toBeVisible();
-    await expect(page.getByText('このコードを新しい端末で入力してください')).toBeVisible();
+    // 平文 OTP は表示されず、案内メッセージが表示される
+    await expect(page.getByText(/ログイン有効化コードを送信しました/)).toBeVisible();
+    await expect(page.getByText(/登録済みのメールアドレス宛にコードを送信しました/)).toBeVisible();
+    await expect(page.getByText(/有効期限: 5分/)).toBeVisible();
+    await expect(page.getByText(/123456/)).not.toBeVisible();
+  });
+
+  /**
+   * AUTH-FE-S022: Passkey deletion は再認証を要求する
+   */
+  test('パスキー削除時に再認証を経て削除が成功する', async ({ page }) => {
+    await loginAndGoToPasskeys(page);
+    await mockReauth(page, 'passkey-delete');
+
+    await page.route(`**/api/v1/passkeys/${TEST_ULID.passkeyCredentialId}`, async (route) => {
+      const reauthSession = route.request().headers()['x-reauth-session'];
+      expect(reauthSession).toBe('01ARZ3NDEKTSV4RRFFQ69G5FBA');
+      await route.fulfill({
+        status: 204,
+        headers: { 'cache-control': 'private, no-store, max-age=0' },
+        body: '',
+      });
+    });
+
+    await expect(page.getByText('MacBook Pro')).toBeVisible();
+
+    const deleteButton = page.getByRole('button', { name: 'MacBook Pro を削除' });
+    await expect(deleteButton).toBeEnabled();
+    await deleteButton.click();
+
+    await expect(page.getByText('MacBook Pro')).not.toBeVisible();
+    await expect(page.getByText('iPhone 15')).toBeVisible();
   });
 });
 
@@ -288,14 +379,28 @@ test.describe('passkey add by OTP (new device)', () => {
   );
 
   /**
-   * AUTH-FE-S017: 新端末パスキー登録ページで有効な OTP を入力してパスキーを登録できる
+   * AUTH-FE-S017: 新端末パスキー登録ページで有効な email と OTP を入力してパスキーを登録できる
    */
-  test('有効な OTP を入力してパスキーを登録できる', async ({ page }) => {
+  test('有効な email と OTP を入力してパスキーを登録できる', async ({ page }) => {
+    await mockWebAuthn(page);
+    await page.goto('http://localhost:5174/passkeys/add');
+
     await page.route('**/api/v1/auth/passkey/add/start', async (route) => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
-        challenge: 'otp-add-challenge-base64',
+        challenge: 'b3RwLWFkZC1jaGFsbGVuZ2U',
         rpId: 'localhost',
+        rpName: 'Test RP',
+        user: {
+          id: 'dXNlcjE',
+          name: 'valid@example.com',
+          displayName: 'Test User',
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },
+          { type: 'public-key', alg: -257 },
+        ],
+        userVerification: 'required',
       });
     });
 
@@ -307,10 +412,10 @@ test.describe('passkey add by OTP (new device)', () => {
       });
     });
 
-    await page.goto('http://localhost:5174/passkeys/add');
     await expect(page.getByRole('heading', { name: 'パスキーを追加' })).toBeVisible();
 
-    // OTP 入力フォームへの入力
+    // email + OTP 入力フォームへの入力
+    await page.getByLabel('メールアドレス').fill('valid@example.com');
     await page.getByLabel('ワンタイムパスワード').fill('123456');
 
     // ボタンが有効になっていること
@@ -324,9 +429,11 @@ test.describe('passkey add by OTP (new device)', () => {
   });
 
   /**
-   * AUTH-FE-S018: 新端末パスキー登録ページで無効な OTP を入力した場合はエラーが表示される
+   * AUTH-FE-S018: 新端末パスキー登録ページで無効な email と OTP は generic error を表示する
    */
-  test('無効な OTP を入力した場合にエラーメッセージが表示される', async ({ page }) => {
+  test('無効な email と OTP を入力した場合にエラーメッセージが表示される', async ({ page }) => {
+    await page.goto('http://localhost:5174/passkeys/add');
+
     await page.route('**/api/v1/auth/passkey/add/start', async (route) => {
       await fulfillJson(route, 400, {
         requestId: TEST_ULID.requestId,
@@ -334,9 +441,9 @@ test.describe('passkey add by OTP (new device)', () => {
       });
     });
 
-    await page.goto('http://localhost:5174/passkeys/add');
     await expect(page.getByRole('heading', { name: 'パスキーを追加' })).toBeVisible();
 
+    await page.getByLabel('メールアドレス').fill('valid@example.com');
     await page.getByLabel('ワンタイムパスワード').fill('000000');
 
     const submitButton = page.getByRole('button', { name: 'パスキーを登録' });

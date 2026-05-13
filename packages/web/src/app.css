@@ -1,0 +1,12 @@
+/**
+ * web パッケージのグローバルスタイルシート。
+ * ページ固有のスタイルは各 .svelte ファイルの <style> ブロックに定義する。
+ */
+
+/* UI パッケージが提供するベース・トークン・テーマ層をインポート */
+@import '@www-template/ui/styles.css';
+
+/* Tailwind v4: web パッケージ内のソースコードをスキャンしてユーティリティを生成 */
+@import 'tailwindcss' source(none);
+@source "./routes";
+@source "./lib";

@@ -14,14 +14,23 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "^2.7.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
+    "@opentelemetry/instrumentation": "^0.215.0",
+    "@opentelemetry/instrumentation-fetch": "^0.215.0",
+    "@opentelemetry/resources": "^2.7.0",
+    "@opentelemetry/sdk-trace-base": "^2.7.0",
+    "@opentelemetry/sdk-trace-web": "^2.7.0",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
     "@www-template/domain": "workspace:*",
     "@www-template/ui": "workspace:*"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.14",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.48.4",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@tailwindcss/vite": "latest",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
     "@testing-library/user-event": "^14.6.1",
@@ -30,7 +39,7 @@
     "msw": "^2.12.7",
     "svelte": "^5.53.9",
     "svelte-check": "^4.4.5",
-    "tailwindcss": "^4.1.14",
+    "tailwindcss": "^4.2.4",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^3.2.4"

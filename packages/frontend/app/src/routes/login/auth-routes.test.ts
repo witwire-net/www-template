@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import {
+  applyInvalidRecoveryToken,
+  applyRecoveryAccepted,
+  applyRecoveryReady,
+  clearRecoveryState,
+  createGenericRecoverySentView,
+  createRecoveryFlowInitialState,
+} from '@www-template/domain/auth/recovery';
 import {
   applyExpiredSession,
   applyMissingSession,
@@ -8,15 +16,9 @@ import {
   hasUlidAuthSessionShape,
   isNoStoreCacheControl,
   isUlid,
-} from '../../../../domain/src/auth/authSessionState';
-import {
-  applyInvalidRecoveryToken,
-  applyRecoveryAccepted,
-  applyRecoveryReady,
-  clearRecoveryState,
-  createGenericRecoverySentView,
-  createRecoveryFlowInitialState,
-} from '../../../../domain/src/auth/recoveryState';
+} from '@www-template/domain/auth/session';
+
+import { removeQueryParamFromUrl } from '../../lib/auth/url';
 import { TEST_ULID } from '../../tests/mocks/handlers';
 import { _AUTH_ROUTE_CACHE_POLICY as LOGOUT_CACHE_POLICY } from '../logout/+layout';
 
@@ -98,7 +100,7 @@ describe('[AUTH-FE-S004] 有効な復旧リンクはパスキー再登録へ進�
         requestId: TEST_ULID.requestId,
         recoveryTokenId: TEST_ULID.recoveryTokenId,
         recoverySessionId: TEST_ULID.recoverySessionId,
-        recoverySession: 'opaque-session',
+        recoverySession: 'recovery-session-value',
         expiresAt: '2026-03-21T00:15:00.000Z',
       },
       'no-store'
@@ -107,7 +109,7 @@ describe('[AUTH-FE-S004] 有効な復旧リンクはパスキー再登録へ進�
     expect(state.phase).toBe('ready');
     expect(isUlid(state.recoveryTokenId ?? '')).toBe(true);
     expect(isUlid(state.recoverySessionId ?? '')).toBe(true);
-    expect(state.recoverySession).toBe('opaque-session');
+    expect(state.recoverySession).toBe('recovery-session-value');
     expect(state.lastCacheControl).toBe('no-store');
   });
 
@@ -119,7 +121,7 @@ describe('[AUTH-FE-S004] 有効な復旧リンクはパスキー再登録へ進�
         requestId: TEST_ULID.requestId,
         recoveryTokenId: TEST_ULID.recoveryTokenId,
         recoverySessionId: TEST_ULID.recoverySessionId,
-        recoverySession: 'opaque-session',
+        recoverySession: 'recovery-session-value',
         expiresAt: '2026-03-21T00:15:00.000Z',
       },
       'no-store'
@@ -153,34 +155,28 @@ describe('[AUTH-FE-S005] 無効な復旧リンクは再試行案内へ戻す', (
     /* recoverySession が null の場合、registerRecoveryPasskey は実行できない */
   });
 
-  it('recovery snapshot の runtime 検証は不正 shape を拒否する', () => {
-    /* register ページの isValidSnapshot() contract を検証する。
-       snapshot は全 5 フィールドが string であることを要求する。 */
-    const validShape = {
-      requestId: TEST_ULID.requestId,
-      recoveryTokenId: TEST_ULID.recoveryTokenId,
-      recoverySessionId: TEST_ULID.recoverySessionId,
-      recoverySession: 'opaque',
-      expiresAt: '2026-03-21T00:15:00.000Z',
-    };
+  it('[AUTH-FE-S020] recovery flow は in-memory state のみで遷移し sessionStorage を使わない', () => {
+    /* recoverySession を含む状態遷移は domain singleton state で行い、
+       sessionStorage には一切書き込まないことを検証する。 */
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const state = createRecoveryFlowInitialState();
 
-    /* 正しい shape */
-    expect(typeof validShape.requestId).toBe('string');
-    expect(typeof validShape.recoveryTokenId).toBe('string');
-    expect(typeof validShape.recoverySessionId).toBe('string');
-    expect(typeof validShape.recoverySession).toBe('string');
-    expect(typeof validShape.expiresAt).toBe('string');
+    applyRecoveryReady(
+      state,
+      {
+        requestId: TEST_ULID.requestId,
+        recoveryTokenId: TEST_ULID.recoveryTokenId,
+        recoverySessionId: TEST_ULID.recoverySessionId,
+        recoverySession: 'recovery-session-value',
+        expiresAt: '2026-03-21T00:15:00.000Z',
+      },
+      'no-store'
+    );
 
-    /* フィールド欠落 */
-    const missingField = { requestId: TEST_ULID.requestId };
-    expect('recoveryTokenId' in missingField).toBe(false);
+    expect(state.recoverySession).toBe('recovery-session-value');
+    expect(setItemSpy).not.toHaveBeenCalled();
 
-    /* null value */
-    const nullValues = { ...validShape, recoverySession: null };
-    expect(typeof nullValues.recoverySession).not.toBe('string');
-
-    /* 空オブジェクト */
-    expect(Object.keys({}).length).toBe(0);
+    setItemSpy.mockRestore();
   });
 });
 
@@ -244,7 +240,7 @@ describe('[AUTH-FE-S007] logout は利用者を非認証 route へ戻す', () =>
       accountId: TEST_ULID.accountId,
       passkeyCredentialId: TEST_ULID.passkeyCredentialId,
       sessionId: TEST_ULID.sessionId,
-      sessionToken: 'bearer-token',
+      accessToken: 'bearer-token',
       expiresAt: '2026-04-04T00:00:00.000Z',
     };
 
@@ -313,7 +309,7 @@ describe('[AUTH-FE-S009] auth routes は no-store surface として配信され�
       accountId: TEST_ULID.accountId,
       passkeyCredentialId: TEST_ULID.passkeyCredentialId,
       sessionId: TEST_ULID.sessionId,
-      sessionToken: 'opaque-bearer-token',
+      accessToken: 'jwt-bearer-token',
       expiresAt: '2026-04-04T00:00:00.000Z',
     };
 
@@ -328,7 +324,7 @@ describe('[AUTH-FE-S009] auth routes は no-store surface として配信され�
         requestId: TEST_ULID.requestId,
         recoveryTokenId: TEST_ULID.recoveryTokenId,
         recoverySessionId: TEST_ULID.recoverySessionId,
-        recoverySession: 'opaque-session',
+        recoverySession: 'recovery-session-value',
         expiresAt: '2026-03-21T00:15:00.000Z',
       },
       'no-store'
@@ -347,7 +343,7 @@ describe('[AUTH-FE-S009] auth routes は no-store surface として配信され�
         requestId: TEST_ULID.requestId,
         recoveryTokenId: TEST_ULID.recoveryTokenId,
         recoverySessionId: TEST_ULID.recoverySessionId,
-        recoverySession: 'opaque-session',
+        recoverySession: 'recovery-session-value',
         expiresAt: '2026-03-21T00:15:00.000Z',
       },
       'no-store'
@@ -360,5 +356,62 @@ describe('[AUTH-FE-S009] auth routes は no-store surface として配信され�
     expect(state.recoveryTokenId).toBeNull();
     expect(state.recoverySessionId).toBeNull();
     expect(state.lastCacheControl).toBeNull();
+  });
+});
+
+describe('[AUTH-FE-S019] Recovery token は URL から除去される', () => {
+  it('removeQueryParamFromUrl が token を読み取った直後に URL から除去する', () => {
+    /* consume ページと同一の helper を使い、URL から token を読み取った直後に
+       replaceState でパス名のみに置き換えることを検証する。
+       これによりブラウザ履歴・画面共有・Referer から recovery token が漏えいするのを防ぐ。 */
+    const replaceStateMock = vi.fn();
+    const originalHistory = window.history;
+    const originalLocation = window.location;
+
+    // window.location と window.history をモック化
+    Object.defineProperty(window, 'location', {
+      value: {
+        search: '?token=secret-recovery-token-123',
+        pathname: '/login/recovery/consume',
+      },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'history', {
+      value: { replaceState: replaceStateMock },
+      writable: true,
+      configurable: true,
+    });
+
+    const token = removeQueryParamFromUrl('token');
+
+    expect(token).toBe('secret-recovery-token-123');
+    expect(replaceStateMock).toHaveBeenCalledWith({}, document.title, '/login/recovery/consume');
+
+    // 復元
+    Object.defineProperty(window, 'history', {
+      value: originalHistory,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+      configurable: true,
+    });
+  });
+});
+
+describe('[AUTH-FE-S020] auth routes は security headers と no-store semantics を持つ', () => {
+  it('bearer token は sessionStorage に永続化されない', () => {
+    /* session hook は in-memory のみを維持し、sessionStorage への書き込みを行わない。
+       これにより browser close 後に session が復元されることを防ぐ。 */
+    const state = createAuthSessionInitialState();
+    expect(state.session).toBeNull();
+    expect(state.phase).toBe('anonymous');
+
+    // sessionStorage に 'www-template:auth-session' キーが存在しないことを確認
+    // （以前の実装ではこのキーを使用していたが、セキュリティ監査で除去済み）
+    expect(sessionStorage.getItem('www-template:auth-session')).toBeNull();
   });
 });

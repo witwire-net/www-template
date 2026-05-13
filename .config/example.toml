@@ -1,0 +1,110 @@
+# Backend configuration example.
+# Copy this file to .config/production.toml (or any name) and fill in real values.
+# Point the backend to it via CONFIG_PATH environment variable.
+
+[app]
+# Application environment: development, staging, or production.
+environment = "production"
+
+# Bearer token for internal app-to-app authorization.
+# REQUIRED in non-development environments.
+bearer_token = "your-secret-bearer-token"
+
+[server]
+# HTTP port the API server listens on.
+port = 8080
+
+# CORS allowed origins (comma-separated in TOML array).
+allowed_origins = [
+  "https://your-domain.com",
+  "https://app.your-domain.com",
+]
+
+# Trusted proxy CIDRs for secure client IP extraction.
+trusted_proxy_cidrs = ["10.0.0.0/8"]
+
+[auth]
+# WebAuthn Relying Party ID.
+webauthn_rp_id = "your-domain.com"
+
+# Base URL for account recovery deep links.
+account_recovery_url_base = "https://app.your-domain.com/login/recovery/consume"
+
+# Time-to-live durations for various auth tokens and sessions.
+challenge_ttl = "5m"
+recovery_token_ttl = "30m"
+recovery_session_ttl = "15m"
+session_idle_ttl = "12h"
+session_absolute_ttl = "336h"
+
+# Refresh token TTL. Optional. If unset or zero, refresh tokens are unlimited.
+# If set, MUST be at least 24 hours (e.g. "168h" for 7 days).
+# Values below 24h are rejected at startup to prevent misconfiguration.
+refresh_token_ttl = "168h"
+
+# Rate limiting configuration.
+passkey_start_limit = 5
+passkey_start_window = "5m"
+recovery_email_limit = 3
+recovery_email_window = "1h"
+recovery_ip_limit = 10
+recovery_ip_window = "1h"
+
+# Failure lockout configuration.
+failure_threshold = 10
+failure_window = "15m"
+failure_duration = "15m"
+
+# Auth body size limit (bytes).
+auth_body_limit_bytes = 1048576
+
+# Server-side pepper for HMAC hashing of OTP/email/IP keys.
+# MUST be at least 32 characters and changed from default in production.
+secret_hash_key = "change-this-to-a-long-random-pepper-in-production"
+
+# JWT signing secret. MUST be at least 32 characters and changed from default in production.
+jwt_secret = "change-this-to-a-long-random-jwt-secret-in-production"
+
+[database]
+# PostgreSQL connection string.
+url = "postgres://user:password@host:5432/dbname?sslmode=require"
+
+[valkey]
+# Valkey (Redis-compatible) connection string.
+url = "redis://host:6379/0"
+key_prefix = "www-template"
+
+[opensearch]
+# OpenSearch endpoint.
+url = "https://opensearch-host:9200"
+
+[object_storage]
+# S3-compatible object storage settings.
+endpoint = "https://s3-compatible-endpoint"
+region = "auto"
+bucket = "your-bucket-name"
+access_key_id = "your-access-key"
+secret_access_key = "your-secret-key"
+use_path_style = false
+
+[smtp]
+# Outgoing SMTP server settings.
+host = "smtp.example.com"
+port = 587
+username = "smtp-user"
+password = "smtp-password"
+secure_transport = true
+
+[mail]
+# Default sender address for transactional emails.
+from_address = "noreply@your-domain.com"
+
+[observability]
+# OpenTelemetry OTLP endpoints.
+otel_exporter_otlp_endpoint = "otel-collector:4317"
+otel_exporter_otlp_traces_endpoint = "otel-collector:4317"
+otel_exporter_otlp_logs_endpoint = "otel-collector:4317"
+
+# OTel service identification.
+otel_service_name = "www-template-api"
+otel_resource_attributes = "service.namespace=www-template,deployment.environment=production"

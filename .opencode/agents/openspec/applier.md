@@ -1,7 +1,7 @@
 ---
 description: Apply an OpenSpec change through tasks.md, delegating implementation and reviews with dependency-safe parallel execution until archive-ready.
 mode: subagent
-model: github-copilot/gpt-5.4
+model: opencode-go/deepseek-v4-flash
 reasoningEffort: 'high'
 temperature: 0.1
 permission:

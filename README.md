@@ -1,249 +1,588 @@
 # www-template
 
-TypeSpec を API 契約の正に据え、Svelte フロントエンドと Go バックエンドを同じリポジトリで運用するためのモノレポです。
+TypeSpec を API 契約の正とし、Svelte フロントエンドと Go バックエンドを同じリポジトリで運用するモノレポテンプレートです。
 
-- API 契約は `packages/typespec/main.tsp` を正とします
-- OpenAPI、frontend SDK、Go bindings は契約から生成します
-- フロントエンドは `web -> domain -> api` および `app -> domain -> api`（`app` は `ui` にも依存）の依存方向を守ります
-- バックエンドは `cmd/api -> internal/app -> (http|persistence|usecases) -> domain -> types` の依存方向を守ります
+- API 契約は `packages/typespec/main.tsp` が唯一の正です
+- OpenAPI・フロントエンド SDK・Go バインディングは契約から生成します（手編集禁止）
+- `web` は公開面 LP であり `domain` / `api` に依存しません（`ui` のみ利用可）
+- `app` は `app -> domain -> api` の依存方向を守ります（`app` は `ui` にも依存）
+- バックエンドは `cmd/api -> internal/app -> (adapters|application|platform) -> auth/domain -> platform` の依存方向を守ります
+
+## 目次
+
+- [技術スタック](#技術スタック)
+- [リポジトリ構成](#リポジトリ構成)
+- [アーキテクチャ](#アーキテクチャ)
+- [ローカル開発環境セットアップ](#ローカル開発環境セットアップ)
+- [コマンド一覧](#コマンド一覧)
+- [標準の検証順（CI と同じ）](#標準の検証順ci-と同じ)
+- [API 契約と生成物](#api-契約と生成物)
+- [現在の API surface](#現在の-api-surface)
+- [Auth surface と認証仕様](#auth-surface-と認証仕様)
+- [環境変数リファレンス](#環境変数リファレンス)
+- [データベースマイグレーション](#データベースマイグレーション)
+- [CI/CD](#cicd)
+- [Git hooks とコミット規約](#git-hooks-とコミット規約)
+- [Guardrails と静的解析](#guardrails-と静的解析)
+- [関連ドキュメント](#関連ドキュメント)
+
+---
 
 ## 技術スタック
 
-- Frontend: SvelteKit, Svelte 5, Vitest, Playwright
-- Contract: TypeSpec, OpenAPI, Spectral, Orval, `oapi-codegen`
-- Backend: Go 1.26.2, Gin, GORM, golang-migrate
-- Tooling: pnpm, ESLint, Prettier, golangci-lint, Husky
+| 分類               | 内容                                                      |
+| ------------------ | --------------------------------------------------------- |
+| フロントエンド     | SvelteKit 2, Svelte 5, TypeScript, Vite                   |
+| テスト（フロント） | Vitest, Playwright                                        |
+| API 契約           | TypeSpec 1.8, OpenAPI 3, Spectral, Orval                  |
+| コード生成         | Orval（frontend SDK）, oapi-codegen 2.4（Go bindings）    |
+| バックエンド       | Go 1.26.2, Gin 1.11, GORM 1.31, golang-migrate 4.18       |
+| DB / KVS / Search  | PostgreSQL 18, Valkey 9 (Redis 互換), OpenSearch 3        |
+| Object Storage     | Cloudflare R2 / MinIO（S3 互換）                          |
+| メール             | SMTP（開発時は Mailpit）                                  |
+| ツール             | pnpm 10.33, ESLint 9, Prettier, golangci-lint 1.64, Husky |
+| CI                 | GitHub Actions                                            |
+| 開発環境           | Dev Container（Docker Compose）                           |
+
+---
 
 ## リポジトリ構成
 
 ```text
-packages/
-├── backend/
-│   ├── cmd/api                          # Go API entrypoint
-│   ├── db/migrations/                   # golang-migrate SQL
-│   ├── internal/app/                    # runtime / container
-│   ├── internal/http/                   # Gin + generated handler adapter
-│   ├── internal/persistence/            # GORM / memory repository
-│   ├── internal/usecases/               # application services
-│   ├── internal/domain/                 # domain model / invariants
-│   ├── internal/types/                  # config / shared backend types
-│   └── internal/generated/openapi/      # generated Go bindings
-├── frontend/
-│   ├── api/                             # generated SDK + API helpers
-│   ├── domain/                          # domain hooks / domain types
-│   ├── app/                             # SvelteKit app
-│   └── ui/                              # shared UI package
-└── typespec/                            # API contract source of truth
+.
+├── .devcontainer/               # Dev Container 定義（compose.yaml, devcontainer.json, Dockerfile）
+├── .github/workflows/ci.yml     # CI パイプライン
+├── .husky/                      # Git hooks（pre-commit, commit-msg）
+├── scripts/                     # CI / lint / codegen / migration ヘルパースクリプト
+│   ├── codegen/check.sh         # codegen drift check
+│   ├── go/                      # Go build / lint / format / test / migrate
+│   ├── hooks/                   # pre-commit 内で呼ばれるフックスクリプト
+│   └── security/                # govulncheck / gitleaks / osv-scanner
+├── tests/                       # Playwright E2E テスト
+├── packages/
+│   ├── typespec/                # API 契約（唯一の正）
+│   │   ├── main.tsp             # エントリポイント
+│   │   ├── src/
+│   │   │   ├── common/          # 共通エラー定義
+│   │   │   ├── models/          # データモデル
+│   │   │   └── routes/v1/       # API ルート定義
+│   │   ├── openapi/openapi.json # 生成 OpenAPI（手編集禁止）
+│   │   └── .spectral.yaml       # Spectral lint ルールセット
+│   ├── frontend/
+│   │   ├── api/                 # 生成 SDK + API ヘルパー（手編集禁止）
+│   │   │   └── src/generated/client.ts
+│   │   ├── domain/              # ドメインフック / ドメイン型
+│   │   │   └── src/hooks/       # use* 形式の Svelte 5 stateful hook
+│   │   ├── app/                 # SvelteKit SPA アプリ（認証面・アプリ機能）
+│   │   │   └── src/routes/      # CSR ルート
+│   │   └── ui/                  # 共有 UI コンポーネント（atoms / molecules / organisms）
+│   ├── web/                     # SvelteKit 公開面 LP（domain / api 非依存）
+│   └── backend/
+│       ├── cmd/api/             # Go API エントリポイント
+│       ├── db/migrations/       # golang-migrate SQL ファイル（*.up.sql / *.down.sql）
+│       ├── internal/
+│       │   ├── app/             # ランタイムコンテナ・依存注入（Composition Root）
+│       │   ├── auth/
+│       │   │   ├── domain/      # ドメインモデル・不変条件
+│       │   │   └── application/ # アプリケーションサービス（ユースケース・ポート）
+│       │   ├── adapters/
+│       │   │   ├── http/        # Gin ルーター・ハンドラアダプタ
+│       │   │   ├── persistence/
+│       │   │   │   ├── postgres/  # GORM リポジトリ実装
+│       │   │   │   └── valkey/    # Valkey 状態リポジトリ実装
+│       │   │   ├── webauthn/    # WebAuthn プロバイダ実装
+│       │   │   └── mailer/      # SMTP メール送信実装
+│       │   ├── platform/
+│       │   │   ├── config/      # 設定・共有型
+│       │   │   ├── id/          # ID ポリシー・ULID 生成
+│       │   │   ├── observability/ # ロガー・メトリクス・トレーサー
+│       │   │   └── health/      # インフラ健全性チェック
+│       │   └── generated/openapi/openapi.gen.go  # 生成 Go バインディング（手編集禁止）
+│       └── tools/analyzers/     # カスタム静的解析ツール（guardrails）
+└── openspec/                    # OpenSpec 仕様（現在は lint / CI 対象外）
 ```
 
-## クイックスタート
+---
+
+## アーキテクチャ
+
+### フロントエンド依存方向
+
+```
+packages/web  ──────────────────────────────►  packages/frontend/ui
+                                                （公開面 LP は api / domain に依存しない）
+
+packages/frontend/app  ──►  packages/frontend/domain  ──►  packages/frontend/api
+         │                                                          │
+         └──────────────────►  packages/frontend/ui                └── 生成 SDK
+
+```
+
+- `web` は `@www-template/ui` のみ利用可。`@www-template/domain` / `@www-template/api` の import は ESLint で禁止。
+- `app` はページ・コンポーネントで直接 API を呼ばず、`domain` の `use*` フックを経由します。
+- `domain` フックは `{ data, actions }` を返す `use*` export に統一します（`.svelte.ts` に配置）。
+- ページ・コンポーネントは副作用（`onMount`, `$effect` による I/O）を書かず、フックの `actions` を呼ぶだけにします。
+
+### バックエンド依存方向
+
+```
+cmd/api
+  └── internal/app              （DI コンテナ・ランタイム）
+        ├── internal/adapters/http        （Gin + 生成アダプタ）
+        │     └── internal/auth/application
+        ├── internal/adapters/persistence （GORM / Valkey リポジトリ実装）
+        │     └── internal/auth/domain
+        ├── internal/adapters/webauthn    （WebAuthn プロバイダ）
+        │     └── internal/auth/domain
+        ├── internal/adapters/mailer      （SMTP メール送信）
+        │     └── internal/auth/domain
+        ├── internal/auth/application     （ユースケース・ポート）
+        │     └── internal/auth/domain
+        ├── internal/auth/domain          （ドメインモデル・不変条件）
+        │     └── internal/platform/*     （config / id / observability / health）
+        └── internal/platform/*           （クロスカッティング基盤）
+```
+
+**禁止事項（守護ルール）**
+
+| レイヤー                    | 禁止                                                                    |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `domain` / `application`    | Gin, GORM, generated, HTTP infra の import                              |
+| `adapters/http`             | `domain.<Entity>` / `domain.Err\*` の直接使用（application DTO を経由） |
+| `adapters/persistence` 以外 | GORM / Postgres driver の import                                        |
+| `domain` / `application`    | `time.Now`, `os.Getenv`, `log`, `math/rand` の直接使用                  |
+
+### API 契約フロー
+
+```
+packages/typespec/main.tsp
+        │  pnpm gen
+        ├──► packages/typespec/openapi/openapi.json
+        │           │  Orval
+        │           └──► packages/frontend/api/src/generated/client.ts
+        │           │  oapi-codegen
+        │           └──► packages/backend/internal/generated/openapi/openapi.gen.go
+        │
+        └── pnpm check:codegen（drift があれば CI 失敗）
+```
+
+---
+
+## ローカル開発環境セットアップ
+
+### オプション A: Dev Container（推奨）
+
+VS Code または GitHub Codespaces で `.devcontainer/` を使います。起動すると以下のサービスが自動で立ち上がります。
+
+| サービス                 | 接続先                                                  |
+| ------------------------ | ------------------------------------------------------- |
+| PostgreSQL 18            | `postgres:5432`                                         |
+| Valkey 9（Redis 互換）   | `valkey:6379`                                           |
+| OpenSearch 3             | `http://opensearch:9200`                                |
+| MinIO（S3 互換）         | `http://minio:9000`（Console: `http://localhost:9001`） |
+| Mailpit（SMTP + Web UI） | SMTP: `mailpit:1025` / UI: `http://localhost:8025`      |
+
+環境変数はコンテナ内に自動注入されます。`postCreateCommand` で `pnpm install` と Playwright ブラウザのインストールも自動実行されます。
+
+### オプション B: ローカルセットアップ（手動）
+
+**前提ツール**
+
+- Node.js 24.12+
+- pnpm 10.27+（`corepack enable` で有効化）
+- Go 1.26.2+
+- PostgreSQL 18
+- Valkey 9（または Redis 7+）
+- OpenSearch 3
+- MinIO または S3 互換ストレージ
+- SMTP サーバー（開発時は Mailpit 推奨）
+
+**手順**
 
 ```bash
+# 1. 依存インストール
 corepack enable
 pnpm install
+
+# 2. 生成物をそろえる（TypeSpec -> OpenAPI -> SDK -> Go bindings）
 pnpm gen
+
+# 3. 環境変数を設定（.env.example を参考に）
+cp .env.example .env
+# .env を編集して DATABASE_URL, VALKEY_URL 等を設定
+
+# 4. DB マイグレーションを実行
+pnpm db:migrate:up
+
+# 5. 全サービスを起動
 pnpm dev:all
 ```
 
-個別起動:
+起動後のアクセス先:
+
+| サービス          | URL                     |
+| ----------------- | ----------------------- |
+| Go API            | `http://localhost:8080` |
+| 公開面 LP（web）  | `http://localhost:5173` |
+| SPA アプリ（app） | `http://localhost:5174` |
+
+---
+
+## コマンド一覧
+
+### 開発
 
 ```bash
-pnpm dev:server
-pnpm dev:client
+pnpm dev:all          # Go API + web + app を並列起動
+pnpm dev:server       # Go API のみ（http://localhost:8080）
+pnpm dev:web          # 公開面 LP のみ（http://localhost:5173）
+pnpm dev:app          # SPA アプリのみ（http://localhost:5174）
+pnpm dev:client       # dev:web のエイリアス
 ```
 
-- Go API: `http://localhost:8080`
-- Frontend: `http://localhost:5173`
-
-## よく使うコマンド
+### コード生成
 
 ```bash
-pnpm gen               # TypeSpec -> OpenAPI -> frontend SDK -> Go bindings
-pnpm check:codegen     # 生成物 drift check
-pnpm lint              # Spectral + ESLint + Go lint + custom guardrails + security + codegen drift
-pnpm check             # TypeSpec check + frontend type check + Go build
-pnpm test:run          # frontend app + frontend ui + Go unit tests
-pnpm build             # Go backend と frontend app を build
-pnpm test:e2e          # Playwright E2E
-pnpm db:migrate:create add_auth_tables
-pnpm db:migrate:up
-pnpm db:migrate:down
+pnpm gen              # TypeSpec -> OpenAPI -> frontend SDK -> Go bindings（フル生成）
+pnpm gen:openapi      # TypeSpec -> OpenAPI のみ
+pnpm gen:api-sdk      # TypeSpec -> OpenAPI -> frontend SDK
+pnpm gen:backend      # OpenAPI -> Go bindings のみ
+pnpm check:codegen    # 生成物に未コミットの差分があれば失敗（CI 確認用）
 ```
 
-## 標準の検証順
-
-CI は次の順番で実行されます。
+### 検証
 
 ```bash
-pnpm format:check
-pnpm gen
-pnpm lint
-pnpm check
-pnpm test:run
-pnpm check:codegen
-pnpm build
+pnpm format:check     # Prettier + tsp format + gofmt/goimports のフォーマット確認
+pnpm lint             # Spectral + ESLint + golangci-lint + custom guardrails + security + codegen drift
+pnpm check            # TypeSpec compile + frontend 型チェック + Go build
+pnpm test:run         # web + app + ui + Go ユニットテスト（全て）
+pnpm test:server      # Go ユニットテストのみ
+pnpm test:client      # web + app フロントテストのみ
+pnpm test:e2e         # Playwright E2E テスト
+pnpm build            # Go backend + frontend をビルド
 ```
 
-迷ったらこの順にローカルでも確認すると安全です。
+### フォーマット
+
+```bash
+pnpm format           # 全ファイルをフォーマット（Prettier + tsp format + gofmt/goimports）
+pnpm format:check     # フォーマット確認のみ（変更なし）
+```
+
+### DB マイグレーション
+
+```bash
+pnpm db:migrate:create <name>   # 新規マイグレーションファイルを作成（up + down のペア）
+pnpm db:migrate:up              # 未適用の全マイグレーションを適用
+pnpm db:migrate:down            # 直近 1 つのマイグレーションをロールバック
+```
+
+---
+
+## 標準の検証順（CI と同じ）
+
+CI は以下の順番で実行します。ローカルで問題が疑われる場合はこの順番で確認してください。
+
+```bash
+pnpm format:check     # 1. フォーマット確認
+pnpm gen              # 2. 生成物を最新化
+pnpm lint             # 3. 全 lint（Spectral / ESLint / Go lint / security / codegen drift）
+pnpm check            # 4. 型チェック + Go build
+pnpm test:run         # 5. 全ユニットテスト
+pnpm check:codegen    # 6. 生成物 drift 確認（pnpm gen 後の差分ゼロ確認）
+pnpm build            # 7. 本番ビルド
+```
+
+---
 
 ## API 契約と生成物
 
-- Source of truth: `packages/typespec/main.tsp`
-- Generated OpenAPI: `packages/typespec/openapi/openapi.json`
-- Generated frontend SDK: `packages/frontend/api/src/generated/client.ts`
-- Generated Go bindings: `packages/backend/internal/generated/openapi/openapi.gen.go`
+### ファイル対応
 
-契約を変更したら、生成物は手編集せず `pnpm gen` を実行してください。`pnpm check:codegen` は生成物の差分が残っていると fail します。
+| 役割              | パス                                                         |
+| ----------------- | ------------------------------------------------------------ |
+| 契約（唯一の正）  | `packages/typespec/main.tsp`                                 |
+| 生成 OpenAPI      | `packages/typespec/openapi/openapi.json`                     |
+| 生成 frontend SDK | `packages/frontend/api/src/generated/client.ts`              |
+| 生成 Go bindings  | `packages/backend/internal/generated/openapi/openapi.gen.go` |
 
-OpenAPI には Spectral lint を掛けています。
+**生成物は手編集禁止です。** 契約を変更したら `pnpm gen` を実行し、生成物をまとめてコミットしてください。`pnpm check:codegen` は生成物に差分が残っていると失敗します。
 
-- path policy: `/api/v1/*` だけを許可
-- app endpoint（`/api/v1/auth/*` 除く）: `BearerAuth` 宣言を必須化
-- `BearerAuth`: `type=http` / `scheme=bearer` を必須化
+### API 変更の手順
+
+1. `packages/typespec/main.tsp`（または `src/` 配下の `.tsp`）を編集
+2. `pnpm gen` を実行して生成物を更新
+3. `pnpm lint` と `pnpm check` を通す
+4. 生成物とソースをまとめてコミット
+
+### Spectral lint ルール
+
+OpenAPI に対して以下の Spectral ルールが適用されます（`pnpm lint` / CI に含まれます）。
+
+| ルール        | 内容                                                                           |
+| ------------- | ------------------------------------------------------------------------------ |
+| path-policy   | OpenAPI path は `/api/v1/*` のみ許可                                           |
+| app-security  | `/api/v1/auth/*` と `/api/v1/status` 以外の operation は `BearerAuth` 宣言必須 |
+| bearer-scheme | `BearerAuth` は `type=http` + `scheme=bearer` に限定                           |
+
+---
 
 ## 現在の API surface
 
-OpenAPI 契約（`packages/typespec/openapi/openapi.json`）に基づく正確な一覧です。
+### public（Bearer 不要）
 
-**public（bearer 不要）**
+| メソッド | パス                                  | 説明                           |
+| -------- | ------------------------------------- | ------------------------------ |
+| `GET`    | `/api/v1/status`                      | ヘルスチェック                 |
+| `POST`   | `/api/v1/auth/passkey/start`          | パスキー認証開始               |
+| `POST`   | `/api/v1/auth/passkey/finish`         | パスキー認証完了               |
+| `POST`   | `/api/v1/auth/passkey/register/start` | パスキー登録開始               |
+| `POST`   | `/api/v1/auth/passkey/register`       | パスキー登録完了               |
+| `POST`   | `/api/v1/auth/recovery`               | アカウントリカバリー開始       |
+| `POST`   | `/api/v1/auth/recovery/consume`       | リカバリートークン消費         |
+| `POST`   | `/api/v1/auth/passkey/add/start`      | パスキー追加開始（OTP フロー） |
+| `POST`   | `/api/v1/auth/passkey/add/finish`     | パスキー追加完了（OTP フロー） |
 
-- `GET /api/v1/status`
-- `POST /api/v1/auth/passkey/start`
-- `POST /api/v1/auth/passkey/finish`
-- `POST /api/v1/auth/passkey/register/start`
-- `POST /api/v1/auth/passkey/register`
-- `POST /api/v1/auth/recovery`
-- `POST /api/v1/auth/recovery/consume`
-- `POST /api/v1/auth/passkey/add/start`（OTP フロー）
-- `POST /api/v1/auth/passkey/add/finish`（OTP フロー）
+### Bearer 必須
 
-**bearer 必須**
+| メソッド | パス                      | 説明                               |
+| -------- | ------------------------- | ---------------------------------- |
+| `POST`   | `/api/v1/auth/logout`     | ログアウト                         |
+| `GET`    | `/api/v1/passkeys`        | パスキー一覧取得                   |
+| `POST`   | `/api/v1/passkeys/start`  | パスキー追加開始（認証済みフロー） |
+| `POST`   | `/api/v1/passkeys/finish` | パスキー追加完了（認証済みフロー） |
+| `POST`   | `/api/v1/passkeys/otp`    | OTP 発行                           |
+| `DELETE` | `/api/v1/passkeys/{id}`   | パスキー削除                       |
 
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/passkeys`
-- `POST /api/v1/passkeys/start`
-- `POST /api/v1/passkeys/finish`
-- `POST /api/v1/passkeys/otp`
-- `DELETE /api/v1/passkeys/{id}`
+### OpenAPI 契約外（router.go 直書き）
 
-**OpenAPI 契約外（router.go 直書き）**
+| メソッド | パス      | 説明                           |
+| -------- | --------- | ------------------------------ |
+| `GET`    | `/health` | インフラレベルのヘルスチェック |
 
-- `GET /health`
+---
 
-## Auth surface
+## Auth surface と認証仕様
 
-- `/login` は passkey-only の認証面です
-- `/login/recovery`, `/login/recovery/sent`, `/login/recovery/consume`, `/login/recovery/register` は既存アカウント向けの recovery-only 導線です
-- `/logout` は utility route ですが、logout 実行は canonical な `POST /api/v1/auth/logout` を使います
-- auth routes (`/login*`, `/logout`) と auth endpoints は no-store 前提で扱います
+### フロントエンドルート
 
-bearer session contract:
+| パス                       | 説明                                            |
+| -------------------------- | ----------------------------------------------- |
+| `/login`                   | パスキー専用の認証面                            |
+| `/login/recovery`          | 既存アカウント向けリカバリー導線                |
+| `/login/recovery/sent`     | リカバリーメール送信完了                        |
+| `/login/recovery/consume`  | リカバリートークン消費                          |
+| `/login/recovery/register` | リカバリー後のパスキー再登録                    |
+| `/logout`                  | ログアウト（実行は `POST /api/v1/auth/logout`） |
 
-- login / recovery register 成功後、client は `Authorization: Bearer <session token>` で `/api/v1/passkeys/*` 等を利用します
-- bearer token は frontend の in-memory state にのみ保持し、永続 storage に復元しません
-- missing session は通常の `/login` 導線へ戻し、expired / revoked session は `/session-expired` へ分岐します
+auth routes (`/login*`, `/logout`) と auth endpoints は `Cache-Control: no-store` 前提で扱います。
 
-auth-owned identifier policy:
+### Bearer セッション契約
 
-- `accountId`, `sessionId`, `passkeyCredentialId`, `recoveryTokenId`, `recoverySessionId`, `requestId` などの system-owned ID は canonical ULID string を使います
-- 例外として、opaque bearer token、recovery link token、rate-limit bucket key、WebAuthn RP ID は ULID 対象外です
+- ログイン / リカバリー登録成功後、クライアントは `Authorization: Bearer <session token>` を `/api/v1/passkeys/*` 等に付与します
+- bearer token はフロントエンドの **in-memory state にのみ保持**し、`localStorage` / `sessionStorage` 等の永続ストレージには書き込みません
+- セッション不在 → 通常の `/login` 導線へ戻す
+- セッション期限切れ / 失効 → `/session-expired` へ分岐
 
-auth runtime dependencies:
+### システム所有 ID ポリシー
 
-- 短命 auth state は Valkey を第一実装として扱います
-- recovery mail delivery は SMTP 設定を利用します
+以下の ID は canonical ULID string を使用します。
 
-## 環境変数
+`accountId`, `sessionId`, `passkeyCredentialId`, `recoveryTokenId`, `recoverySessionId`, `requestId`
 
-主に使うもの:
+例外（ULID 対象外）: opaque bearer token, recovery link token, rate-limit bucket key, WebAuthn RP ID
 
-- `APP_ENV` - 既定値は `development`
-- `APP_BEARER_TOKEN` - app API 用 token。`APP_ENV=development` かつ未設定のときだけ既定値 `dev-app-auth`
-- `DATABASE_URL` - PostgreSQL 接続先。backend 起動と migration 実行に必須
-- `ALLOWED_ORIGINS` - 既定値は `http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174`
-- `PORT` - backend listen port。既定値は `8080`
-- `VALKEY_URL` - Valkey 接続先。backend 起動に必須
-- `VALKEY_KEY_PREFIX` - shared Valkey key prefix。既定値は `www-template`
-- `OPENSEARCH_URL` - OpenSearch 接続先。backend 起動に必須
-- `R2_ENDPOINT` - R2/S3 互換 object storage endpoint。backend 起動に必須
-- `R2_REGION` - object storage region。backend 起動に必須
-- `R2_BUCKET` - object storage bucket 名。backend 起動に必須
-- `R2_ACCESS_KEY_ID` - object storage access key。backend 起動に必須
-- `R2_SECRET_ACCESS_KEY` - object storage secret key。backend 起動に必須
-- `R2_USE_PATH_STYLE` - MinIO 等の path-style endpoint を使う場合に `true`
-- `WEBAUTHN_RP_ID` - passkey/WebAuthn の RP ID。既定値は `localhost`
-- `ACCOUNT_RECOVERY_URL_BASE` - account recovery link の base URL。既定値は `http://localhost:5174/login/recovery/consume`
-- `SMTP_HOST` - shared SMTP host。backend 起動に必須
-- `SMTP_PORT` - shared SMTP port。既定値は `587`
-- `SMTP_USERNAME` - shared SMTP username
-- `SMTP_PASSWORD` - shared SMTP password
-- `MAIL_FROM_ADDRESS` - mail の From address。backend 起動に必須
+### Auth のレート制限・TTL デフォルト値
 
-重要:
+| 設定                                   | 値                                                       |
+| -------------------------------------- | -------------------------------------------------------- |
+| challenge TTL                          | 5 分                                                     |
+| recovery token TTL                     | 30 分                                                    |
+| recovery session TTL                   | 15 分                                                    |
+| session idle TTL                       | 12 時間                                                  |
+| session absolute TTL                   | 14 日                                                    |
+| passkey start throttle                 | 5 req / 5 分                                             |
+| recovery throttle                      | 3 req / 時（メールアドレスごと）, 10 req / 時（IP ごと） |
+| finish / consume / register 失敗ロック | 10 失敗 / 15 分 → 15 分ロック                            |
 
-- `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定のまま起動できません
-- backend は PostgreSQL / Valkey / OpenSearch / object storage の設定が揃っていないと起動しません
-- backend 起動時に PostgreSQL / Valkey / OpenSearch / object storage の疎通確認を行い、失敗したら起動しません
+---
 
-auth config defaults:
+## 環境変数リファレンス
 
-- challenge TTL: 5 minutes
-- recovery token TTL: 30 minutes
-- recovery session TTL: 15 minutes
-- session idle TTL: 12 hours
-- session absolute TTL: 14 days
-- passkey start throttle: 5 requests / 5 minutes
-- recovery throttle: 3 requests / hour per email, 10 requests / hour per IP
-- finish / consume / register failure lock: 10 failures / 15 minutes -> 15 minute lock
-
-## PostgreSQL を使う場合
+`.env.example` をコピーして `.env` として使用してください。
 
 ```bash
-export DATABASE_URL='postgres://user:pass@localhost:5432/app?sslmode=disable'
-export VALKEY_URL='redis://localhost:6379/0'
-export OPENSEARCH_URL='http://localhost:9200'
-export R2_ENDPOINT='http://localhost:9000'
-export R2_REGION='us-east-1'
-export R2_BUCKET='template'
-export R2_ACCESS_KEY_ID='minioadmin'
-export R2_SECRET_ACCESS_KEY='minioadmin'
-export R2_USE_PATH_STYLE='true'
-pnpm db:migrate:up
-pnpm dev:server
+cp .env.example .env
 ```
 
-GORM は `packages/backend/internal/persistence/**` に限定され、`AutoMigrate` は禁止です。schema 変更は `packages/backend/db/migrations/*.sql` で管理します。
+### 必須
 
-## Guardrails と Git hooks
+| 変数                   | 説明                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `DATABASE_URL`         | PostgreSQL 接続先（例: `postgres://user:pass@localhost:5432/app?sslmode=disable`） |
+| `VALKEY_URL`           | Valkey 接続先（例: `redis://localhost:6379/0`）                                    |
+| `OPENSEARCH_URL`       | OpenSearch 接続先（例: `http://localhost:9200`）                                   |
+| `R2_ENDPOINT`          | R2/S3 互換 object storage endpoint                                                 |
+| `R2_REGION`            | object storage region                                                              |
+| `R2_BUCKET`            | object storage bucket 名                                                           |
+| `R2_ACCESS_KEY_ID`     | object storage アクセスキー                                                        |
+| `R2_SECRET_ACCESS_KEY` | object storage シークレットキー                                                    |
+| `SMTP_HOST`            | SMTP サーバーホスト                                                                |
+| `MAIL_FROM_ADDRESS`    | メールの From アドレス                                                             |
 
-- `pnpm lint` は Spectral、ESLint、golangci-lint、custom Go guardrails、`govulncheck`、`gitleaks`、`osv-scanner`、`pnpm check:codegen` を実行します
-- `pre-commit` は `pnpm lint-staged` の後に `pnpm check:codegen` を実行します
-- `commit-msg` は `pnpm commitlint --edit $1` を実行します
+`APP_ENV!=development` の場合は `APP_BEARER_TOKEN` も必須です（未設定では起動しません）。
 
-`lint-staged` の実行内容:
+### オプション / デフォルトあり
 
-- `*.{ts,tsx,js,jsx}` -> `eslint --fix --no-inline-config --max-warnings 0` + `prettier --write`
-- `*.{json,md,yml,yaml}` -> `prettier --write`
-- `*.go` -> `gofmt -w` + `goimports -w`
-- `packages/backend/db/migrations/*.sql` -> migration filename / pair policy を guardrail で検証
+| 変数                        | デフォルト                                     | 説明                                             |
+| --------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| `APP_ENV`                   | `development`                                  | 実行環境（`development` 以外では厳格モード）     |
+| `APP_BEARER_TOKEN`          | `dev-app-auth`（dev のみ）                     | app API 用 Bearer token                          |
+| `PORT`                      | `8080`                                         | backend listen port                              |
+| `ALLOWED_ORIGINS`           | `http://localhost:5173,...`                    | CORS 許可オリジン（カンマ区切り）                |
+| `VALKEY_KEY_PREFIX`         | `www-template`                                 | Valkey key の共通プレフィックス                  |
+| `R2_USE_PATH_STYLE`         | `false`                                        | MinIO 等 path-style endpoint を使う場合は `true` |
+| `WEBAUTHN_RP_ID`            | `localhost`                                    | WebAuthn の Relying Party ID                     |
+| `ACCOUNT_RECOVERY_URL_BASE` | `http://localhost:5174/login/recovery/consume` | recovery リンクのベース URL                      |
+| `SMTP_PORT`                 | `587`                                          | SMTP ポート（Mailpit の場合は `1025`）           |
+| `SMTP_USERNAME`             | （空）                                         | SMTP ユーザー名                                  |
+| `SMTP_PASSWORD`             | （空）                                         | SMTP パスワード                                  |
 
-## アーキテクチャメモ
+### 重要な起動条件
 
-- Frontend dependency direction: `frontend/web -> frontend/domain -> frontend/api` and `frontend/app -> frontend/domain -> frontend/api` (also `frontend/app -> frontend/ui`)
-- Backend dependency direction: `backend/cmd/api -> backend/internal/app -> (backend/internal/http|backend/internal/persistence|backend/internal/usecases) -> backend/internal/domain -> backend/internal/types`
-- public routes は `/api/v1/auth/*` および `/api/v1/status`
-- app routes（bearer 必須）は `/api/v1/passkeys/*` および `/api/v1/auth/logout`
-- OpenAPI は TypeSpec から生成し、server route から逆生成しません
+- backend は起動時に PostgreSQL / Valkey / OpenSearch / object storage の疎通確認を行います。接続失敗時は起動しません
+- `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定のまま起動できません
 
-より厳密な機械ルールは `CODING_STANDARDS.md` を見てください。
+---
+
+## データベースマイグレーション
+
+マイグレーションは `packages/backend/db/migrations/` に配置します。`AutoMigrate` は禁止です。
+
+### 命名規則
+
+```
+000001_description_here.up.sql
+000001_description_here.down.sql
+```
+
+- 6 桁の連番 + アンダースコア + lowercase 英数字
+- `up` / `down` のペアが必須
+- ネストディレクトリ禁止
+
+### 操作コマンド
+
+```bash
+# 新規マイグレーションファイルを作成（up + down のペア自動生成）
+pnpm db:migrate:create add_auth_tables
+
+# 未適用のマイグレーションを全て適用
+pnpm db:migrate:up
+
+# 直近 1 つのマイグレーションをロールバック
+pnpm db:migrate:down
+```
+
+GORM の import は `packages/backend/internal/adapters/persistence/**` のみに許可されています。
+
+---
+
+## CI/CD
+
+GitHub Actions の `ci.yml` が以下の順番で実行されます（`main` / `develop` への push と PR が対象）。
+
+```
+Checkout
+└── Setup pnpm 11.1.1
+└── Setup Node 24
+└── Setup Go 1.26.2
+└── pnpm install --frozen-lockfile
+└── pnpm format:check          # フォーマット確認
+└── pnpm gen                   # 生成物の最新化
+└── pnpm lint                  # 全 lint
+└── pnpm check                 # 型チェック + Go build
+└── pnpm test:run              # ユニットテスト
+└── pnpm check:codegen         # codegen drift 確認
+└── pnpm build                 # ビルド
+```
+
+タイムアウト: 15 分。`pnpm install` は `--frozen-lockfile` で実行するため、`pnpm-lock.yaml` を常に最新にしてコミットしてください。
+
+---
+
+## Git hooks とコミット規約
+
+### pre-commit（`pnpm lint-staged`）
+
+staged ファイルに対して以下を自動適用します。
+
+| 対象パターン                           | 処理内容                                                                |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| `*.{ts,tsx,js,jsx}`                    | `eslint --fix --no-inline-config --max-warnings 0` → `prettier --write` |
+| `*.{json,md,yml,yaml}`                 | `prettier --write`                                                      |
+| `*.go`                                 | `gofmt -w` + `goimports -local www-template -w`                         |
+| `packages/backend/db/migrations/*.sql` | migration ファイル名 / ペアポリシーの検証                               |
+
+codegen drift check は pre-commit には含まれず、`pnpm lint` と CI で実行されます。
+
+### commit-msg
+
+Conventional Commits 形式を強制します（`commitlint`）。
+
+```
+<type>: <subject>
+```
+
+使用可能な type: `feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore` | `revert`
+
+**NG 例**: `update stuff`  
+**OK 例**: `fix: prevent write application services from bypassing domain validation`
+
+---
+
+## Guardrails と静的解析
+
+`pnpm lint` は以下の検証をすべて実行します。
+
+### フロントエンド（ESLint）
+
+- `eslint-plugin-boundaries`: パッケージ間依存方向の強制
+- `no-restricted-imports`: `app` からの `@www-template/api` 直接 import 禁止など
+- `frontend-svelte5/no-legacy-syntax`: Svelte 5 記法の強制（`on:click` 等の旧記法禁止）
+- `sveltekit-app-policy`: サーバー面 route・サーバー import の禁止
+- `hooks-domain/require-domain-structure`: `use*` + `{ data, actions }` 形式の強制
+- `export-tsdoc/require-export-tsdoc`: export に TSDoc コメント必須
+- `eslint-comments/no-use`: `eslint-disable` コメント全面禁止
+- `max-lines` / `max-lines-per-function`: ファイル 500 行・関数 100 行以内
+
+### バックエンド（golangci-lint + カスタム guardrails）
+
+- `depguard`: レイヤー間の外部依存強制（GORM は adapters/persistence のみ等）
+- カスタム静的解析（`tools/analyzers/cmd/guardrails/main.go`）:
+  - レイヤー配置ポリシー・import 方向チェック
+  - `adapters/http` が `domain` 型を直接使用していないか
+  - application の exported API が domain 型を露出していないか
+  - domain entity を `{}` リテラルで直接構築していないか
+  - write application service が domain を経由しているか
+  - `time.Now`, `os.Getenv` 等の副作用源の直接使用禁止
+  - `AutoMigrate` 禁止
+  - migration ファイル名・ペアポリシー
+
+### セキュリティスキャン
+
+- `govulncheck`: Go の既知脆弱性チェック
+- `osv-scanner`: 依存関係の OSV チェック
+- `gitleaks --no-git --config .gitleaks.toml`: シークレットスキャン
+
+---
 
 ## 関連ドキュメント
 
-- `CONTRIBUTING.md` - contributor 向けの最短フロー
-- `CODING_STANDARDS.md` - 実際に fail するルールだけをまとめた一覧
-- `AGENTS.md` - coding agent 向けの実行方針
-
-## OpenSpec
-
-- `openspec/**` は現在の default `pnpm lint` / Git hooks / CI の対象外です
-- 仕様と実装の整合は、今は主に TypeSpec とテストで保っています
+| ドキュメント                  | 内容                                                       |
+| ----------------------------- | ---------------------------------------------------------- |
+| `CONTRIBUTING.md`             | コントリビューター向けの最短フロー                         |
+| `CODING_STANDARDS.md`         | 機械的に fail するルールの完全一覧（guardrail の解説付き） |
+| `AGENTS.md`                   | AI コーディングエージェント向けの実行方針                  |
+| `.devcontainer/README.md`     | Dev Container の詳細（サービス接続先・環境変数）           |
+| `packages/typespec/README.md` | TypeSpec 契約の詳細                                        |

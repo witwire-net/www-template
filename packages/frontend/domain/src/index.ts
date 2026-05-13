@@ -1,8 +1,23 @@
-export * from './hooks/status/useStatus.svelte';
-export * from './hooks/auth/useAuthSession.svelte';
-export * from './hooks/auth/useSessionGuard.svelte';
-export * from './hooks/auth/usePasskeyLogin.svelte';
-export * from './hooks/auth/usePasskeyManagement.svelte';
-export * from './hooks/auth/usePasskeyAddByOtp.svelte';
-export * from './hooks/auth/useRecoveryFlow.svelte';
-export type * from './types';
+export {
+  useAuthSession,
+  usePasskeyLogin,
+  usePasskeyManagement,
+  useRecoveryFlow,
+  useSessionGuard,
+} from './auth';
+export type {
+  AuthSessionActions,
+  AuthSessionData,
+  PasskeyLoginActions,
+  PasskeyLoginData,
+  PasskeyManagementActions,
+  PasskeyManagementData,
+  RecoveryFlowActions,
+  RecoveryFlowData,
+  SessionGuardActions,
+  SessionGuardData,
+  SessionGuardOptions,
+} from './auth';
+export { useStatus } from './status';
+export type { StatusActions, StatusData } from './status';
+export { initObservability, useObservability } from './observability';

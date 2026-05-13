@@ -88,153 +88,6 @@
         ]
       }
     },
-    "/api/v1/auth/passkey/add/finish": {
-      "post": {
-        "operationId": "finishPasskeyAdditionByOtp",
-        "summary": "Finishes adding a passkey on a new device by OTP handoff",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The server could not understand the request due to invalid syntax.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthFailureResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["auth"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PasskeyAddByOtpFinishRequest"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/passkey/add/start": {
-      "post": {
-        "operationId": "startPasskeyAdditionByOtp",
-        "summary": "Starts adding a passkey on a new device by OTP handoff",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasskeyAddStartResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The server could not understand the request due to invalid syntax.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthFailureResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["auth"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PasskeyAddByOtpStartRequest"
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/auth/passkey/finish": {
       "post": {
         "operationId": "finishPasskeyAuthentication",
@@ -543,6 +396,208 @@
         }
       }
     },
+    "/api/v1/auth/reauth/finish": {
+      "post": {
+        "operationId": "finishReauthentication",
+        "summary": "Finishes a WebAuthn reauthentication ceremony and issues a reauthentication session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReauthenticationSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["app-auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReauthenticationFinishRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/reauth/start": {
+      "post": {
+        "operationId": "startReauthentication",
+        "summary": "Starts a WebAuthn reauthentication ceremony for a high-risk operation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyStartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["app-auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReauthenticationStartRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/recovery": {
       "post": {
         "operationId": "requestPasskeyRecovery",
@@ -691,6 +746,102 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RecoveryConsumeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "refreshToken",
+        "summary": "Refreshes an access token using a valid refresh token",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
               }
             }
           }
@@ -870,11 +1021,20 @@
         ]
       }
     },
-    "/api/v1/passkeys/otp": {
+    "/api/v1/passkeys/send-device-link": {
       "post": {
-        "operationId": "issuePasskeyOtp",
-        "summary": "Issues a one-time password for adding a passkey on a new device",
-        "parameters": [],
+        "operationId": "sendDeviceLink",
+        "summary": "Sends a device-link URL to the registered email for adding a passkey on a new device",
+        "parameters": [
+          {
+            "name": "X-Reauth-Session",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "The request has succeeded.",
@@ -890,7 +1050,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PasskeyOtpResponse"
+                  "$ref": "#/components/schemas/DeviceLinkResponse"
                 }
               }
             }
@@ -929,6 +1089,25 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
                 }
               }
             }
@@ -1045,6 +1224,14 @@
             "schema": {
               "$ref": "#/components/schemas/UlidId"
             }
+          },
+          {
+            "name": "X-Reauth-Session",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1056,6 +1243,25 @@
                 "schema": {
                   "type": "string",
                   "enum": ["no-store"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
                 }
               }
             }
@@ -1100,6 +1306,236 @@
           },
           "409": {
             "description": "The request conflicts with the current state of the server.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["app-auth"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "summary": "Lists active sessions for the current account",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["app-auth"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/others": {
+      "delete": {
+        "operationId": "revokeOtherSessions",
+        "summary": "Revokes all other sessions except the current one",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. ",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["app-auth"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{id}": {
+      "delete": {
+        "operationId": "revokeSession",
+        "summary": "Revokes a specific session by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UlidId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. ",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
             "headers": {
               "Cache-Control": {
                 "required": true,
@@ -1203,7 +1639,8 @@
           "accountId",
           "passkeyCredentialId",
           "sessionId",
-          "sessionToken",
+          "accessToken",
+          "refreshToken",
           "expiresAt"
         ],
         "properties": {
@@ -1219,12 +1656,45 @@
           "sessionId": {
             "$ref": "#/components/schemas/UlidId"
           },
-          "sessionToken": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
             "type": "string"
           },
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "BearerAuth": {
+        "type": "object",
+        "required": ["type", "scheme"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["http"],
+            "description": "Http authentication"
+          },
+          "scheme": {
+            "type": "string",
+            "enum": ["bearer"],
+            "description": "bearer auth scheme"
+          }
+        },
+        "description": "JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。"
+      },
+      "DeviceLinkResponse": {
+        "type": "object",
+        "required": ["requestId", "issued"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "issued": {
+            "type": "boolean",
+            "enum": [true]
           }
         }
       },
@@ -1273,27 +1743,6 @@
           }
         }
       },
-      "PasskeyAddByOtpFinishRequest": {
-        "type": "object",
-        "required": ["otp", "credential"],
-        "properties": {
-          "otp": {
-            "type": "string"
-          },
-          "credential": {
-            "$ref": "#/components/schemas/WebAuthnAttestationCredential"
-          }
-        }
-      },
-      "PasskeyAddByOtpStartRequest": {
-        "type": "object",
-        "required": ["otp"],
-        "properties": {
-          "otp": {
-            "type": "string"
-          }
-        }
-      },
       "PasskeyAddFinishRequest": {
         "type": "object",
         "required": ["credential"],
@@ -1305,7 +1754,15 @@
       },
       "PasskeyAddStartResponse": {
         "type": "object",
-        "required": ["requestId", "challenge", "rpId", "rpName", "user", "pubKeyCredParams"],
+        "required": [
+          "requestId",
+          "challenge",
+          "rpId",
+          "rpName",
+          "user",
+          "pubKeyCredParams",
+          "userVerification"
+        ],
         "properties": {
           "requestId": {
             "$ref": "#/components/schemas/UlidId"
@@ -1348,7 +1805,8 @@
             }
           },
           "userVerification": {
-            "type": "string"
+            "type": "string",
+            "enum": ["required"]
           },
           "attestation": {
             "type": "string"
@@ -1396,18 +1854,6 @@
           }
         }
       },
-      "PasskeyOtpResponse": {
-        "type": "object",
-        "required": ["requestId", "otp"],
-        "properties": {
-          "requestId": {
-            "$ref": "#/components/schemas/UlidId"
-          },
-          "otp": {
-            "type": "string"
-          }
-        }
-      },
       "PasskeyRegisterRequest": {
         "oneOf": [
           {
@@ -1440,7 +1886,7 @@
       },
       "PasskeyStartResponse": {
         "type": "object",
-        "required": ["requestId", "challenge", "rpId"],
+        "required": ["requestId", "challenge", "rpId", "userVerification"],
         "properties": {
           "requestId": {
             "$ref": "#/components/schemas/UlidId"
@@ -1465,10 +1911,62 @@
             "description": "Allowed credential descriptors (empty for usernameless flows)."
           },
           "userVerification": {
-            "type": "string"
+            "type": "string",
+            "enum": ["required"]
           }
         },
         "description": "WebAuthn PublicKeyCredentialRequestOptions returned by the server after BeginLogin."
+      },
+      "ReauthenticationFinishRequest": {
+        "type": "object",
+        "required": ["requestId", "kind", "credential"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReauthenticationSessionKind"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/WebAuthnAssertionCredential"
+          }
+        },
+        "description": "Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind."
+      },
+      "ReauthenticationSessionKind": {
+        "type": "string",
+        "enum": ["device-link", "passkey-delete"],
+        "description": "Reauthentication session kind bound to a high-risk operation."
+      },
+      "ReauthenticationSessionResponse": {
+        "type": "object",
+        "required": ["requestId", "reauthSessionId", "kind", "expiresAt"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "reauthSessionId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReauthenticationSessionKind"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Reauthentication session response issued after a fresh WebAuthn reauthentication."
+      },
+      "ReauthenticationStartRequest": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ReauthenticationSessionKind"
+          }
+        },
+        "description": "Reauthentication start request that binds the ceremony to a high-risk operation kind."
       },
       "RecoveryAcceptedResponse": {
         "type": "object",
@@ -1499,7 +1997,8 @@
           "recoveryTokenId",
           "recoverySessionId",
           "recovery_session",
-          "expiresAt"
+          "expiresAt",
+          "kind"
         ],
         "properties": {
           "requestId": {
@@ -1522,6 +2021,9 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TokenKind"
           }
         }
       },
@@ -1558,6 +2060,79 @@
           }
         }
       },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "description": "リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。"
+      },
+      "RefreshTokenResponse": {
+        "type": "object",
+        "required": ["accessToken", "refreshToken"],
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "description": "リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。"
+      },
+      "SessionItem": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "deviceName",
+          "loginAt",
+          "lastActiveAt",
+          "ipHash",
+          "isCurrentSession"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "loginAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ipHash": {
+            "type": "string"
+          },
+          "isCurrentSession": {
+            "type": "boolean"
+          }
+        },
+        "description": "ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。"
+      },
+      "SessionListResponse": {
+        "type": "object",
+        "required": ["requestId", "sessions"],
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/UlidId"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionItem"
+            }
+          }
+        },
+        "description": "ログイン中のセッション一覧レスポンス。認証済みアカウントが所有する全セッションを含む。"
+      },
       "StatusResponse": {
         "type": "object",
         "required": ["message", "timestamp"],
@@ -1570,6 +2145,11 @@
             "format": "date-time"
           }
         }
+      },
+      "TokenKind": {
+        "type": "string",
+        "enum": ["recovery", "device-link"],
+        "description": "パスキー追加トークンの発行種別。recovery は紛失時復旧、device-link は認証済み端末からの新端末追加。"
       },
       "UlidId": {
         "type": "string",
@@ -1730,7 +2310,8 @@
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",
-        "scheme": "Bearer"
+        "scheme": "bearer",
+        "description": "JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。"
       }
     }
   },

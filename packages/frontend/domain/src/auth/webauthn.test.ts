@@ -208,7 +208,7 @@ describe('createWebAuthnAttestation', () => {
       { type: 'public-key', alg: -257 },
     ],
     timeout: 60000,
-    userVerification: 'preferred',
+    userVerification: 'required',
     attestation: 'none',
   };
 

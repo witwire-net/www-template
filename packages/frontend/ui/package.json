@@ -7,7 +7,6 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "svelte": "./src/index.ts",
       "default": "./src/index.ts"
     },
     "./components": {
@@ -16,9 +15,14 @@
       "default": "./src/components/index.ts"
     },
     "./components/*": {
-      "types": "./src/components/*",
-      "svelte": "./src/components/*",
-      "default": "./src/components/*"
+      "types": "./src/components/*/index.ts",
+      "svelte": "./src/components/*/index.ts",
+      "default": "./src/components/*/index.ts"
+    },
+    "./hooks/*": {
+      "types": "./src/hooks/*.ts",
+      "svelte": "./src/hooks/*.ts",
+      "default": "./src/hooks/*.ts"
     },
     "./assets": {
       "types": "./src/assets/index.ts",
@@ -39,10 +43,16 @@
       "types": "./src/styles/index.ts",
       "svelte": "./src/styles/index.ts",
       "default": "./src/styles/index.ts"
+    },
+    "./styles.css": {
+      "import": "./dist/styles.css",
+      "default": "./dist/styles.css"
     }
   },
   "svelte": "./src/index.ts",
   "scripts": {
+    "build:css": "tailwindcss -i ./src/styles/tailwind.css -o ./dist/styles.css --minify",
+    "build:css:watch": "tailwindcss -i ./src/styles/tailwind.css -o ./dist/styles.css --watch",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
@@ -67,6 +77,7 @@
     "@lucide/svelte": "^0.577.0",
     "@storybook/svelte-vite": "^10.2.17",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tailwindcss/cli": "^4.2.4",
     "@tailwindcss/vite": "latest",
     "@tanstack/table-core": "^8.21.3",
     "@testing-library/jest-dom": "^6.9.1",
@@ -80,7 +91,6 @@
     "layerchart": "2.0.0-next.48",
     "mode-watcher": "^1.1.0",
     "paneforge": "^1.0.2",
-    "sass-embedded": "^1.97.3",
     "shadcn-svelte": "^1.2.7",
     "storybook": "^10.2.17",
     "svelte": "^5.53.9",

@@ -33,8 +33,8 @@ Read these files before applying `coding-guardian` in this repository.
 
 - `packages/backend/.golangci.yml`: enabled Go linters and depguard policy
 - `packages/backend/tools/analyzers/cmd/guardrails/main.go`: custom backend guardrails
-- `packages/backend/internal/http/router_test.go`: runtime route/auth checks
-- `packages/backend/internal/http/openapi_contract_test.go`: OpenAPI bearer declaration check
+- `packages/backend/internal/adapters/http/router_test.go`: runtime route/auth checks
+- `packages/backend/internal/adapters/http/openapi_contract_test.go`: OpenAPI bearer declaration check
 - `packages/backend/internal/app/runtime_test.go`: fail-close token requirement outside development
 
 ## Helper scripts

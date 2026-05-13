@@ -2,7 +2,7 @@
 description: Build review subagent
 mode: subagent
 hidden: true
-model: github-copilot/gpt-5.4
+model: openai/gpt-5.5
 reasoningEffort: 'high'
 temperature: 0.1
 permission:
@@ -33,6 +33,8 @@ You are the `unit/build/reviewer` subagent. Based on the change summary and arti
   - `AGENTS.md`
   - `docs/**`
   - `.opencode/**`
+  - `package.json`
+  - `README.md`
 - Then load `orchestration-playbook` via `skill` and use its templates for acceptance
 
 ## Required inputs to verify first

@@ -7,6 +7,15 @@ using TypeSpec.OpenAPI;
 
 namespace WWWTemplate;
 
+@doc("JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。")
+model BearerAuth {
+  @doc("Http authentication")
+  type: AuthType.http;
+
+  @doc("bearer auth scheme")
+  scheme: "bearer";
+}
+
 @doc("Canonical ULID string used for auth-owned resource and correlation identifiers.")
 scalar UlidId extends string;
 
@@ -45,7 +54,7 @@ model PasskeyStartResponse {
   @doc("Allowed credential descriptors (empty for usernameless flows).")
   allowCredentials?: WebAuthnCredentialDescriptor[];
 
-  userVerification?: string;
+  userVerification: "required";
 }
 
 @doc("Credential descriptor used in allowCredentials and excludeCredentials lists.")
@@ -162,25 +171,11 @@ model PasskeyAddStartResponse {
   timeout?: int64;
 
   excludeCredentials?: WebAuthnCredentialDescriptor[];
-  userVerification?: string;
+  userVerification: "required";
   attestation?: string;
 }
 
 model PasskeyAddFinishRequest {
-  credential: WebAuthnAttestationCredential;
-}
-
-model PasskeyOtpResponse {
-  requestId: UlidId;
-  otp: string;
-}
-
-model PasskeyAddByOtpStartRequest {
-  otp: string;
-}
-
-model PasskeyAddByOtpFinishRequest {
-  otp: string;
   credential: WebAuthnAttestationCredential;
 }
 
@@ -189,7 +184,8 @@ model AuthSessionResponse {
   accountId: UlidId;
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
-  sessionToken: string;
+  accessToken: string;
+  refreshToken: string;
   expiresAt: utcDateTime;
 }
 
@@ -207,6 +203,12 @@ model RecoveryConsumeRequest {
   token: string;
 }
 
+@doc("パスキー追加トークンの発行種別。recovery は紛失時復旧、device-link は認証済み端末からの新端末追加。")
+enum TokenKind {
+  recovery: "recovery",
+  deviceLink: "device-link",
+}
+
 model RecoveryConsumeResponse {
   requestId: UlidId;
   recoveryTokenId: UlidId;
@@ -216,6 +218,12 @@ model RecoveryConsumeResponse {
   recovery_session: UlidId;
 
   expiresAt: utcDateTime;
+  kind: TokenKind;
+}
+
+model DeviceLinkResponse {
+  requestId: UlidId;
+  issued: true;
 }
 
 @doc("Start passkey registration ceremony using a recovery session.")
@@ -252,7 +260,60 @@ union PasskeyRegisterRequest {
   invitation: InvitationPasskeyFinishRequest,
 }
 
+@doc("Reauthentication session kind bound to a high-risk operation.")
+enum ReauthenticationSessionKind {
+  deviceLink: "device-link",
+  passkeyDelete: "passkey-delete",
+}
+
+@doc("Reauthentication start request that binds the ceremony to a high-risk operation kind.")
+model ReauthenticationStartRequest {
+  kind: ReauthenticationSessionKind;
+}
+
+@doc("Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind.")
+model ReauthenticationFinishRequest {
+  requestId: UlidId;
+  kind: ReauthenticationSessionKind;
+  credential: WebAuthnAssertionCredential;
+}
+
+@doc("Reauthentication session response issued after a fresh WebAuthn reauthentication.")
+model ReauthenticationSessionResponse {
+  requestId: UlidId;
+  reauthSessionId: UlidId;
+  kind: ReauthenticationSessionKind;
+  expiresAt: utcDateTime;
+}
+
 model LogoutResponse {
   requestId: UlidId;
   revoked: true;
+}
+
+@doc("リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。")
+model RefreshTokenRequest {
+  refreshToken: string;
+}
+
+@doc("リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。")
+model RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+@doc("ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。")
+model SessionItem {
+  sessionId: UlidId;
+  deviceName: string;
+  loginAt: utcDateTime;
+  lastActiveAt: utcDateTime;
+  ipHash: string;
+  isCurrentSession: boolean;
+}
+
+@doc("ログイン中のセッション一覧レスポンス。認証済みアカウントが所有する全セッションを含む。")
+model SessionListResponse {
+  requestId: UlidId;
+  sessions: SessionItem[];
 }

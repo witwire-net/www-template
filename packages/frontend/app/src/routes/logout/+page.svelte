@@ -1,8 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import { useAuthSession } from '@www-template/domain/hooks/auth/useAuthSession';
-  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
+  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
+  import { useAuthSession } from '@www-template/domain/auth/session';
+  import { Button, Card, CardContent } from '@www-template/ui/components';
 
   const { actions } = useAuthSession();
 
@@ -16,136 +17,43 @@
 
   async function performLogout() {
     try {
-      await actions.logoutCurrentSession();
-      await goto('/login');
+      const intent = await actions.logoutCurrentSession();
+      // 残りセッションがある場合は intent が null となり認証状態を維持する
+      await goto(intent ?? '/');
     } catch {
       logoutError = 'ログアウトに失敗しました。';
       isLoggingOut = false;
       /* fail-safe: state 消去して login へ */
       actions.clearInMemorySession();
+      await goto('/login');
     }
   }
 </script>
 
-<div class="auth-shell">
-  <header class="auth-header">
-    <a href="/" class="site-link" aria-label="www-template トップページ">
-      <span class="logo-text">www-template</span>
-    </a>
-  </header>
+<AuthLayout>
+  <Card class="w-full">
+    <CardContent>
+      <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label="ログアウト">
+        {#if isLoggingOut}
+          <h1 class="m-0 text-2xl font-bold text-center">ログアウト中…</h1>
+          <p class="m-0 text-sm text-muted-foreground text-center">セッションを終了しています。</p>
+        {:else if logoutError}
+          <h1 class="m-0 text-2xl font-bold text-center">ログアウト</h1>
+          <p class="text-destructive text-sm m-0" role="alert">{logoutError}</p>
+          <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
+            ログインへ
+          </Button>
+        {:else}
+          <h1 class="m-0 text-2xl font-bold text-center">ログアウトしました</h1>
+          <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
+            ログインへ
+          </Button>
+        {/if}
+      </div>
+    </CardContent>
+  </Card>
 
-  <Separator />
-
-  <main class="auth-main">
-    <Card class="w-full">
-      <CardContent>
-        <div class="auth-card-content" role="region" aria-label="ログアウト">
-          {#if isLoggingOut}
-            <h1 class="auth-title">ログアウト中…</h1>
-            <p class="auth-desc">セッションを終了しています。</p>
-          {:else if logoutError}
-            <h1 class="auth-title">ログアウト</h1>
-            <p class="auth-error" role="alert">{logoutError}</p>
-            <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
-              ログインへ
-            </Button>
-          {:else}
-            <h1 class="auth-title">ログアウトしました</h1>
-            <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
-              ログインへ
-            </Button>
-          {/if}
-        </div>
-      </CardContent>
-    </Card>
-  </main>
-
-  <Separator />
-
-  <footer class="auth-footer">
-    <a href="/" class="link-muted">公開サイトに戻る</a>
-  </footer>
-</div>
-
-<style>
-  .auth-shell {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    padding: var(--spacing-xl) var(--spacing-md);
-    font-family: var(--font-family-sans);
-    background: var(--color-background);
-    color: var(--color-text);
-  }
-
-  .auth-header {
-    display: flex;
-    justify-content: center;
-    padding: var(--spacing-md) 0;
-  }
-
-  .site-link {
-    text-decoration: none;
-    color: inherit;
-  }
-
-  .logo-text {
-    font-weight: bold;
-    letter-spacing: 0.08em;
-  }
-
-  .auth-main {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    max-width: 400px;
-    padding: var(--spacing-xl) 0;
-  }
-
-  .auth-card-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-md);
-    text-align: center;
-  }
-
-  .auth-title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: bold;
-    text-align: center;
-  }
-
-  .auth-desc {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-    text-align: center;
-  }
-
-  .auth-error {
-    color: var(--destructive);
-    font-size: 0.875rem;
-    margin: 0;
-  }
-
-  .auth-footer {
-    display: flex;
-    justify-content: center;
-    padding: var(--spacing-md) 0;
-  }
-
-  .link-muted {
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-    text-decoration: none;
-  }
-
-  .link-muted:hover {
-    text-decoration: underline;
-  }
-</style>
+  {#snippet footer()}
+    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトに戻る</a>
+  {/snippet}
+</AuthLayout>

@@ -43,7 +43,8 @@ const handlers = [
         accountId: TEST_ULID.accountId,
         passkeyCredentialId: TEST_ULID.passkeyCredentialId,
         sessionId: TEST_ULID.sessionId,
-        sessionToken: 'opaque-bearer-token',
+        accessToken: 'jwt-access-token',
+        refreshToken: 'jwt-refresh-token',
         expiresAt: '2026-04-04T00:00:00.000Z',
       },
       {
@@ -76,7 +77,7 @@ const handlers = [
           requestId: TEST_ULID.requestId,
           recoveryTokenId: TEST_ULID.recoveryTokenId,
           recoverySessionId: TEST_ULID.recoverySessionId,
-          recovery_session: 'recovery-session-opaque',
+          recovery_session: 'recovery-session-value',
           expiresAt: '2026-03-21T00:15:00.000Z',
         },
         {
@@ -106,7 +107,8 @@ const handlers = [
         accountId: TEST_ULID.accountId,
         passkeyCredentialId: TEST_ULID.passkeyCredentialId,
         sessionId: TEST_ULID.sessionId,
-        sessionToken: 'opaque-bearer-token-recovery',
+        accessToken: 'jwt-access-token-recovery',
+        refreshToken: 'jwt-refresh-token-recovery',
         expiresAt: '2026-04-04T00:00:00.000Z',
       },
       {
@@ -197,7 +199,18 @@ const handlers = [
   }),
 
   // DELETE /api/v1/passkeys/:id
-  http.delete('/api/v1/passkeys/:id', ({ params }) => {
+  http.delete('/api/v1/passkeys/:id', ({ params, request }) => {
+    const reauthSession = request.headers.get('X-Reauth-Session');
+    if (reauthSession === null || reauthSession === '') {
+      return HttpResponse.json(
+        {
+          requestId: TEST_ULID.requestId,
+          error: 'reauth_session_required',
+        },
+        { status: 400, headers: NO_STORE_HEADERS }
+      );
+    }
+
     const { id } = params as { id: string };
     if (id === TEST_ULID.passkeyCredentialId) {
       return new HttpResponse(null, {
@@ -217,54 +230,29 @@ const handlers = [
     );
   }),
 
-  // POST /api/v1/passkeys/otp
-  http.post('/api/v1/passkeys/otp', () => {
+  // POST /api/v1/passkeys/send-device-link
+  http.post('/api/v1/passkeys/send-device-link', ({ request }) => {
+    const reauthSession = request.headers.get('X-Reauth-Session');
+    if (reauthSession === null || reauthSession === '') {
+      return HttpResponse.json(
+        {
+          requestId: TEST_ULID.requestId,
+          error: 'reauth_session_required',
+        },
+        { status: 400, headers: NO_STORE_HEADERS }
+      );
+    }
+
     return HttpResponse.json(
       {
         requestId: TEST_ULID.requestId,
-        otp: '123456',
+        issued: true,
       },
       {
         status: 200,
         headers: NO_STORE_HEADERS,
       }
     );
-  }),
-
-  // POST /api/v1/auth/passkey/add/start
-  http.post('/api/v1/auth/passkey/add/start', async ({ request }) => {
-    const body = (await request.json()) as { otp: string };
-    if (body.otp === 'valid-otp') {
-      return HttpResponse.json(
-        {
-          requestId: TEST_ULID.requestId,
-          challenge: 'otp-add-challenge-base64',
-          rpId: 'localhost',
-        },
-        {
-          status: 200,
-          headers: NO_STORE_HEADERS,
-        }
-      );
-    }
-    return HttpResponse.json(
-      {
-        requestId: TEST_ULID.requestId,
-        error: 'invalid_otp',
-      },
-      {
-        status: 400,
-        headers: NO_STORE_HEADERS,
-      }
-    );
-  }),
-
-  // POST /api/v1/auth/passkey/add/finish
-  http.post('/api/v1/auth/passkey/add/finish', () => {
-    return new HttpResponse(null, {
-      status: 200,
-      headers: NO_STORE_HEADERS,
-    });
   }),
 ];
 

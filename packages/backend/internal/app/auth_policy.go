@@ -4,19 +4,19 @@ import (
 	"crypto/rand"
 	"time"
 
-	"www-template/packages/backend/internal/domain"
-	"www-template/packages/backend/internal/types"
+	"www-template/packages/backend/internal/auth/domain"
+	"www-template/packages/backend/internal/platform/id"
 )
 
-func newAuthIDPolicy() types.AuthIDPolicy {
-	return types.AuthIDPolicy{
+func newAuthIDPolicy() id.AuthIDPolicy {
+	return id.AuthIDPolicy{
 		New: func() string {
-			id, err := types.NewULID(time.Now().UTC(), rand.Reader)
+			ulid, err := id.NewULID(time.Now().UTC(), rand.Reader)
 			if err != nil {
 				panic(err)
 			}
 
-			return id
+			return ulid
 		},
 		Validate: domain.ValidateAuthID,
 	}

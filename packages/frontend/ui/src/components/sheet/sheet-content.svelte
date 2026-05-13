@@ -7,9 +7,9 @@
 	import type { Snippet , ComponentProps } from "svelte";
 	import SheetPortal from "./sheet-portal.svelte";
 	import SheetOverlay from "./sheet-overlay.svelte";
-	import { Button } from "@ui/components/button/index.js";
+	import { Button } from "@www-template/ui/components/button";
 	import XIcon from '@lucide/svelte/icons/x';
-	import { cn, type WithoutChildrenOrChild } from "@ui/lib/utils.js";
+	import { cn, type WithoutChildrenOrChild } from "@www-template/ui/lib/utils";
 	
 	let {
 		ref = $bindable(null),
