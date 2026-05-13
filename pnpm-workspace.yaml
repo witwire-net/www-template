@@ -34,3 +34,13 @@ verifyDepsBeforeRun: error
 
 # audit の既定しきい値を high にし、実害の大きい脆弱性を CI で扱いやすくする。
 auditLevel: high
+
+# devcontainer 初期化と開発ツール実行に必要な依存パッケージの install script だけを明示承認する。
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  msw: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true

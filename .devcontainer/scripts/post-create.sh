@@ -3,7 +3,7 @@
 set -euo pipefail
 
 corepack enable
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@11.1.1 --activate
 pnpm install
 
 if pnpm exec playwright --version >/dev/null 2>&1; then
