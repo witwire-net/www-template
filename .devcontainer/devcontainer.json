@@ -40,8 +40,6 @@
     "vscode": {
       "extensions": [
         "golang.Go",
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
         "bradlc.vscode-tailwindcss",
         "typespec.typespec-vscode",
         "vitest.explorer",
