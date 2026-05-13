@@ -10,7 +10,6 @@ permission:
   task:
     '*': deny
     'planner': allow
-    'magi': allow
     'unit/backend/engineer': allow
     'unit/backend/reviewer': allow
     'unit/frontend/engineer': allow
