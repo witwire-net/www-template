@@ -2,3 +2,35 @@ packages:
   - 'packages/typespec'
   - 'packages/frontend/*'
   - 'packages/web'
+
+# npmjs.org 以外へ意図せず解決されないように、既定 registry を明示する。
+registries:
+  default: https://registry.npmjs.org/
+
+# 公開直後の侵害版を拾わないように、公開から 24 時間未満の依存解決を拒否する。
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+
+# 既存リリースより署名や provenance の信頼度が下がったパッケージを拒否する。
+trustPolicy: no-downgrade
+
+# 推移依存が git URL や tarball URL などの外部ソースを持ち込むことを拒否する。
+blockExoticSubdeps: true
+
+# 未承認の依存パッケージ install script を失敗扱いにし、任意コード実行を審査制にする。
+strictDepBuilds: true
+
+# pnpm store 内の改ざんや同一内容の別名混入を検出する。
+verifyStoreIntegrity: true
+strictStorePkgContentCheck: true
+
+# packageManager と Node.js engine の不一致を失敗させ、意図しない実行環境を避ける。
+pmOnFail: error
+engineStrict: true
+
+# node_modules が lockfile とずれた状態で scripts/exec が自動 install することを防ぐ。
+verifyDepsBeforeRun: error
+
+# audit の既定しきい値を high にし、実害の大きい脆弱性を CI で扱いやすくする。
+auditLevel: high
