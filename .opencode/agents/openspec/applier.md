@@ -25,6 +25,7 @@ permission:
     '*': deny
     'coding-guardian': allow
     'orchestration-playbook': allow
+    'agent-browser': allow
     'openspec-*': allow
   bash:
     '*': deny
@@ -52,6 +53,7 @@ permission:
   - `.opencode/**`
 - Load `orchestration-playbook` via `skill` and use its templates for delegation and reporting.
 - Load `coding-guardian` via `skill` and follow repository enforcement rules.
+- Load `agent-browser` via `skill` and use it to require browser-based verification evidence from delegated frontend work when runtime UI behavior is in scope.
 - Load `openspec-apply-change` via `skill` and align the main apply flow to that skill.
 
 # OpenSpec skills

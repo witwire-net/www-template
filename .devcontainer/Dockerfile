@@ -2,7 +2,7 @@ ARG NODE_VERSION=24.12.0
 FROM node:${NODE_VERSION}-bookworm
 
 ARG GO_VERSION=1.26.2
-ARG PNPM_VERSION=11.1.1
+ARG PNPM_VERSION=11.1.2
 ARG TYPESPEC_VERSION=1.8.0
 ARG GORM_VERSION=1.31.0
 ARG GOLANG_MIGRATE_VERSION=4.18.3
@@ -11,6 +11,7 @@ ARG GOLANGCI_LINT_VERSION=1.64.8
 ARG WRANGLER_VERSION=4.57.0
 ARG OPENSPEC_VERSION=1.2.0
 ARG OPENCODE_VERSION=1.14.48
+ARG AGENT_BROWSER_VERSION=0.27.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NPM_CONFIG_PREFIX=/home/node/.npm-global
@@ -127,7 +128,8 @@ RUN corepack prepare pnpm@${PNPM_VERSION} --activate
 
 ENV GOBIN=/home/node/.local/bin
 
-RUN npm install -g "wrangler@${WRANGLER_VERSION}" "@typespec/compiler@${TYPESPEC_VERSION}" "@fission-ai/openspec@${OPENSPEC_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
+RUN npm install -g "wrangler@${WRANGLER_VERSION}" "@typespec/compiler@${TYPESPEC_VERSION}" "@fission-ai/openspec@${OPENSPEC_VERSION}" "opencode-ai@${OPENCODE_VERSION}" "agent-browser@${AGENT_BROWSER_VERSION}" \
+    && agent-browser install
 
 RUN go install golang.org/x/tools/gopls@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \

@@ -65,6 +65,12 @@ ms-playwright/.links
 playwright-report/
 test-results/
 
+# Agent Browser local browser state and exported auth files
+.agent-browser/
+browser-data/
+agent-browser-state*.json
+*.auth-state.json
+
 #opencode
 !.opencode/agents/unit/build
 

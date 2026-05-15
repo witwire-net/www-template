@@ -7,7 +7,7 @@
 - Node.js 24 と pnpm
 - Go 1.26.2 以上
 - `gopls` `goimports` `dlv` `golangci-lint` `air`
-- `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode`
+- `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode` `agent-browser`
 - Playwright 実行に必要な Linux 依存
 - PostgreSQL 18 Valkey 9 OpenSearch 3 MinIO Mailpit のローカルサービス
 - `docker` と `docker compose` をコンテナ内から利用可能
@@ -16,6 +16,7 @@
 
 - `postCreateCommand` で `pnpm install` を実行
 - Playwright のブラウザをインストール
+- `agent-browser` と Chrome for Testing を利用可能
 - `packages/backend/go.mod` が存在すれば依存取得を実行
 
 ## サービス接続先
@@ -27,6 +28,14 @@
 - MinIO Console: `http://localhost:9001`
 - Mailpit SMTP: `mailpit:1025`
 - Mailpit UI: `http://localhost:8025`
+
+## Agent Browser
+
+- バージョン: `agent-browser@0.27.0`
+- 起動確認: `agent-browser doctor --offline --quick`
+- 基本操作: `agent-browser open http://localhost:5173` の後に `agent-browser snapshot`
+- Dashboard: `agent-browser dashboard start` の後に `http://localhost:4848`
+- 認証 state や profile は Cookie やセッショントークンを含む可能性があるため、repo にはコミットしないでください
 
 ## 主要な環境変数
 

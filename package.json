@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "www-template monorepo with Svelte frontend, TypeSpec contract, and Go backend",
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.1.2",
   "engines": {
     "node": ">=24.12.0"
   },

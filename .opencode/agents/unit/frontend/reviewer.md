@@ -46,6 +46,7 @@ You are the `unit/build/reviewer` subagent. Based on the change summary and arti
 - Then load `coding-guardian` via `skill` and use it as an enforcement baseline
 - Then load `.opencode/skills/uiux/claude-ux` via `skill` and use its guidance as a UI/UX review baseline
 - Then load `.opencode/skills/uiux/gpt-ux` via `skill` and use its guidance as a UI/UX review baseline
+- Then load `.opencode/skills/agent-browser` via `skill` and use it for browser-based verification, screenshots, and interactive frontend review evidence when runtime UI inspection is needed
 - Then load `orchestration-playbook` via `skill` and use its templates for acceptance
 
 ## Required inputs to verify first

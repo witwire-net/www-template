@@ -494,7 +494,7 @@ GitHub Actions の `ci.yml` が以下の順番で実行されます（`main` / `
 
 ```
 Checkout
-└── Setup pnpm 11.1.1
+└── Setup pnpm 11.1.2
 └── Setup Node 24
 └── Setup Go 1.26.2
 └── pnpm install --frozen-lockfile
