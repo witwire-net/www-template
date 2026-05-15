@@ -10,7 +10,7 @@ ARG OAPI_CODEGEN_VERSION=2.4.1
 ARG GOLANGCI_LINT_VERSION=1.64.8
 ARG WRANGLER_VERSION=4.57.0
 ARG OPENSPEC_VERSION=1.2.0
-ARG OPENCODE_PACKAGE=opencode-ai@latest
+ARG OPENCODE_VERSION=1.14.48
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NPM_CONFIG_PREFIX=/home/node/.npm-global
@@ -127,7 +127,7 @@ RUN corepack prepare pnpm@${PNPM_VERSION} --activate
 
 ENV GOBIN=/home/node/.local/bin
 
-RUN npm install -g "wrangler@${WRANGLER_VERSION}" "@typespec/compiler@${TYPESPEC_VERSION}" "@fission-ai/openspec@${OPENSPEC_VERSION}" "${OPENCODE_PACKAGE}"
+RUN npm install -g "wrangler@${WRANGLER_VERSION}" "@typespec/compiler@${TYPESPEC_VERSION}" "@fission-ai/openspec@${OPENSPEC_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
 
 RUN go install golang.org/x/tools/gopls@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \
