@@ -322,11 +322,11 @@ test.describe('passkey management', () => {
   /**
    * AUTH-FE-S016: パスキー管理ページで OTP を発行できる
    */
-  test('OTP 発行ボタンを押すとメール送信済み guidance が表示される', async ({ page }) => {
+  test('デバイスリンク発行ボタンを押すとメール送信済み guidance が表示される', async ({ page }) => {
     await loginAndGoToPasskeys(page);
-    await mockReauth(page, 'otp-issue');
+    await mockReauth(page, 'device-link');
 
-    await page.route('**/api/v1/passkeys/otp', async (route) => {
+    await page.route('**/api/v1/passkeys/send-device-link', async (route) => {
       const reauthSession = route.request().headers()['x-reauth-session'];
       expect(reauthSession).toBe('01ARZ3NDEKTSV4RRFFQ69G5FBA');
       await fulfillJson(route, 200, {
@@ -337,10 +337,9 @@ test.describe('passkey management', () => {
 
     await page.getByRole('button', { name: '新しい端末でログインを有効にする' }).click();
 
-    // 平文 OTP は表示されず、案内メッセージが表示される
-    await expect(page.getByText(/ログイン有効化コードを送信しました/)).toBeVisible();
-    await expect(page.getByText(/登録済みのメールアドレス宛にコードを送信しました/)).toBeVisible();
-    await expect(page.getByText(/有効期限: 5分/)).toBeVisible();
+    // 平文 OTP ではなく、device-link の案内メッセージだけが表示される
+    await expect(page.getByText(/ログイン有効化リンクを送信しました/)).toBeVisible();
+    await expect(page.getByText(/登録済みのメールアドレス宛にリンクを送信しました/)).toBeVisible();
     await expect(page.getByText(/123456/)).not.toBeVisible();
   });
 
@@ -369,90 +368,5 @@ test.describe('passkey management', () => {
 
     await expect(page.getByText('MacBook Pro')).not.toBeVisible();
     await expect(page.getByText('iPhone 15')).toBeVisible();
-  });
-});
-
-test.describe('passkey add by OTP (new device)', () => {
-  test.skip(
-    ({ browserName }) => browserName !== 'chromium',
-    'passkey add-by-OTP tests run in Chromium only'
-  );
-
-  /**
-   * AUTH-FE-S017: 新端末パスキー登録ページで有効な email と OTP を入力してパスキーを登録できる
-   */
-  test('有効な email と OTP を入力してパスキーを登録できる', async ({ page }) => {
-    await mockWebAuthn(page);
-    await page.goto('http://localhost:5174/passkeys/add');
-
-    await page.route('**/api/v1/auth/passkey/add/start', async (route) => {
-      await fulfillJson(route, 200, {
-        requestId: TEST_ULID.requestId,
-        challenge: 'b3RwLWFkZC1jaGFsbGVuZ2U',
-        rpId: 'localhost',
-        rpName: 'Test RP',
-        user: {
-          id: 'dXNlcjE',
-          name: 'valid@example.com',
-          displayName: 'Test User',
-        },
-        pubKeyCredParams: [
-          { type: 'public-key', alg: -7 },
-          { type: 'public-key', alg: -257 },
-        ],
-        userVerification: 'required',
-      });
-    });
-
-    await page.route('**/api/v1/auth/passkey/add/finish', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'cache-control': 'private, no-store, max-age=0' },
-        body: '',
-      });
-    });
-
-    await expect(page.getByRole('heading', { name: 'パスキーを追加' })).toBeVisible();
-
-    // email + OTP 入力フォームへの入力
-    await page.getByLabel('メールアドレス').fill('valid@example.com');
-    await page.getByLabel('ワンタイムパスワード').fill('123456');
-
-    // ボタンが有効になっていること
-    const submitButton = page.getByRole('button', { name: 'パスキーを登録' });
-    await expect(submitButton).toBeEnabled();
-
-    await submitButton.click();
-
-    await expect(page.getByRole('heading', { name: 'パスキーを登録しました' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'ログインページへ' })).toBeVisible();
-  });
-
-  /**
-   * AUTH-FE-S018: 新端末パスキー登録ページで無効な email と OTP は generic error を表示する
-   */
-  test('無効な email と OTP を入力した場合にエラーメッセージが表示される', async ({ page }) => {
-    await page.goto('http://localhost:5174/passkeys/add');
-
-    await page.route('**/api/v1/auth/passkey/add/start', async (route) => {
-      await fulfillJson(route, 400, {
-        requestId: TEST_ULID.requestId,
-        error: 'invalid_otp',
-      });
-    });
-
-    await expect(page.getByRole('heading', { name: 'パスキーを追加' })).toBeVisible();
-
-    await page.getByLabel('メールアドレス').fill('valid@example.com');
-    await page.getByLabel('ワンタイムパスワード').fill('000000');
-
-    const submitButton = page.getByRole('button', { name: 'パスキーを登録' });
-    await expect(submitButton).toBeEnabled();
-
-    await submitButton.click();
-
-    await expect(page.getByRole('alert')).toBeVisible();
-    // ページ状態が保持されていること（完了画面に遷移しない）
-    await expect(page.getByRole('heading', { name: 'パスキーを追加' })).toBeVisible();
   });
 });

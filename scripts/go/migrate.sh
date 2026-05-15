@@ -23,7 +23,7 @@ case "$command_name" in
       exit 1
     fi
 
-    go run "$MIGRATE_PKG" -path packages/backend/db/migrations -database "$DATABASE_URL" "$command_name" "$@"
+    go run -tags 'postgres' "$MIGRATE_PKG" -path packages/backend/db/migrations -database "$DATABASE_URL" "$command_name" "$@"
     ;;
   *)
     printf 'unsupported migrate command: %s\n' "$command_name" >&2

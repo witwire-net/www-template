@@ -53,6 +53,39 @@ func (n *slogAuditNotifier) EmitCredentialStateUpdateFailure(ctx context.Context
 	)
 }
 
+func (n *slogAuditNotifier) EmitDeviceLinkDeliveryFailure(ctx context.Context, requestID string, accountID string, err error) {
+	n.logger.ErrorContext(ctx, "audit: device-link delivery failed",
+		slog.String("event_type", "device_link.delivery_failed"),
+		slog.String("request_id", requestID),
+		slog.String("account_id", accountID),
+		slog.String("error", err.Error()),
+	)
+}
+
+func (n *slogAuditNotifier) EmitRecoverySessionRevokeFailure(ctx context.Context, accountID string, err error) {
+	n.logger.ErrorContext(ctx, "audit: recovery session revoke failed",
+		slog.String("event_type", "recovery.session_revoke_failed"),
+		slog.String("account_id", accountID),
+		slog.String("error", err.Error()),
+	)
+}
+
+func (n *slogAuditNotifier) EmitRecoveryCompleteDeliveryFailure(ctx context.Context, accountID string, err error) {
+	n.logger.ErrorContext(ctx, "audit: recovery complete delivery failed",
+		slog.String("event_type", "recovery.complete_delivery_failed"),
+		slog.String("account_id", accountID),
+		slog.String("error", err.Error()),
+	)
+}
+
+func (n *slogAuditNotifier) EmitDeviceLinkCompleteDeliveryFailure(ctx context.Context, accountID string, err error) {
+	n.logger.ErrorContext(ctx, "audit: device-link complete delivery failed",
+		slog.String("event_type", "device_link.complete_delivery_failed"),
+		slog.String("account_id", accountID),
+		slog.String("error", err.Error()),
+	)
+}
+
 func BuildContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	return buildContainer(ctx, cfg, newGormAuthAccountRepository, newValkeyAuthStateRepository, newValkeyChallengeStore)
 }

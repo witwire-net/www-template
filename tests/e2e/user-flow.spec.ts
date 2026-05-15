@@ -20,11 +20,12 @@ test.describe('www-template auth surface', () => {
     await expect(page.getByRole('button', { name: 'パスキーでログイン' })).toBeVisible();
   });
 
-  test('公開トップで status card を操作できる', async ({ page }) => {
+  test('公開トップで主要メッセージと CTA を確認できる', async ({ page }) => {
     await expect(
-      page.getByRole('heading', { name: '公開面は SSR、データ更新は domain 経由です。' })
+      page.getByRole('heading', { name: '公開面と認証面を再利用しやすい構成でまとめています。' })
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: '公開 API を再取得' })).toBeVisible();
+    await expect(page.getByText('public route は SSR の SvelteKit として運用')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'ログインを試す' })).toBeVisible();
   });
 
   test('recovery route を表示できる', async ({ page }) => {

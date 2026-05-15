@@ -45,8 +45,8 @@
       "default": "./src/styles/index.ts"
     },
     "./styles.css": {
-      "import": "./dist/styles.css",
-      "default": "./dist/styles.css"
+      "import": "./src/styles/tailwind.css",
+      "default": "./src/styles/tailwind.css"
     }
   },
   "svelte": "./src/index.ts",

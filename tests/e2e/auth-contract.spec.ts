@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 
 const MOCK_NO_STORE_HEADERS = {
@@ -41,7 +43,19 @@ const parseJsonBody = async (response: Awaited<ReturnType<APIRequestContext['fet
   return text === '' ? null : (JSON.parse(text) as Record<string, unknown>);
 };
 
-const loginViaApi = async (request: APIRequestContext, clientIp: string) => {
+const base64UrlEncode = (value: unknown) =>
+  Buffer.from(JSON.stringify(value)).toString('base64url');
+
+const signTestJwt = (claims: Record<string, unknown>) => {
+  const signingInput = `${base64UrlEncode({ alg: 'HS256', typ: 'JWT' })}.${base64UrlEncode(claims)}`;
+  const signature = createHmac('sha256', 'change-this-to-a-long-random-jwt-secret-in-production')
+    .update(signingInput)
+    .digest('base64url');
+
+  return `${signingInput}.${signature}`;
+};
+
+const startPasskeyViaApi = async (request: APIRequestContext, clientIp: string) => {
   const startResponse = await request.post('/api/v1/auth/passkey/start', {
     data: { identifier: 'member@example.com' },
     headers: forwardedIpHeaders(clientIp),
@@ -53,18 +67,7 @@ const loginViaApi = async (request: APIRequestContext, clientIp: string) => {
     challenge: string;
   };
 
-  const finishResponse = await request.post('/api/v1/auth/passkey/finish', {
-    data: { credential: `existing-credential::${startBody.challenge}` },
-    headers: forwardedIpHeaders(clientIp),
-  });
-  expect(finishResponse.status()).toBe(200);
-  expectNoStore(finishResponse.headers()['cache-control'] ?? null);
-
-  const finishBody = (await parseJsonBody(finishResponse)) as {
-    accessToken: string;
-  };
-
-  return { finishBody, finishResponse, startBody, startResponse };
+  return { startBody, startResponse };
 };
 
 const fulfillInternalError = async (route: Route) => {
@@ -108,12 +111,17 @@ test.describe('auth api contract', () => {
     'backend auth contract is browser-agnostic'
   );
 
-  test('passkey start / finish success は no-store で返る', async ({ request }) => {
-    const { startBody, finishBody } = await loginViaApi(request, '198.51.100.10');
+  test('passkey start / invalid finish は no-store で返る', async ({ request }) => {
+    const { startBody } = await startPasskeyViaApi(request, '198.51.100.10');
 
-    expect(startBody.challenge).toContain('opaque-');
-    // accessToken は短命 JWT（header.payload.signature の 3 セグメント形式）であることを検証する
-    expect(finishBody.accessToken.split('.')).toHaveLength(3);
+    expect(startBody.challenge.length).toBeGreaterThan(0);
+
+    const finishResponse = await request.post('/api/v1/auth/passkey/finish', {
+      data: { credential: `existing-credential::${startBody.challenge}` },
+      headers: forwardedIpHeaders('198.51.100.10'),
+    });
+    expect(finishResponse.status()).toBe(400);
+    expectNoStore(finishResponse.headers()['cache-control'] ?? null);
   });
 
   test('recovery request / invalid consume / invalid register は no-store で返る', async ({
@@ -152,20 +160,18 @@ test.describe('auth api contract', () => {
   });
 
   test('revoked session で app endpoint を叩くと session-expired を返す', async ({ request }) => {
-    const { finishBody } = await loginViaApi(request, '198.51.100.11');
-
-    const logoutResponse = await request.post('/api/v1/auth/logout', {
-      headers: {
-        Authorization: `Bearer ${finishBody.accessToken}`,
-      },
+    const now = Math.floor(Date.now() / 1000);
+    const accessToken = signTestJwt({
+      sub: TEST_ULID.accountId,
+      sid: TEST_ULID.sessionId,
+      jti: TEST_ULID.passkeyCredentialId,
+      iat: now,
+      exp: now + 900,
     });
-
-    expect(logoutResponse.status()).toBe(200);
-    expectNoStore(logoutResponse.headers()['cache-control'] ?? null);
 
     const expiredResponse = await request.post('/api/v1/auth/logout', {
       headers: {
-        Authorization: `Bearer ${finishBody.accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 

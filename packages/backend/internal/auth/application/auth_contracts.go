@@ -331,6 +331,22 @@ type AuditNotifier interface {
 	// credentialHandle は対象 credential の識別子、err は発生したエラー。
 	// secret（credential raw data）は含めない。
 	EmitCredentialStateUpdateFailure(ctx context.Context, credentialHandle string, err error)
+	// EmitDeviceLinkDeliveryFailure は device-link メール送信に失敗したときに呼び出される。
+	// requestID は対象リクエスト、accountID は送信対象アカウント、err は送信失敗の原因である。
+	// メール本文、トークン、URL などの secret は渡さない。
+	EmitDeviceLinkDeliveryFailure(ctx context.Context, requestID string, accountID string, err error)
+	// EmitRecoverySessionRevokeFailure は recovery 完了後の全セッション失効に失敗したときに呼び出される。
+	// accountID は失効対象アカウント、err は失効失敗の原因である。
+	// この通知は監査用であり、呼び出し側は別途 fail-closed のエラー処理を行う。
+	EmitRecoverySessionRevokeFailure(ctx context.Context, accountID string, err error)
+	// EmitRecoveryCompleteDeliveryFailure は recovery 完了通知メールの送信失敗時に呼び出される。
+	// accountID は通知対象アカウント、err は送信失敗の原因である。
+	// 通知メールは best-effort のため、この通知自体は認証結果を変更しない。
+	EmitRecoveryCompleteDeliveryFailure(ctx context.Context, accountID string, err error)
+	// EmitDeviceLinkCompleteDeliveryFailure は device-link 完了通知メールの送信失敗時に呼び出される。
+	// accountID は通知対象アカウント、err は送信失敗の原因である。
+	// 通知メールは best-effort のため、この通知自体は認証結果を変更しない。
+	EmitDeviceLinkCompleteDeliveryFailure(ctx context.Context, accountID string, err error)
 }
 
 type AuthService struct {

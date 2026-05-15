@@ -33,7 +33,7 @@ secret_hash_key = "dev-pepper-change-in-production"
 jwt_secret = "change-this-to-a-long-random-jwt-secret-in-production"
 
 [database]
-url = "postgres://template:template@postgres:5432/template?sslmode=disable"
+url = "postgres://www-template:www-template@postgres:5432/www-template?sslmode=disable"
 
 [valkey]
 url = "redis://valkey:6379/0"

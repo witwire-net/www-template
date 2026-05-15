@@ -24,7 +24,13 @@ export default defineConfig({
     exclude: ['@opentelemetry/sdk-trace-base'],
   },
   server: {
-    port: 5175,
+    port: 5173,
     host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
   },
 });

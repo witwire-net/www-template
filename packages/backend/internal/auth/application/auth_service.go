@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"www-template/packages/backend/internal/auth/domain"
@@ -136,11 +135,9 @@ func (s *AuthService) ExecuteDeviceLink(ctx context.Context, accountID, sessionI
 	// device-link メールを fire-and-forget で送信する。失敗しても issued=true を返す。
 	if s.deviceLinkSender != nil {
 		if err := s.deviceLinkSender.SendDeviceLink(ctx, delivery); err != nil {
-			slog.ErrorContext(ctx, "device-link delivery failed",
-				slog.String("request_id", requestID),
-				slog.String("account_id", accountID),
-				slog.String("error", err.Error()),
-			)
+			if s.auditNotifier != nil {
+				s.auditNotifier.EmitDeviceLinkDeliveryFailure(ctx, requestID, accountID, err)
+			}
 		}
 	}
 
@@ -513,30 +510,27 @@ func (s *AuthService) runRegisterPasskeyPostProcess(ctx context.Context, kind do
 		// 全セッション失効はセキュリティ上必須。失敗時は registration 全体を fail させる。
 		if s.tokenService != nil {
 			if err := s.tokenService.RevokeAllForAccount(ctx, accountID); err != nil {
-				slog.ErrorContext(ctx, "failed to revoke all sessions after recovery",
-					slog.String("account_id", accountID),
-					slog.String("error", err.Error()),
-				)
+				if s.auditNotifier != nil {
+					s.auditNotifier.EmitRecoverySessionRevokeFailure(ctx, accountID, err)
+				}
 				return ErrInternalError
 			}
 		}
 		// 通知メールは best-effort
 		if s.recoveryCompleteSender != nil {
 			if err := s.recoveryCompleteSender.SendRecoveryComplete(ctx, accountID, email); err != nil {
-				slog.ErrorContext(ctx, "failed to send recovery complete notification",
-					slog.String("account_id", accountID),
-					slog.String("error", err.Error()),
-				)
+				if s.auditNotifier != nil {
+					s.auditNotifier.EmitRecoveryCompleteDeliveryFailure(ctx, accountID, err)
+				}
 			}
 		}
 	case domain.TokenKindDeviceLink:
 		// device-link 完了通知は best-effort
 		if s.deviceLinkCompleteSender != nil {
 			if err := s.deviceLinkCompleteSender.SendDeviceLinkComplete(ctx, accountID, email); err != nil {
-				slog.ErrorContext(ctx, "failed to send device-link complete notification",
-					slog.String("account_id", accountID),
-					slog.String("error", err.Error()),
-				)
+				if s.auditNotifier != nil {
+					s.auditNotifier.EmitDeviceLinkCompleteDeliveryFailure(ctx, accountID, err)
+				}
 			}
 		}
 	}

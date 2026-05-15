@@ -475,7 +475,7 @@
 
 ### CI verify job の順番を前提にする
 
-- required: CI は `Checkout -> Setup pnpm (11.1.2) -> Setup Node (24) -> Setup Go (1.26.2) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
+- required: CI は `Checkout -> Setup pnpm (11.1.2) -> Setup Node (24) -> Setup Go (1.26.3) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
 - Enforcement point: `.github/workflows/ci.yml`
 - NG例: ローカルで `pnpm test:run` だけ通して `pnpm gen` や `pnpm check:codegen` を飛ばす
 - OK例: 変更に応じて少なくとも CI と同じ順番で確認する

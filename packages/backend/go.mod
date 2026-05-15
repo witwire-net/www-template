@@ -1,6 +1,6 @@
 module www-template/packages/backend
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/gin-contrib/cors v1.7.6
@@ -76,7 +76,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.25.0 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect

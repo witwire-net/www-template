@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { useObservability } from '@www-template/domain';
-  import { PUBLIC_OTEL_COLLECTOR_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
 
   import '@www-template/ui/styles.css';
   import '../app.css';
 
   let { children }: { children: Snippet } = $props();
 
-  useObservability('www-template-app', PUBLIC_OTEL_COLLECTOR_URL);
+  const otelCollectorUrl = env.PUBLIC_OTEL_COLLECTOR_URL ?? 'http://localhost:4318/v1/traces';
+
+  useObservability('www-template-app', otelCollectorUrl);
 </script>
 
 {@render children()}

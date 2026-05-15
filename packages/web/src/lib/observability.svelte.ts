@@ -8,15 +8,21 @@ import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { onMount } from 'svelte';
 
-import { PUBLIC_OTEL_COLLECTOR_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
+
+const defaultOtelCollectorUrl = 'http://localhost:4318/v1/traces';
 
 /**
- * Initialize OpenTelemetry browser tracing for the given service.
- * @param serviceName - The service name to attribute traces to.
+ * 指定したサービス名でブラウザ用 OpenTelemetry tracing を初期化する。
+ *
+ * @param serviceName trace の帰属先として使用する service.name。
+ * @returns 戻り値はない。ブラウザの global tracer provider と error listener を登録する。
  */
 export function initObservability(serviceName: string): void {
+  const collectorUrl = env.PUBLIC_OTEL_COLLECTOR_URL ?? defaultOtelCollectorUrl;
+
   const exporter = new OTLPTraceExporter({
-    url: PUBLIC_OTEL_COLLECTOR_URL,
+    url: collectorUrl,
   });
 
   const provider = new WebTracerProvider({
@@ -75,8 +81,10 @@ export function initObservability(serviceName: string): void {
 }
 
 /**
- * Initialize OpenTelemetry browser tracing on mount.
- * @param serviceName - The service name for tracing attribution.
+ * Svelte component の mount 時にブラウザ用 OpenTelemetry tracing を初期化する。
+ *
+ * @param serviceName trace の帰属先として使用する service.name。
+ * @returns 戻り値はない。mount 後に observability 初期化の副作用を発生させる。
  */
 export function useObservability(serviceName: string): void {
   onMount(() => {
