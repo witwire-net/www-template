@@ -32,6 +32,7 @@ export {
 } from './recovery/state';
 export {
   addAuthenticatedSession,
+  applyAccountSuspended,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyInternalError,
@@ -43,6 +44,7 @@ export {
   isNoStoreCacheControl,
   isUlid,
   removeActiveSession,
+  removeSessionById,
   switchActiveSession,
 } from './session/state';
 export { decodeAccessToken, isRefreshNeeded, createEmptyTokenPair } from './session/token_state';

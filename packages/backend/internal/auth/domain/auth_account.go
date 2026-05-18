@@ -45,10 +45,12 @@ func (c PasskeyCredential) CreatedAt() time.Time     { return c.createdAt }
 // AuthAccount はひとつの認証済みアカウントを表すドメインモデル。
 // credentials に 1 件以上の PasskeyCredential を保持する。
 type AuthAccount struct {
-	accountID   string
-	identifier  string
-	email       string
-	credentials []PasskeyCredential
+	accountID           string
+	identifier          string
+	email               string
+	status              string
+	sessionRevokedAfter *time.Time
+	credentials         []PasskeyCredential
 }
 
 // NewAuthAccount は後方互換のための単一パスキー版コンストラクタ。
@@ -75,6 +77,7 @@ func NewAuthAccount(accountID string, identifier string, email string, passkeyCr
 		accountID:   accountID,
 		identifier:  strings.TrimSpace(identifier),
 		email:       strings.TrimSpace(email),
+		status:      "active",
 		credentials: []PasskeyCredential{cred},
 	}, nil
 }
@@ -96,6 +99,7 @@ func NewAuthAccountWithCredentials(accountID string, identifier string, email st
 		accountID:   accountID,
 		identifier:  strings.TrimSpace(identifier),
 		email:       strings.TrimSpace(email),
+		status:      "active",
 		credentials: credentials,
 	}, nil
 }
@@ -103,6 +107,25 @@ func NewAuthAccountWithCredentials(accountID string, identifier string, email st
 func (a AuthAccount) AccountID() string  { return a.accountID }
 func (a AuthAccount) Identifier() string { return a.identifier }
 func (a AuthAccount) Email() string      { return a.email }
+func (a AuthAccount) Status() string     { return a.status }
+
+// IsSuspended はアカウントが管理者操作で停止中かどうかを返す。
+// status は Product DB の accounts.status から復元された値であり、
+// suspended の場合は新規 token pair 発行、refresh rotation、bearer 認可を拒否する。
+// 未設定または active の場合は false を返す。
+func (a AuthAccount) IsSuspended() bool { return a.status == "suspended" }
+
+// SessionRevokedAfter はアカウント停止時に設定されたセッション失効時刻を返す。
+// nil の場合は失効時刻が設定されていないことを示す。
+func (a AuthAccount) SessionRevokedAfter() *time.Time { return a.sessionRevokedAfter }
+
+// WithStatus は status と sessionRevokedAfter を設定した新しい AuthAccount を返す。
+// リポジトリ層で DB から読み出した値を設定する際に使用する。
+func (a AuthAccount) WithStatus(status string, sessionRevokedAfter *time.Time) AuthAccount {
+	a.status = status
+	a.sessionRevokedAfter = sessionRevokedAfter
+	return a
+}
 
 // Credentials は保持する全 PasskeyCredential のスライスを返す。
 func (a AuthAccount) Credentials() []PasskeyCredential { return a.credentials }

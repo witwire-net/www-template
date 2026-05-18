@@ -1,0 +1,75 @@
+// Admin DB 用 Prisma schema
+// オペレーター認証・監査ログを管理する Admin 専用データベースの構造定義
+// Product DB とは完全に分離し、別接続文字列・別 Prisma Client で運用する
+// 注意: DB レコード ID はタスク仕様に従い UUID（@default(uuid())）を使用する。
+// challengeId / sessionId 等の一時的なトークンはアプリケーション層で ULID を生成する。
+
+generator prisma-client-admin {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/admin-client"
+}
+
+datasource admin_db {
+  provider = "postgresql"
+  url      = env("ADMIN_DATABASE_URL")
+  schemas  = ["admin"]
+}
+
+// 管理画面オペレーター（管理者・オペレーター・閲覧者のロールベース権限制御）
+model AdminOperator {
+  id                   String   @id @default(uuid()) @map("id")
+  email                String   @unique @map("email")
+  display_name         String   @map("display_name")
+  role                 String   @default("operator") @map("role")
+  is_active            Boolean  @default(true) @map("is_active")
+  setup_token_hash     String?  @map("setup_token_hash")
+  setup_token_expires_at DateTime? @map("setup_token_expires_at")
+  last_login_at        DateTime? @map("last_login_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  passkeys     AdminOperatorPasskey[]
+  auditEvents  AdminAuditEvent[]
+
+  @@map("operators")
+  @@schema("admin")
+}
+
+// オペレーターが登録した WebAuthn passkey credential
+model AdminOperatorPasskey {
+  id                String   @id @default(uuid()) @map("id")
+  operator_id       String   @map("operator_id")
+  credential_handle String   @unique @map("credential_handle")
+  public_key        Bytes    @map("public_key")
+  sign_count        BigInt   @default(0) @map("sign_count")
+  aaguid            Bytes    @map("aaguid")
+  backup_eligible   Boolean  @map("backup_eligible")
+  backup_state      Boolean  @map("backup_state")
+  transports        Json?    @map("transports")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  operator AdminOperator @relation(fields: [operator_id], references: [id], onDelete: Cascade)
+
+  @@map("operator_passkeys")
+  @@schema("admin")
+}
+
+// 監査イベント（全操作の追跡・証跡として利用）
+model AdminAuditEvent {
+  id           String   @id @default(uuid()) @map("id")
+  operator_id  String   @map("operator_id")
+  action       String   @map("action")
+  target_type  String   @map("target_type")
+  target_id    String   @map("target_id")
+  details      Json?    @map("details")
+  outcome      String   @map("outcome")
+  error_code   String?  @map("error_code")
+  ip_address   String?  @map("ip_address")
+  createdAt    DateTime @default(now()) @map("created_at")
+  completed_at DateTime? @map("completed_at")
+
+  operator AdminOperator @relation(fields: [operator_id], references: [id])
+
+  @@map("audit_events")
+  @@schema("admin")
+}

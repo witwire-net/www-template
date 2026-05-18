@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   addAuthenticatedSession,
+  applyAccountSuspended,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyMissingSession,
@@ -11,6 +12,7 @@ import {
   isNoStoreCacheControl,
   isUlid,
   removeActiveSession,
+  removeSessionById,
   switchActiveSession,
 } from './state';
 
@@ -234,5 +236,64 @@ describe('authSessionState', () => {
     expect(state.routeIntent).toBe('/login');
     expect(state.lastFailure).toBe('unauthenticated');
     expect(state.phase).toBe('anonymous');
+  });
+
+  it('[AUTH-FE-S042] applyAccountSuspended removes the active suspended session only', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      accessToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+    const sessionB = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+      accessToken: 'token-b',
+      expiresAt: '2026-03-21T01:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    addAuthenticatedSession(state, sessionB, 'no-store');
+    const intent = applyAccountSuspended(state, 'no-store', sessionB.sessionId);
+
+    expect(intent).toBe('/account-suspended');
+    expect(state.phase).toBe('account-suspended');
+    expect(state.lastFailure).toBe('account-suspended');
+    expect(state.sessions).toEqual([sessionA]);
+    expect(state.session).toBeNull();
+  });
+
+  it('[AUTH-FE-S044] removeSessionById preserves other account sessions', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      accessToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+    const sessionB = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+      accessToken: 'token-b',
+      expiresAt: '2026-03-21T01:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    addAuthenticatedSession(state, sessionB, 'no-store');
+    const intent = removeSessionById(state, sessionA.sessionId, '/account-suspended');
+
+    expect(intent).toBeNull();
+    expect(state.sessions).toEqual([sessionB]);
+    expect(state.session?.sessionId).toBe(sessionB.sessionId);
+    expect(state.phase).toBe('authenticated');
   });
 });

@@ -21,6 +21,13 @@ import { useAuthSession } from '../../session/hook.svelte';
 import type { PasskeyItem, PasskeyManagementState } from '../../types';
 
 type AuthSessionRef = ReturnType<typeof useAuthSession>;
+type PasskeyAuthFailure = 'session-expired' | 'unauthenticated' | 'account-suspended';
+
+const AUTH_FAILURE_CODES = new Set<string>([
+  'session-expired',
+  'unauthenticated',
+  'account-suspended',
+]);
 
 interface PasskeyManagementData {
   passkeys: PasskeyItem[];
@@ -50,11 +57,45 @@ function handleApiError(
   state: PasskeyManagementState,
   authSession: AuthSessionRef
 ): void {
-  if (errorCode === 'session-expired' || errorCode === 'unauthenticated') {
-    authSession.actions.handleFailure(errorCode, fallbackMessage);
+  if (AUTH_FAILURE_CODES.has(errorCode)) {
+    const failure = errorCode as PasskeyAuthFailure;
+    authSession.actions.handleFailure(failure, fallbackMessage);
   } else {
     applyPasskeyError(state, fallbackMessage);
   }
+}
+
+function handlePasskeyFailureResponse(
+  response: { status: number; data: unknown },
+  fallbackMessage: string,
+  state: PasskeyManagementState,
+  authSession: AuthSessionRef
+): boolean {
+  if (response.status === 401 || response.status === 403 || response.status === 503) {
+    const error =
+      typeof response.data === 'object' && response.data !== null && 'error' in response.data
+        ? String((response.data as { error: unknown }).error)
+        : 'internal-error';
+    handleApiError(error, fallbackMessage, state, authSession);
+    return true;
+  }
+
+  return false;
+}
+
+function handleAuthOnlyFailure(
+  errorCode: string,
+  fallbackMessage: string,
+  state: PasskeyManagementState,
+  authSession: AuthSessionRef
+): boolean {
+  if (AUTH_FAILURE_CODES.has(errorCode)) {
+    const failure = errorCode as PasskeyAuthFailure;
+    authSession.actions.handleFailure(failure, fallbackMessage);
+    return true;
+  }
+
+  return false;
 }
 
 const createListPasskeys =
@@ -65,13 +106,14 @@ const createListPasskeys =
       const response = await authApi.listPasskeys({
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (response.status === 401 || response.status === 503) {
-        handleApiError(
-          response.data.error,
+      if (
+        handlePasskeyFailureResponse(
+          response,
           'パスキー一覧を取得できませんでした。',
           state,
           authSession
-        );
+        )
+      ) {
         return;
       }
       if (response.status === 200) {
@@ -93,13 +135,14 @@ const createAddPasskey =
       const startResponse = await authApi.startPasskeyAddition({
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (startResponse.status === 401 || startResponse.status === 503) {
-        handleApiError(
-          startResponse.data.error,
+      if (
+        handlePasskeyFailureResponse(
+          startResponse,
           'パスキー追加を開始できませんでした。',
           state,
           authSession
-        );
+        )
+      ) {
         return;
       }
       if (startResponse.status !== 200) return;
@@ -117,13 +160,14 @@ const createAddPasskey =
       const finishResponse = await authApi.finishPasskeyAddition(credential, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (finishResponse.status === 401 || finishResponse.status === 503) {
-        handleApiError(
-          finishResponse.data.error,
+      if (
+        handlePasskeyFailureResponse(
+          finishResponse,
           'パスキー追加を完了できませんでした。',
           state,
           authSession
-        );
+        )
+      ) {
         return;
       }
       if (finishResponse.status === 200) {
@@ -145,7 +189,17 @@ const createDeletePasskey =
       const response = await authApi.deletePasskey(id, reauthSession, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (response.status === 401 || response.status === 503) {
+      if (
+        handlePasskeyFailureResponse(
+          response,
+          'パスキーを削除できませんでした。',
+          state,
+          authSession
+        )
+      ) {
+        return;
+      }
+      if (response.status === 409) {
         handleApiError(response.data.error, 'パスキーを削除できませんでした。', state, authSession);
         return;
       }
@@ -176,6 +230,16 @@ const createSendDeviceLink =
         return false;
       }
       if (response.status === 400 || response.status === 403) {
+        if (
+          handleAuthOnlyFailure(
+            response.data.error,
+            'ログイン有効化リンクを送信できませんでした。',
+            state,
+            authSession
+          )
+        ) {
+          return false;
+        }
         applyPasskeyError(state, response.data.error);
         return false;
       }
@@ -205,13 +269,14 @@ const createPerformReauth =
       const startResponse = await authApi.startReauthentication(kind, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (startResponse.status === 401 || startResponse.status === 503) {
-        handleApiError(
-          startResponse.data.error,
+      if (
+        handlePasskeyFailureResponse(
+          startResponse,
           '再認証を開始できませんでした。',
           state,
           authSession
-        );
+        )
+      ) {
         return null;
       }
       if (startResponse.status !== 200) return null;
@@ -232,13 +297,14 @@ const createPerformReauth =
           headers: authSession.actions.createAuthorizationHeaders(),
         }
       );
-      if (finishResponse.status === 401 || finishResponse.status === 503) {
-        handleApiError(
-          finishResponse.data.error,
+      if (
+        handlePasskeyFailureResponse(
+          finishResponse,
           '再認証を完了できませんでした。',
           state,
           authSession
-        );
+        )
+      ) {
         return null;
       }
       if (finishResponse.status === 200) {

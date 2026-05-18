@@ -1,0 +1,197 @@
+<script lang="ts">
+	import { startRegistration } from '@simplewebauthn/browser';
+
+	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, ConfirmDialog, EmptyState, Spinner } from '@www-template/ui/components';
+
+	interface PasskeyItem {
+		id: string;
+		createdAt: string;
+		backupEligible: boolean;
+		backupState: boolean;
+		transports: unknown;
+	}
+
+	interface RegistrationStartResponse {
+		challengeId: string;
+		options: Parameters<typeof startRegistration>[0];
+	}
+
+	interface PasskeyListResponse {
+		passkeys: PasskeyItem[];
+	}
+
+	const { data }: { data: { operator: { email: string }; passkeys: PasskeyItem[] } } = $props();
+
+	let passkeys = $state(initialPasskeys());
+	let isAdding = $state(false);
+	let deletingId = $state<string | null>(null);
+	let pendingDeleteId = $state<string | null>(null);
+	let message = $state<string | null>(null);
+	let deleteDialogOpen = $state(false);
+
+	function readCsrfToken(): string {
+		// hooks.server.ts が GET 応答で配布する admin_csrf cookie を、状態変更 BFF の header に載せる。
+		const match = /(?:^|; )admin_csrf=([^;]+)/.exec(globalThis.document.cookie);
+		return match === null ? '' : decodeURIComponent(match[1] ?? '');
+	}
+
+	function initialPasskeys(): PasskeyItem[] {
+		// server load 由来の初期一覧を、後続の追加・削除で置き換え可能な local state に移す。
+		return data.passkeys;
+	}
+
+	function formatDate(iso: string): string {
+		// DB の ISO 文字列を運用者が読める日本語日時に整形する。
+		return new Date(iso).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' });
+	}
+
+	async function refreshPasskeys(): Promise<void> {
+		// 追加・削除後は BFF から最新 metadata を取得し、画面と server load cache を揃える。
+		const response = await globalThis.fetch('/api/admin/auth/passkeys');
+		if (!response.ok) throw new Error('passkey-refresh-failed');
+		const payload = (await response.json()) as PasskeyListResponse;
+		passkeys = payload.passkeys;
+	}
+
+	async function handleAddPasskey(): Promise<void> {
+		// 追加処理中は重複 challenge を作らないようボタン操作を止める。
+		if (isAdding) return;
+		isAdding = true;
+		message = null;
+
+		try {
+			// 認証済み BFF は session-bound CSRF header を要求するため、cookie 値を同一 origin のみへ送る。
+			const startResponse = await globalThis.fetch('/api/admin/auth/passkeys/start', {
+				method: 'POST',
+				headers: { 'x-csrf-token': readCsrfToken() },
+			});
+			if (!startResponse.ok) throw new Error('passkey-add-start-failed');
+			const startPayload = (await startResponse.json()) as RegistrationStartResponse;
+
+			// authenticator で新しい passkey を作成し、attestation だけを finish route に渡す。
+			const attestation = await startRegistration(startPayload.options);
+
+			// 追加完了時は BFF が credential を検証し、公開 metadata のみを返す。
+			const finishResponse = await globalThis.fetch('/api/admin/auth/passkeys/finish', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'x-csrf-token': readCsrfToken() },
+				body: JSON.stringify({ challengeId: startPayload.challengeId, attestation }),
+			});
+			if (!finishResponse.ok) throw new Error('passkey-add-finish-failed');
+			await refreshPasskeys();
+			message = 'この端末のパスキーを追加しました。';
+		} catch {
+			// WebAuthn cancel / CSRF / server error の詳細を分けず、安全な再試行メッセージにする。
+			message = 'パスキーを追加できませんでした。認証状態を確認して再試行してください。';
+		} finally {
+			// 成功・失敗にかかわらず追加操作を再度行えるようにする。
+			isAdding = false;
+		}
+	}
+
+	function requestDelete(passkeyId: string): void {
+		// 破壊的操作は即時実行せず、ConfirmDialog の確認を必ず挟む。
+		pendingDeleteId = passkeyId;
+		deleteDialogOpen = true;
+	}
+
+	async function confirmDelete(): Promise<void> {
+		// dialog 確認時点の対象 ID を固定し、途中で state が変わっても別 passkey を削除しない。
+		const targetId = pendingDeleteId;
+		if (targetId === null) return;
+		deletingId = targetId;
+		message = null;
+
+		try {
+			// DELETE は本人所有 passkey だけを BFF が削除し、最後の passkey は server 側で拒否する。
+			const response = await globalThis.fetch(`/api/admin/auth/passkeys/${encodeURIComponent(targetId)}`, {
+				method: 'DELETE',
+				headers: { 'x-csrf-token': readCsrfToken() },
+			});
+			if (!response.ok) throw new Error('passkey-delete-failed');
+			await refreshPasskeys();
+			message = 'パスキーを削除しました。';
+		} catch {
+			// 削除失敗時は対象有無や最後の passkey かどうかを必要以上に露出しない。
+			message = 'パスキーを削除できませんでした。最後のパスキーは削除できません。';
+		} finally {
+			// dialog の対象と loading をクリアし、次の操作に備える。
+			pendingDeleteId = null;
+			deletingId = null;
+		}
+	}
+</script>
+
+<svelte:head>
+	<title>Admin Passkeys</title>
+</svelte:head>
+
+<main class="min-h-screen bg-background px-6 py-10 text-foreground">
+	<section class="mx-auto max-w-5xl space-y-8">
+		<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+			<div class="space-y-2">
+				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Credential control</p>
+				<h1 class="text-4xl font-black tracking-tight">パスキー管理</h1>
+				<p class="text-sm text-muted-foreground">{data.operator.email} のログイン用パスキーを管理します。</p>
+			</div>
+			<Button disabled={isAdding} onclick={handleAddPasskey}>
+				{#if isAdding}
+					<Spinner />
+					追加中…
+				{:else}
+					パスキーを追加
+				{/if}
+			</Button>
+		</div>
+
+		{#if message !== null}
+			<p class="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-card-foreground" role="status">{message}</p>
+		{/if}
+
+		<Card>
+			<CardHeader>
+				<CardTitle>登録済みパスキー</CardTitle>
+				<CardDescription>最後のパスキーはロックアウト防止のため削除できません。</CardDescription>
+			</CardHeader>
+			<CardContent>
+				{#if passkeys.length === 0}
+					<EmptyState title="パスキーがありません" description="ログインを継続するにはパスキーを追加してください。" />
+				{:else}
+					<div class="space-y-3">
+						{#each passkeys as passkey, index (passkey.id)}
+							<div class="flex flex-col gap-4 rounded-3xl border border-border bg-card p-4 md:flex-row md:items-center md:justify-between">
+								<div class="space-y-1">
+									<p class="text-sm font-bold">Passkey {index + 1}</p>
+									<p class="text-xs text-muted-foreground">Credential ID: {passkey.id}</p>
+									<p class="text-sm text-muted-foreground">登録日時: {formatDate(passkey.createdAt)}</p>
+									<p class="text-xs text-muted-foreground">バックアップ: {passkey.backupEligible ? (passkey.backupState ? '同期済み' : '対応') : '端末固定'}</p>
+								</div>
+								<Button variant="destructive" disabled={passkeys.length <= 1 || deletingId === passkey.id} onclick={() => { requestDelete(passkey.id); }}>
+									{#if deletingId === passkey.id}
+										<Spinner />
+										削除中…
+									{:else}
+										削除
+									{/if}
+								</Button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</CardContent>
+			<CardFooter>
+				<Button variant="outline" href="/">Admin Console に戻る</Button>
+			</CardFooter>
+		</Card>
+	</section>
+</main>
+
+<ConfirmDialog
+	bind:open={deleteDialogOpen}
+	title="このパスキーを削除しますか？"
+	description="削除後、このパスキーでは Admin Console にログインできません。"
+	confirmText="削除する"
+	cancelText="キャンセル"
+	confirmVariant="destructive"
+	onConfirm={confirmDelete}
+/>

@@ -1,8 +1,12 @@
 /** 認証導線が選択する route intent。 */
-export type AuthRouteIntent = '/login' | '/session-expired';
+export type AuthRouteIntent = '/login' | '/session-expired' | '/account-suspended';
 
 /** auth failure の安定分類。 */
-export type AuthFailureState = 'unauthenticated' | 'session-expired' | 'internal-error';
+export type AuthFailureState =
+  | 'unauthenticated'
+  | 'session-expired'
+  | 'account-suspended'
+  | 'internal-error';
 
 /** in-memory bearer session の最小表現。 */
 export interface AuthSessionSummary {
@@ -18,7 +22,13 @@ export interface AuthSessionSummary {
 
 /** 共有 auth session state。 */
 export interface AuthSessionState {
-  phase: 'anonymous' | 'authenticating' | 'authenticated' | 'session-expired' | 'logging-out';
+  phase:
+    | 'anonymous'
+    | 'authenticating'
+    | 'authenticated'
+    | 'session-expired'
+    | 'account-suspended'
+    | 'logging-out';
   session: AuthSessionSummary | null;
   /** メモリ上の複数セッションリスト。マルチアカウント対応。 */
   sessions?: AuthSessionSummary[];

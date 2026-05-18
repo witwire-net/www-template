@@ -25,7 +25,8 @@
       "@www-template/ui/styles": ["packages/frontend/ui/src/styles/index.ts"],
       "@www-template/ui/components": ["packages/frontend/ui/src/components/index.ts"],
       "@www-template/ui/*": ["packages/frontend/ui/src/*"],
-      "@www-template/ui": ["packages/frontend/ui/src/index.ts"]
+      "@www-template/ui": ["packages/frontend/ui/src/index.ts"],
+      "@www-template/admin/*": ["packages/admin/src/*"]
     },
     "resolveJsonModule": true,
     "allowJs": true,

@@ -2,8 +2,8 @@
 description: Build agent helper
 mode: subagent
 hidden: false
-model: opencode-go/deepseek-v4-flash
-reasoningEffort: 'max'
+model: openai/gpt-5.4-mini
+reasoningEffort: 'high'
 permission:
   edit: allow
   webfetch: allow

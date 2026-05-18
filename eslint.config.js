@@ -11,6 +11,7 @@ import unicorn from 'eslint-plugin-unicorn';
 import tseslint from 'typescript-eslint';
 
 import maxlinesConfig from './.eslintrc-maxlines.json' with { type: 'json' };
+import adminSvelteConfig from './packages/admin/svelte.config.js';
 import uiSvelteConfig from './packages/frontend/ui/svelte.config.js';
 
 const compat = new FlatCompat();
@@ -138,6 +139,19 @@ const frontendAppSvelteKitServerOnlyFiles = [
   'packages/frontend/app/src/hooks.server.{ts,js}',
   'packages/frontend/app/src/lib/server/**/*.{ts,js,svelte}',
   'packages/frontend/app/src/lib/server/**/*.svelte.{ts,js}',
+];
+
+const adminSourceFiles = [
+  'packages/admin/src/**/*.{ts,js}',
+  'packages/admin/src/**/*.svelte',
+  'packages/admin/src/**/*.svelte.ts',
+  'packages/admin/src/**/*.svelte.js',
+];
+
+const adminSvelteFiles = [
+  'packages/admin/**/*.svelte',
+  'packages/admin/**/*.svelte.ts',
+  'packages/admin/**/*.svelte.js',
 ];
 
 const exportTsdocPlugin = {
@@ -765,6 +779,179 @@ const frontendCssPolicyPlugin = {
   },
 };
 
+const adminSecurityPlugin = {
+  rules: {
+    'no-hardcoded-db-strings': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description: 'Admin パッケージ内でハードコードされた DB 接続文字列を禁止する。',
+        },
+        schema: [],
+        messages: {
+          hardcodedDb:
+            'Admin パッケージ内にハードコードされた DB 接続文字列 ({{protocol}}://) を含めないでください。環境変数を使用してください。',
+        },
+      },
+      create(context) {
+        return {
+          Literal(node) {
+            if (typeof node.value !== 'string') {
+              return;
+            }
+            const match = node.value.match(/^(postgres(?:ql)?):\/\//i);
+            if (match) {
+              context.report({
+                node,
+                messageId: 'hardcodedDb',
+                data: { protocol: match[1] },
+              });
+            }
+          },
+          TemplateElement(node) {
+            const value = node.value?.cooked ?? node.value?.raw ?? '';
+            const match = value.match(/^(postgres(?:ql)?):\/\//i);
+            if (match) {
+              context.report({
+                node,
+                messageId: 'hardcodedDb',
+                data: { protocol: match[1] },
+              });
+            }
+          },
+        };
+      },
+    },
+    'no-sql-template-literals': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description: 'Admin パッケージ内でテンプレートリテラルに SQL を含めることを禁止する。',
+        },
+        schema: [],
+        messages: {
+          sqlLiteral:
+            'Admin パッケージ内でテンプレートリテラルに SQL 文 ({{keyword}}) を含めないでください。Prisma の型安全な API を使用してください。',
+        },
+      },
+      create(context) {
+        // SQL キーワードを検出する正規表現（リテラル形式で security/detect-non-literal-regexp を回避）
+        const sqlPattern = /\b(select|insert|update|delete|create|drop|alter)\b/i;
+
+        // テンプレートリテラルが Prisma の型安全な $queryRaw / $executeRaw に渡されているか判定する
+        const isSafePrismaRaw = (node) => {
+          const parent = node.parent;
+          if (parent?.type !== 'TaggedTemplateExpression') {
+            return false;
+          }
+          const tag = parent.tag;
+          if (tag.type === 'Identifier') {
+            return tag.name === '$queryRaw' || tag.name === '$executeRaw';
+          }
+          if (tag.type === 'MemberExpression' && tag.property.type === 'Identifier') {
+            return tag.property.name === '$queryRaw' || tag.property.name === '$executeRaw';
+          }
+          return false;
+        };
+
+        return {
+          TemplateLiteral(node) {
+            if (isSafePrismaRaw(node)) {
+              return;
+            }
+            for (const element of node.quasis) {
+              const value = element.value?.cooked ?? element.value?.raw ?? '';
+              const match = value.match(sqlPattern);
+              if (match) {
+                context.report({
+                  node: element,
+                  messageId: 'sqlLiteral',
+                  data: { keyword: match[1] },
+                });
+              }
+            }
+          },
+        };
+      },
+    },
+    'no-raw-unsafe': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Admin パッケージ内で Prisma の $queryRawUnsafe / $executeRawUnsafe を禁止する。',
+        },
+        schema: [],
+        messages: {
+          rawUnsafe:
+            'Admin パッケージでは `{{name}}` の使用を禁止します。型安全な `$queryRaw` または `$executeRaw` を使用してください。',
+        },
+      },
+      create(context) {
+        return {
+          Identifier(node) {
+            if (node.name === '$queryRawUnsafe' || node.name === '$executeRawUnsafe') {
+              context.report({
+                node,
+                messageId: 'rawUnsafe',
+                data: { name: node.name },
+              });
+            }
+          },
+          MemberExpression(node) {
+            if (
+              node.property.type === 'Identifier' &&
+              (node.property.name === '$queryRawUnsafe' ||
+                node.property.name === '$executeRawUnsafe')
+            ) {
+              context.report({
+                node: node.property,
+                messageId: 'rawUnsafe',
+                data: { name: node.property.name },
+              });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
+const adminBffPolicyPlugin = {
+  rules: {
+    'no-api-admin-reference': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Admin Console 以外のパッケージから `/api/admin/*` パスを参照することを禁止する。',
+        },
+        schema: [],
+        messages: {
+          forbidden:
+            '`/api/admin/*` パスは Admin Console の package-local BFF route 専用です。他のパッケージから参照しないでください。',
+        },
+      },
+      create(context) {
+        const checkValue = (node, value) => {
+          if (typeof value === 'string' && value.includes('/api/admin/')) {
+            context.report({ node, messageId: 'forbidden' });
+          }
+        };
+        return {
+          Literal(node) {
+            checkValue(node, node.value);
+          },
+          TemplateElement(node) {
+            checkValue(node, node.value?.cooked);
+            checkValue(node, node.value?.raw);
+          },
+        };
+      },
+    },
+  },
+};
+
 const isImportMetaEnvChain = (node) => {
   if (!node || node.type !== 'MemberExpression' || node.computed) {
     return false;
@@ -898,6 +1085,41 @@ export default tseslint.config(
     },
   },
 
+  // Admin Console の Svelte ファイル設定
+  {
+    files: adminSvelteFiles,
+    plugins: {
+      'frontend-svelte5': frontendSvelte5Plugin,
+      'frontend-css-policy': frontendCssPolicyPlugin,
+    },
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        localStorage: 'readonly',
+        navigator: 'readonly',
+        sessionStorage: 'readonly',
+        window: 'readonly',
+      },
+      parserOptions: {
+        projectService: true,
+        extraFileExtensions: ['.svelte'],
+        parser: tseslint.parser,
+        svelteConfig: adminSvelteConfig,
+      },
+    },
+    rules: {
+      'frontend-svelte5/no-legacy-syntax': 'error',
+      'svelte/valid-compile': 'error',
+      'svelte/require-each-key': 'error',
+      'svelte/no-target-blank': 'error',
+      'svelte/no-navigation-without-resolve': 'off',
+      'svelte/no-at-html-tags': 'error',
+      'svelte/prefer-writable-derived': 'off',
+      'frontend-css-policy/no-svelte-style-tag': 'error',
+      'frontend-css-policy/no-tailwind-arbitrary-values': 'error',
+    },
+  },
+
   // グローバルルール設定
   {
     plugins: {
@@ -941,6 +1163,86 @@ export default tseslint.config(
         {
           type: 'domain-observability',
           pattern: 'packages/frontend/domain/src/observability/**/*',
+          mode: 'full',
+        },
+        {
+          type: 'admin-controller',
+          pattern: 'packages/admin/src/routes/**/+page.server.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-controller',
+          pattern: 'packages/admin/src/routes/**/+layout.server.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-controller',
+          pattern: 'packages/admin/src/routes/**/+server.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-controller',
+          pattern: 'packages/admin/src/routes/**/*.test.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-controller',
+          pattern: 'packages/admin/src/lib/server/infrastructure/**/*.test.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-service',
+          pattern: 'packages/admin/src/lib/server/services/**/*.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-model',
+          pattern: 'packages/admin/src/lib/server/models/**/*.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-infrastructure',
+          pattern: 'packages/admin/src/lib/server/infrastructure/**/*.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-infrastructure',
+          pattern: 'packages/admin/src/hooks.server.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-infrastructure',
+          pattern: 'packages/admin/src/hooks.client.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-view',
+          pattern: 'packages/admin/src/lib/components/**/*.svelte',
+          mode: 'full',
+        },
+        {
+          type: 'admin-route-view',
+          pattern: 'packages/admin/src/routes/**/*.svelte',
+          mode: 'full',
+        },
+        {
+          type: 'admin-hooks',
+          pattern: 'packages/admin/src/hooks/**/*.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-hooks',
+          pattern: 'packages/admin/src/hooks/**/*.svelte.ts',
+          mode: 'full',
+        },
+        {
+          type: 'admin-hooks',
+          pattern: 'packages/admin/src/hooks/**/*.svelte.js',
+          mode: 'full',
+        },
+        {
+          type: 'prisma-client',
+          pattern: 'packages/admin/node_modules/.prisma/**/*',
           mode: 'full',
         },
       ],
@@ -1077,6 +1379,34 @@ export default tseslint.config(
               from: ['ui'],
               allow: ['ui'],
             },
+            {
+              from: ['admin-view'],
+              allow: ['admin-view', 'admin-route-view', 'ui'],
+            },
+            {
+              from: ['admin-route-view'],
+              allow: ['admin-route-view', 'admin-controller', 'admin-view', 'ui'],
+            },
+            {
+              from: ['admin-controller'],
+              allow: ['admin-controller', 'admin-service', 'admin-model', 'admin-infrastructure'],
+            },
+            {
+              from: ['admin-service'],
+              allow: ['admin-service', 'admin-model', 'admin-infrastructure', 'prisma-client'],
+            },
+            {
+              from: ['admin-model'],
+              allow: ['admin-model', 'admin-infrastructure', 'prisma-client'],
+            },
+            {
+              from: ['admin-infrastructure'],
+              allow: ['admin-infrastructure', 'admin-model', 'prisma-client'],
+            },
+            {
+              from: ['admin-hooks'],
+              allow: ['admin-hooks', 'admin-infrastructure'],
+            },
           ],
         },
       ],
@@ -1139,6 +1469,24 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: adminSvelteFiles,
+    ...tseslint.configs.disableTypeChecked,
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'import/order': 'off',
+      'import/extensions': 'off',
+      'prefer-const': 'off',
+      'no-undef': 'off',
+      'security/detect-object-injection': 'off',
+      '@typescript-eslint/consistent-type-definitions': 'off',
+      '@typescript-eslint/no-base-to-string': 'off',
+      '@typescript-eslint/no-useless-default-assignment': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/strict-boolean-expressions': 'off',
+    },
+  },
+
   // Boundaries: 層定義外のファイルや依存を禁止
   {
     files: [
@@ -1146,6 +1494,7 @@ export default tseslint.config(
       ...frontendWebSourceFiles,
       ...frontendDomainSourceFiles,
       ...frontendUiSourceFiles,
+      ...adminSourceFiles,
     ],
     ignores: [
       // .svelte ファイルは SvelteKit 仮想モジュール ($app/*, $lib/*) を import するため除外
@@ -1155,6 +1504,11 @@ export default tseslint.config(
       'packages/web/**/*.svelte',
       'packages/web/**/*.svelte.ts',
       'packages/web/**/*.svelte.js',
+      'packages/admin/**/*.svelte',
+      'packages/admin/**/*.svelte.ts',
+      'packages/admin/**/*.svelte.js',
+      'packages/admin/src/app.d.ts',
+      'packages/admin/src/lib/server/infrastructure/**/*.test.ts',
     ],
     rules: {
       'boundaries/no-unknown-files': 'error',
@@ -2029,6 +2383,106 @@ export default tseslint.config(
       ],
     },
   },
+
+  // Admin Console は顧客向け SDK / domain / app / web を参照しない
+  {
+    files: adminSourceFiles,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@www-template/api',
+              message:
+                'Admin Console では生成された顧客向け SDK (@www-template/api) を import しないでください。Admin 専用の BFF route や Prisma クライアントを利用してください。',
+            },
+            {
+              name: '@www-template/domain',
+              message:
+                'Admin Console では顧客向け domain パッケージ (@www-template/domain) を import しないでください。Admin 専用の model/service を利用してください。',
+            },
+            {
+              name: '@www-template/app',
+              message:
+                'Admin Console では顧客向け app パッケージ (@www-template/app) を import しないでください。',
+            },
+            {
+              name: '@www-template/web',
+              message:
+                'Admin Console では顧客向け web パッケージ (@www-template/web) を import しないでください。',
+            },
+          ],
+          patterns: [
+            {
+              group: ['packages/frontend/api/**', '@www-template/api/**'],
+              message:
+                'Admin Console では生成された顧客向け SDK を import しないでください。Admin 専用の BFF route や Prisma クライアントを利用してください。',
+            },
+            {
+              group: ['packages/frontend/domain/**', '@www-template/domain/**'],
+              message:
+                'Admin Console では顧客向け domain パッケージを import しないでください。Admin 専用の model/service を利用してください。',
+            },
+            {
+              group: ['packages/frontend/app/**', '@www-template/app/**'],
+              message: 'Admin Console では顧客向け app パッケージを import しないでください。',
+            },
+            {
+              group: ['packages/web/**', '@www-template/web/**'],
+              message: 'Admin Console では顧客向け web パッケージを import しないでください。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Admin Console セキュリティルール
+  {
+    files: ['packages/admin/src/**/*.{ts,js}'],
+    plugins: {
+      'admin-security': adminSecurityPlugin,
+    },
+    rules: {
+      'admin-security/no-hardcoded-db-strings': 'error',
+      'admin-security/no-sql-template-literals': 'error',
+      'admin-security/no-raw-unsafe': 'error',
+    },
+  },
+
+  // Admin BFF route: +server.ts は api/admin/**  のみに限定
+  {
+    files: ['packages/admin/src/routes/**/+server.ts'],
+    ignores: ['packages/admin/src/routes/api/admin/**/+server.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message:
+            'Admin Console では `/api/admin/*` 以外の BFF route (`+server.ts`) を禁止します。package-local BFF route は `src/routes/api/admin/**` に限定してください。',
+        },
+      ],
+    },
+  },
+
+  // 他パッケージから /api/admin/ パスを参照しない（生成コードも含む）
+  {
+    files: [
+      ...frontendAppSourceFiles,
+      ...frontendWebSourceFiles,
+      ...frontendDomainSourceFiles,
+      ...frontendUiSourceFiles,
+      'packages/frontend/api/src/generated/**/*',
+    ],
+    plugins: {
+      'admin-bff-policy': adminBffPolicyPlugin,
+    },
+    rules: {
+      'admin-bff-policy/no-api-admin-reference': 'error',
+    },
+  },
   {
     files: [...frontendRoutePageFiles, ...frontendComponentFiles],
     rules: {
@@ -2477,6 +2931,10 @@ export default tseslint.config(
   // vitest config は型情報なしで lint
   {
     files: ['packages/frontend/ui/vitest.config.ts'],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    files: ['packages/admin/vitest.config.ts', 'packages/admin/vite.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
   // Storybook 関連は型情報なしで lint

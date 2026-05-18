@@ -46,7 +46,7 @@ interface AuthSuccess<T, S extends number = 200 | 202> {
 
 interface AuthFailure {
   data: AuthFailureResponse;
-  status: 401 | 503;
+  status: 401 | 403 | 503;
   headers: Headers;
 }
 

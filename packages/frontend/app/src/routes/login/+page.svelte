@@ -9,6 +9,10 @@
 
   async function handlePasskeySignIn() {
     const result = await actions.signInWithPasskey();
+    if (result !== null) {
+      await goto(result);
+      return;
+    }
     if (result === null && data.state.lastSession !== null) {
       await goto('/');
     }

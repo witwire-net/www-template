@@ -60,6 +60,25 @@
               }
             }
           },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service unavailable.",
             "headers": {
@@ -128,6 +147,25 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
                 }
               }
             }
@@ -459,6 +497,25 @@
               }
             }
           },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service unavailable.",
             "headers": {
@@ -543,6 +600,25 @@
           },
           "401": {
             "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
             "headers": {
               "Cache-Control": {
                 "required": true,
@@ -815,6 +891,25 @@
               }
             }
           },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service unavailable.",
             "headers": {
@@ -875,6 +970,25 @@
           },
           "401": {
             "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
             "headers": {
               "Cache-Control": {
                 "required": true,
@@ -966,6 +1080,25 @@
           },
           "401": {
             "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
             "headers": {
               "Cache-Control": {
                 "required": true,
@@ -1107,7 +1240,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AuthFailureResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -1167,6 +1307,25 @@
           },
           "401": {
             "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
             "headers": {
               "Cache-Control": {
                 "required": true,
@@ -1299,7 +1458,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AuthFailureResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -1395,6 +1561,25 @@
               }
             }
           },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service unavailable.",
             "headers": {
@@ -1443,6 +1628,25 @@
           },
           "401": {
             "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
             "headers": {
               "Cache-Control": {
                 "required": true,
@@ -1548,7 +1752,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AuthFailureResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -1606,7 +1817,7 @@
     "schemas": {
       "AuthFailureClassification": {
         "type": "string",
-        "enum": ["unauthenticated", "session-expired", "internal-error"]
+        "enum": ["unauthenticated", "session-expired", "account-suspended", "internal-error"]
       },
       "AuthFailureResponse": {
         "type": "object",

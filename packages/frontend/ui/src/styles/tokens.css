@@ -50,10 +50,14 @@
   --color-text-muted: #a3a3a3;
   --color-text-on-brand: #1f1f1f;
   --color-text-secondary: #575757;
-  --color-error: #ff7675;
-  --color-info: #74b9ff;
-  --color-success: #00b894;
-  --color-warning: #fdcb6e;
+  --success: #00b894;
+  --success-foreground: #ffffff;
+  --warning: #fdcb6e;
+  --warning-foreground: #292929;
+  --info: #74b9ff;
+  --info-foreground: #ffffff;
+  --error: #ff7675;
+  --error-foreground: #ffffff;
 
   --radius: 0.875rem;
   --radius-sm: 0.5rem;
@@ -149,6 +153,14 @@
   --color-text-muted: #a3a3a3;
   --color-text-on-brand: #1f1f1f;
   --color-text-secondary: #d4d4d4;
+  --success: #00b894;
+  --success-foreground: #ffffff;
+  --warning: #fdcb6e;
+  --warning-foreground: #292929;
+  --info: #74b9ff;
+  --info-foreground: #ffffff;
+  --error: #ff7675;
+  --error-foreground: #ffffff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

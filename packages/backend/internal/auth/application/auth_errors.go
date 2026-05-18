@@ -16,6 +16,10 @@ var (
 	ErrInternalError              = errors.New("internal-error")
 	ErrBadRequest                 = errors.New("bad auth request")
 	ErrLastPasskeyCannotBeDeleted = errors.New("last passkey cannot be deleted")
+	// ErrAccountSuspended はアカウントが管理者により停止されている場合に返すエラー。
+	// 停止中アカウントに対しては新規トークン発行、セッション認可、refresh rotation を拒否する。
+	// HTTP レスポンスでは 403 Forbidden + error="account-suspended" で返す。
+	ErrAccountSuspended = errors.New("account-suspended")
 )
 
 // generateURLToken は tokenID に基づいて独立した暗号論的乱数 secret を生成し、

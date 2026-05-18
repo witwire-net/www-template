@@ -106,7 +106,7 @@ func TestAuthStoreOutageFailsClosed(t *testing.T) {
 	// セッションストア障害時の fail-closed を検証
 	// JWT 検証自体は成功するが、ストアへの GetSession で障害が発生する
 	failingStore := failingSessionStore{}
-	tokenService := application.NewTokenService(newStubRefreshTokenStore(), failingStore, testConfig().AuthRuntime(), env.now, newSequentialPolicy())
+	tokenService := application.NewTokenService(newStubRefreshTokenStore(), failingStore, nil, testConfig().AuthRuntime(), env.now, newSequentialPolicy())
 	auth := application.NewAuthService(newStubAuthStateRepository(env.now), stubAuthAccountRepositoryWithMember(), nil, nil, env.now, newSequentialPolicy(), testConfig().AuthRuntime())
 	auth.UseTokenService(tokenService)
 	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService})
@@ -410,7 +410,7 @@ func TestAuthRepeatedFailuresEnterTemporaryLock(t *testing.T) {
 func injectTestTokenService(auth *application.AuthService, clock func() time.Time) (*application.TokenService, *application.SessionService) {
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, testConfig().AuthRuntime(), clock, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 	sessionService := application.NewSessionService(sessionStore, refreshStore)
 	return tokenService, sessionService
@@ -458,7 +458,7 @@ func newAuthTestEnvWithSender(t *testing.T, sender application.AccountRecoverySe
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, testConfig().AuthRuntime(), clock.Now, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock.Now, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 	sessionService := application.NewSessionService(sessionStore, refreshStore)
 

@@ -18,6 +18,14 @@ func newJWTAuthTestEnv(t *testing.T) authTestEnv {
 	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
 	stateRepo := newStubAuthStateRepository(clock.Now)
 	accountRepo := stubAuthAccountRepositoryWithMember()
+	return newJWTAuthTestEnvWithRepository(t, clock, stateRepo, accountRepo)
+}
+
+// newJWTAuthTestEnvWithRepository は指定された account repository を使用して
+// JWT 認証テスト環境を構築する。accountRepo は AuthService と TokenService の
+// 両方に注入されるため、login / bearer 認可 / refresh が同じ account status を参照する。
+func newJWTAuthTestEnvWithRepository(t *testing.T, clock *mutableClock, stateRepo *stubAuthStateRepository, accountRepo application.AuthAccountRepository) authTestEnv {
+	t.Helper()
 	invite := &stubInvitationPasskeyRegistrar{}
 	sender := &capturingAccountRecoverySender{}
 	cfg := testConfig()
@@ -26,7 +34,7 @@ func newJWTAuthTestEnv(t *testing.T) authTestEnv {
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, cfg.AuthRuntime(), clock.Now, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, accountRepo, cfg.AuthRuntime(), clock.Now, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 	sessionService := application.NewSessionService(sessionStore, refreshStore)
 
@@ -40,6 +48,16 @@ func newJWTAuthTestEnv(t *testing.T) authTestEnv {
 		advance:      clock.Advance,
 		refreshStore: refreshStore,
 	}
+}
+
+// newJWTAuthTestEnvWithAccountRepo はテストが account status を途中で変更できるように、
+// mutable な stub repository と JWT 認証環境をまとめて返す。
+func newJWTAuthTestEnvWithAccountRepo(t *testing.T) (authTestEnv, *stubAuthAccountRepository) {
+	t.Helper()
+	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
+	stateRepo := newStubAuthStateRepository(clock.Now)
+	accountRepo := stubAuthAccountRepositoryWithMember()
+	return newJWTAuthTestEnvWithRepository(t, clock, stateRepo, accountRepo), accountRepo
 }
 
 // stubRefreshTokenStore はテスト用のインメモリ RefreshTokenStore。
@@ -172,6 +190,22 @@ func TestAuthPasskeyFinishReturnsJWTAndRefreshToken(t *testing.T) {
 	}
 }
 
+// [AUTH-BE-S054] suspended account は valid passkey assertion 後も token pair を発行されない。
+func TestAuthPasskeyFinishRejectsSuspendedAccount(t *testing.T) {
+	t.Parallel()
+	env, accountRepo := newJWTAuthTestEnvWithAccountRepo(t)
+	revokedAt := env.now()
+	accountRepo.account = accountRepo.account.WithStatus("suspended", &revokedAt)
+
+	challenge := startPasskey(t, env.router, "member@example.com")
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish",
+		map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
+
+	assertStatus(t, response, stdhttp.StatusForbidden)
+	assertNoStore(t, response)
+	assertFailureCode(t, response, "account-suspended")
+}
+
 // [AUTH-BE-S043] Refresh endpoint returns new pair
 func TestAuthRefreshReturnsNewPair(t *testing.T) {
 	t.Parallel()
@@ -188,6 +222,24 @@ func TestAuthRefreshReturnsNewPair(t *testing.T) {
 	}
 	if body["refreshToken"] == "" {
 		t.Fatal("expected new refreshToken")
+	}
+}
+
+// [AUTH-BE-S058] suspended account の refresh は rotation と新 token pair 発行を拒否する。
+func TestAuthRefreshRejectsSuspendedAccountWithoutRotation(t *testing.T) {
+	t.Parallel()
+	env, accountRepo := newJWTAuthTestEnvWithAccountRepo(t)
+	_, refreshToken := loginWithJWT(t, env.router, "member@example.com")
+	revokedAt := env.now().Add(time.Second)
+	accountRepo.account = accountRepo.account.WithStatus("suspended", &revokedAt)
+
+	response := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/refresh", map[string]any{"refreshToken": refreshToken}, "")
+
+	assertStatus(t, response, stdhttp.StatusForbidden)
+	assertNoStore(t, response)
+	assertFailureCode(t, response, "account-suspended")
+	if len(env.refreshStore.data) != 0 {
+		t.Fatalf("expected refresh token family to be revoked without new rotation, got %d tokens", len(env.refreshStore.data))
 	}
 }
 
@@ -291,7 +343,7 @@ func TestAuthMultipleAccountsIndependent(t *testing.T) {
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, cfg.AuthRuntime(), clock.Now, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, cfg.AuthRuntime(), clock.Now, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 
 	router := NewRouter(cfg, Dependencies{Auth: auth, TokenService: tokenService})
@@ -324,6 +376,70 @@ func TestAuthListSessionsReturnsSessions(t *testing.T) {
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(sessions))
 	}
+}
+
+// [AUTH-BE-S055] [AUTH-BE-S059] suspended account の既存 bearer access token は 403 の stable failure で拒否される。
+func TestAuthBearerRejectsSuspendedAccount(t *testing.T) {
+	t.Parallel()
+	env, accountRepo := newJWTAuthTestEnvWithAccountRepo(t)
+	accessToken, _ := loginWithJWT(t, env.router, "member@example.com")
+	revokedAt := env.now().Add(time.Second)
+	accountRepo.account = accountRepo.account.WithStatus("suspended", &revokedAt)
+
+	response := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/sessions", nil, accessToken)
+
+	assertStatus(t, response, stdhttp.StatusForbidden)
+	assertNoStore(t, response)
+	assertFailureCode(t, response, "account-suspended")
+}
+
+// [AUTH-BE-S056] session_revoked_after 以前に発行された bearer access token は拒否される。
+func TestAuthBearerRejectsSessionRevokedAfterOldSession(t *testing.T) {
+	t.Parallel()
+	env, accountRepo := newJWTAuthTestEnvWithAccountRepo(t)
+	accessToken, _ := loginWithJWT(t, env.router, "member@example.com")
+	revokedAt := env.now()
+	accountRepo.account = accountRepo.account.WithStatus("active", &revokedAt)
+
+	response := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/sessions", nil, accessToken)
+
+	assertStatus(t, response, stdhttp.StatusForbidden)
+	assertNoStore(t, response)
+	assertFailureCode(t, response, "account-suspended")
+}
+
+// [AUTH-BE-S057] restored account は suspend 前 session では復帰できず、再ログインのみ許可される。
+func TestAuthRestoredAccountRejectsPreSuspendSession(t *testing.T) {
+	t.Parallel()
+	env, accountRepo := newJWTAuthTestEnvWithAccountRepo(t)
+	oldAccessToken, _ := loginWithJWT(t, env.router, "member@example.com")
+	revokedAt := env.now()
+	accountRepo.account = accountRepo.account.WithStatus("active", &revokedAt)
+
+	oldResponse := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/sessions", nil, oldAccessToken)
+	assertStatus(t, oldResponse, stdhttp.StatusForbidden)
+	assertFailureCode(t, oldResponse, "account-suspended")
+
+	env.advance(time.Second)
+	newAccessToken, _ := loginWithJWT(t, env.router, "member@example.com")
+	newResponse := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/sessions", nil, newAccessToken)
+	assertStatus(t, newResponse, stdhttp.StatusOK)
+	assertNoStore(t, newResponse)
+}
+
+// [AUTH-BE-S057] restored account は同一秒内でも session_revoked_after 後の再ログインなら成功する。
+func TestAuthRestoredAccountAllowsSameSecondPostSuspendLogin(t *testing.T) {
+	t.Parallel()
+	env, accountRepo := newJWTAuthTestEnvWithAccountRepo(t)
+	revokedAt := env.now().Add(500 * time.Millisecond)
+	accountRepo.account = accountRepo.account.WithStatus("active", &revokedAt)
+
+	env.advance(800 * time.Millisecond)
+	newAccessToken, _ := loginWithJWT(t, env.router, "member@example.com")
+	newResponse := performJSON(t, env.router, stdhttp.MethodGet, "/api/v1/sessions", nil, newAccessToken)
+
+	assertStatus(t, newResponse, stdhttp.StatusOK)
+	assertNoStore(t, newResponse)
 }
 
 // [AUTH-BE-S048] Revoke session endpoint invalidates session
@@ -386,7 +502,7 @@ func TestAuthRevokeOtherAccountSessionForbidden(t *testing.T) {
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, cfg.AuthRuntime(), clock.Now, seq)
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, cfg.AuthRuntime(), clock.Now, seq)
 	auth.UseTokenService(tokenService)
 	sessionService := application.NewSessionService(sessionStore, refreshStore)
 
@@ -425,7 +541,7 @@ func TestAuthRefreshTokenTTL24hApplied(t *testing.T) {
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, cfg.AuthRuntime(), clock.Now, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, cfg.AuthRuntime(), clock.Now, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 
 	router := NewRouter(cfg, Dependencies{Auth: auth, TokenService: tokenService})
@@ -451,7 +567,7 @@ func TestAuthJWTStoreUnavailableReturnsInternalError(t *testing.T) {
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, testConfig().AuthRuntime(), clock.Now, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock.Now, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 
 	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService})

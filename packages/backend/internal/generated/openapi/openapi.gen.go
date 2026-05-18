@@ -22,9 +22,10 @@ const (
 
 // Defines values for AuthFailureClassification.
 const (
-	InternalError   AuthFailureClassification = "internal-error"
-	SessionExpired  AuthFailureClassification = "session-expired"
-	Unauthenticated AuthFailureClassification = "unauthenticated"
+	AccountSuspended AuthFailureClassification = "account-suspended"
+	InternalError    AuthFailureClassification = "internal-error"
+	SessionExpired   AuthFailureClassification = "session-expired"
+	Unauthenticated  AuthFailureClassification = "unauthenticated"
 )
 
 // Defines values for BearerAuthScheme.
@@ -1080,6 +1081,23 @@ func (response Logout401JSONResponse) VisitLogoutResponse(w http.ResponseWriter)
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type Logout403ResponseHeaders struct {
+	CacheControl string
+}
+
+type Logout403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers Logout403ResponseHeaders
+}
+
+func (response Logout403JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type Logout503ResponseHeaders struct {
 	CacheControl string
 }
@@ -1135,6 +1153,23 @@ func (response FinishPasskeyAuthentication400JSONResponse) VisitFinishPasskeyAut
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAuthentication403ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAuthentication403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishPasskeyAuthentication403ResponseHeaders
+}
+
+func (response FinishPasskeyAuthentication403JSONResponse) VisitFinishPasskeyAuthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -1392,6 +1427,23 @@ func (response FinishReauthentication401JSONResponse) VisitFinishReauthenticatio
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type FinishReauthentication403ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishReauthentication403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishReauthentication403ResponseHeaders
+}
+
+func (response FinishReauthentication403JSONResponse) VisitFinishReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type FinishReauthentication503ResponseHeaders struct {
 	CacheControl string
 }
@@ -1464,6 +1516,23 @@ func (response StartReauthentication401JSONResponse) VisitStartReauthenticationR
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartReauthentication403ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartReauthentication403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartReauthentication403ResponseHeaders
+}
+
+func (response StartReauthentication403JSONResponse) VisitStartReauthenticationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -1662,6 +1731,23 @@ func (response RefreshToken401JSONResponse) VisitRefreshTokenResponse(w http.Res
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RefreshToken403ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RefreshToken403ResponseHeaders
+}
+
+func (response RefreshToken403JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type RefreshToken503ResponseHeaders struct {
 	CacheControl string
 }
@@ -1716,6 +1802,23 @@ func (response ListPasskeys401JSONResponse) VisitListPasskeysResponse(w http.Res
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPasskeys403ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListPasskeys403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ListPasskeys403ResponseHeaders
+}
+
+func (response ListPasskeys403JSONResponse) VisitListPasskeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -1792,6 +1895,23 @@ func (response FinishPasskeyAddition401JSONResponse) VisitFinishPasskeyAdditionR
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type FinishPasskeyAddition403ResponseHeaders struct {
+	CacheControl string
+}
+
+type FinishPasskeyAddition403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers FinishPasskeyAddition403ResponseHeaders
+}
+
+func (response FinishPasskeyAddition403JSONResponse) VisitFinishPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -1877,7 +1997,9 @@ type SendDeviceLink403ResponseHeaders struct {
 }
 
 type SendDeviceLink403JSONResponse struct {
-	Body    AuthOperationErrorResponse
+	Body struct {
+		union json.RawMessage
+	}
 	Headers SendDeviceLink403ResponseHeaders
 }
 
@@ -1886,7 +2008,7 @@ func (response SendDeviceLink403JSONResponse) VisitSendDeviceLinkResponse(w http
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response.Body)
+	return json.NewEncoder(w).Encode(response.Body.union)
 }
 
 type SendDeviceLink503ResponseHeaders struct {
@@ -1943,6 +2065,23 @@ func (response StartPasskeyAddition401JSONResponse) VisitStartPasskeyAdditionRes
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StartPasskeyAddition403ResponseHeaders struct {
+	CacheControl string
+}
+
+type StartPasskeyAddition403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers StartPasskeyAddition403ResponseHeaders
+}
+
+func (response StartPasskeyAddition403JSONResponse) VisitStartPasskeyAdditionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -2026,7 +2165,9 @@ type DeletePasskey403ResponseHeaders struct {
 }
 
 type DeletePasskey403JSONResponse struct {
-	Body    AuthOperationErrorResponse
+	Body struct {
+		union json.RawMessage
+	}
 	Headers DeletePasskey403ResponseHeaders
 }
 
@@ -2035,7 +2176,7 @@ func (response DeletePasskey403JSONResponse) VisitDeletePasskeyResponse(w http.R
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response.Body)
+	return json.NewEncoder(w).Encode(response.Body.union)
 }
 
 type DeletePasskey409ResponseHeaders struct {
@@ -2113,6 +2254,23 @@ func (response ListSessions401JSONResponse) VisitListSessionsResponse(w http.Res
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListSessions403ResponseHeaders struct {
+	CacheControl string
+}
+
+type ListSessions403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers ListSessions403ResponseHeaders
+}
+
+func (response ListSessions403JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ListSessions503ResponseHeaders struct {
 	CacheControl string
 }
@@ -2164,6 +2322,23 @@ func (response RevokeOtherSessions401JSONResponse) VisitRevokeOtherSessionsRespo
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeOtherSessions403ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevokeOtherSessions403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RevokeOtherSessions403ResponseHeaders
+}
+
+func (response RevokeOtherSessions403JSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -2229,7 +2404,9 @@ type RevokeSession403ResponseHeaders struct {
 }
 
 type RevokeSession403JSONResponse struct {
-	Body    AuthOperationErrorResponse
+	Body struct {
+		union json.RawMessage
+	}
 	Headers RevokeSession403ResponseHeaders
 }
 
@@ -2238,7 +2415,7 @@ func (response RevokeSession403JSONResponse) VisitRevokeSessionResponse(w http.R
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response.Body)
+	return json.NewEncoder(w).Encode(response.Body.union)
 }
 
 type RevokeSession503ResponseHeaders struct {

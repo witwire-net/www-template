@@ -12,6 +12,7 @@ import MenuAction from './sidebar-menu-action.svelte';
 import MenuBadge from './sidebar-menu-badge.svelte';
 import MenuButton from './sidebar-menu-button.svelte';
 import MenuItem from './sidebar-menu-item.svelte';
+import MenuLink from './sidebar-menu-link.svelte';
 import MenuSkeleton from './sidebar-menu-skeleton.svelte';
 import MenuSubButton from './sidebar-menu-sub-button.svelte';
 import MenuSubItem from './sidebar-menu-sub-item.svelte';
@@ -38,6 +39,7 @@ export {
   MenuBadge,
   MenuButton,
   MenuItem,
+  MenuLink,
   MenuSkeleton,
   MenuSub,
   MenuSubButton,
@@ -62,6 +64,7 @@ export {
   MenuBadge as SidebarMenuBadge,
   MenuButton as SidebarMenuButton,
   MenuItem as SidebarMenuItem,
+  MenuLink as SidebarMenuLink,
   MenuSkeleton as SidebarMenuSkeleton,
   MenuSub as SidebarMenuSub,
   MenuSubButton as SidebarMenuSubButton,

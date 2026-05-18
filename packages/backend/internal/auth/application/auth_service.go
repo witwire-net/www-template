@@ -271,6 +271,12 @@ func (s *AuthService) finishPasskeyAuthenticationWebAuthn(ctx context.Context, i
 		return AuthSession{}, ErrBadRequest
 	}
 
+	// 有効な WebAuthn assertion 後、アカウント停止状態を検証する。
+	// 停止中アカウントは新規 token pair を発行せず拒否する。
+	if account.IsSuspended() {
+		return AuthSession{}, ErrAccountSuspended
+	}
+
 	requestID, err := s.policy.Next()
 	if err != nil {
 		return AuthSession{}, ErrInternalError
@@ -390,6 +396,11 @@ func (s *AuthService) StartPasskeyRegistration(ctx context.Context, input StartP
 		return PasskeyChallenge{}, err
 	}
 
+	// アカウント停止状態を検証する。停止中は registration ceremony を開始しない。
+	if err := s.ensureAccountActive(ctx, accountID); err != nil {
+		return PasskeyChallenge{}, err
+	}
+
 	// WebAuthn provider 必須
 	if s.webauthn == nil {
 		return PasskeyChallenge{}, ErrInternalError
@@ -453,6 +464,11 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 		return AuthSession{}, ErrBadRequest
 	}
 
+	// アカウント停止状態を検証する。停止中は side effect（passkey 追加・セッション消費）を実行しない。
+	if err := s.ensureAccountActive(ctx, recoverySession.AccountID()); err != nil {
+		return AuthSession{}, err
+	}
+
 	// recovery path: challengeKey は空文字列を渡す（provider が clientDataJSON から自己解決）
 	credentialHandle, credData, err := s.resolveCredentialHandleAndData(ctx, "", recoverySession.AccountID(), input.Credential)
 	if err != nil {
@@ -491,6 +507,7 @@ func (s *AuthService) RegisterPasskey(ctx context.Context, input RegisterPasskey
 
 	// JWT ペアを発行し、認証セッションを構成する。
 	// TokenService が未注入の場合は fail-closed で内部エラーを返す。
+	// issueAuthSession 内で ensureAccountActive を再度実行し defense-in-depth とする。
 	authSession := AuthSession{
 		RequestID:           requestID,
 		AccountID:           account.AccountID(),
@@ -585,13 +602,29 @@ func (s *AuthService) Logout(ctx context.Context, token string) (string, error) 
 	claims, err := s.tokenService.VerifyAccessToken(token)
 	if err == nil {
 		// セッションが既に失効していないか確認する
-		_, err := s.tokenService.sessionStore.GetSession(ctx, claims.SessionID)
+		session, err := s.tokenService.sessionStore.GetSession(ctx, claims.SessionID)
 		if err != nil {
 			if errors.Is(err, domain.ErrSessionNotFound) {
 				return "", ErrSessionExpired
 			}
 			return "", ErrInternalError
 		}
+
+		// アカウント停止状態と session_revoked_after を検証する
+		account, err := s.accountRepo.FindByID(ctx, claims.AccountID)
+		if err != nil {
+			if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
+				return "", ErrInternalError
+			}
+			return "", ErrSessionExpired
+		}
+		if account.IsSuspended() {
+			return "", ErrAccountSuspended
+		}
+		if sra := account.SessionRevokedAfter(); sra != nil && !session.LoginAt.After(*sra) {
+			return "", ErrAccountSuspended
+		}
+
 		if revokeErr := s.tokenService.RevokeSession(ctx, claims.AccountID, claims.SessionID); revokeErr != nil {
 			return "", ErrInternalError
 		}
@@ -615,13 +648,29 @@ func (s *AuthService) AuthorizeSession(ctx context.Context, token string) (AuthS
 	claims, err := s.tokenService.VerifyAccessToken(token)
 	if err == nil {
 		// セッションが既に失効していないか確認する
-		_, err := s.tokenService.sessionStore.GetSession(ctx, claims.SessionID)
+		session, err := s.tokenService.sessionStore.GetSession(ctx, claims.SessionID)
 		if err != nil {
 			if errors.Is(err, domain.ErrSessionNotFound) {
 				return AuthSession{}, ErrSessionExpired
 			}
 			return AuthSession{}, ErrInternalError
 		}
+
+		// アカウント停止状態と session_revoked_after を検証する
+		account, err := s.accountRepo.FindByID(ctx, claims.AccountID)
+		if err != nil {
+			if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
+				return AuthSession{}, ErrInternalError
+			}
+			return AuthSession{}, ErrSessionExpired
+		}
+		if account.IsSuspended() {
+			return AuthSession{}, ErrAccountSuspended
+		}
+		if sra := account.SessionRevokedAfter(); sra != nil && !session.LoginAt.After(*sra) {
+			return AuthSession{}, ErrAccountSuspended
+		}
+
 		return AuthSession{
 			AccountID: claims.AccountID,
 			SessionID: claims.SessionID,
@@ -662,12 +711,33 @@ func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID strin
 	}, nil
 }
 
+// ensureAccountActive は指定アカウントが active であることを検証する。
+// 停止中アカウントの場合は ErrAccountSuspended を返す。
+// DB 障害時は ErrInternalError を返す。
+func (s *AuthService) ensureAccountActive(ctx context.Context, accountID string) error {
+	account, err := s.accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
+			return ErrInternalError
+		}
+		return ErrBadRequest
+	}
+	if account.IsSuspended() {
+		return ErrAccountSuspended
+	}
+	return nil
+}
+
 // issueAuthSession は TokenService を用いて JWT アクセストークン・リフレッシュトークン・セッションID を発行し、
 // 与えられた AuthSession に付与して返す。これは認証完了後の唯一のセッション発行パスである。
 // TokenService が未注入の場合は fail-closed で内部エラーを返す。
+// 発行前にアカウント停止状態を再度検証し、 defense-in-depth とする。
 func (s *AuthService) issueAuthSession(ctx context.Context, authSession AuthSession, accountID, clientIP, userAgent string) (AuthSession, error) {
 	if s.tokenService == nil {
 		return AuthSession{}, ErrInternalError
+	}
+	if err := s.ensureAccountActive(ctx, accountID); err != nil {
+		return AuthSession{}, err
 	}
 	fp, devName, ipHash := s.deviceMetadata(clientIP, userAgent)
 	accessToken, refreshToken, sessionID, err := s.tokenService.Issue(ctx, accountID, fp, devName, ipHash, "")

@@ -40,6 +40,38 @@ services:
       - pnpm-store:/home/node/.local/share/pnpm/store
       - agent-browser-cache:/home/node/.agent-browser
 
+  admin:
+    build:
+      context: ..
+      dockerfile: packages/admin/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+      opensearch:
+        condition: service_started
+    environment:
+      ADMIN_DATABASE_URL: postgres://www-template:www-template@postgres:5432/www_template_admin?schema=admin
+      PRODUCT_DATABASE_URL: postgres://admin_console:admin_console@postgres:5432/www-template
+      VALKEY_URL: redis://valkey:6379/0
+      ADMIN_VALKEY_URL: redis://valkey:6379/1
+      OPENSEARCH_URL: http://opensearch:9200
+      ADMIN_OPENSEARCH_AUDIT_REPLICAS: '0'
+      ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX: admin-audit
+      PRODUCT_OPENSEARCH_INDEX_PREFIX: www-template
+      ADMIN_ORIGIN: http://localhost:3001
+      ADMIN_JWT_SECRET: dev-admin-jwt-secret-change-in-production
+      ADMIN_BOOTSTRAP_ENABLED: 'true'
+      ADMIN_BOOTSTRAP_SECRET_HASH: '$$2a$$10$$devbootstraphashchangeinprod'
+      ADMIN_BOOTSTRAP_EXPIRES_AT: '2099-12-31T23:59:59Z'
+      ADMIN_RP_ID: localhost
+      ADMIN_RP_NAME: Admin Console Dev
+      NODE_ENV: development
+    ports:
+      - '3001:3000'
+    restart: unless-stopped
+
   postgres:
     image: postgres:18.3
     environment:
@@ -55,6 +87,7 @@ services:
     restart: unless-stopped
     volumes:
       - postgres18-data:/var/lib/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d:ro
 
   valkey:
     image: valkey/valkey:9.0.3-alpine

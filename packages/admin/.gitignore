@@ -1,0 +1,35 @@
+# Admin Console .gitignore
+# シークレット・ビルド成果物・依存を git から除外する
+
+# ビルド成果物
+build/
+.svelte-kit/
+dist/
+
+# 依存
+node_modules/
+
+# 環境変数（シークレット実値を含む）
+.env
+.env.*.local
+
+# ログ
+*.log
+
+# Prisma generated（必要に応じてコミットする場合もあるが、原則生成物は除外）
+# ただし migration SQL はコミット対象
+src/generated/
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# テスト
+ coverage/
+.nyc_output/

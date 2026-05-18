@@ -22,6 +22,7 @@ scalar UlidId extends string;
 enum AuthFailureClassification {
   unauthenticated: "unauthenticated",
   sessionExpired: "session-expired",
+  accountSuspended: "account-suspended",
   internalError: "internal-error",
 }
 

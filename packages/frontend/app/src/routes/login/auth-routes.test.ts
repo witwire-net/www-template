@@ -10,6 +10,7 @@ import {
 } from '@www-template/domain/auth/recovery';
 import {
   applyExpiredSession,
+  applyAccountSuspended,
   applyMissingSession,
   clearAuthSession,
   createAuthSessionInitialState,
@@ -356,6 +357,30 @@ describe('[AUTH-FE-S009] auth routes は no-store surface として配信され�
     expect(state.recoveryTokenId).toBeNull();
     expect(state.recoverySessionId).toBeNull();
     expect(state.lastCacheControl).toBeNull();
+  });
+});
+
+describe('suspended account frontend flow', () => {
+  it('[AUTH-FE-S041] account-suspended failure routes to dedicated guidance without session', () => {
+    const state = createAuthSessionInitialState();
+    const intent = applyAccountSuspended(state, 'no-store');
+
+    expect(intent).toBe('/account-suspended');
+    expect(state.phase).toBe('account-suspended');
+    expect(state.session).toBeNull();
+    expect(state.lastFailure).toBe('account-suspended');
+  });
+
+  it('[AUTH-FE-S043] login start and recovery request surfaces stay non-revealing', () => {
+    const recoverySent = createGenericRecoverySentView();
+    const loginStartFailureCopy =
+      'パスキー認証を完了できませんでした。時間を置いて再度お試しください。';
+
+    expect(loginStartFailureCopy).not.toContain('停止');
+    expect(loginStartFailureCopy).not.toContain('suspended');
+    expect(recoverySent.description).not.toContain('停止');
+    expect(recoverySent.description).not.toContain('suspended');
+    expect(recoverySent.description).not.toContain('存在しません');
   });
 });
 

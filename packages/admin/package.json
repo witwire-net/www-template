@@ -1,0 +1,43 @@
+{
+  "name": "@www-template/admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "node --max-old-space-size=4096 --expose-gc ../../scripts/eslint-gc.js --no-inline-config --max-warnings 0 src",
+    "prisma:admin:generate": "prisma generate --schema prisma/admin/schema.prisma",
+    "prisma:admin:migrate:deploy": "prisma migrate deploy --schema prisma/admin/schema.prisma",
+    "prisma:admin:migrate:dev": "prisma migrate dev --schema prisma/admin/schema.prisma",
+    "prisma:product:generate": "prisma generate --schema prisma/product/schema.prisma"
+  },
+  "dependencies": {
+    "@opensearch-project/opensearch": "^3.5.0",
+    "@prisma/client": "^6.6.0",
+    "@simplewebauthn/browser": "^11.0.0",
+    "@simplewebauthn/server": "^11.0.0",
+    "@sveltejs/adapter-node": "^5.2.12",
+    "@www-template/ui": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "ioredis": "^5.6.0",
+    "jose": "^5.10.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "@sveltejs/kit": "^2.20.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "prisma": "^6.6.0",
+    "svelte": "^5.25.0",
+    "svelte-check": "^4.2.0",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.9.0",
+    "vite": "^6.3.0",
+    "vitest": "^3.1.0"
+  }
+}

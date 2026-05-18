@@ -31,7 +31,7 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
       state.error = null;
 
       try {
-        // Step 1: Start ceremony — get challenge from server
+        // 認証開始は public surface のため、account existence や suspended 状態を表示しない。
         const startResponse = await authApi.startPasskeyAuthentication(state.identifier.trim());
 
         if (startResponse.status !== 200) {
@@ -44,7 +44,7 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
         state.lastChallengeRequestId = startResponse.data.requestId;
         state.lastCacheControl = startResponse.headers.get('cache-control');
 
-        // Step 2: Call browser WebAuthn API — normalize browser/device errors only
+        // ブラウザの WebAuthn API だけを呼び、端末起因の失敗は汎用文言へ正規化する。
         let credential;
         try {
           credential = await getWebAuthnAssertion(startResponse.data);
@@ -54,7 +54,7 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
           return null;
         }
 
-        // Step 3: Finish ceremony — send assertion to server
+        // valid credential 確認後の finish 応答だけを認証済み失敗分類として扱う。
         const finishResponse = await authApi.finishPasskeyAuthentication(credential);
 
         state.lastCacheControl = finishResponse.headers.get('cache-control');
@@ -74,6 +74,11 @@ function usePasskeyLogin(): { data: PasskeyLoginData; actions: PasskeyLoginActio
             finishResponse.data.error,
             '認証基盤を利用できませんでした。'
           );
+        }
+
+        if (finishResponse.status === 403 && finishResponse.data.error === 'account-suspended') {
+          state.lastSession = null;
+          return authSession.actions.handleFailure(finishResponse.data.error);
         }
 
         state.error = finishResponse.data.error;

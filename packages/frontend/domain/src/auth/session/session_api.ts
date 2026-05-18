@@ -14,6 +14,9 @@ import {
 } from '@www-template/api';
 
 const SESSION_EXPIRED_ERROR = 'session-expired';
+const ACCOUNT_SUSPENDED_ERROR = 'account-suspended';
+
+type SessionAuthFailure = 'session-expired' | 'unauthenticated' | 'account-suspended';
 
 /** ドメイン層で使用するデバイスセッション表示モデル。 */
 export interface DeviceSession {
@@ -32,7 +35,7 @@ export interface DeviceSession {
  */
 export type ListDevicesResult =
   | { ok: true; data: DeviceSession[] }
-  | { ok: false; error: string; status?: number; failure?: 'session-expired' | 'unauthenticated' };
+  | { ok: false; error: string; status?: number; failure?: SessionAuthFailure };
 
 /**
  * 認証操作の結果。
@@ -40,7 +43,7 @@ export type ListDevicesResult =
  */
 export type AuthOperationResult =
   | { ok: true }
-  | { ok: false; error: string; failure?: 'session-expired' | 'unauthenticated' };
+  | { ok: false; error: string; failure?: SessionAuthFailure };
 
 /**
  * 401 レスポンスから認証失敗分類を抽出する共通ヘルパー。
@@ -51,15 +54,19 @@ export type AuthOperationResult =
 function extractAuthFailure(response: {
   status: number;
   data: unknown;
-}): 'session-expired' | 'unauthenticated' | null {
+}): SessionAuthFailure | null {
   if (
-    response.status === 401 &&
+    (response.status === 401 || response.status === 403) &&
     typeof response.data === 'object' &&
     response.data !== null &&
     'error' in response.data
   ) {
     const err = (response.data as { error: string }).error;
-    if (err === SESSION_EXPIRED_ERROR || err === 'unauthenticated') {
+    if (
+      err === SESSION_EXPIRED_ERROR ||
+      err === 'unauthenticated' ||
+      err === ACCOUNT_SUSPENDED_ERROR
+    ) {
       return err;
     }
   }
@@ -79,13 +86,17 @@ export async function fetchDevices(headers: Record<string, string>): Promise<Lis
     if (response.status === 200 && 'sessions' in response.data) {
       return { ok: true, data: response.data.sessions as DeviceSession[] };
     }
-    if (response.status === 401 && 'error' in response.data) {
+    if ((response.status === 401 || response.status === 403) && 'error' in response.data) {
       const err = (response.data as { error: string }).error;
-      if (err === SESSION_EXPIRED_ERROR || err === 'unauthenticated') {
+      if (
+        err === SESSION_EXPIRED_ERROR ||
+        err === 'unauthenticated' ||
+        err === ACCOUNT_SUSPENDED_ERROR
+      ) {
         return {
           ok: false,
           error: 'デバイス一覧の取得に失敗しました。',
-          status: 401,
+          status: response.status,
           failure: err,
         };
       }

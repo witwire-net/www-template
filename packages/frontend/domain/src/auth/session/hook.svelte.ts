@@ -4,6 +4,7 @@ import { authApi, refreshToken } from '@www-template/api';
 
 import {
   addAuthenticatedSession,
+  applyAccountSuspended,
   applyExpiredSession,
   applyInternalError,
   applyMissingSession,
@@ -29,6 +30,7 @@ import type {
 import type { DeviceSession } from './session_api';
 
 const SESSION_EXPIRED_ERROR = 'session-expired';
+const ACCOUNT_SUSPENDED_ERROR = 'account-suspended';
 
 interface AuthSessionData {
   state: AuthSessionState;
@@ -205,6 +207,27 @@ function handleRefreshFailureForTarget(
 }
 
 /**
+ * suspended account 応答を対象セッション単位で処理する。
+ *
+ * @param authState - 認証セッション state
+ * @param targetSessionId - 停止対象と判定されたセッション ID
+ * @param cacheControl - API 応答の cache-control 値
+ * @returns アクティブセッションなら案内 route、非アクティブなら null
+ */
+function handleAccountSuspendedForTarget(
+  authState: AuthSessionState,
+  targetSessionId: string,
+  cacheControl: string | null = null
+): AuthRouteIntent | null {
+  if (authState.activeSessionId !== targetSessionId) {
+    authState.sessions = authState.sessions?.filter((s) => s.sessionId !== targetSessionId) ?? [];
+    return null;
+  }
+
+  return applyAccountSuspended(authState, cacheControl, targetSessionId);
+}
+
+/**
  * 指定されたセッションのリフレッシュトークンを消費し、新しいトークンペアを取得する。
  * 成功時は対象セッションのみを更新し、現在アクティブなセッションが同じ場合に限り
  * `state.session` を差し替える。
@@ -258,6 +281,14 @@ async function executeRefreshActiveSession(
       return null;
     }
 
+    if (response.status === 403 && response.data.error === ACCOUNT_SUSPENDED_ERROR) {
+      return handleAccountSuspendedForTarget(
+        authState,
+        targetSessionId,
+        response.headers.get('cache-control')
+      );
+    }
+
     return handleRefreshFailureForTarget(authState, targetSessionId);
   } catch {
     return handleRefreshFailureForTarget(authState, targetSessionId);
@@ -274,6 +305,10 @@ async function executeListDevices(authState: AuthSessionState): Promise<DeviceSe
   if (!result.ok) {
     if (result.failure === SESSION_EXPIRED_ERROR) {
       applyExpiredSession(authState);
+      return null;
+    }
+    if (result.failure === ACCOUNT_SUSPENDED_ERROR) {
+      applyAccountSuspended(authState);
       return null;
     }
     if (result.failure === 'unauthenticated') {
@@ -300,6 +335,10 @@ async function executeRevokeDevice(
       applyExpiredSession(authState);
       return false;
     }
+    if (result.failure === ACCOUNT_SUSPENDED_ERROR) {
+      applyAccountSuspended(authState);
+      return false;
+    }
     if (result.failure === 'unauthenticated') {
       applyMissingSession(authState);
       return false;
@@ -324,6 +363,10 @@ async function executeRevokeOtherDevices(authState: AuthSessionState): Promise<b
   if (!result.ok) {
     if (result.failure === SESSION_EXPIRED_ERROR) {
       applyExpiredSession(authState);
+      return false;
+    }
+    if (result.failure === ACCOUNT_SUSPENDED_ERROR) {
+      applyAccountSuspended(authState);
       return false;
     }
     if (result.failure === 'unauthenticated') {
@@ -362,6 +405,10 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
     handleFailure: (classification, message) => {
       if (classification === SESSION_EXPIRED_ERROR) {
         return applyExpiredSession(state);
+      }
+
+      if (classification === ACCOUNT_SUSPENDED_ERROR) {
+        return applyAccountSuspended(state);
       }
 
       if (classification === 'unauthenticated') {

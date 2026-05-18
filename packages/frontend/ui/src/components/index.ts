@@ -15,6 +15,7 @@ export * as Chart from './chart';
 export * as Checkbox from './checkbox';
 export * as Collapsible from './collapsible';
 export * as Command from './command';
+export * as CodeBlockNS from './code-block';
 export * as ContextMenu from './context-menu';
 export * as DataTable from './data-table';
 export * as DeviceManagerNS from './device-manager';
@@ -72,7 +73,10 @@ export {
 } from './card';
 export { Separator } from './separator';
 export { Badge } from './badge';
+export { CodeBlock } from './code-block';
 export { DeviceManager } from './device-manager';
 export { Label } from './label';
 export { Spinner } from './spinner';
 export { Toaster } from './sonner';
+export { ConfirmDialog } from './confirm-dialog';
+export { EmptyState } from './empty-state';

@@ -89,6 +89,9 @@ func writeAuthFailure(c *gin.Context, err error) {
 	classification := openapi.Unauthenticated
 
 	switch {
+	case errors.Is(err, application.ErrAccountSuspended):
+		status = stdhttp.StatusForbidden
+		classification = openapi.AccountSuspended
 	case errors.Is(err, application.ErrSessionExpired):
 		classification = openapi.SessionExpired
 	case errors.Is(err, application.ErrInternalError):
@@ -110,6 +113,9 @@ func fallbackRequestID() string {
 
 func authFailureResponseObject(requestID string, err error) openapi.AuthFailureResponse {
 	classification := openapi.Unauthenticated
+	if errors.Is(err, application.ErrAccountSuspended) {
+		classification = openapi.AccountSuspended
+	}
 	if errors.Is(err, application.ErrSessionExpired) {
 		classification = openapi.SessionExpired
 	}

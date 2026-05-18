@@ -122,7 +122,7 @@ func testTokenService() *TokenService {
 		New:      func() string { return "01ARZ3NDEKTSV4RRFFQ69G5FAV" },
 		Validate: domain.ValidateAuthID,
 	}
-	return NewTokenService(newMockRefreshTokenStore(), newMockSessionStore(), cfg, clock, policy)
+	return NewTokenService(newMockRefreshTokenStore(), newMockSessionStore(), nil, cfg, clock, policy)
 }
 
 // [UT-AUTH-BE-HAP-002] TokenService rotates refresh token
@@ -204,7 +204,7 @@ func TestTokenServiceVerifyAccessTokenExpired(t *testing.T) {
 		New:      func() string { return "01ARZ3NDEKTSV4RRFFQ69G5FAV" },
 		Validate: domain.ValidateAuthID,
 	}
-	svc := NewTokenService(newMockRefreshTokenStore(), newMockSessionStore(), cfg, clock, policy)
+	svc := NewTokenService(newMockRefreshTokenStore(), newMockSessionStore(), nil, cfg, clock, policy)
 	ctx := context.Background()
 
 	accessToken, _, _, err := svc.Issue(ctx, "01ARZ3NDEKTSV4RRFFQ69G5FAW", "fp1", "test-device", "iphash123", "")

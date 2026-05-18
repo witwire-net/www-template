@@ -111,6 +111,9 @@ func (s *StrictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.Logout503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.Logout503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.Logout403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.Logout403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
 		return openapi.Logout401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.Logout401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
@@ -123,7 +126,11 @@ func (s *StrictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject
 func (s *StrictServer) StartReauthentication(ctx context.Context, request openapi.StartReauthenticationRequestObject) (openapi.StartReauthenticationResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.StartReauthentication401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartReauthentication401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.StartReauthentication403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartReauthentication403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.StartReauthentication401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartReauthentication401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	if request.Body == nil {
@@ -155,7 +162,11 @@ func (s *StrictServer) StartReauthentication(ctx context.Context, request openap
 func (s *StrictServer) FinishReauthentication(ctx context.Context, request openapi.FinishReauthenticationRequestObject) (openapi.FinishReauthenticationResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.FinishReauthentication401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.FinishReauthentication401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.FinishReauthentication403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishReauthentication403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.FinishReauthentication401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishReauthentication401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	if request.Body == nil {
@@ -220,6 +231,9 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 		failureRequestID := nextAuthRequestID()
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.FinishPasskeyAuthentication503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.FinishPasskeyAuthentication403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishPasskeyAuthentication403ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
 		return openapi.FinishPasskeyAuthentication400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.FinishPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -290,7 +304,7 @@ func (s *StrictServer) StartPasskeyRegistration(ctx context.Context, request ope
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.StartPasskeyRegistration503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartPasskeyRegistration503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
-		return openapi.StartPasskeyRegistration400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.StartPasskeyRegistration400ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return openapi.StartPasskeyRegistration400JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.StartPasskeyRegistration400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	body := openapi.PasskeyAddStartResponse{RequestId: result.RequestID, Challenge: result.Challenge, RpId: result.WebAuthnRPID}
@@ -317,7 +331,7 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.RegisterPasskey503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RegisterPasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
-		return openapi.RegisterPasskey400JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.RegisterPasskey400ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return openapi.RegisterPasskey400JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.RegisterPasskey400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	body := openapi.AuthSessionResponse{
@@ -400,7 +414,11 @@ func chooseAttestationCredential(primary openapi.WebAuthnAttestationCredential, 
 func (s *StrictServer) ListPasskeys(ctx context.Context, _ openapi.ListPasskeysRequestObject) (openapi.ListPasskeysResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.ListPasskeys401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.ListPasskeys401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.ListPasskeys403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.ListPasskeys403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.ListPasskeys401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.ListPasskeys401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	creds, err := s.auth.ListPasskeys(ctx, session.AccountID)
@@ -425,7 +443,11 @@ func (s *StrictServer) ListPasskeys(ctx context.Context, _ openapi.ListPasskeysR
 func (s *StrictServer) StartPasskeyAddition(ctx context.Context, _ openapi.StartPasskeyAdditionRequestObject) (openapi.StartPasskeyAdditionResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.StartPasskeyAddition401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.StartPasskeyAddition401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.StartPasskeyAddition403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartPasskeyAddition403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.StartPasskeyAddition401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.StartPasskeyAddition401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	result, err := s.auth.StartAddPasskey(ctx, session.AccountID)
@@ -450,7 +472,11 @@ func (s *StrictServer) FinishPasskeyAddition(ctx context.Context, request openap
 
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.FinishPasskeyAddition401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.FinishPasskeyAddition401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.FinishPasskeyAddition403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishPasskeyAddition403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.FinishPasskeyAddition401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.FinishPasskeyAddition401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	creds, err := s.auth.FinishAddPasskey(ctx, session.AccountID, mapAttestationCredentialToDTO(request.Body.Credential))
@@ -476,7 +502,11 @@ func (s *StrictServer) FinishPasskeyAddition(ctx context.Context, request openap
 func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.DeletePasskeyRequestObject) (openapi.DeletePasskeyResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.DeletePasskey401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.DeletePasskey401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return deletePasskey403Response{body: authFailureResponseObject(failureRequestID, err), headers: openapi.DeletePasskey403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.DeletePasskey401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.DeletePasskey401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	// X-Reauth-Session header で提示された再認証セッションを検証・consume する。
@@ -485,7 +515,7 @@ func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.Delete
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.DeletePasskey503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.DeletePasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
-		return openapi.DeletePasskey403JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.DeletePasskey403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return deletePasskey403Response{body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), headers: openapi.DeletePasskey403ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	if err := s.auth.DeletePasskey(ctx, session.AccountID, string(request.Id)); err != nil {
@@ -496,7 +526,7 @@ func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.Delete
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.DeletePasskey503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.DeletePasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
-		return openapi.DeletePasskey403JSONResponse{Body: authOperationError(failureRequestID, err.Error()), Headers: openapi.DeletePasskey403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return deletePasskey403Response{body: authOperationError(failureRequestID, err.Error()), headers: openapi.DeletePasskey403ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	return openapi.DeletePasskey204Response{Headers: openapi.DeletePasskey204ResponseHeaders{CacheControl: noStoreValue}}, nil
@@ -505,7 +535,11 @@ func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.Delete
 func (s *StrictServer) SendDeviceLink(ctx context.Context, request openapi.SendDeviceLinkRequestObject) (openapi.SendDeviceLinkResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.SendDeviceLink401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.SendDeviceLink401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return sendDeviceLink403Response{body: authFailureResponseObject(failureRequestID, err), headers: openapi.SendDeviceLink403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.SendDeviceLink401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.SendDeviceLink401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	// X-Reauth-Session header で提示された再認証セッションを検証・consume する。
@@ -514,7 +548,7 @@ func (s *StrictServer) SendDeviceLink(ctx context.Context, request openapi.SendD
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.SendDeviceLink503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.SendDeviceLink503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
-		return openapi.SendDeviceLink403JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.SendDeviceLink403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		return sendDeviceLink403Response{body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), headers: openapi.SendDeviceLink403ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	result, err := s.auth.ExecuteDeviceLink(ctx, session.AccountID, session.SessionID)
@@ -526,6 +560,46 @@ func (s *StrictServer) SendDeviceLink(ctx context.Context, request openapi.SendD
 		Body:    openapi.DeviceLinkResponse{RequestId: result.RequestID, Issued: openapi.DeviceLinkResponseIssuedTrue},
 		Headers: openapi.SendDeviceLink200ResponseHeaders{CacheControl: noStoreValue},
 	}, nil
+}
+
+// ─── Custom response types for union 403 bodies ─────────────────────────────
+// oapi-codegen が union response body に対して構築ヘルパーを生成しないため、
+// ハンドラから直接 JSON エンコードできるカスタムレスポンスタイプを定義する。
+
+type deletePasskey403Response struct {
+	body    interface{}
+	headers openapi.DeletePasskey403ResponseHeaders
+}
+
+func (r deletePasskey403Response) VisitDeletePasskeyResponse(w stdhttp.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", r.headers.CacheControl)
+	w.WriteHeader(403)
+	return json.NewEncoder(w).Encode(r.body)
+}
+
+type sendDeviceLink403Response struct {
+	body    interface{}
+	headers openapi.SendDeviceLink403ResponseHeaders
+}
+
+func (r sendDeviceLink403Response) VisitSendDeviceLinkResponse(w stdhttp.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", r.headers.CacheControl)
+	w.WriteHeader(403)
+	return json.NewEncoder(w).Encode(r.body)
+}
+
+type revokeSession403Response struct {
+	body    interface{}
+	headers openapi.RevokeSession403ResponseHeaders
+}
+
+func (r revokeSession403Response) VisitRevokeSessionResponse(w stdhttp.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", r.headers.CacheControl)
+	w.WriteHeader(403)
+	return json.NewEncoder(w).Encode(r.body)
 }
 
 func bearerTokenFromContext(ctx context.Context) string {
@@ -739,6 +813,9 @@ func (s *StrictServer) RefreshToken(ctx context.Context, request openapi.Refresh
 		if errors.Is(err, application.ErrInternalError) {
 			return openapi.RefreshToken503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RefreshToken503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.RefreshToken403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RefreshToken403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
 		return openapi.RefreshToken401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RefreshToken401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
@@ -758,7 +835,11 @@ func (s *StrictServer) ListSessions(ctx context.Context, _ openapi.ListSessionsR
 
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.ListSessions401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.ListSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.ListSessions403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.ListSessions403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.ListSessions401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.ListSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	sessions, err := s.sessionService.List(ctx, session.AccountID)
@@ -798,7 +879,11 @@ func (s *StrictServer) RevokeSession(ctx context.Context, request openapi.Revoke
 
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.RevokeSession401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.RevokeSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return revokeSession403Response{body: authFailureResponseObject(failureRequestID, err), headers: openapi.RevokeSession403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.RevokeSession401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	if err := s.sessionService.Revoke(ctx, session.AccountID, string(request.Id)); err != nil {
@@ -807,7 +892,7 @@ func (s *StrictServer) RevokeSession(ctx context.Context, request openapi.Revoke
 			return openapi.RevokeSession503JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
 		if errors.Is(err, application.ErrBadRequest) {
-			return openapi.RevokeSession403JSONResponse{Body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), Headers: openapi.RevokeSession403ResponseHeaders{CacheControl: noStoreValue}}, nil
+			return revokeSession403Response{body: authOperationError(failureRequestID, nonRevealingAuthRejectMessage), headers: openapi.RevokeSession403ResponseHeaders{CacheControl: noStoreValue}}, nil
 		}
 		return openapi.RevokeSession401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -822,7 +907,11 @@ func (s *StrictServer) RevokeOtherSessions(ctx context.Context, _ openapi.Revoke
 
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
-		return openapi.RevokeOtherSessions401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), err), Headers: openapi.RevokeOtherSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
+		failureRequestID := nextAuthRequestID()
+		if errors.Is(err, application.ErrAccountSuspended) {
+			return openapi.RevokeOtherSessions403JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeOtherSessions403ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
+		return openapi.RevokeOtherSessions401JSONResponse{Body: authFailureResponseObject(failureRequestID, err), Headers: openapi.RevokeOtherSessions401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	if err := s.sessionService.RevokeOthers(ctx, session.AccountID, session.SessionID); err != nil {

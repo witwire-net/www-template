@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { authApi } from '@www-template/api';
 import * as apiModule from '@www-template/api';
 
+import { usePasskeyLogin } from '../passkey/hook.svelte';
+import { usePasskeyManagement } from '../passkey/management/hook.svelte';
+
 import { useAuthSession } from './hook.svelte';
 
 function buildJwt(claims: { exp: number }): string {
@@ -33,6 +36,7 @@ function createSession(id: string, token: string, refresh?: string) {
 describe('useAuthSession hook', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     const { actions } = useAuthSession();
     actions.clearInMemorySession();
 
@@ -394,5 +398,173 @@ describe('useAuthSession hook', () => {
     expect(data.state.phase).toBe('anonymous');
     expect(data.state.session).toBeNull();
     expect(result).toBe('/login');
+  });
+
+  it('[AUTH-FE-S042] refreshActiveSession routes suspended active account to guidance', async () => {
+    const { data, actions } = useAuthSession();
+    actions.acceptSession(createSession('A1', 'token-a', 'refresh-a'), 'no-store');
+
+    vi.spyOn(apiModule, 'refreshToken').mockResolvedValue({
+      status: 403,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', error: 'account-suspended' },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    } as unknown as Awaited<ReturnType<typeof apiModule.refreshToken>>);
+
+    const result = await actions.refreshActiveSession();
+
+    expect(result).toBe('/account-suspended');
+    expect(data.state.phase).toBe('account-suspended');
+    expect(data.state.session).toBeNull();
+    expect(data.state.sessions).toHaveLength(0);
+  });
+
+  it('[AUTH-FE-S044] suspended refresh removes only the target account session', async () => {
+    const { data, actions } = useAuthSession();
+    const expA = Math.floor(Date.now() / 1000) + 30;
+    const expB = Math.floor(Date.now() / 1000) + 900;
+    actions.acceptSession(
+      {
+        ...createSession('A1', buildJwt({ exp: expA }), 'refresh-a'),
+        expiresAt: new Date(expA * 1000).toISOString(),
+      },
+      'no-store'
+    );
+    actions.acceptSession(
+      {
+        ...createSession('B2', buildJwt({ exp: expB }), 'refresh-b'),
+        expiresAt: new Date(expB * 1000).toISOString(),
+      },
+      'no-store'
+    );
+    actions.switchSession(sidA);
+
+    let resolveRefresh: (value: unknown) => void;
+    const refreshPromise = new Promise((resolve) => {
+      resolveRefresh = resolve;
+    });
+    vi.spyOn(apiModule, 'refreshToken').mockReturnValue(refreshPromise);
+    vi.spyOn(apiModule, 'listSessions').mockResolvedValue({
+      status: 200,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', sessions: [] },
+      headers: new Headers(),
+    });
+
+    const listPromise = actions.listDevices();
+    actions.switchSession(sidB);
+    resolveRefresh({
+      status: 403,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', error: 'account-suspended' },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    });
+
+    await listPromise;
+
+    expect(data.state.phase).toBe('authenticated');
+    expect(data.state.activeSessionId).toBe(sidB);
+    expect(data.state.sessions?.map((session) => session.sessionId)).toEqual([sidB]);
+  });
+
+  it('[AUTH-FE-S042] protected API account-suspended clears current session guidance', async () => {
+    const { data, actions } = useAuthSession();
+    actions.acceptSession(createSession('A1', 'token-a', 'refresh-a'), 'no-store');
+
+    vi.spyOn(apiModule, 'listSessions').mockResolvedValue({
+      status: 403,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', error: 'account-suspended' },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    });
+
+    const devices = await actions.listDevices();
+
+    expect(devices).toBeNull();
+    expect(data.state.phase).toBe('account-suspended');
+    expect(data.state.routeIntent).toBe('/account-suspended');
+    expect(data.state.session).toBeNull();
+  });
+
+  it('[AUTH-FE-S041] suspended passkey login stores no session and returns guidance intent', async () => {
+    const { data: sessionData, actions: sessionActions } = useAuthSession();
+    sessionActions.clearInMemorySession();
+    const passkey = usePasskeyLogin();
+
+    class TestPublicKeyCredential {
+      id = 'credential-id';
+      rawId = new Uint8Array([1, 2, 3]).buffer;
+      type = 'public-key';
+      authenticatorAttachment = 'platform';
+      response = {
+        clientDataJSON: new Uint8Array([4]).buffer,
+        authenticatorData: new Uint8Array([5]).buffer,
+        signature: new Uint8Array([6]).buffer,
+        userHandle: new Uint8Array([7]).buffer,
+      };
+    }
+
+    vi.stubGlobal('PublicKeyCredential', TestPublicKeyCredential);
+    vi.stubGlobal('navigator', {
+      credentials: {
+        get: vi.fn().mockResolvedValue(new TestPublicKeyCredential()),
+      },
+    });
+    vi.spyOn(authApi, 'startPasskeyAuthentication').mockResolvedValue({
+      status: 200,
+      data: {
+        requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        challenge: 'YQ',
+        rpId: 'localhost',
+        timeout: 60000,
+        allowCredentials: [],
+        userVerification: 'required',
+      },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    } as unknown as Awaited<ReturnType<typeof authApi.startPasskeyAuthentication>>);
+    vi.spyOn(authApi, 'finishPasskeyAuthentication').mockResolvedValue({
+      status: 403,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', error: 'account-suspended' },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    } as unknown as Awaited<ReturnType<typeof authApi.finishPasskeyAuthentication>>);
+
+    const intent = await passkey.actions.signInWithPasskey();
+
+    expect(intent).toBe('/account-suspended');
+    expect(passkey.data.state.lastSession).toBeNull();
+    expect(sessionData.state.session).toBeNull();
+    expect(sessionData.state.phase).toBe('account-suspended');
+  });
+
+  it('[AUTH-FE-S042] passkey management protected API account-suspended clears session', async () => {
+    const { data: sessionData, actions: sessionActions } = useAuthSession();
+    sessionActions.acceptSession(createSession('A1', 'token-a', 'refresh-a'), 'no-store');
+    const passkeys = usePasskeyManagement();
+
+    vi.spyOn(authApi, 'listPasskeys').mockResolvedValue({
+      status: 403,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', error: 'account-suspended' },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    } as unknown as Awaited<ReturnType<typeof authApi.listPasskeys>>);
+
+    await passkeys.actions.listPasskeys();
+
+    expect(sessionData.state.phase).toBe('account-suspended');
+    expect(sessionData.state.session).toBeNull();
+    expect(passkeys.data.error).toBeNull();
+  });
+
+  it('[AUTH-FE-S042] passkey device-link 403 account-suspended uses auth failure not form error', async () => {
+    const { data: sessionData, actions: sessionActions } = useAuthSession();
+    sessionActions.acceptSession(createSession('A1', 'token-a', 'refresh-a'), 'no-store');
+    const passkeys = usePasskeyManagement();
+
+    vi.spyOn(authApi, 'sendDeviceLink').mockResolvedValue({
+      status: 403,
+      data: { requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', error: 'account-suspended' },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    } as unknown as Awaited<ReturnType<typeof authApi.sendDeviceLink>>);
+
+    const issued = await passkeys.actions.sendDeviceLink('reauth-session');
+
+    expect(issued).toBe(false);
+    expect(sessionData.state.phase).toBe('account-suspended');
+    expect(passkeys.data.error).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ export type AuthFailureClassification =
 export const AuthFailureClassification = {
   unauthenticated: 'unauthenticated',
   'session-expired': 'session-expired',
+  'account-suspended': 'account-suspended',
   'internal-error': 'internal-error',
 } as const;
 
@@ -396,6 +397,12 @@ export interface WebAuthnUserEntity {
   displayName: string;
 }
 
+export type SendDeviceLink403 = AuthOperationErrorResponse | AuthFailureResponse;
+
+export type DeletePasskey403 = AuthOperationErrorResponse | AuthFailureResponse;
+
+export type RevokeSession403 = AuthOperationErrorResponse | AuthFailureResponse;
+
 /**
  * @summary Revokes the current bearer session
  */
@@ -409,6 +416,11 @@ export type logoutResponse401 = {
   status: 401;
 };
 
+export type logoutResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type logoutResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -417,7 +429,7 @@ export type logoutResponse503 = {
 export type logoutResponseSuccess = logoutResponse200 & {
   headers: Headers;
 };
-export type logoutResponseError = (logoutResponse401 | logoutResponse503) & {
+export type logoutResponseError = (logoutResponse401 | logoutResponse403 | logoutResponse503) & {
   headers: Headers;
 };
 
@@ -452,6 +464,11 @@ export type finishPasskeyAuthenticationResponse400 = {
   status: 400;
 };
 
+export type finishPasskeyAuthenticationResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type finishPasskeyAuthenticationResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -462,6 +479,7 @@ export type finishPasskeyAuthenticationResponseSuccess = finishPasskeyAuthentica
 };
 export type finishPasskeyAuthenticationResponseError = (
   | finishPasskeyAuthenticationResponse400
+  | finishPasskeyAuthenticationResponse403
   | finishPasskeyAuthenticationResponse503
 ) & {
   headers: Headers;
@@ -667,6 +685,11 @@ export type finishReauthenticationResponse401 = {
   status: 401;
 };
 
+export type finishReauthenticationResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type finishReauthenticationResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -678,6 +701,7 @@ export type finishReauthenticationResponseSuccess = finishReauthenticationRespon
 export type finishReauthenticationResponseError = (
   | finishReauthenticationResponse400
   | finishReauthenticationResponse401
+  | finishReauthenticationResponse403
   | finishReauthenticationResponse503
 ) & {
   headers: Headers;
@@ -726,6 +750,11 @@ export type startReauthenticationResponse401 = {
   status: 401;
 };
 
+export type startReauthenticationResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type startReauthenticationResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -737,6 +766,7 @@ export type startReauthenticationResponseSuccess = startReauthenticationResponse
 export type startReauthenticationResponseError = (
   | startReauthenticationResponse400
   | startReauthenticationResponse401
+  | startReauthenticationResponse403
   | startReauthenticationResponse503
 ) & {
   headers: Headers;
@@ -891,6 +921,11 @@ export type refreshTokenResponse401 = {
   status: 401;
 };
 
+export type refreshTokenResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type refreshTokenResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -902,6 +937,7 @@ export type refreshTokenResponseSuccess = refreshTokenResponse200 & {
 export type refreshTokenResponseError = (
   | refreshTokenResponse400
   | refreshTokenResponse401
+  | refreshTokenResponse403
   | refreshTokenResponse503
 ) & {
   headers: Headers;
@@ -943,6 +979,11 @@ export type listPasskeysResponse401 = {
   status: 401;
 };
 
+export type listPasskeysResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type listPasskeysResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -951,7 +992,11 @@ export type listPasskeysResponse503 = {
 export type listPasskeysResponseSuccess = listPasskeysResponse200 & {
   headers: Headers;
 };
-export type listPasskeysResponseError = (listPasskeysResponse401 | listPasskeysResponse503) & {
+export type listPasskeysResponseError = (
+  | listPasskeysResponse401
+  | listPasskeysResponse403
+  | listPasskeysResponse503
+) & {
   headers: Headers;
 };
 
@@ -991,6 +1036,11 @@ export type finishPasskeyAdditionResponse401 = {
   status: 401;
 };
 
+export type finishPasskeyAdditionResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type finishPasskeyAdditionResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -1002,6 +1052,7 @@ export type finishPasskeyAdditionResponseSuccess = finishPasskeyAdditionResponse
 export type finishPasskeyAdditionResponseError = (
   | finishPasskeyAdditionResponse400
   | finishPasskeyAdditionResponse401
+  | finishPasskeyAdditionResponse403
   | finishPasskeyAdditionResponse503
 ) & {
   headers: Headers;
@@ -1051,7 +1102,7 @@ export type sendDeviceLinkResponse401 = {
 };
 
 export type sendDeviceLinkResponse403 = {
-  data: AuthOperationErrorResponse;
+  data: SendDeviceLink403;
   status: 403;
 };
 
@@ -1103,6 +1154,11 @@ export type startPasskeyAdditionResponse401 = {
   status: 401;
 };
 
+export type startPasskeyAdditionResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type startPasskeyAdditionResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -1113,6 +1169,7 @@ export type startPasskeyAdditionResponseSuccess = startPasskeyAdditionResponse20
 };
 export type startPasskeyAdditionResponseError = (
   | startPasskeyAdditionResponse401
+  | startPasskeyAdditionResponse403
   | startPasskeyAdditionResponse503
 ) & {
   headers: Headers;
@@ -1159,7 +1216,7 @@ export type deletePasskeyResponse401 = {
 };
 
 export type deletePasskeyResponse403 = {
-  data: AuthOperationErrorResponse;
+  data: DeletePasskey403;
   status: 403;
 };
 
@@ -1220,6 +1277,11 @@ export type listSessionsResponse401 = {
   status: 401;
 };
 
+export type listSessionsResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type listSessionsResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -1228,7 +1290,11 @@ export type listSessionsResponse503 = {
 export type listSessionsResponseSuccess = listSessionsResponse200 & {
   headers: Headers;
 };
-export type listSessionsResponseError = (listSessionsResponse401 | listSessionsResponse503) & {
+export type listSessionsResponseError = (
+  | listSessionsResponse401
+  | listSessionsResponse403
+  | listSessionsResponse503
+) & {
   headers: Headers;
 };
 
@@ -1263,6 +1329,11 @@ export type revokeOtherSessionsResponse401 = {
   status: 401;
 };
 
+export type revokeOtherSessionsResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
 export type revokeOtherSessionsResponse503 = {
   data: AuthFailureResponse;
   status: 503;
@@ -1273,6 +1344,7 @@ export type revokeOtherSessionsResponseSuccess = revokeOtherSessionsResponse204 
 };
 export type revokeOtherSessionsResponseError = (
   | revokeOtherSessionsResponse401
+  | revokeOtherSessionsResponse403
   | revokeOtherSessionsResponse503
 ) & {
   headers: Headers;
@@ -1314,7 +1386,7 @@ export type revokeSessionResponse401 = {
 };
 
 export type revokeSessionResponse403 = {
-  data: AuthOperationErrorResponse;
+  data: RevokeSession403;
   status: 403;
 };
 

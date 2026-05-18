@@ -431,7 +431,7 @@ func newTestAuthService(stateRepo application.AuthStateRepository, accountRepo a
 	auth := application.NewAuthService(stateRepo, accountRepo, nil, nil, fixedClock(), newSeqPolicy(), cfg)
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, cfg, fixedClock(), newSeqPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, cfg, fixedClock(), newSeqPolicy())
 	auth.UseTokenService(tokenService)
 	return auth
 }

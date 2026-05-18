@@ -2,7 +2,7 @@
 description: Agent that produces work plans and detailed designs
 mode: subagent
 hidden: true
-model: opencode-go/deepseek-v4-pro
+model: openai/gpt-5.5
 reasoningEffort: 'high'
 temperature: 0.1
 permission:

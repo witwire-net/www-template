@@ -27,6 +27,7 @@ var (
 type TokenService struct {
 	refreshStore RefreshTokenStore
 	sessionStore SessionStore
+	accountRepo  AuthAccountRepository
 	config       config.AuthConfig
 	clock        func() time.Time
 	policy       id.AuthIDPolicy
@@ -34,13 +35,15 @@ type TokenService struct {
 
 // NewTokenService は TokenService を生成する。
 // clock と policy は必須。nil の場合 panic する。
-func NewTokenService(refreshStore RefreshTokenStore, sessionStore SessionStore, cfg config.AuthConfig, clock func() time.Time, policy id.AuthIDPolicy) *TokenService {
+// accountRepo はオプション。設定した場合、refresh 時にアカウント停止状態を検証する。
+func NewTokenService(refreshStore RefreshTokenStore, sessionStore SessionStore, accountRepo AuthAccountRepository, cfg config.AuthConfig, clock func() time.Time, policy id.AuthIDPolicy) *TokenService {
 	if clock == nil {
 		panic("clock is required")
 	}
 	return &TokenService{
 		refreshStore: refreshStore,
 		sessionStore: sessionStore,
+		accountRepo:  accountRepo,
 		config:       cfg,
 		clock:        clock,
 		policy:       policy,
@@ -166,6 +169,11 @@ func (s *TokenService) Refresh(ctx context.Context, refreshToken, clientIP, user
 		return "", "", ErrTokenTheftDetected
 	}
 
+	// アカウント停止状態と session_revoked_after を検証する。
+	if err := s.checkAccountSuspended(ctx, record.AccountID, record.SessionID, record.IssuedAt); err != nil {
+		return "", "", err
+	}
+
 	// 新しいペアを発行する（セッション ID は継続し、デバイス情報も引き継ぐ）
 	newAccessToken, newRefreshToken, _, err = s.Issue(ctx, record.AccountID, record.Fingerprint, record.DeviceName, record.IPHash, record.SessionID)
 	if err != nil {
@@ -173,6 +181,30 @@ func (s *TokenService) Refresh(ctx context.Context, refreshToken, clientIP, user
 	}
 
 	return newAccessToken, newRefreshToken, nil
+}
+
+// checkAccountSuspended はアカウントが停止中であるか、または session_revoked_after より前に
+// 発行されたセッションであるかを検証する。いずれかに該当する場合はセッションを失効させて
+// ErrAccountSuspended を返す。accountRepo が未設定の場合は何もしない。
+func (s *TokenService) checkAccountSuspended(ctx context.Context, accountID, sessionID string, issuedAt time.Time) error {
+	if s.accountRepo == nil {
+		return nil
+	}
+	account, err := s.accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		return ErrInternalError
+	}
+	if account.IsSuspended() {
+		_ = s.sessionStore.RevokeSession(ctx, accountID, sessionID)
+		_ = s.refreshStore.RevokeBySessionID(ctx, accountID, sessionID)
+		return ErrAccountSuspended
+	}
+	if sra := account.SessionRevokedAfter(); sra != nil && !issuedAt.After(*sra) {
+		_ = s.sessionStore.RevokeSession(ctx, accountID, sessionID)
+		_ = s.refreshStore.RevokeBySessionID(ctx, accountID, sessionID)
+		return ErrAccountSuspended
+	}
+	return nil
 }
 
 // RevokeSession は指定されたセッションを失効させ、関連するリフレッシュトークンも削除する。

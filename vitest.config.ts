@@ -23,6 +23,13 @@ export default defineConfig({
           name: 'frontend-ui',
         },
       },
+      {
+        extends: './packages/admin/vitest.config.ts',
+        root: './packages/admin',
+        test: {
+          name: 'frontend-admin',
+        },
+      },
     ],
   },
 });

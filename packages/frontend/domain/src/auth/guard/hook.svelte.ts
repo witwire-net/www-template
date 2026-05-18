@@ -14,22 +14,29 @@ interface SessionGuardOptions {
   readPathname: () => string;
   redirectTo: (intent: AuthRouteIntent) => void;
   sessionExpiredPath?: Extract<AuthRouteIntent, '/session-expired'>;
+  accountSuspendedPath?: Extract<AuthRouteIntent, '/account-suspended'>;
 }
 
 const SESSION_EXPIRED_PATH: Extract<AuthRouteIntent, '/session-expired'> = '/session-expired';
+const ACCOUNT_SUSPENDED_PATH: Extract<AuthRouteIntent, '/account-suspended'> = '/account-suspended';
 
 const resolveSessionGuardIntent = (
   pathname: string,
   state: SessionGuardData['state'],
   authSessionActions: ReturnType<typeof useAuthSession>['actions'],
-  sessionExpiredPath: Extract<AuthRouteIntent, '/session-expired'>
+  sessionExpiredPath: Extract<AuthRouteIntent, '/session-expired'>,
+  accountSuspendedPath: Extract<AuthRouteIntent, '/account-suspended'>
 ): AuthRouteIntent | null => {
-  if (pathname === sessionExpiredPath) {
+  if (pathname === sessionExpiredPath || pathname === accountSuspendedPath) {
     return null;
   }
 
   if (state.phase === 'session-expired') {
     return sessionExpiredPath;
+  }
+
+  if (state.phase === 'account-suspended') {
+    return accountSuspendedPath;
   }
 
   if (state.phase === 'anonymous' || state.session === null) {
@@ -51,6 +58,7 @@ function useSessionGuard(options: SessionGuardOptions): {
 } {
   const { data, actions: authSessionActions } = useAuthSession();
   const sessionExpiredPath = options.sessionExpiredPath ?? SESSION_EXPIRED_PATH;
+  const accountSuspendedPath = options.accountSuspendedPath ?? ACCOUNT_SUSPENDED_PATH;
 
   const actions: SessionGuardActions = {
     redirectIfRequired: () => {
@@ -58,7 +66,8 @@ function useSessionGuard(options: SessionGuardOptions): {
         options.readPathname(),
         data.state,
         authSessionActions,
-        sessionExpiredPath
+        sessionExpiredPath,
+        accountSuspendedPath
       );
 
       if (intent !== null) {

@@ -2,6 +2,7 @@ packages:
   - 'packages/typespec'
   - 'packages/frontend/*'
   - 'packages/web'
+  - 'packages/admin'
 
 # npmjs.org 以外へ意図せず解決されないように、既定 registry を明示する。
 registries:
@@ -25,6 +26,12 @@ strictDepBuilds: true
 verifyStoreIntegrity: true
 strictStorePkgContentCheck: true
 
+# provenance 欠落による trust downgrade を回避し、workspace の install を通す
+# これらの override は一時的な workaround であり、各パッケージが provenance 付きで再公開されたら削除可能
+overrides:
+  semver: ^7.6.3
+  chokidar: ^5.0.0
+
 # packageManager と Node.js engine の不一致を失敗させ、意図しない実行環境を避ける。
 pmOnFail: error
 engineStrict: true
@@ -38,8 +45,11 @@ auditLevel: high
 # devcontainer 初期化と開発ツール実行に必要な依存パッケージの install script だけを明示承認する。
 allowBuilds:
   '@parcel/watcher': true
+  '@prisma/client': true
+  '@prisma/engines': true
   esbuild: true
   msw: true
+  prisma: true
   protobufjs: true
   sharp: true
   unrs-resolver: true

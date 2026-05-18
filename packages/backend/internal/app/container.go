@@ -131,7 +131,7 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 	}
 	refreshStore := valkey.NewRefreshTokenStore(valkeyStore)
 	sessionStore := valkey.NewSessionStore(valkeyStore)
-	tokenService := application.NewTokenService(refreshStore, sessionStore, authConfig, func() time.Time {
+	tokenService := application.NewTokenService(refreshStore, sessionStore, accountRepo, authConfig, func() time.Time {
 		return time.Now().UTC()
 	}, idPolicy)
 	authSvc.UseTokenService(tokenService)

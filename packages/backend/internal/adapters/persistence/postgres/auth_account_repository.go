@@ -12,8 +12,10 @@ import (
 )
 
 type gormAccountRecord struct {
-	ID    string `gorm:"column:id;primaryKey"`
-	Email string `gorm:"column:email"`
+	ID                  string     `gorm:"column:id;primaryKey"`
+	Email               string     `gorm:"column:email"`
+	Status              string     `gorm:"column:status"`
+	SessionRevokedAfter *time.Time `gorm:"column:session_revoked_after"`
 }
 
 func (gormAccountRecord) TableName() string {
@@ -219,6 +221,8 @@ func normalizeDomainAccount(account gormAccountRecord, passkey gormPasskeyCreden
 	if err != nil {
 		return emptyAuthAccount(), domain.ErrAuthStoreUnavailable
 	}
+	// DB から読み出した status / session_revoked_after をドメインオブジェクトに反映する
+	authAccount = authAccount.WithStatus(account.Status, account.SessionRevokedAfter)
 	return authAccount, nil
 }
 

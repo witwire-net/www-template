@@ -153,7 +153,7 @@ func newTestRouter(t *testing.T) *gin.Engine {
 
 	refreshStore := newStubRefreshTokenStore()
 	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, testConfig().AuthRuntime(), clock, newSequentialPolicy())
+	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock, newSequentialPolicy())
 	auth.UseTokenService(tokenService)
 	sessionService := application.NewSessionService(sessionStore, refreshStore)
 

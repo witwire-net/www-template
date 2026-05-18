@@ -103,6 +103,35 @@ function removeActiveSession(state: AuthSessionState): AuthRouteIntent | null {
   return clearAuthSession(state);
 }
 
+/**
+ * 指定された sessionId をメモリ上の認証 state から除去する。
+ *
+ * @param state - 更新対象の認証セッション state
+ * @param sessionId - 削除対象の sessionId
+ * @param routeIntent - 対象がアクティブだった場合に設定する遷移先
+ * @returns 対象がアクティブなら遷移先 route intent、非アクティブなら null
+ */
+function removeSessionById(
+  state: AuthSessionState,
+  sessionId: string,
+  routeIntent: AuthRouteIntent = '/login'
+): AuthRouteIntent | null {
+  const remaining = (state.sessions ?? []).filter((s) => s.sessionId !== sessionId);
+  state.sessions = remaining;
+
+  if (state.activeSessionId !== sessionId) {
+    return null;
+  }
+
+  state.session = null;
+  state.activeSessionId = null;
+  state.phase = routeIntent === '/account-suspended' ? 'account-suspended' : 'anonymous';
+  state.routeIntent = routeIntent;
+  state.lastFailure = routeIntent === '/account-suspended' ? 'account-suspended' : null;
+  state.lastError = null;
+  return routeIntent;
+}
+
 /** missing session を通常 login 導線へ正規化する。 */
 function applyMissingSession(
   state: AuthSessionState,
@@ -130,6 +159,33 @@ function applyExpiredSession(
   state.activeSessionId = null;
   state.routeIntent = '/session-expired';
   state.lastFailure = 'session-expired';
+  state.lastError = null;
+  state.lastCacheControl = cacheControl;
+  return state.routeIntent;
+}
+
+/**
+ * suspended account の失敗を account-suspended 導線へ正規化する。
+ *
+ * @param state - 更新対象の認証セッション state
+ * @param cacheControl - レスポンスの cache-control 値（任意）
+ * @param targetSessionId - 削除対象 sessionId。未指定時は active session を対象にする
+ * @returns account suspended 案内 route intent
+ */
+function applyAccountSuspended(
+  state: AuthSessionState,
+  cacheControl: string | null = null,
+  targetSessionId: string | null = state.activeSessionId ?? null
+): AuthRouteIntent {
+  if (targetSessionId !== null) {
+    removeSessionById(state, targetSessionId, '/account-suspended');
+  }
+
+  state.phase = 'account-suspended';
+  state.session = null;
+  state.activeSessionId = null;
+  state.routeIntent = '/account-suspended';
+  state.lastFailure = 'account-suspended';
   state.lastError = null;
   state.lastCacheControl = cacheControl;
   return state.routeIntent;
@@ -185,6 +241,7 @@ function hasUlidAuthSessionShape(session: AuthSessionSummary): boolean {
 
 export {
   addAuthenticatedSession,
+  applyAccountSuspended,
   applyAuthenticatedSession,
   applyExpiredSession,
   applyInternalError,
@@ -196,5 +253,6 @@ export {
   isNoStoreCacheControl,
   isUlid,
   removeActiveSession,
+  removeSessionById,
   switchActiveSession,
 };
