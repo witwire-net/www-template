@@ -6,12 +6,13 @@
 
 - `packages/web` の `/ja` と `/en` による公開ページ表示、`/` から対応ロケール URL への誘導、公開ページメタデータのローカライズ。
 - `packages/frontend/app` と `packages/frontend/domain` のアカウント言語取得、更新、代替言語、設定 UI、認証済み画面文言の辞書化。
-- `packages/frontend/ui` の reusable component から固定言語文言と固定 locale formatter を排除し、呼び出し側から localized labels / formatters を注入する境界整備。
+- `packages/frontend/ui` の reusable component から固定言語文言と固定 locale formatter を排除し、呼び出し側から localized labels / formatters を注入する境界整備。i18n import が必要な concrete component は UI package に置かない。既存 `DeviceManager` は app 固有の device/session 文言を表示するため `packages/frontend/app` へ移す。
 - `packages/admin` のオペレーター言語読み込み、設定 UI、Admin layout data、Admin 認証前代替言語、Admin 文言の辞書化。
 - Product API のアカウント言語設定取得・更新、TypeSpec 契約、Product DB 永続化、Clean Architecture に基づく `internal/account` 実装、生成物更新。
 - Product 認証メールの保存済みアカウント言語による件名・本文選択。
 - Admin DB の operator locale 永続化と本人更新処理。
 - 対象パッケージに対する i18n lint 強制と辞書キー整合チェック。
+- `packages/frontend/i18n` への共有 i18n 実装導入。外部 i18n dependency に頼らず、locale 定義、loader/config、typed translator、formatter、key coverage utility を集約する。locale JSON files は `packages/web`、`packages/frontend/app`、`packages/admin` がそれぞれ所有し、各 package は `@www-template/i18n` に自分の辞書を渡して使う。巨大な単一辞書や route 内の ad hoc translator は作らない。
 
 ### Out of Scope
 
@@ -35,7 +36,8 @@
 - HTTP adapter は `auth` で bearer session を認可して得た account ID を `account` use case へ渡し、account settings response と refresh client settings response を application 境界で合成する。
 - `packages/frontend/app` は API を直接呼ばず、`packages/frontend/domain -> packages/frontend/api` の依存方向を維持する。
 - `packages/frontend/domain` は Product account settings API 協調だけを担当し、`localStorage`、browser/OS language、DOM globals による端末 fallback を所有しない。
-- `packages/frontend/ui` は app/admin の表示言語、固定文言、固定 date/time locale を所有せず、localized props と formatter を呼び出し側から受け取る。
+- `packages/web`、`packages/frontend/app`、`packages/admin` は SvelteKit 面の翻訳適用に `@www-template/i18n` を使用する。共有 i18n 実装は locale 定義、loader/config、typed translator、formatter、key coverage utility を持つ。locale JSON files は表示面ごとの package が所有し、route component 内の ad hoc translator と別 surface の辞書 import を禁止する。
+- `packages/frontend/ui` は app/admin/web の表示言語、i18n import、固定文言、固定 date/time locale を所有せず、localized props と formatter を呼び出し側から受け取る。i18n import が必要な component は UI package に配置しない。
 - `packages/web` は公開面として `@www-template/domain` と `@www-template/api` に依存しない。
 - `packages/admin` は SvelteKit server routes と server load を持つため、operator locale は server hook と layout load で読み込める。Admin operator locale は Admin package-local symbols で扱い、Product TypeSpec/generated SDK/Product account locale model を import しない。
 - 標準検証は `pnpm gen`、`pnpm check:codegen`、`pnpm lint`、`pnpm test:run` を使用する。
@@ -47,9 +49,10 @@
 - Go backend: `internal/account` domain/application/repository port、`internal/auth` の認可・token 境界、HTTP strict handler、localized mailer。
 - Frontend API client: 生成 SDK と wrapper method。
 - Frontend domain: account locale state hook、domain state/types。API wrapper は `packages/frontend/api` に閉じる。
-- Frontend app: settings 画面、layout 文言、auth/protected 文言、localStorage 優先 fallback、browser/OS locale resolver。
-- Frontend UI: reusable component の localized label props、aria label props、date/time formatter props。
-- Public web: locale route、辞書、metadata、root 誘導。
+- Frontend i18n: 共有 i18n 実装、locale 定義、typed translator、formatter、key coverage utility。locale JSON files は持たない。
+- Frontend app: app-owned locale JSON files、`@www-template/i18n` 接続、settings 画面、layout 文言、auth/protected 文言、localStorage 優先 fallback、browser/OS locale resolver。
+- Frontend UI: i18n 非依存 reusable primitive の localized label props、aria label props、date/time formatter props。i18n import が必要な concrete component は app/admin/web 側へ移す。`DeviceManager` は `packages/frontend/app` 側へ移す。
+- Public web: web-owned locale JSON files、`@www-template/i18n` 接続、locale route、metadata、root 誘導。
 - Admin DB: `admin.operators.locale` column と Prisma model。
 - Admin server: operator model、locals、layout data、profile/settings action。
 - lint/tooling: ハードコード文言検知と辞書網羅性チェック。
@@ -117,6 +120,16 @@ www-template
 │  │        └─ openapi
 │  │           └─ openapi.gen.go
 │  ├─ frontend
+│  │  ├─ i18n
+│  │  │  ├─ package.json
+│  │  │  └─ src
+│  │  │     ├─ catalog.ts
+│  │  │     ├─ config.ts
+│  │  │     ├─ coverage.ts
+│  │  │     ├─ formatters.ts
+│  │  │     ├─ index.ts
+│  │  │     ├─ locales.ts
+│  │  │     └─ translator.ts
 │  │  ├─ api
 │  │  │  └─ src
 │  │  │     ├─ api
@@ -136,14 +149,28 @@ www-template
 │  │  ├─ ui
 │  │  │  └─ src
 │  │  │     └─ components
-│  │  │        └─ device-manager
-│  │  │           └─ device-manager.svelte
+│  │  │        └─ primitives
 │  │  └─ app
 │  │     └─ src
+│  │        ├─ components
+│  │        │  └─ device-manager
+│  │        │     └─ device-manager.svelte
 │  │        ├─ lib
-│  │        │  └─ i18n
-│  │        │     ├─ index.ts
-│  │        │     └─ messages.ts
+│  │        │  ├─ i18n
+│  │        │  │  ├─ index.ts
+│  │        │  │  └─ messages
+│  │        │  │     ├─ en
+│  │        │  │     │  ├─ auth.json
+│  │        │  │     │  ├─ device-manager.json
+│  │        │  │     │  ├─ navigation.json
+│  │        │  │     │  └─ settings.json
+│  │        │  │     └─ ja
+│  │        │  │        ├─ auth.json
+│  │        │  │        ├─ device-manager.json
+│  │        │  │        ├─ navigation.json
+│  │        │  │        └─ settings.json
+│  │        │  └─ locale
+│  │        │     └─ resolver.ts
 │  │        └─ routes
 │  │           ├─ +layout.svelte
 │  │           ├─ login
@@ -156,7 +183,15 @@ www-template
 │  ├─ web
 │  │  └─ src
 │  │     ├─ lib
-│  │     │  └─ i18n.ts
+│  │     │  └─ i18n
+│  │     │     ├─ index.ts
+│  │     │     └─ messages
+│  │     │        ├─ en
+│  │     │        │  ├─ home.json
+│  │     │        │  └─ metadata.json
+│  │     │        └─ ja
+│  │     │           ├─ home.json
+│  │     │           └─ metadata.json
 │  │     └─ routes
 │  │        ├─ +layout.svelte
 │  │        ├─ +page.ts
@@ -175,7 +210,17 @@ www-template
 │        ├─ lib
 │        │  ├─ i18n
 │        │  │  ├─ index.ts
-│        │  │  └─ messages.ts
+│        │  │  └─ messages
+│        │  │     ├─ en
+│        │  │     │  ├─ auth.json
+│        │  │     │  ├─ navigation.json
+│        │  │     │  ├─ operators.json
+│        │  │     │  └─ settings.json
+│        │  │     └─ ja
+│        │  │        ├─ auth.json
+│        │  │        ├─ navigation.json
+│        │  │        ├─ operators.json
+│        │  │        └─ settings.json
 │        │  └─ server
 │        │     ├─ models
 │        │     │  ├─ operator_locale.ts
@@ -196,56 +241,59 @@ www-template
 
 ## New / Changed Files
 
-| Type | File                                                                                     | Change                                                                                                                                          |
-| ---- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 更新 | `package.json`                                                                           | 標準 `pnpm lint` に i18n lint を組み込む。                                                                                                      |
-| 更新 | `eslint.config.js`                                                                       | 対象 UI ソース向けの多言語境界ルールを追加する。                                                                                                |
-| 追加 | `scripts/i18n/check-locales.ts`                                                          | `ja` と `en` の辞書キー網羅性を検証する。                                                                                                       |
-| 更新 | `packages/typespec/main.tsp`                                                             | localization model と account settings route を読み込む。                                                                                       |
-| 追加 | `packages/typespec/src/models/localization.tsp`                                          | Product API 専用の `AccountLocale`、`AccountClientSettings`、account locale request/response model を定義し、Admin operator locale を含めない。 |
-| 追加 | `packages/typespec/src/routes/v1/account_settings.tsp`                                   | 認証済み account locale 取得・更新操作と refresh response の account-owned client settings locale を定義する。                                  |
-| 生成 | `packages/typespec/openapi/openapi.json`                                                 | OpenAPI 契約を再生成する。                                                                                                                      |
-| 追加 | `packages/backend/db/migrations/000007_add_account_locale.up.sql`                        | Product account locale column と制約を追加する。                                                                                                |
-| 追加 | `packages/backend/db/migrations/000007_add_account_locale.down.sql`                      | Product account locale column を削除する。                                                                                                      |
-| 追加 | `packages/backend/internal/account/domain/locale.go`                                     | Product account locale 値オブジェクト、検証、既定値を定義する。                                                                                 |
-| 追加 | `packages/backend/internal/account/domain/account_settings.go`                           | Account settings と client settings の domain DTO を定義する。                                                                                  |
-| 追加 | `packages/backend/internal/account/application/contracts.go`                             | Account settings repository port と client settings reader port を定義する。                                                                    |
-| 追加 | `packages/backend/internal/account/application/settings_service.go`                      | current account locale の取得・更新ユースケースを実装する。                                                                                     |
-| 追加 | `packages/backend/internal/account/application/client_settings.go`                       | refresh response 用の DB 由来 client settings 読み込みを実装する。                                                                              |
-| 削除 | `packages/backend/internal/auth/domain/auth_account.go`                                  | Product account aggregate と誤読される AuthAccount model を廃止し、後方互換 accessor も残さない。                                               |
-| 追加 | `packages/backend/internal/auth/domain/auth_subject.go`                                  | 認証主体を表す AuthSubject を定義し、account ID、identifier、email、status、session revoked boundary、passkey credential だけを保持する。       |
-| 更新 | `packages/backend/internal/auth/application/auth_contracts.go`                           | AuthAccountRepository を AuthSubjectRepository に置き換え、locale mutation、client settings DTO、account settings DTO を除去する。              |
-| 更新 | `packages/backend/internal/auth/application/auth_service.go`                             | recovery/device-link delivery と完了メールでは account locale reader port から得た locale だけを使う。                                          |
-| 更新 | `packages/backend/internal/auth/application/token_service.go`                            | refresh は token rotation と認証状態検証だけを担当し、client settings は response 合成側に渡す。                                                |
-| 追加 | `packages/backend/internal/adapters/persistence/postgres/account_settings_repository.go` | `accounts.locale` の読み書きと client settings 読み込みを account repository adapter として実装する。                                           |
-| 削除 | `packages/backend/internal/adapters/persistence/postgres/auth_account_repository.go`     | AuthAccount 命名の repository adapter を廃止する。                                                                                              |
-| 追加 | `packages/backend/internal/adapters/persistence/postgres/auth_subject_repository.go`     | auth 用 repository として認証に必要な account status / passkey だけを復元し、locale column は読み込まない。                                     |
-| 更新 | `packages/backend/internal/adapters/http/router.go`                                      | Auth で本人認可し、Account service へ account ID を渡して settings/refresh response を合成する。                                                |
-| 更新 | `packages/backend/internal/adapters/mailer/account_recovery_sender.go`                   | account locale reader 経由の locale 文字列からメール文面を選択する。                                                                            |
-| 追加 | `packages/backend/internal/adapters/mailer/localized_messages.go`                        | 認証メールの日本語・英語テンプレートを定義する。                                                                                                |
-| 生成 | `packages/backend/internal/generated/openapi/openapi.gen.go`                             | Go OpenAPI bindings を再生成する。                                                                                                              |
-| 生成 | `packages/frontend/api/src/generated/client.ts`                                          | frontend API client を再生成する。                                                                                                              |
-| 更新 | `packages/frontend/api/src/sdk.ts`                                                       | account locale SDK method を公開する。                                                                                                          |
-| 更新 | `packages/frontend/api/src/api/client.ts`                                                | 既存の API wrapper 集約点に `accountSettingsApi` を追加する。新しい feature-specific wrapper file は作らない。                                  |
-| 更新 | `packages/frontend/domain/package.json`                                                  | localization domain entrypoint を公開する。                                                                                                     |
-| 更新 | `packages/frontend/domain/src/index.ts`                                                  | localization hook/types を再公開する。                                                                                                          |
-| 追加 | `packages/frontend/domain/src/localization/*`                                            | account locale の state、hook、型、index を追加する。API wrapper file、端末 fallback、DOM/localStorage は持たない。                             |
-| 更新 | `packages/frontend/ui/src/components/device-manager/device-manager.svelte`               | 固定日本語文言と固定 `ja-JP` formatter を取り除き、localized label、aria label、date/time formatter props を受け取る。                          |
-| 追加 | `packages/frontend/app/src/lib/i18n/*`                                                   | app 用 `ja` / `en` 辞書、localStorage 優先 fallback、browser/OS locale resolver を追加する。                                                    |
-| 更新 | `packages/frontend/app/src/routes/**`                                                    | login、protected layout、overview、settings を辞書文言に置き換え、UI component へ localized labels/formatters を渡す。                          |
-| 追加 | `packages/web/src/lib/i18n.ts`                                                           | public web の locale、辞書、validator を定義する。                                                                                              |
-| 更新 | `packages/web/src/routes/**`                                                             | `/` 誘導、`/[locale]` 表示、公開 navigation を実装する。                                                                                        |
-| 更新 | `packages/admin/prisma/admin/schema.prisma`                                              | operator locale field を追加する。                                                                                                              |
-| 追加 | `packages/admin/prisma/admin/migrations/000002_add_operator_locale/migration.sql`        | operator locale の既定値と制約を永続化する。                                                                                                    |
-| 更新 | `packages/admin/src/app.d.ts`                                                            | `App.Locals.operator` に locale を追加する。                                                                                                    |
-| 更新 | `packages/admin/src/hooks.server.ts`                                                     | 認証済み operator context に locale を読み込む。                                                                                                |
-| 追加 | `packages/admin/src/lib/i18n/*`                                                          | Admin 用 `ja` / `en` 辞書と resolver を追加する。                                                                                               |
-| 追加 | `packages/admin/src/lib/server/models/operator_locale.ts`                                | Admin package-local の OperatorLocale 型、parser、validator を定義し、Product TypeSpec/generated SDK を import しない。                         |
-| 更新 | `packages/admin/src/lib/server/models/*`                                                 | Operator 型と Prisma mapping に locale を追加する。                                                                                             |
-| 追加 | `packages/admin/src/lib/server/services/operators/locale.ts`                             | 認証済み本人の operator locale 更新を実装する。                                                                                                 |
-| 更新 | `packages/admin/src/routes/+layout.*`                                                    | layout data と画面表示へ operator locale を渡し、Admin 辞書から navigation を生成する。                                                         |
-| 更新 | `packages/admin/src/routes/settings/+page.*`                                             | operator locale 設定 UI と action を追加し、Product API locale 型を使わない。                                                                   |
-| 追加 | `tests/i18n-lint.test.ts`                                                                | i18n lint と辞書網羅性チェックの挙動を検証する。                                                                                                |
+| Type | File                                                                                                                 | Change                                                                                                                                                                           |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 更新 | `package.json`                                                                                                       | 標準 `pnpm lint` に i18n lint と辞書網羅性チェックを組み込む。外部 i18n dependency は追加しない。                                                                                |
+| 更新 | `eslint.config.js`                                                                                                   | 対象 UI ソース向けの多言語境界ルールを追加する。                                                                                                                                 |
+| 追加 | `scripts/i18n/check-locales.ts`                                                                                      | `ja` と `en` の辞書キー網羅性を検証する。                                                                                                                                        |
+| 更新 | `packages/typespec/main.tsp`                                                                                         | localization model と account settings route を読み込む。                                                                                                                        |
+| 追加 | `packages/typespec/src/models/localization.tsp`                                                                      | Product API 専用の `AccountLocale`、`AccountClientSettings`、account locale request/response model を定義し、Admin operator locale を含めない。                                  |
+| 追加 | `packages/typespec/src/routes/v1/account_settings.tsp`                                                               | 認証済み account locale 取得・更新操作と refresh response の account-owned client settings locale を定義する。                                                                   |
+| 生成 | `packages/typespec/openapi/openapi.json`                                                                             | OpenAPI 契約を再生成する。                                                                                                                                                       |
+| 追加 | `packages/backend/db/migrations/000007_add_account_locale.up.sql`                                                    | Product account locale column と制約を追加する。                                                                                                                                 |
+| 追加 | `packages/backend/db/migrations/000007_add_account_locale.down.sql`                                                  | Product account locale column を削除する。                                                                                                                                       |
+| 追加 | `packages/backend/internal/account/domain/locale.go`                                                                 | Product account locale 値オブジェクト、検証、既定値を定義する。                                                                                                                  |
+| 追加 | `packages/backend/internal/account/domain/account_settings.go`                                                       | Account settings と client settings の domain DTO を定義する。                                                                                                                   |
+| 追加 | `packages/backend/internal/account/application/contracts.go`                                                         | Account settings repository port と client settings reader port を定義する。                                                                                                     |
+| 追加 | `packages/backend/internal/account/application/settings_service.go`                                                  | current account locale の取得・更新ユースケースを実装する。                                                                                                                      |
+| 追加 | `packages/backend/internal/account/application/client_settings.go`                                                   | refresh response 用の DB 由来 client settings 読み込みを実装する。                                                                                                               |
+| 削除 | `packages/backend/internal/auth/domain/auth_account.go`                                                              | Product account aggregate と誤読される AuthAccount model を廃止し、後方互換 accessor も残さない。                                                                                |
+| 追加 | `packages/backend/internal/auth/domain/auth_subject.go`                                                              | 認証主体を表す AuthSubject を定義し、account ID、identifier、email、status、session revoked boundary、passkey credential だけを保持する。                                        |
+| 更新 | `packages/backend/internal/auth/application/auth_contracts.go`                                                       | AuthAccountRepository を AuthSubjectRepository に置き換え、locale mutation、client settings DTO、account settings DTO を除去する。                                               |
+| 更新 | `packages/backend/internal/auth/application/auth_service.go`                                                         | recovery/device-link delivery と完了メールでは account locale reader port から得た locale だけを使う。                                                                           |
+| 更新 | `packages/backend/internal/auth/application/token_service.go`                                                        | refresh は token rotation と認証状態検証だけを担当し、client settings は response 合成側に渡す。                                                                                 |
+| 追加 | `packages/backend/internal/adapters/persistence/postgres/account_settings_repository.go`                             | `accounts.locale` の読み書きと client settings 読み込みを account repository adapter として実装する。                                                                            |
+| 削除 | `packages/backend/internal/adapters/persistence/postgres/auth_account_repository.go`                                 | AuthAccount 命名の repository adapter を廃止する。                                                                                                                               |
+| 追加 | `packages/backend/internal/adapters/persistence/postgres/auth_subject_repository.go`                                 | auth 用 repository として認証に必要な account status / passkey だけを復元し、locale column は読み込まない。                                                                      |
+| 更新 | `packages/backend/internal/adapters/http/router.go`                                                                  | Auth で本人認可し、Account service へ account ID を渡して settings/refresh response を合成する。                                                                                 |
+| 更新 | `packages/backend/internal/adapters/mailer/account_recovery_sender.go`                                               | account locale reader 経由の locale 文字列からメール文面を選択する。                                                                                                             |
+| 追加 | `packages/backend/internal/adapters/mailer/localized_messages.go`                                                    | 認証メールの日本語・英語テンプレートを定義する。                                                                                                                                 |
+| 生成 | `packages/backend/internal/generated/openapi/openapi.gen.go`                                                         | Go OpenAPI bindings を再生成する。                                                                                                                                               |
+| 生成 | `packages/frontend/api/src/generated/client.ts`                                                                      | frontend API client を再生成する。                                                                                                                                               |
+| 更新 | `packages/frontend/api/src/sdk.ts`                                                                                   | account locale SDK method を公開する。                                                                                                                                           |
+| 更新 | `packages/frontend/api/src/api/client.ts`                                                                            | 既存の API wrapper 集約点に `accountSettingsApi` を追加する。新しい feature-specific wrapper file は作らない。                                                                   |
+| 更新 | `packages/frontend/domain/package.json`                                                                              | localization domain entrypoint を公開する。                                                                                                                                      |
+| 更新 | `packages/frontend/domain/src/index.ts`                                                                              | localization hook/types を再公開する。                                                                                                                                           |
+| 追加 | `packages/frontend/domain/src/localization/*`                                                                        | account locale の state、hook、型、index を追加する。API wrapper file、端末 fallback、DOM/localStorage は持たない。                                                              |
+| 追加 | `packages/frontend/i18n/package.json`                                                                                | 共有 frontend i18n package `@www-template/i18n` を追加する。                                                                                                                     |
+| 追加 | `packages/frontend/i18n/src/*`                                                                                       | 共有 i18n 実装、locale 定義、loader/config、JSON catalog loader、typed translator、formatter、key coverage utilities を追加する。app/web/admin の locale JSON files は置かない。 |
+| 削除 | `packages/frontend/ui/src/components/device-manager/device-manager.svelte`                                           | app 固有の device/session 文言を持つ concrete component は UI package に置かないため削除する。                                                                                   |
+| 追加 | `packages/frontend/app/src/components/device-manager/device-manager.svelte`                                          | `DeviceManager` を認証済み app 側へ移し、app-owned locale JSON files と `@www-template/i18n` から文言と formatter を受け取って描画する。                                         |
+| 更新 | `packages/frontend/app/package.json`、`packages/frontend/app/src/lib/i18n/**`、`packages/frontend/app/src/routes/**` | app-owned locale JSON files を持ち、`@www-template/i18n` を使って app 文言、fallback、account locale 同期、UI component への localized props 注入を実装する。                    |
+| 更新 | `packages/frontend/app/src/routes/**`                                                                                | login、protected layout、overview、settings を辞書文言に置き換え、UI component へ localized labels/formatters を渡す。                                                           |
+| 更新 | `packages/web/package.json`、`packages/web/src/lib/i18n/**`、`packages/web/src/routes/**`                            | web-owned locale JSON files を持ち、`@www-template/i18n` を使って `/` 誘導、`/[locale]` 表示、公開 navigation、metadata を実装する。                                             |
+| 更新 | `packages/admin/prisma/admin/schema.prisma`                                                                          | operator locale field を追加する。                                                                                                                                               |
+| 追加 | `packages/admin/prisma/admin/migrations/000002_add_operator_locale/migration.sql`                                    | operator locale の既定値と制約を永続化する。                                                                                                                                     |
+| 更新 | `packages/admin/src/app.d.ts`                                                                                        | `App.Locals.operator` に locale を追加する。                                                                                                                                     |
+| 更新 | `packages/admin/src/hooks.server.ts`                                                                                 | 認証済み operator context に locale を読み込む。                                                                                                                                 |
+| 更新 | `packages/admin/package.json`                                                                                        | `@www-template/i18n` dependency を追加する。                                                                                                                                     |
+| 追加 | `packages/admin/src/lib/i18n/**`                                                                                     | admin-owned locale JSON files を持ち、`@www-template/i18n` へ渡す Admin 辞書 catalog を定義する。                                                                                |
+| 追加 | `packages/admin/src/lib/server/models/operator_locale.ts`                                                            | Admin package-local の OperatorLocale 型、parser、validator を定義し、Product TypeSpec/generated SDK を import しない。                                                          |
+| 更新 | `packages/admin/src/lib/server/models/*`                                                                             | Operator 型と Prisma mapping に locale を追加する。                                                                                                                              |
+| 追加 | `packages/admin/src/lib/server/services/operators/locale.ts`                                                         | 認証済み本人の operator locale 更新を実装する。                                                                                                                                  |
+| 更新 | `packages/admin/src/routes/+layout.*`                                                                                | layout data と画面表示へ operator locale を渡し、`@www-template/i18n` から navigation を生成する。                                                                               |
+| 更新 | `packages/admin/src/routes/settings/+page.*`                                                                         | operator locale 設定 UI と action を追加し、Product API locale 型を使わない。                                                                                                    |
+| 追加 | `tests/i18n-lint.test.ts`                                                                                            | i18n lint と辞書網羅性チェックの挙動を検証する。                                                                                                                                 |
 
 ## System Diagram
 
@@ -258,6 +306,17 @@ flowchart LR
   ApiClient --> ProductAPI[Go Product API]
   ProductAPI --> ProductDB[(Product DB accounts.locale)]
   ProductAPI --> Mailer[多言語メール送信]
+  I18n[packages/frontend/i18n]
+  WebMessages[web-owned locale JSON files]
+  AppMessages[app-owned locale JSON files]
+  AdminMessages[admin-owned locale JSON files]
+  Web --> WebMessages
+  App --> AppMessages
+  Admin --> AdminMessages
+  Web --> I18n
+  App --> I18n
+  App --> AppDeviceManager[app/components/device-manager]
+  Admin --> I18n
   App --> UI[packages/frontend/ui localized props]
   Operator[管理オペレーター] --> Admin[packages/admin]
   Admin --> AdminDB[(Admin DB operators.locale)]
@@ -272,8 +331,11 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  Web[packages/web] --> WebI18n[web/src/lib/i18n]
-  App[packages/frontend/app] --> AppI18n[app/src/lib/i18n]
+  Web[packages/web] --> FrontendI18n[packages/frontend/i18n]
+  Web --> WebMessages[web/src/lib/i18n/messages]
+  App[packages/frontend/app] --> FrontendI18n
+  App --> AppMessages[app/src/lib/i18n/messages]
+  App --> AppDeviceManager[app/src/components/device-manager]
   App --> UI[frontend/ui localized labels-formatters]
   App --> Domain[packages/frontend/domain/localization]
   Domain --> Api[packages/frontend/api]
@@ -286,7 +348,8 @@ flowchart TB
   AuthApp --> PostgresAuth[adapters/persistence/postgres auth repository]
   AuthApp --> AccountLocaleReader[account locale reader port]
   AuthApp --> Mailer[adapters/mailer]
-  AdminRoutes[packages/admin routes] --> AdminI18n[admin/src/lib/i18n]
+  AdminRoutes[packages/admin routes] --> FrontendI18n
+  AdminRoutes --> AdminMessages[admin/src/lib/i18n/messages]
   AdminRoutes --> UI
   AdminRoutes --> AdminServices[admin server services]
   AdminServices --> AdminModels[admin server models]
@@ -405,30 +468,33 @@ erDiagram
 
 ### Package List
 
-| Package                                                   | Purpose / Responsibility                                                  | Public API                                           | Dependencies                                        |
-| --------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------- |
-| `packages/web`                                            | 公開 URL ロケール選択と公開辞書                                           | `/ja`、`/en`、`/`                                    | `@www-template/ui`                                  |
-| `packages/frontend/app`                                   | 認証済み UI と設定画面の多言語表示                                        | Svelte routes                                        | `@www-template/domain`、`@www-template/ui`          |
-| `packages/frontend/domain`                                | account locale state と domain use case。API wrapper は所有しない         | `useAccountLocalization`                             | `@www-template/api` の public wrapper               |
-| `packages/frontend/ui`                                    | 再利用 UI の構造と表示 primitive。言語は所有しない                        | localized label / formatter props                    | なし、または UI 内部 primitive                      |
-| `packages/frontend/api`                                   | 型付き API wrapper の集約。account settings も既存 `client.ts` に追加する | `accountSettingsApi`                                 | 生成 SDK                                            |
-| `packages/typespec`                                       | Product API account locale 契約                                           | AccountLocale models/routes                          | TypeSpec emitters                                   |
-| `packages/backend/internal/account`                       | Product account locale、account settings、client settings                 | Account settings service、client settings reader     | account domain、PostgreSQL port                     |
-| `packages/backend/internal/auth`                          | 本人確認、session、token、passkey/recovery 認証フロー                     | AuthService、TokenService                            | auth domain、Valkey、account status reader          |
-| `packages/backend/internal/adapters/http`                 | Product API の transport と use case 合成                                 | generated strict handler                             | auth/application、account/application、生成 OpenAPI |
-| `packages/backend/internal/adapters/persistence/postgres` | Product account/auth 永続化 adapter                                       | account settings repository、auth subject repository | PostgreSQL、account/auth domain                     |
-| `packages/backend/internal/adapters/mailer`               | locale-aware 認証メール送信                                               | AccountRecoverySender                                | SMTP、account locale string                         |
-| `packages/admin`                                          | operator locale 永続化と Admin 多言語 UI                                  | server load/action、Prisma model                     | Admin DB、`@www-template/ui`                        |
-| `scripts/i18n`                                            | 辞書網羅性検証                                                            | `check-locales.ts`                                   | Node/tsx                                            |
+| Package                                                   | Purpose / Responsibility                                                  | Public API                                                                 | Dependencies                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `packages/web`                                            | 公開 URL ロケール選択、web-owned locale JSON files、共有 i18n 適用        | `/ja`、`/en`、`/`                                                          | `@www-template/ui`、`@www-template/i18n`                         |
+| `packages/frontend/app`                                   | 認証済み UI、app-owned locale JSON files、共有 i18n 適用                  | Svelte routes                                                              | `@www-template/domain`、`@www-template/ui`、`@www-template/i18n` |
+| `packages/frontend/domain`                                | account locale state と domain use case。API wrapper は所有しない         | `useAccountLocalization`                                                   | `@www-template/api` の public wrapper                            |
+| `packages/frontend/ui`                                    | 再利用 UI の構造と表示 primitive。言語と i18n import は所有しない         | localized label / formatter props                                          | なし、または UI 内部 primitive                                   |
+| `packages/frontend/i18n`                                  | web/app/admin 共通の i18n 実装。locale JSON files は所有しない            | locale resolver、JSON catalog loader、translator、formatter、coverage util | TypeScript のみ                                                  |
+| `packages/frontend/api`                                   | 型付き API wrapper の集約。account settings も既存 `client.ts` に追加する | `accountSettingsApi`                                                       | 生成 SDK                                                         |
+| `packages/typespec`                                       | Product API account locale 契約                                           | AccountLocale models/routes                                                | TypeSpec emitters                                                |
+| `packages/backend/internal/account`                       | Product account locale、account settings、client settings                 | Account settings service、client settings reader                           | account domain、PostgreSQL port                                  |
+| `packages/backend/internal/auth`                          | 本人確認、session、token、passkey/recovery 認証フロー                     | AuthService、TokenService                                                  | auth domain、Valkey、account status reader                       |
+| `packages/backend/internal/adapters/http`                 | Product API の transport と use case 合成                                 | generated strict handler                                                   | auth/application、account/application、生成 OpenAPI              |
+| `packages/backend/internal/adapters/persistence/postgres` | Product account/auth 永続化 adapter                                       | account settings repository、auth subject repository                       | PostgreSQL、account/auth domain                                  |
+| `packages/backend/internal/adapters/mailer`               | locale-aware 認証メール送信                                               | AccountRecoverySender                                                      | SMTP、account locale string                                      |
+| `packages/admin`                                          | operator locale 永続化、admin-owned locale JSON files、共有 i18n 適用     | server load/action、Prisma model                                           | Admin DB、`@www-template/ui`、`@www-template/i18n`               |
+| `scripts/i18n`                                            | 辞書網羅性検証                                                            | `check-locales.ts`                                                         | Node/tsx                                                         |
+
+`packages/frontend/i18n` は正式な共有 frontend package として扱う。実装時は `AGENTS.md`、`CODING_STANDARDS.md`、`eslint.config.js` の依存境界を同時に更新し、`packages/web`、`packages/frontend/app`、`packages/admin` からの `@www-template/i18n` import を許可する。一方で `packages/frontend/domain` と `packages/frontend/ui` からの `@www-template/i18n`、app/web/admin i18n module、surface-owned locale JSON files への依存は禁止のまま機械検証する。
 
 ### Details
 
 #### `packages/web`
 
-- 責務: Product API に依存せず、公開 URL のロケール選択と公開辞書を管理する。
+- 責務: Product API に依存せず、公開 URL のロケール選択と web-owned locale JSON files を管理し、共通翻訳処理は `@www-template/i18n` から取得する。
 - 公開入口: SvelteKit routes `/`、`/ja`、`/en`。
-- 主なデータ: `PublicLocale`、公開辞書、route params。
-- 主な流れ: root route で対応ロケール URL に誘導し、`[locale]` page で params を検証して辞書文言を表示する。
+- 主なデータ: `PublicLocale`、route params、`packages/web/src/lib/i18n/messages/**/*.json` の locale JSON files、`@www-template/i18n` の translator。
+- 主な流れ: root route で対応ロケール URL に誘導し、`[locale]` page で params を検証して web-owned locale JSON files を `@www-template/i18n` の translator に渡し、辞書文言を表示する。
 - エラー処理: 未対応ロケールは翻訳済みページとして扱わない。
 - テスト: `LOCALIZATION-FE-S001` から `LOCALIZATION-FE-S003` を Playwright と unit test で確認する。
 
@@ -438,7 +504,7 @@ erDiagram
 - 公開入口: `useAccountLocalization(): { data, actions }` と locale 型。
 - 主なデータ: locale union、account settings state、load/update result。
 - 主な流れ: auth session 由来の Authorization header を受け取り、`@www-template/api` の既存 `client.ts` から公開される `accountSettingsApi` を呼び出して state を更新し、エラーを domain state に正規化する。
-- 禁止事項: `account_settings_api.ts` や `account_settings.ts` などの新規 feature-specific API wrapper file、generated SDK の直接 import、`localStorage`、browser/OS language、DOM globals、UI component import、直接 `fetch` を使わない。端末 fallback は app が所有する。
+- 禁止事項: `account_settings_api.ts` や `account_settings.ts` などの新規 feature-specific API wrapper file、generated SDK の直接 import、`localStorage`、browser/OS language、DOM globals、UI component import、`@www-template/i18n` import、app/web/admin i18n module import、直接 `fetch` を使わない。端末 fallback は app が所有する。
 - エラー処理: unauthenticated、expired、suspended は既存 auth 導線と整合させ、検証エラーは汎用表示にする。
 - テスト: `LOCALIZATION-FE-S004` から `LOCALIZATION-FE-S006` の state 挙動を Vitest で確認し、domain/API 配置境界は `ARCH-FE-DOMAIN-API-BOUNDARY` source guard で確認する。
 
@@ -451,21 +517,30 @@ erDiagram
 - 禁止事項: `src/api/account_settings.ts` のような feature-specific wrapper file を作らない。app/domain に generated SDK import や package-local `*_api.ts` wrapper を要求しない。
 - テスト: API wrapper unit test と `ARCH-FE-DOMAIN-API-BOUNDARY` guard で domain に API wrapper が増えないこと、API package が既存集約構造を維持することを確認する。
 
+#### `packages/frontend/i18n`
+
+- 責務: web/app/admin が共有する frontend 表示翻訳実装を提供する。locale 定義、fallback 解決、JSON catalog loader、typed translator、formatter builder、辞書 key coverage utility を所有するが、各 surface の locale JSON files は所有しない。
+- 公開入口: `SupportedLocale`、`createTranslator`、`defineJsonCatalog`、`resolveSupportedLocale`、date/time formatter builder、key coverage utility。
+- 主なデータ: `ja` / `en` locale 定義、JSON message catalog 型、typed key path、formatter 設定。
+- 主な流れ: 呼び出し側 package が自分の package に置いた locale JSON files と locale を渡し、typed translator と必要な formatter を取得する。辞書は `packages/web`、`packages/frontend/app`、`packages/admin` の各 `src/lib/i18n/messages/{locale}/{namespace}.json` に分割し、巨大な単一辞書を作らない。
+- 禁止事項: app/web/admin の locale JSON files、Product API SDK、frontend/domain、frontend/ui、admin server persistence、DOM globals、`localStorage`、Svelte component を import しない。表示翻訳共通実装に限定し、account/admin の永続 locale 更新は所有しない。
+- テスト: `LOCALIZATION-FE-S010`、`ARCH-I18N-DICTIONARY-COVERAGE`、unit test で consuming package ごとの locale JSON files の key coverage と fallback を確認する。root `pnpm check`、`pnpm lint`、`pnpm test:run` は `packages/frontend/i18n` を標準検証対象に含める。
+
 #### `packages/frontend/ui`
 
-- 責務: reusable component の構造、slot、interaction primitive を提供し、言語・辞書・account/admin 文脈を所有しない。
-- 公開入口: `DeviceManager` など reusable components の localized label / formatter props。
+- 責務: reusable primitive の構造、slot、interaction primitive を提供し、言語・辞書・i18n package・account/admin 文脈を所有しない。
+- 公開入口: button、field、table、dialog など reusable primitives の localized label / formatter props。
 - 主なデータ: 呼び出し側から渡される label object、aria label builder、date/time formatter function。
-- 主な流れ: app/Admin が現在 locale に応じた辞書文言と formatter を作り、UI component は渡された値だけを描画する。
-- 禁止事項: 固定日本語、固定英語、固定 `ja-JP` / `en-US` formatter、Product API/domain/Admin server への依存を持たない。
-- テスト: `ARCH-FE-UI-LOCALIZED-PROPS` と i18n lint で UI package が表示言語を所有しないことを確認する。
+- 主な流れ: app/web/Admin が現在 locale に応じた辞書文言と formatter を作り、UI primitive は渡された値だけを描画する。component が `@www-template/i18n`、app-owned locale JSON files、domain hook、または app-specific device/session 文言を必要とする場合、その component は UI package ではなく呼び出し側 package に配置する。
+- 禁止事項: 固定日本語、固定英語、固定 `ja-JP` / `en-US` formatter、`@www-template/i18n` import、app/web/admin i18n module import、Product API/domain/Admin server への依存を持たない。`DeviceManager` を UI package に置かない。
+- テスト: `ARCH-FE-UI-LOCALIZED-PROPS`、`ARCH-FE-UI-NO-I18N-IMPORT`、i18n lint で UI package が表示言語と i18n 実装を所有せず、`DeviceManager` を含まないことを確認する。
 
 #### `packages/frontend/app`
 
-- 責務: 認証前と認証後の app 文言を辞書から表示し、account locale 設定画面を提供する。
+- 責務: 認証前と認証後の app 文言を app-owned locale JSON files と `@www-template/i18n` から表示し、account locale 設定画面を提供する。
 - 公開入口: `/login`、protected root、protected `/settings`。
-- 主なデータ: app 辞書、locale resolver、settings form state。
-- 主な流れ: 認証前は `localStorage` の対応 locale を優先し、存在しない場合はアクセス時の browser/OS language を `ja` / `en` へ解決する。protected layout は account locale を読み込み、settings は locale 更新後に表示文言を切り替える。refresh 成功後は DB 由来 account-owned client settings locale を正として表示状態を置き換える。`frontend/ui` component へは現在 locale から作った label と formatter を渡す。
+- 主なデータ: `packages/frontend/app/src/lib/i18n/messages/**/*.json` の locale JSON files、`@www-template/i18n` translator、locale resolver、settings form state、app-owned `DeviceManager`。
+- 主な流れ: 認証前は `localStorage` の対応 locale を優先し、存在しない場合はアクセス時の browser/OS language を `ja` / `en` へ解決する。protected layout は account locale を読み込み、settings は locale 更新後に app-owned locale JSON files を渡した translator の current locale を切り替える。refresh 成功後は DB 由来 account-owned client settings locale を正として表示状態を置き換える。`DeviceManager` は `packages/frontend/app/src/components/device-manager` に置き、app-owned locale JSON files から作った label と formatter を使う。`frontend/ui` へは必要な reusable primitive props だけを渡す。
 - エラー処理: locale 更新失敗はローカライズ済み汎用エラーとして表示する。
 - テスト: component test と Playwright で `LOCALIZATION-FE-S004`、`LOCALIZATION-FE-S005`、`LOCALIZATION-FE-S006` を確認する。
 
@@ -511,28 +586,28 @@ erDiagram
 
 #### `packages/admin`
 
-- 責務: Admin operator locale の保存、読み込み、本人更新、Admin UI 文言表示を管理する。
+- 責務: Admin operator locale の保存、読み込み、本人更新、admin-owned locale JSON files と `@www-template/i18n` による Admin UI 文言表示を管理する。
 - 公開入口: layout load data、settings load/action、Prisma `AdminOperator.locale`。
-- 主なデータ: Admin package-local `OperatorLocale`、`Operator.locale`、`App.Locals.operator.locale`、Admin 辞書。
-- 主な流れ: hook が session を検証して operator locale を読み込み、layout と settings へ渡し、settings action が本人 locale だけを更新する。
+- 主なデータ: Admin package-local `OperatorLocale`、`Operator.locale`、`App.Locals.operator.locale`、`packages/admin/src/lib/i18n/messages/**/*.json` の locale JSON files、`@www-template/i18n` translator。
+- 主な流れ: hook が session を検証して operator locale を読み込み、layout と settings へ渡し、settings action が本人 locale だけを更新し、Admin UI は admin-owned locale JSON files を渡した translator の current locale に同期して表示する。
 - 禁止事項: operator locale のために Product TypeSpec/generated SDK、`@www-template/api`、Product account locale model を import しない。
 - エラー処理: 更新時の未対応 locale は form error とし、保存値を変更しない。DB から未知 locale が読めた場合は既定値へ黙って丸めず fail-closed にする。
 - テスト: Admin service/server/component test で `LOCALIZATION-BE-S009` から `LOCALIZATION-BE-S012`、`ARCH-ADMIN-LOCALE-INDEPENDENCE`、`LOCALIZATION-FE-S007` から `LOCALIZATION-FE-S009` を確認する。
 
 #### `scripts/i18n` と `eslint.config.js`
 
-- 責務: 対象 UI ソースの辞書経由表示、UI label contract、辞書キー網羅性を標準 lint で強制する。
+- 責務: 対象 UI ソースの共有 i18n 辞書経由表示、UI label contract、辞書キー網羅性、UI/domain package の i18n import 禁止、`@www-template/i18n` を許可する表示面境界を標準 lint で強制する。
 - 公開入口: `pnpm lint`。
 - 主なデータ: 対応 locale 一覧、辞書 key path、UI label contract、許可する literal pattern。
-- 主な流れ: ESLint がユーザー向け直書き文言と固定 formatter locale を検出し、辞書検証 script が `ja` と `en` の key 差分を検出する。
+- 主な流れ: ESLint がユーザー向け直書き文言、固定 formatter locale、`packages/frontend/ui` / `packages/frontend/domain` からの `@www-template/i18n` または app/web/admin i18n module import、app/web/admin 間の相互辞書 import を検出し、辞書検証 script が app/web/admin の各 locale JSON files の `ja` と `en` の key 差分を検出する。
 - エラー処理: file、key、欠落 locale を表示して失敗する。
-- テスト: `tests/i18n-lint.test.ts` で `ARCH-I18N-LITERAL-GUARD` と `ARCH-I18N-DICTIONARY-COVERAGE` を確認する。
+- テスト: `tests/i18n-lint.test.ts` で `LOCALIZATION-FE-S011`、`ARCH-I18N-LITERAL-GUARD`、`ARCH-I18N-DICTIONARY-COVERAGE` を確認する。
 
 ## Implementation Plan
 
 ```mermaid
 flowchart TD
-  A[1. locale 契約と辞書を定義する] --> B[2. Product TypeSpec に account locale API を追加する]
+  A[1. packages/frontend/i18n の共有実装と app/web/admin owned locale JSON files を定義する] --> B[2. Product TypeSpec に account locale API を追加する]
   B --> C[3. API と Go bindings を生成する]
   B --> D[4. Product DB locale 永続化を追加する]
   D --> E0[5. internal/account domain/application/repository を実装する]
@@ -541,7 +616,7 @@ flowchart TD
   E2 --> E1
   E1 --> F[8. Product 認証メールを account locale reader 経由で多言語化する]
   C --> G[9. frontend API/domain の account locale state を追加する]
-  G --> H0[10. frontend/ui の言語所有を取り除く]
+  G --> H0[10. DeviceManager を app へ移し frontend/ui の言語所有を取り除く]
   H0 --> H[11. 認証済みアプリと settings UI を多言語化する]
   A --> I[12. web のパスベース locale route を追加する]
   A --> J[13. Admin operator locale 永続化を追加する]
@@ -592,19 +667,19 @@ flowchart TD
 
 ### Unit/Component Test (UT)
 
-| UT ID                       | Test Name                                                                                   | Package                        | Category | Summary                                           | Steps (Test)                                                                                                                               | Expected Behavior                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------ | -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| UT-LOCALIZATION-FE-HAP-001  | `[LOCALIZATION-FE-S004] account locale state は保存済み locale を保持し app 表示へ反映する` | frontend/domain + frontend/app | HAP      | domain hook と app 表示の読み込み結果を確認する。 | API mock が `en` を返す状態で load action と protected layout を描画する。                                                                 | data locale が `en` になり、navigation、heading、操作 label が英語になる。                                                                             |
-| UT-LOCALIZATION-FE-HAP-002  | `[LOCALIZATION-FE-S006] login は localStorage または system locale で表示する`              | frontend/app                   | HAP      | 認証前画面の fallback 表示を確認する。            | 認証 state なしで login route を描画し、localStorage locale と browser/OS locale の両方を検証する。                                        | 端末保存 locale が優先され、存在しない場合は system locale の文言が表示され、account settings API は呼ばれない。                                       |
-| UT-LOCALIZATION-FE-HAP-003  | `[LOCALIZATION-FE-S007] Admin layout は operator locale を使う`                             | admin                          | HAP      | layout data の locale 反映を確認する。            | `locale: en` の layout data で描画する。                                                                                                   | Admin navigation label が英語になる。                                                                                                                  |
-| UT-LOCALIZATION-FE-ARCH-000 | `[ARCH-FE-DOMAIN-API-BOUNDARY] Domain localization は API wrapper を所有しない`             | frontend/domain + frontend/api | ARCH     | frontend domain/API の配置境界を確認する。        | `packages/frontend/domain/src/localization` の file 名と imports、`packages/frontend/api/src/api/client.ts` の wrapper export を検査する。 | account settings API wrapper は既存 `client.ts` にあり、domain localization は hook/state/types/index だけを持ち、generated SDK を直接 import しない。 |
-| UT-LOCALIZATION-FE-ARCH-001 | `[ARCH-FE-UI-LOCALIZED-PROPS] reusable UI は表示言語を所有しない`                           | frontend/ui                    | ARCH     | UI package の言語所有排除を確認する。             | DeviceManager などに label object と formatter を渡して描画し、source guard で固定文言/固定 locale を検査する。                            | UI component は渡された labels/formatter だけを表示し、固定日本語、固定英語、固定 `ja-JP` / `en-US` を持たない。                                       |
-| UT-LOCALIZATION-FE-REG-001  | `[ARCH-I18N-LITERAL-GUARD] 未翻訳 UI literal は lint で失敗する`                            | tooling                        | REG      | ハードコード文言検知を確認する。                  | 直書き文言 fixture に lint rule を実行する。                                                                                               | 違反が報告される。                                                                                                                                     |
-| UT-LOCALIZATION-FE-REG-002  | `[ARCH-I18N-DICTIONARY-COVERAGE] 辞書欠落 key は検証で失敗する`                             | tooling                        | REG      | 辞書網羅性を確認する。                            | `en` key が欠けた fixture で locale check を実行する。                                                                                     | 欠落 key path が報告される。                                                                                                                           |
-| UT-LOCALIZATION-BE-HAP-001  | `[LOCALIZATION-BE-S006] recovery email は account locale を使う`                            | backend/mailer                 | HAP      | メールテンプレート選択を確認する。                | locale `en` の delivery で message を生成する。                                                                                            | 件名と本文が英語になり token は log に出ない。                                                                                                         |
-| UT-LOCALIZATION-BE-BND-001  | `[LOCALIZATION-BE-S008] 不正 Product locale は拒否される`                                   | backend/domain                 | BND      | locale validation を確認する。                    | 未対応 locale を検証する。                                                                                                                 | domain または persistence が拒否する。                                                                                                                 |
-| UT-LOCALIZATION-BE-ARCH-001 | `[ARCH-BE-ACCOUNT-AUTH-BOUNDARY] locale domain は account に所属する`                       | backend/account + backend/auth | ARCH     | account/auth の package boundary を確認する。     | package/import 境界テストまたは grep guard で auth 配下の locale/account settings 所有を検査する。                                         | locale 値オブジェクト、settings use case、client settings DTO は account 配下にあり、auth 配下に存在しない。                                           |
-| UT-LOCALIZATION-BE-ARCH-002 | `[ARCH-BE-AUTH-SUBJECT] auth subject は account settings を持たない`                        | backend/auth                   | ARCH     | auth subject のドメイン意味を確認する。           | AuthSubject の constructor/accessor と repository port を検査する。                                                                        | AuthSubject は認証に必要な ID、identifier、email、status、session revoked boundary、passkey credential だけを公開する。                                |
+| UT ID                       | Test Name                                                                                                          | Package                        | Category | Summary                                                    | Steps (Test)                                                                                                                                                                                                                                       | Expected Behavior                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------ | -------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UT-LOCALIZATION-FE-HAP-001  | `[LOCALIZATION-FE-S004] account locale state は保存済み locale を保持し app 表示へ反映する`                        | frontend/domain + frontend/app | HAP      | domain hook と app 表示の読み込み結果を確認する。          | API mock が `en` を返す状態で load action と protected layout を描画する。                                                                                                                                                                         | data locale が `en` になり、navigation、heading、操作 label が英語になる。                                                                                                 |
+| UT-LOCALIZATION-FE-HAP-002  | `[LOCALIZATION-FE-S006] login は localStorage または system locale で表示する`                                     | frontend/app                   | HAP      | 認証前画面の fallback 表示を確認する。                     | 認証 state なしで login route を描画し、localStorage locale と browser/OS locale の両方を検証する。                                                                                                                                                | 端末保存 locale が優先され、存在しない場合は system locale の文言が表示され、account settings API は呼ばれない。                                                           |
+| UT-LOCALIZATION-FE-HAP-003  | `[LOCALIZATION-FE-S007] Admin layout は operator locale を使う`                                                    | admin                          | HAP      | layout data の locale 反映を確認する。                     | `locale: en` の layout data で描画する。                                                                                                                                                                                                           | Admin navigation label が英語になる。                                                                                                                                      |
+| UT-LOCALIZATION-FE-ARCH-000 | `[ARCH-FE-DOMAIN-API-BOUNDARY] Domain localization は API wrapper を所有しない`                                    | frontend/domain + frontend/api | ARCH     | frontend domain/API の配置境界を確認する。                 | `packages/frontend/domain/src/localization` の file 名と imports、`packages/frontend/api/src/api/client.ts` の wrapper export を検査する。                                                                                                         | account settings API wrapper は既存 `client.ts` にあり、domain localization は hook/state/types/index だけを持ち、generated SDK を直接 import しない。                     |
+| UT-LOCALIZATION-FE-ARCH-001 | `[LOCALIZATION-FE-S013][ARCH-FE-UI-LOCALIZED-PROPS][ARCH-FE-UI-NO-I18N-IMPORT] reusable UI は表示言語を所有しない` | frontend/ui + frontend/app     | ARCH     | UI package の言語所有排除と DeviceManager 移動を確認する。 | source guard で `packages/frontend/ui` の固定文言/固定 locale、`@www-template/i18n` / app/web/admin i18n module import、`device-manager` 残存を検査し、app 側 DeviceManager が app-owned locale JSON files と formatter を使うことを描画確認する。 | UI component は固定日本語、固定英語、固定 `ja-JP` / `en-US` と i18n import を持たず、`DeviceManager` は `packages/frontend/app/src/components/device-manager` に存在する。 |
+| UT-LOCALIZATION-FE-REG-001  | `[LOCALIZATION-FE-S011][ARCH-I18N-LITERAL-GUARD] 未翻訳 UI literal は lint で失敗する`                             | tooling                        | REG      | ハードコード文言と layer import 禁止を確認する。           | 直書き文言 fixture と i18n import 違反 fixture に lint rule を実行する。                                                                                                                                                                           | 違反が報告され、UI/domain は i18n と表示面辞書を import できない。                                                                                                         |
+| UT-LOCALIZATION-FE-REG-002  | `[LOCALIZATION-FE-S010][ARCH-I18N-DICTIONARY-COVERAGE] 辞書欠落 key は検証で失敗する`                              | tooling                        | REG      | 辞書網羅性と表示面別辞書所有を確認する。                   | app/web/admin いずれかの package-owned locale JSON files で `en` key が欠けた fixture と相互辞書 import fixture に locale check を実行する。                                                                                                       | 欠落 key path と所有 package が報告され、app/web/admin 間の辞書 import が拒否される。                                                                                      |
+| UT-LOCALIZATION-BE-HAP-001  | `[LOCALIZATION-BE-S006] recovery email は account locale を使う`                                                   | backend/mailer                 | HAP      | メールテンプレート選択を確認する。                         | locale `en` の delivery で message を生成する。                                                                                                                                                                                                    | 件名と本文が英語になり token は log に出ない。                                                                                                                             |
+| UT-LOCALIZATION-BE-BND-001  | `[LOCALIZATION-BE-S008] 不正 Product locale は拒否される`                                                          | backend/domain                 | BND      | locale validation を確認する。                             | 未対応 locale を検証する。                                                                                                                                                                                                                         | domain または persistence が拒否する。                                                                                                                                     |
+| UT-LOCALIZATION-BE-ARCH-001 | `[ARCH-BE-ACCOUNT-AUTH-BOUNDARY] locale domain は account に所属する`                                              | backend/account + backend/auth | ARCH     | account/auth の package boundary を確認する。              | package/import 境界テストまたは grep guard で auth 配下の locale/account settings 所有を検査する。                                                                                                                                                 | locale 値オブジェクト、settings use case、client settings DTO は account 配下にあり、auth 配下に存在しない。                                                               |
+| UT-LOCALIZATION-BE-ARCH-002 | `[ARCH-BE-AUTH-SUBJECT] auth subject は account settings を持たない`                                               | backend/auth                   | ARCH     | auth subject のドメイン意味を確認する。                    | AuthSubject の constructor/accessor と repository port を検査する。                                                                                                                                                                                | AuthSubject は認証に必要な ID、identifier、email、status、session revoked boundary、passkey credential だけを公開する。                                                    |
 
 ## Rollback / Migration
 
@@ -630,14 +705,18 @@ flowchart TD
 - 認証済みアプリが domain/API 境界を守って account locale を読み書きし、app route から Product API を直接 import しない。
 - account settings API wrapper は既存 `packages/frontend/api/src/api/client.ts` に存在し、`packages/frontend/domain/src/localization` は API wrapper file と generated SDK import を持たない。
 - Product TypeSpec/generated SDK が Product account locale だけを表し、Admin operator locale や `/api/admin/**` を含まない。
-- `packages/frontend/ui` が表示言語や固定 formatter locale を所有せず、app/Admin から localized labels/formatters を受け取る。
+- `packages/frontend/i18n` が共有 i18n 実装として locale 定義、loader/config、JSON catalog loader、typed translator、formatter、辞書 key coverage utility を提供し、locale JSON files は持たない。
+- `AGENTS.md`、`CODING_STANDARDS.md`、`eslint.config.js` が `packages/frontend/i18n` を正式な共有 frontend package として扱い、web/app/admin からの利用を許可し、domain/ui からの i18n 依存を禁止する。
+- `packages/web`、`packages/frontend/app`、`packages/admin` が各自の locale JSON files を所有し、それを `@www-template/i18n` に渡して使い、互いの辞書を import しない。
+- `packages/frontend/ui` が表示言語、i18n import、固定 formatter locale を所有せず、app/Admin から localized labels/formatters を受け取る。i18n import が必要な component は UI package に存在しない。`DeviceManager` は `packages/frontend/ui` から削除され、`packages/frontend/app/src/components/device-manager` に存在する。
 - Product API が未対応 locale と未認証 locale request を拒否し、永続値を変更しない。
 - Product BE で account locale、account settings、client settings が `internal/account` に所属し、`internal/auth` は locale/account settings を所有しない。
 - Product BE の auth domain は `AuthSubject` を認証主体として使い、`AuthAccount` / `AuthAccountRepository` 命名と後方互換 accessor を残さない。
 - Product 認証メールが保存済み account locale から日本語または英語文面を選ぶ。
 - Admin Console が operator locale を server context に読み込み、認証済み本人だけが自分の locale を更新できる。Admin operator locale は Admin package-local で、Product TypeSpec/generated SDK を参照しない。
 - 標準 `pnpm lint` が未翻訳のユーザー向け UI 文言と対応ロケール辞書の欠落 key で失敗する。
-- `pnpm gen`、`pnpm check:codegen`、`pnpm lint`、`pnpm test:run` が通る。
+- 標準 `pnpm check`、`pnpm lint`、`pnpm test:run` が `packages/frontend/i18n` を検証対象に含める。
+- `pnpm gen`、`pnpm check:codegen`、`pnpm lint`、`pnpm check`、`pnpm test:run` が通る。
 
 ## Open Issues
 

@@ -7,6 +7,7 @@
 ## What Changes
 
 - 公開サイトはパスベースのロケールルートを提供し、`/ja` と `/en` で表示言語を明示できるようにします。
+- 公開サイト、認証済みアプリ、Admin Console の SvelteKit 面は、保守性を重視した `packages/frontend/i18n` の共有 i18n 実装を使います。外部 i18n dependency に頼らず、locale 定義、loader/config、typed translator、辞書 key coverage の共通処理を集約します。ただし locale JSON files は文言を表示する `packages/web`、`packages/frontend/app`、`packages/admin` がそれぞれ所有し、別 surface の辞書を共有または import しません。
 - 公開サイトの `/` は、安全な既定言語またはブラウザ言語に基づくロケールルートへ誘導します。
 - 認証済みアプリはアカウント単位の言語設定を Product BE に保存し、別端末でも同じ言語で表示されるようにします。
 - 未ログイン時の認証済みアプリは、端末に保存されたローカル言語設定を優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応ロケールへ解決します。
@@ -15,12 +16,12 @@
 - Product BE は Clean Architecture を徹底し、account locale、account settings、client settings を `packages/backend/internal/account` の責務に分離します。`packages/backend/internal/auth` は本人確認、session、token、passkey/recovery 認証フローだけを扱い、locale や account settings を所有しません。既存の `AuthAccount` のように Product account aggregate と誤読される auth domain model は、認証主体だけを表す `AuthSubject` と credential/session モデルへリファクタリングします。
 - 管理コンソールはオペレーター単位の言語設定を Admin DB に保存し、別端末でも同じ言語で表示されるようにします。
 - Admin operator locale は `packages/admin` 内で package-local に定義し、Product TypeSpec/generated SDK や Product account locale model を共有しません。`ja` / `en` の値整合は lint/test で確認します。
-- `packages/frontend/ui` は表示言語を所有せず、再利用コンポーネントは localized label、aria label、日時 formatter を呼び出し側から受け取るようにします。
+- `packages/frontend/ui` は表示言語も i18n 実装も所有しません。i18n import が必要なコンポーネントは UI package に置かず、利用面の app/web/admin 側に配置します。既存の `DeviceManager` は認証済みアプリの device/session 文言を持つ concrete component として `packages/frontend/app` 側へ移します。
 - Product BE は、アカウント言語設定を取得・更新する認証済み API を提供します。
 - Product BE の認証関連メールは、保存済みアカウント言語に基づいて件名と本文を選択します。
 - Admin Console はログイン済みオペレーターの言語設定を読み込み、設定画面から更新できるようにします。
 - lint で、対象パッケージの多言語対応を迂回するハードコード文言や未登録ロケールキーを検知できるようにします。
-- **破壊的変更なし**。既存の主要導線は維持し、公開サイトの `/` はロケール付き URL へ誘導する入口として扱います。
+- **主要ユーザー導線の破壊的変更なし**。既存の主要導線は維持し、公開サイトの `/` はロケール付き URL へ誘導する入口として扱います。ただし app 固有の `DeviceManager` は shared UI package から削除し、認証済み app 側へ移します。
 
 ## Spec Units
 
@@ -39,12 +40,12 @@
 
 ## Impact
 
-- 影響パッケージ: `packages/web`、`packages/frontend/app`、`packages/frontend/domain`、`packages/frontend/ui`、`packages/frontend/api`、`packages/admin`、`packages/backend`、`packages/typespec`。
+- 影響パッケージ: `packages/web`、`packages/frontend/app`、`packages/frontend/domain`、`packages/frontend/ui`、`packages/frontend/i18n`、`packages/frontend/api`、`packages/admin`、`packages/backend`、`packages/typespec`。
 - API 影響: Product API に認証済みアカウント言語設定の取得・更新エンドポイントを追加します。Product API 契約は Admin operator locale を含めません。
 - DB 影響: Product DB の `accounts` と Admin DB の `admin.operators` に言語設定を永続化する migration が必要です。
 - 生成物影響: TypeSpec 変更により OpenAPI、frontend API SDK、Go server bindings の再生成が必要です。
 - メール影響: 復旧、デバイスリンク、復旧完了、デバイス追加完了メールの言語選択が保存済み設定に依存します。
-- lint 影響: 対象パッケージに i18n 強制ルールを追加し、対象外にする文字列や例外条件を明確化します。
+- lint 影響: 対象パッケージに i18n 強制ルールを追加し、対象外にする文字列や例外条件を明確化します。`packages/frontend/ui` と `packages/frontend/domain` では `packages/frontend/i18n` と app/web/admin の i18n module import を禁止します。`packages/web`、`packages/frontend/app`、`packages/admin` は各自の locale JSON files だけを import し、互いの辞書を参照しません。
 - セキュリティ影響: 言語設定更新は認証済み本人または認証済みオペレーター本人に限定し、未知ロケールは fail-closed で拒否します。
 - アーキテクチャ影響: Product account 設定のドメイン・ユースケース・repository port を `internal/account` に追加し、`internal/auth` から locale/account settings の所有を排除します。`AuthAccount` / `AuthAccountRepository` のような中途半端な account 命名は `AuthSubject` / `AuthSubjectRepository` へ整理します。
-- フロントエンド境界影響: `frontend/app` は未認証 fallback と辞書適用を担当し、`frontend/domain` は Product account settings API 協調だけを担当し、`frontend/ui` は言語や固定 locale formatter を所有しません。
+- フロントエンド境界影響: `frontend/i18n` は共通翻訳実装を担当し、locale JSON files は `web`、`frontend/app`、`admin` が表示面ごとに所有します。`frontend/app` は未認証 fallback と app 辞書適用を担当し、`frontend/domain` は Product account settings API 協調だけを担当し、`frontend/ui` は言語、i18n import、固定 locale formatter を所有しません。

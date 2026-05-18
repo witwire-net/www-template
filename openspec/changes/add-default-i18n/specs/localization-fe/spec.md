@@ -111,3 +111,38 @@
 - **前提** 未認証の利用者が Admin Console のログイン画面を開く
 - **操作** operator locale が存在しない
 - **結果** ログイン画面は対応ロケールの代替文言を表示し、operator DB の認証済み読み取りを要求しない
+
+### Requirement: Frontend i18n 境界は辞書網羅性と表示面所有を SHALL 強制する
+
+システムは、`packages/web`、`packages/frontend/app`、`packages/admin` が所有する locale JSON files について、対応ロケール `ja` と `en` の辞書 key 差分を SHALL 検出する。システムは、`packages/frontend/i18n` に app/web/admin 固有の locale JSON files が存在しないことを SHALL 検証する。システムは、ユーザー向け UI 文言が各表示面の locale JSON files と共有 i18n 実装を経由することを SHALL 強制し、未翻訳の直書き UI literal を SHALL 拒否する。`packages/frontend/ui` と `packages/frontend/domain` は、`@www-template/i18n` または app/web/admin の i18n module を import してはならない（MUST NOT）。`packages/web`、`packages/frontend/app`、`packages/admin` は互いの locale JSON files を import してはならない（MUST NOT）。再利用 UI package は表示言語、固定 locale formatter、app 固有の認証文言、または `DeviceManager` のように具体的な locale JSON files を必要とする component を所有してはならない（MUST NOT）。
+
+**Customer Context**
+
+利用者は表示面ごとの文言が同じ言語設定で欠けなく表示されることを期待する。辞書 key の欠落、表示面間の辞書共有、UI package 内の固定言語文言が残ると、設定した言語でも一部だけ別言語になり、アクセシビリティ、サポート、管理操作の信頼性が下がる。
+
+**要求**
+
+- システムは、app/web/admin が所有する locale JSON files について、対応ロケール `ja` と `en` の辞書 key 差分を SHALL 検出する。
+- システムは、`packages/frontend/i18n` に app/web/admin 固有の locale JSON files が存在しないことを SHALL 検証する。
+- システムは、ユーザー向け UI 文言が各表示面の locale JSON files と共有 i18n 実装を経由することを SHALL 強制し、未翻訳の直書き UI literal を SHALL 拒否する。
+- `packages/frontend/ui` と `packages/frontend/domain` は、`@www-template/i18n` または app/web/admin の i18n module を import してはならない（MUST NOT）。
+- `packages/web`、`packages/frontend/app`、`packages/admin` は互いの locale JSON files を import してはならない（MUST NOT）。
+- 再利用 UI package は表示言語、固定 locale formatter、app 固有の認証文言、または具体的な locale JSON files を必要とする component を所有してはならない（MUST NOT）。
+
+#### Scenario: 辞書欠落 key は標準検証で失敗する (LOCALIZATION-FE-S010)
+
+- **前提** app/web/admin のいずれかが所有する locale JSON files で、対応ロケール `ja` と `en` の key に差分がある
+- **操作** 標準 lint または辞書網羅性検証を実行する
+- **結果** 欠落 key path と所有 package が報告され、検証は失敗する
+
+#### Scenario: 未翻訳 UI literal と i18n import 境界違反は標準 lint で失敗する (LOCALIZATION-FE-S011)
+
+- **前提** 対象 UI ソースに未翻訳のユーザー向け直書き文言、または UI/domain からの `@www-template/i18n` import が存在する
+- **操作** 標準 lint を実行する
+- **結果** 違反した file と rule が報告され、検証は失敗する
+
+#### Scenario: 再利用 UI は表示言語を所有せず具体 component は表示面へ移される (LOCALIZATION-FE-S013)
+
+- **前提** locale JSON files、固定 locale formatter、または app 固有文言を必要とする concrete component が存在する
+- **操作** 実装者が component の配置と imports を検証する
+- **結果** concrete component は app/web/admin の所有 package に置かれ、`packages/frontend/ui` は localized label と formatter を props として受け取る reusable primitive だけを提供する
