@@ -35,30 +35,30 @@
 - **操作** システムがロケールを検証する
 - **結果** システムは未対応ロケールのページ内容を表示せず、対応ロケールへの誘導または not found を返す
 
-### Requirement: 認証済みアプリはアカウント言語設定で SHALL 表示される
+### Requirement: 認証済みアプリは AccountSetting.locale で SHALL 表示される
 
-システムは、アカウント言語が利用可能になった後、ログイン中アカウントの言語で認証済みアプリの文言を SHALL 表示する。認証済みアプリは、ログイン中利用者がアカウント言語を確認・更新できる設定画面を SHALL 提供する。アカウント言語を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。認証前にアカウント言語を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。アクセストークンリフレッシュ後に DB 由来の account-owned client settings が返った場合、認証済みアプリはその locale を SHALL 採用し、未ログイン fallback 表示を保存済みアカウント言語へ置き換える。認証済みアプリの UI ラベル、検証メッセージ、ナビゲーション、空状態、認証案内はロケール辞書から SHALL 取得する。
+システムは、AccountSetting.locale が利用可能になった後、ログイン中 Account の標準言語で認証済みアプリの文言を SHALL 表示する。認証済みアプリは、ログイン中利用者が AccountSetting.locale を確認・更新できる設定画面を SHALL 提供する。AccountSetting.locale を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。認証前に AccountSetting を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。アクセストークンリフレッシュ後に DB 由来の AccountSetting snapshot が返った場合、認証済みアプリはその locale を SHALL 採用し、未ログイン fallback 表示を保存済み AccountSetting.locale へ置き換える。認証済みアプリの UI ラベル、検証メッセージ、ナビゲーション、空状態、認証案内はロケール辞書から SHALL 取得する。
 
 **Customer Context**
 
-利用者は仕事用 PC、個人端末、予備端末など複数の環境から認証済みアプリへアクセスする。同じアカウントなのに端末ごとに言語を選び直す必要があると、設定の信頼性が低く、メール通知との言語も一致しない。
+利用者は仕事用 PC、個人端末、予備端末など複数の環境から認証済みアプリへアクセスする。同じ Account なのに端末ごとに言語を選び直す必要があると、設定の信頼性が低く、メール通知との言語も一致しない。
 
 **要求**
 
-- システムは、アカウント言語が利用可能になった後、ログイン中アカウントの言語で認証済みアプリの文言を SHALL 表示する。
-- 認証済みアプリは、ログイン中利用者がアカウント言語を確認・更新できる設定画面を SHALL 提供する。
-- アカウント言語を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。
-- 認証前にアカウント言語を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。
-- アクセストークンリフレッシュ後に DB 由来の account-owned client settings が返った場合、認証済みアプリはその locale を SHALL 採用し、未ログイン fallback 表示を保存済みアカウント言語へ置き換える。
+- システムは、AccountSetting.locale が利用可能になった後、ログイン中 Account の標準言語で認証済みアプリの文言を SHALL 表示する。
+- 認証済みアプリは、ログイン中利用者が AccountSetting.locale を確認・更新できる設定画面を SHALL 提供する。
+- AccountSetting.locale を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。
+- 認証前に AccountSetting を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。
+- アクセストークンリフレッシュ後に DB 由来の AccountSetting snapshot が返った場合、認証済みアプリはその locale を SHALL 採用し、未ログイン fallback 表示を保存済み AccountSetting.locale へ置き換える。
 - 認証済みアプリの UI ラベル、検証メッセージ、ナビゲーション、空状態、認証案内はロケール辞書から SHALL 取得する。
 
-#### Scenario: ログイン後は保存済みアカウント言語で表示される (LOCALIZATION-FE-S004)
+#### Scenario: ログイン後は保存済み AccountSetting.locale で表示される (LOCALIZATION-FE-S004)
 
-- **前提** 利用者が保存済み言語 `en` を持つアカウントでログインしている
+- **前提** 利用者が AccountSetting.locale `en` を持つ Account でログインしている
 - **操作** 認証済みアプリの画面が表示される
 - **結果** ナビゲーション、見出し、操作ラベル、説明文は英語で表示される
 
-#### Scenario: アカウント言語を更新すると表示言語が切り替わる (LOCALIZATION-FE-S005)
+#### Scenario: AccountSetting.locale を更新すると表示言語が切り替わる (LOCALIZATION-FE-S005)
 
 - **前提** 利用者が認証済みアプリの設定画面を開いている
 - **操作** 利用者が言語を `ja` から `en` に更新する
@@ -66,19 +66,19 @@
 
 #### Scenario: 未認証画面は端末保存言語またはシステム言語で表示される (LOCALIZATION-FE-S006)
 
-- **前提** 利用者がアカウント言語を取得できない状態でログイン画面を開き、端末の `localStorage` またはブラウザ/OS 言語が対応 locale に解決できる
+- **前提** 利用者が AccountSetting を取得できない状態でログイン画面を開き、端末の `localStorage` またはブラウザ/OS 言語が対応 locale に解決できる
 - **操作** ログイン画面が表示される
 - **結果** 画面は端末保存言語を優先し、存在しない場合はアクセス時のブラウザ/OS 言語に基づく対応ロケール文言を表示し、Product API の認証済み設定取得を要求しない
 
-#### Scenario: refresh 後は DB 由来の client settings locale で表示される (LOCALIZATION-FE-S012)
+#### Scenario: refresh 後は DB 由来の AccountSetting snapshot で表示される (LOCALIZATION-FE-S012)
 
-- **前提** 利用者が未ログイン fallback locale `ja` で表示されており、DB の account locale は `en` である
-- **操作** アクセストークンリフレッシュが成功し、client settings に `locale: "en"` が含まれる
-- **結果** 認証済みアプリの表示文言は保存済み account locale の英語へ切り替わる
+- **前提** 利用者が未ログイン fallback locale `ja` で表示されており、DB の AccountSetting.locale は `en` である
+- **操作** アクセストークンリフレッシュが成功し、AccountSetting snapshot に `locale: "en"` が含まれる
+- **結果** 認証済みアプリの表示文言は保存済み AccountSetting.locale の英語へ切り替わる
 
 ### Requirement: Admin Console はオペレーター言語設定で SHALL 表示される
 
-システムは、認証済みオペレーターが読み込まれた後、そのオペレーター言語で Admin Console の文言を SHALL 表示する。Admin Console のレイアウトデータは、クライアント表示に使う認証済みオペレーターの言語を SHALL 含む。Admin Console は、認証済みオペレーターが自分の言語を更新できる設定画面を SHALL 提供する。Admin Console の operator locale 表示・更新は Admin operator 本人の設定として扱い、Product account locale を読み書きしてはならない（MUST NOT）。Admin Console の認証前ルートは、安全な代替言語を SHALL 使用し、認証済みオペレーターを要求してはならない（MUST NOT）。Admin Console のナビゲーション、設定ラベル、テーブル空状態、検証メッセージ、操作フィードバックはロケール辞書から SHALL 取得する。Admin Console は、通常のプロフィール言語設定操作で別オペレーターの言語設定を変更できてはならない（MUST NOT）。
+システムは、認証済みオペレーターが読み込まれた後、そのオペレーター言語で Admin Console の文言を SHALL 表示する。Admin Console のレイアウトデータは、クライアント表示に使う認証済みオペレーターの言語を SHALL 含む。Admin Console は、認証済みオペレーターが自分の言語を更新できる設定画面を SHALL 提供する。Admin Console の operator locale 表示・更新は Admin operator 本人の設定として扱い、Product AccountSetting を読み書きしてはならない（MUST NOT）。Admin Console の認証前ルートは、安全な代替言語を SHALL 使用し、認証済みオペレーターを要求してはならない（MUST NOT）。Admin Console のナビゲーション、設定ラベル、テーブル空状態、検証メッセージ、操作フィードバックはロケール辞書から SHALL 取得する。Admin Console は、通常のプロフィール言語設定操作で別オペレーターの言語設定を変更できてはならない（MUST NOT）。
 
 **Customer Context**
 
@@ -89,7 +89,7 @@
 - システムは、認証済みオペレーターが読み込まれた後、そのオペレーター言語で Admin Console の文言を SHALL 表示する。
 - Admin Console のレイアウトデータは、クライアント表示に使う認証済みオペレーターの言語を SHALL 含む。
 - Admin Console は、認証済みオペレーターが自分の言語を更新できる設定画面を SHALL 提供する。
-- Admin Console の operator locale 表示・更新は Admin operator 本人の設定として扱い、Product account locale を読み書きしてはならない（MUST NOT）。
+- Admin Console の operator locale 表示・更新は Admin operator 本人の設定として扱い、Product AccountSetting を読み書きしてはならない（MUST NOT）。
 - Admin Console の認証前ルートは、安全な代替言語を SHALL 使用し、認証済みオペレーターを要求してはならない（MUST NOT）。
 - Admin Console のナビゲーション、設定ラベル、テーブル空状態、検証メッセージ、操作フィードバックはロケール辞書から SHALL 取得する。
 - Admin Console は、通常のプロフィール言語設定操作で別オペレーターの言語設定を変更できてはならない（MUST NOT）。
