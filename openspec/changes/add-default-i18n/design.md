@@ -72,7 +72,7 @@ www-template
 │  │  ├─ main.tsp
 │  │  ├─ src
 │  │  │  ├─ models
-│  │  │  │  └─ localization.tsp
+│  │  │  │  └─ account_settings.tsp
 │  │  │  └─ routes
 │  │  │     └─ v1
 │  │  │        └─ account_settings.tsp
@@ -247,7 +247,7 @@ www-template
 | 更新 | `eslint.config.js`                                                                                                   | 対象 UI ソース向けの多言語境界ルールを追加する。                                                                                                                                 |
 | 追加 | `scripts/i18n/check-locales.ts`                                                                                      | `ja` と `en` の辞書キー網羅性を検証する。                                                                                                                                        |
 | 更新 | `packages/typespec/main.tsp`                                                                                         | localization model と account settings route を読み込む。                                                                                                                        |
-| 追加 | `packages/typespec/src/models/localization.tsp`                                                                      | Product API 専用の `AccountLocale`、`AccountClientSettings`、account locale request/response model を定義し、Admin operator locale を含めない。                                  |
+| 追加 | `packages/typespec/src/models/account_settings.tsp`                                                                  | Product API 専用の `AccountLocale`、`AccountClientSettings`、account locale request/response model を定義し、Admin operator locale を含めない。                                  |
 | 追加 | `packages/typespec/src/routes/v1/account_settings.tsp`                                                               | 認証済み account locale 取得・更新操作と refresh response の account-owned client settings locale を定義する。                                                                   |
 | 生成 | `packages/typespec/openapi/openapi.json`                                                                             | OpenAPI 契約を再生成する。                                                                                                                                                       |
 | 追加 | `packages/backend/db/migrations/000007_add_account_locale.up.sql`                                                    | Product account locale column と制約を追加する。                                                                                                                                 |
