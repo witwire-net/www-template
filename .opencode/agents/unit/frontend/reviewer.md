@@ -29,6 +29,14 @@ permission:
     'pnpm gen*': allow
     'pnpm build*': allow
     'pnpm check*': allow
+    'pnpm exec*': deny
+    'pnpm * exec*': deny
+    'vitest*': deny
+    'tsc*': deny
+    'svelte-check*': deny
+    'vite build*': deny
+    'eslint*': deny
+    'stylelint*': deny
     'rm *': deny
 ---
 
@@ -72,6 +80,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 2. No bespoke implementation where reusable components or functions should have been used
 3. No excessive styling in `packages/frontend/app`; app styling must remain minimal and composition-focused while `packages/web` follows existing public-site conventions
 4. Frontend-owned work stays within `packages/frontend` and `packages/web`; backend-owned paths (`packages/backend`, `packages/admin`, `packages/typespec`) are not modified unless the caller explicitly describes a cross-agent handoff
+5. Lint, typecheck, build, and test evidence uses `pnpm` scripts only; direct `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, `stylelint`, `pnpm exec`, or `pnpm --filter ... exec` commands are not accepted as verification evidence
 
 ## Quantitative app-style thresholds
 
@@ -97,6 +106,8 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 - If `packages/frontend/app` contains more styling than is minimally necessary for route/page/layout composition, return overall verdict `BLOCKED`
 - Treat app-authored styling as acceptable only when it is minor, page-specific, composition-focused, and within the quantitative thresholds above
 - If app styling duplicates reusable presentation concerns that belong in `packages/frontend/ui`, classify it as `BLOCKED` and identify the styling that must move
+- Enforce frontend responsibility exactly: `packages/web` owns public-site composition; `packages/frontend/app` owns authenticated CSR app composition; `packages/frontend/domain` owns hooks/state/API orchestration; `packages/frontend/ui` owns reusable UI and styling primitives; `packages/frontend/api` is generated and must not be hand-edited
+- Require `pnpm lint`, `pnpm check`, `pnpm test:*`, and `pnpm build:*` evidence as appropriate for lint/typecheck/test/build validation; reject direct tool commands when they are used instead of `pnpm` scripts
 - Assign severity (blocker/major/minor/nit) and propose concrete fixes when possible
 - Always include an overall verdict (Approve / Request changes / Needs clarification / BLOCKED)
 

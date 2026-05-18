@@ -29,11 +29,19 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 
 - Install: `corepack enable && pnpm install`
 - Generate all contracts: `pnpm gen`
+- Typecheck: `pnpm check`
 - Dev (all): `pnpm dev:all`
 - Dev (server): `pnpm dev:server` (Go API on `http://localhost:8080`)
 - Dev (client entry): `pnpm dev:client` (alias of `pnpm dev:web`, Vite on `http://localhost:5173`)
 - Dev (web): `pnpm dev:web` (SvelteKit public site on `http://localhost:5173`)
 - Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://localhost:5174`)
+
+## Command Policy
+
+- For both backend and frontend work, lint, typecheck, build, and test MUST be invoked through `pnpm` scripts.
+- Use `pnpm lint` for lint, `pnpm check` for typecheck, `pnpm build` or package-specific `pnpm build:*` scripts for build, and `pnpm test:*` scripts for tests.
+- Do not call direct verification tools such as `go test`, `go vet`, `go build`, `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, or `stylelint`; route them through the existing `pnpm` scripts instead.
+- Do not call `pnpm exec` or `pnpm --filter ... exec` directly. If an existing package script uses `exec` internally, run only the parent `pnpm` script.
 
 ## API Contract (TypeSpec)
 
@@ -55,6 +63,19 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 - Client dependency direction: `web -> frontend/ui` (web is a public LP; it MUST NOT depend on domain or api), `frontend/app -> frontend/domain -> frontend/api` (also `frontend/app -> frontend/ui`)
 - Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/adapters/http|backend/internal/adapters/persistence/postgres|backend/internal/adapters/persistence/valkey|backend/internal/adapters/webauthn|backend/internal/adapters/mailer|backend/internal/auth/application|backend/internal/platform/*) -> backend/internal/auth/domain -> backend/internal/platform/*`
 - API contract direction: implementation must follow TypeSpec; do not generate OpenAPI from server routes for SDK input.
+
+## Package Responsibility
+
+- Backend-owned agent scope: `packages/backend`, `packages/typespec`, and `packages/admin`.
+- `packages/backend`: Go product API, migrations, generated Go bindings consumption, backend observability, and backend security boundaries.
+- `packages/typespec`: API contract source of truth and generated OpenAPI input; edit source contracts only and regenerate via `pnpm gen`.
+- `packages/admin`: Admin Console package, including package-local `/api/admin/**` BFF routes, Prisma schemas, admin-only server/runtime code, and admin UI coupled to those routes.
+- Frontend-owned agent scope: `packages/web` and `packages/frontend/**`.
+- `packages/web`: public landing/public site surface; it may depend on `packages/frontend/ui` only.
+- `packages/frontend/app`: authenticated `/app` CSR surface; compose domain hooks and UI components without direct API-client or raw network access.
+- `packages/frontend/domain`: frontend domain hooks, state, and API orchestration; it is the only handwritten frontend layer that depends on `packages/frontend/api`.
+- `packages/frontend/ui`: reusable UI components, styling primitives, assets, and presentation utilities.
+- `packages/frontend/api`: generated API SDK/types package; do not hand-edit generated artifacts, and route contract changes through `packages/typespec` plus `pnpm gen`.
 
 ## Backend Guardrails
 

@@ -30,6 +30,14 @@ permission:
     'pnpm gen*': allow
     'pnpm build*': allow
     'pnpm check*': allow
+    'pnpm exec*': deny
+    'pnpm * exec*': deny
+    'vitest*': deny
+    'tsc*': deny
+    'svelte-check*': deny
+    'vite build*': deny
+    'eslint*': deny
+    'stylelint*': deny
     'rm *': deny
 ---
 
@@ -59,12 +67,19 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - Do not stage or commit changes (`git add`, `git commit`, `git push` are denied)
 - Follow all guardrails enforced by `coding-guardian`
 - Stay within frontend responsibility: `packages/frontend` and `packages/web`
+- Treat `packages/web` as the public landing/public site surface; it may depend on `packages/frontend/ui` only
+- Treat `packages/frontend/app` as the authenticated `/app` CSR surface; compose domain hooks and UI components without direct API-client or raw network access
+- Treat `packages/frontend/domain` as the frontend domain hooks, state, and API orchestration owner; it is the only handwritten frontend layer that depends on `packages/frontend/api`
+- Treat `packages/frontend/ui` as the reusable UI components, styling primitives, assets, and presentation utilities owner
+- Treat `packages/frontend/api` as generated SDK/types; read and consume it only, never hand-edit generated artifacts
 - Enforce frontend dependency direction: `packages/web -> packages/frontend/ui` and `packages/frontend/app -> packages/frontend/domain -> packages/frontend/api`
 - Never import `@www-template/api` directly from `app`; always go through a domain hook
 - Never use `fetch`, `axios`, or `cross-fetch` directly in `packages/frontend/app` or `packages/frontend/domain`; `packages/web` may use native `fetch` for web-local data access, but not `axios` or `cross-fetch`
 - Keep `packages/frontend/app` as the `/app`-served CSR surface and keep auth routes under that app without reintroducing SvelteKit-only route behavior there
 - Never hand-edit generated files (`openapi.json`, `client.ts`, `openapi.gen.go`)
 - Do not edit `packages/backend`, `packages/admin`, or `packages/typespec`; if API contract changes are required, report the need so the caller can route the work to `unit/backend/engineer`
+- Run lint, typecheck, build, and test only through `pnpm` scripts; use `pnpm lint`, `pnpm check`, `pnpm build`/`pnpm build:client`, and `pnpm test:run`/`pnpm test:client` as appropriate
+- Do not call direct verification tools such as `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, `stylelint`, `pnpm exec`, or `pnpm --filter ... exec`; if a package script uses `exec` internally, run only the parent `pnpm` script
 - Stop and report before crossing any Ask-first boundary
 - Do not report completion until `unit/frontend/reviewer` returns `Approve`
 
@@ -88,8 +103,9 @@ After every change, run in order:
 
 ```bash
 pnpm lint
+pnpm check
 pnpm test:client
-pnpm build
+pnpm build:client
 ```
 
 Fix all errors before reporting completion.

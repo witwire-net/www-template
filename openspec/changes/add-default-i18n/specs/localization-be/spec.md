@@ -2,7 +2,7 @@
 
 ### Requirement: Product account locale API は認証済み本人の言語設定を SHALL 扱う
 
-システムは、現在のアカウント言語を取得・更新する認証済み Product API 操作を SHALL 提供する。対応するアカウント言語値は `ja` と `en` でなければならない（MUST）。アカウント言語取得操作は、現在の認証済みアカウント言語を SHALL 返し、`Cache-Control: no-store` を使用しなければならない（MUST）。アカウント言語更新操作は、対応ロケール値だけを受け入れ、未知ロケール値は永続値を変更せずに拒否しなければならない（MUST）。アカウント言語操作は `Authorization: Bearer <session token>` を要求しなければならず、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。アカウント言語操作は bearer session のアカウントだけを対象に SHALL 動作し、別アカウントを指定する account ID をパスまたは body で受け入れてはならない（MUST NOT）。`POST /api/v1/auth/refresh` は refresh token の rotation 成功時に DB から言語設定を含む client settings を SHALL 読み込み、返却 payload に含める。Product API 契約は TypeSpec を正とし、生成された OpenAPI、frontend SDK、Go bindings は同じ locale request/response と refresh client settings 形状を表さなければならない（SHALL）。
+システムは、現在のアカウント言語を取得・更新する認証済み Product API 操作を SHALL 提供する。対応するアカウント言語値は `ja` と `en` でなければならない（MUST）。アカウント言語取得操作は、現在の認証済みアカウント言語を SHALL 返し、`Cache-Control: no-store` を使用しなければならない（MUST）。アカウント言語更新操作は、対応ロケール値だけを受け入れ、未知ロケール値は永続値を変更せずに拒否しなければならない（MUST）。アカウント言語操作は `Authorization: Bearer <session token>` を要求しなければならず、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。アカウント言語操作は bearer session のアカウントだけを対象に SHALL 動作し、別アカウントを指定する account ID をパスまたは body で受け入れてはならない（MUST NOT）。`POST /api/v1/auth/refresh` は refresh token の rotation 成功時に DB から言語設定を含む account-owned client settings を SHALL 読み込み、返却 payload に含める。Product API は Product account locale と account-owned client settings 専用でなければならず、Admin operator locale や `/api/admin/**` を表現してはならない（MUST NOT）。
 
 **Customer Context**
 
@@ -16,8 +16,8 @@
 - アカウント言語更新操作は、対応ロケール値だけを受け入れ、未知ロケール値は永続値を変更せずに拒否しなければならない（MUST）。
 - アカウント言語操作は `Authorization: Bearer <session token>` を要求しなければならず、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。
 - アカウント言語操作は bearer session のアカウントだけを対象に SHALL 動作し、別アカウントを指定する account ID をパスまたは body で受け入れてはならない（MUST NOT）。
-- `POST /api/v1/auth/refresh` は refresh token の rotation 成功時に DB から言語設定を含む client settings を SHALL 読み込み、返却 payload に含める。
-- Product API 契約は TypeSpec を正とし、生成された OpenAPI、frontend SDK、Go bindings は同じ locale request/response と refresh client settings 形状を表さなければならない（SHALL）。
+- `POST /api/v1/auth/refresh` は refresh token の rotation 成功時に DB から言語設定を含む account-owned client settings を SHALL 読み込み、返却 payload に含める。
+- Product API は Product account locale と account-owned client settings 専用でなければならず、Admin operator locale や `/api/admin/**` を表現してはならない（MUST NOT）。
 
 #### Scenario: 認証済みアカウントは自分の言語設定を取得できる (LOCALIZATION-BE-S001)
 
@@ -92,7 +92,7 @@
 
 ### Requirement: Admin operator locale は認証済みオペレーター本人の設定として SHALL 永続化される
 
-システムは、各 Admin operator の locale をオペレーターレコードとともに SHALL 永続化する。対応する operator locale 値は `ja` と `en` でなければならない（MUST）。明示的な locale を持たない operator の locale 永続値は `ja` を既定値にしなければならない（MUST）。認証済み Admin server context は、現在の role と active 状態とともに、Admin DB から operator の現在 locale を SHALL 読み込む。認証済みオペレーターは、Admin Console のプロフィールまたは設定操作を通じて、自分自身の locale だけを SHALL 更新できる。Admin operator locale 更新は、未対応 locale 値を永続値を変更せずに拒否しなければならない（MUST）。role、active state、setup token、passkey を編集する operator 管理操作は、operator locale を暗黙的に変更してはならない（MUST NOT）。
+システムは、各 Admin operator の locale をオペレーターレコードとともに SHALL 永続化する。対応する operator locale 値は `ja` と `en` でなければならない（MUST）。明示的な locale を持たない operator の locale 永続値は `ja` を既定値にしなければならない（MUST）。Admin operator locale は Product account locale から独立して扱い、Product account locale を読み書きしてはならない（MUST NOT）。認証済み Admin server context は、現在の role と active 状態とともに、Admin DB から operator の現在 locale を SHALL 読み込む。認証済みオペレーターは、Admin Console のプロフィールまたは設定操作を通じて、自分自身の locale だけを SHALL 更新できる。Admin operator locale 更新は、未対応 locale 値を永続値を変更せずに拒否しなければならない（MUST）。role、active state、setup token、passkey を編集する operator 管理操作は、operator locale を暗黙的に変更してはならない（MUST NOT）。DB から未知の operator locale が読み込まれた場合、システムは既定値へ黙って丸めてはならず（MUST NOT）、DB 制約違反または server error として fail-closed に扱わなければならない（MUST）。
 
 **Customer Context**
 
@@ -103,10 +103,12 @@ Admin Console のオペレーターは端末やブラウザを変えても同じ
 - システムは、各 Admin operator の locale をオペレーターレコードとともに SHALL 永続化する。
 - 対応する operator locale 値は `ja` と `en` でなければならない（MUST）。
 - 明示的な locale を持たない operator の locale 永続値は `ja` を既定値にしなければならない（MUST）。
+- Admin operator locale は Product account locale から独立して扱い、Product account locale を読み書きしてはならない（MUST NOT）。
 - 認証済み Admin server context は、現在の role と active 状態とともに、Admin DB から operator の現在 locale を SHALL 読み込む。
 - 認証済みオペレーターは、Admin Console のプロフィールまたは設定操作を通じて、自分自身の locale だけを SHALL 更新できる。
 - Admin operator locale 更新は、未対応 locale 値を永続値を変更せずに拒否しなければならない（MUST）。
 - role、active state、setup token、passkey を編集する operator 管理操作は、operator locale を暗黙的に変更してはならない（MUST NOT）。
+- DB から未知の operator locale が読み込まれた場合、システムは既定値へ黙って丸めてはならず（MUST NOT）、DB 制約違反または server error として fail-closed に扱わなければならない（MUST）。
 
 #### Scenario: Admin 認証 context は operator locale を読み込む (LOCALIZATION-BE-S009)
 
