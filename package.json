@@ -23,7 +23,7 @@
     "build:server": "bash scripts/go/build.sh",
     "build": "pnpm build:server && pnpm build:client",
     "check": "pnpm --filter @www-template/typespec check && pnpm --filter @www-template/web check && pnpm --filter @www-template/app check && pnpm --filter @www-template/ui check && pnpm --filter @www-template/admin check && bash scripts/go/build.sh",
-    "gen": "pnpm gen:api-sdk && pnpm gen:backend",
+    "gen": "pnpm gen:api-sdk && pnpm gen:backend && pnpm prisma:admin:generate && pnpm prisma:admin:product:generate",
     "gen:openapi": "pnpm --filter @www-template/typespec gen:openapi && prettier --write packages/typespec/openapi/openapi.json",
     "gen:swagger": "pnpm gen:openapi",
     "gen:api-sdk": "pnpm gen:openapi && pnpm --filter @www-template/api gen && prettier --write packages/frontend/api/src/generated/client.ts",
