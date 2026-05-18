@@ -24,9 +24,7 @@ interface RecoveryFlowData {
 interface RecoveryFlowActions {
   setEmail: (email: string) => void;
   submitRecoveryRequest: () => Promise<'/login/recovery/sent' | null>;
-  consumeToken: (
-    token: string
-  ) => Promise<{
+  consumeToken: (token: string) => Promise<{
     path: '/login/recovery/register' | '/login/recovery';
     kind?: 'recovery' | 'device-link';
   } | null>;
