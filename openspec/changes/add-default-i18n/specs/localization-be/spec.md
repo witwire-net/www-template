@@ -53,7 +53,7 @@
 
 ### Requirement: Product AccountSetting は永続化されメール言語に SHALL 利用される
 
-システムは、各 Account の AccountSetting を Account とともに SHALL 永続化する。AccountSetting は `account_settings` table として Account root の `accounts.id` に紐づかなければならない（MUST）。明示的な AccountSetting を持たない Account の locale は `ja` を既定値にしなければならない（MUST）。AccountSetting.locale の永続値は、対応ロケールだけに制約しなければならない（MUST）。account recovery、device-link、recovery completion、device-link completion の各メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を SHALL 選択する。Auth domain/application は AccountSetting や locale 値オブジェクトを所有してはならない（MUST NOT）。Account が存在しないため AccountSetting を読めない場合でも、列挙耐性が必要な認証フローは非開示の応答挙動を維持しなければならない（MUST）。ローカライズ済み文面を選択する過程で、メール配送ログ、trace、error に recovery token や bearer token を含めてはならない（MUST NOT）。
+システムは、各 Account の AccountSetting を Account とともに SHALL 永続化する。Product DB は Account root の `accounts`、Account child の `account_settings`、Account.Auth child の `account_passkey_credentials` を正規 table として SHALL 持つ。AccountSetting は `account_settings` table として Account root の `accounts.id` に紐づかなければならない（MUST）。Account 作成時には `ja` の AccountSetting を同じ Account の child として作らなければならない（MUST）。AccountSetting.locale の永続値は、対応ロケールだけに制約しなければならない（MUST）。Product DB は `passkey_credentials`、`auth_accounts`、`accounts.locale` を持ってはならない（MUST NOT）。account recovery、device-link、recovery completion、device-link completion の各メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を SHALL 選択する。Auth domain/application は AccountSetting や locale 値オブジェクトを所有してはならない（MUST NOT）。Account が存在しないため AccountSetting を読めない場合でも、列挙耐性が必要な認証フローは非開示の応答挙動を維持しなければならない（MUST）。ローカライズ済み文面を選択する過程で、メール配送ログ、trace、error に recovery token や bearer token を含めてはならない（MUST NOT）。
 
 **Customer Context**
 
@@ -62,9 +62,11 @@
 **要求**
 
 - システムは、各 Account の AccountSetting を Account とともに SHALL 永続化する。
+- Product DB は Account root の `accounts`、Account child の `account_settings`、Account.Auth child の `account_passkey_credentials` を正規 table として SHALL 持つ。
 - AccountSetting は `account_settings` table として Account root の `accounts.id` に紐づかなければならない（MUST）。
-- 明示的な AccountSetting を持たない Account の locale は `ja` を既定値にしなければならない（MUST）。
+- Account 作成時には `ja` の AccountSetting を同じ Account の child として作らなければならない（MUST）。
 - AccountSetting.locale の永続値は、対応ロケールだけに制約しなければならない（MUST）。
+- Product DB は `passkey_credentials`、`auth_accounts`、`accounts.locale` を持ってはならない（MUST NOT）。
 - account recovery、device-link、recovery completion、device-link completion の各メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を SHALL 選択する。
 - Auth domain/application は AccountSetting や locale 値オブジェクトを所有してはならない（MUST NOT）。
 - Account が存在しないため AccountSetting を読めない場合でも、列挙耐性が必要な認証フローは非開示の応答挙動を維持しなければならない（MUST）。
@@ -72,9 +74,9 @@
 
 #### Scenario: Product Account は既定 AccountSetting.locale を持つ (LOCALIZATION-BE-S005)
 
-- **前提** Account が作成または読み込まれる
-- **操作** 明示的な AccountSetting.locale が存在しない
-- **結果** システムはその Account を `ja` locale として扱う
+- **前提** Account が作成される
+- **操作** Account root が永続化される
+- **結果** システムは同じ Account の `account_settings` record を `locale: "ja"` で作成する
 
 #### Scenario: 復旧メールは AccountSetting.locale で送信される (LOCALIZATION-BE-S006)
 
@@ -96,7 +98,7 @@
 
 ### Requirement: Auth は Account にぶら下がる認証概念として SHALL 分離される
 
-システムは、Account を Product 利用主体として扱い、Auth をその Account にぶら下がる本人確認・session・token・credential の概念として SHALL 扱う。Auth domain/application は Account aggregate を所有または代替してはならない（MUST NOT）。Auth domain/application は `AuthAccount` または `AuthSubject` という Account 代替モデルを提供してはならない（MUST NOT）。Auth が必要とする認証用 projection は `AccountAuth` として表現し、AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱わなければならない（MUST）。`AccountAuth` は AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を持ってはならない（MUST NOT）。Auth repository は AccountSetting persistence を読み書きしてはならない（MUST NOT）。refresh response に AccountSetting snapshot が必要な場合、Auth は token pair と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
+システムは、Account を Product 利用主体として扱い、Auth をその Account にぶら下がる本人確認・session・token・credential の概念として SHALL 扱う。Auth domain/application は Account aggregate を所有または代替してはならない（MUST NOT）。Auth domain/application は `AuthAccount` または `AuthSubject` という Account 代替モデルを提供してはならない（MUST NOT）。Auth が必要とする認証用 projection は `AccountAuth` として表現し、AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱わなければならない（MUST）。`AccountAuth` は AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を持ってはならない（MUST NOT）。Auth repository は AccountSetting persistence を読み書きしてはならない（MUST NOT）。Auth repository は Account.Auth credential を `account_passkey_credentials` から復元し、`passkey_credentials` を参照してはならない（MUST NOT）。refresh response に AccountSetting snapshot が必要な場合、Auth は token pair と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
 
 **Customer Context**
 
@@ -110,13 +112,14 @@
 - Auth が必要とする認証用 projection は `AccountAuth` として表現し、AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱わなければならない（MUST）。
 - `AccountAuth` は AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を持ってはならない（MUST NOT）。
 - Auth repository は AccountSetting persistence を読み書きしてはならない（MUST NOT）。
+- Auth repository は Account.Auth credential を `account_passkey_credentials` から復元し、`passkey_credentials` を参照してはならない（MUST NOT）。
 - refresh response に AccountSetting snapshot が必要な場合、Auth は token pair と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
 
 #### Scenario: Auth projection は AccountSetting を所有しない (LOCALIZATION-BE-S014)
 
 - **前提** Auth domain/application と persistence adapter が Account.Auth projection を扱う
 - **操作** 実装者が public symbols、constructors、repository reads、imports を検査する
-- **結果** `AuthAccount` と `AuthSubject` は存在せず、`AccountAuth` は AccountSetting や locale を持たず、Auth repository は `account_settings` を読まない
+- **結果** `AuthAccount` と `AuthSubject` は存在せず、`AccountAuth` は AccountSetting や locale を持たず、Auth repository は `account_settings` と `passkey_credentials` を読まない
 
 ### Requirement: Admin operator locale は認証済みオペレーター本人の設定として SHALL 永続化される
 

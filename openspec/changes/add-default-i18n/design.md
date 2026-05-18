@@ -22,8 +22,8 @@ Account
 ### In Scope
 
 - `packages/web` の `/ja` と `/en` による公開ページ表示、`/` から対応ロケール URL への誘導、公開ページメタデータのローカライズ。
-- `packages/frontend/app` と `packages/frontend/domain` の AccountSetting.locale 取得、更新、認証前 fallback、設定 UI、認証済み画面文言の辞書化。
-- `packages/frontend/ui` の reusable component から固定言語文言と固定 locale formatter を排除し、呼び出し側から localized labels / formatters を注入する境界整備。i18n import が必要な concrete component は UI package に置かない。既存 `DeviceManager` は app 固有の device/session 文言を表示するため `packages/frontend/app` へ移す。
+- `packages/frontend/app` と `packages/frontend/domain/src/account` の AccountSetting.locale 取得、更新、認証前 fallback、設定 UI、認証済み画面文言の辞書化。
+- `packages/frontend/ui` の reusable component から固定言語文言と固定 locale formatter を排除し、呼び出し側から localized labels / formatters を注入する境界整備。i18n import が必要な concrete component は UI package に置かない。`DeviceManager` は app 固有の device/session 文言を表示するため `packages/frontend/app` へ移す。
 - `packages/admin` のオペレーター言語読み込み、設定 UI、Admin layout data、Admin 認証前代替言語、Admin 文言の辞書化。
 - Product API の AccountSetting 取得・更新、TypeSpec 契約、Product DB 永続化、Account と Auth の境界整理、生成物更新。
 - Product 認証メールの AccountSetting.locale による件名・本文選択。
@@ -37,7 +37,7 @@ Account
 - Account 作成時の言語選択 UI。
 - 翻訳管理 SaaS、外部翻訳管理、機械翻訳連携。
 - Admin から Product Account の AccountSetting.locale を代理変更する機能。
-- 画面ワイヤーフレーム作成。既存の navigation、settings form、locale selector の構成を流用し、情報設計を変える新規画面パターンを導入しない。
+- 画面ワイヤーフレーム作成。navigation、settings form、locale selector の情報設計をこの変更で広げない。
 
 ## Assumptions / Dependencies
 
@@ -46,7 +46,7 @@ Account
 - Product API model は `AccountSetting`、`AccountSettingSnapshot`、`AccountLocale` のように Account 所有を名前で明示する。
 - Product API の認証済みエンドポイントは `/api/v1/*` 配下かつ BearerAuth 必須である。
 - Product DB migration は `packages/backend/db/migrations/**` に置き、`AutoMigrate` は使用しない。
-- Product DB では `accounts` を Account root、`account_settings` を AccountSetting として扱う。`account_settings.account_id` は `accounts.id` に従属する。
+- Product DB は Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials` を正規 table として扱う。`account_settings.account_id` と `account_passkey_credentials.account_id` は `accounts.id` に従属する。`passkey_credentials` と `accounts.locale` は作らない。
 - Admin DB migration は `packages/admin/prisma/admin/migrations/**` と Prisma Migrate で管理する。
 - Product BE は Clean Architecture を徹底し、Account root と AccountSetting を `packages/backend/internal/account` が所有する。
 - `packages/backend/internal/auth` は Account にぶら下がる Auth として、本人確認、session、token、passkey/recovery 認証フローだけを所有する。
@@ -54,7 +54,7 @@ Account
 - `AccountAuth` は AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱い、AccountSetting を持たない。
 - HTTP adapter は `auth` で bearer session または refresh token を検証して AccountID を得た後、`account` use case で AccountSetting を取得し、transport response を合成する。
 - `packages/frontend/app` は API を直接呼ばず、`packages/frontend/domain -> packages/frontend/api` の依存方向を維持する。
-- `packages/frontend/domain` は AccountSetting API 協調だけを担当し、`localStorage`、browser/OS language、DOM globals による端末 fallback を所有しない。
+- `packages/frontend/domain` は `src/account` を Account domain root とし、Account と AccountSetting API 協調だけを担当する。`account-settings` root、`localStorage`、browser/OS language、DOM globals による端末 fallback を所有しない。
 - `packages/web`、`packages/frontend/app`、`packages/admin` は SvelteKit 面の翻訳適用に `@www-template/i18n` を使用する。locale JSON files は表示面ごとの package が所有し、route component 内の ad hoc translator と別 surface の辞書 import を禁止する。
 - `packages/frontend/ui` は app/admin/web の表示言語、i18n import、固定文言、固定 date/time locale を所有せず、localized props と formatter を呼び出し側から受け取る。
 - `packages/web` は公開面として `@www-template/domain` と `@www-template/api` に依存しない。
@@ -64,10 +64,11 @@ Account
 ## Impacted Areas
 
 - Product API 契約: Product AccountSetting model、認証済み route、refresh response の AccountSetting snapshot。Admin operator locale は含めない。
-- Product DB: `account_settings` table、対応 locale 制約、既定値、`accounts` への外部キー。
+- Product DB: `accounts`、`account_settings`、`account_passkey_credentials` table、対応 locale 制約、Account child 外部キー、Account 中心 admin views/functions。
+- Admin Console BE spec: `admin-console-be` の Product Database 拡張 requirement を Account root / `account_passkey_credentials` 前提へ更新する。
 - Go backend: `internal/account` domain/application/repository port、`internal/auth` の Account.Auth projection、HTTP strict handler、localized mailer composition。
 - Frontend API client: 生成 SDK と wrapper method。
-- Frontend domain: AccountSetting state hook、domain state/types。API wrapper は `packages/frontend/api` に閉じる。
+- Frontend domain: `src/account` の Account state hook、AccountSetting state/types。API wrapper は `packages/frontend/api` に閉じる。
 - Frontend i18n: 共有 i18n 実装、locale 定義、typed translator、formatter、key coverage utility。locale JSON files は持たない。
 - Frontend app: app-owned locale JSON files、`@www-template/i18n` 接続、settings 画面、layout 文言、auth/protected 文言、localStorage 優先 fallback、browser/OS locale resolver。
 - Frontend UI: i18n 非依存 reusable primitive の localized label props、aria label props、date/time formatter props。i18n import が必要な concrete component は app/admin/web 側へ移す。`DeviceManager` は `packages/frontend/app` 側へ移す。
@@ -100,8 +101,16 @@ www-template
 │  ├─ backend
 │  │  ├─ db
 │  │  │  └─ migrations
-│  │  │     ├─ 000007_create_account_settings.up.sql
-│  │  │     └─ 000007_create_account_settings.down.sql
+│  │  │     ├─ 000001_create_accounts.up.sql
+│  │  │     ├─ 000001_create_accounts.down.sql
+│  │  │     ├─ 000002_create_account_settings.up.sql
+│  │  │     ├─ 000002_create_account_settings.down.sql
+│  │  │     ├─ 000003_create_account_passkey_credentials.up.sql
+│  │  │     ├─ 000003_create_account_passkey_credentials.down.sql
+│  │  │     ├─ 000004_add_account_status.up.sql
+│  │  │     ├─ 000004_add_account_status.down.sql
+│  │  │     ├─ 000005_create_admin_views.up.sql
+│  │  │     └─ 000006_create_admin_functions.up.sql
 │  │  └─ internal
 │  │     ├─ account
 │  │     │  ├─ application
@@ -159,7 +168,7 @@ www-template
 │  │  ├─ domain
 │  │  │  ├─ package.json
 │  │  │  └─ src
-│  │  │     ├─ account-settings
+│  │  │     ├─ account
 │  │  │     │  ├─ hook.svelte.ts
 │  │  │     │  ├─ index.ts
 │  │  │     │  ├─ state.ts
@@ -238,8 +247,11 @@ www-template
 | 追加 | `packages/typespec/src/models/account_settings.tsp`                                     | Product API 専用の `AccountLocale`、`AccountSetting`、`AccountSettingSnapshot`、AccountSetting request/response model を定義し、Admin operator locale を含めない。 |
 | 追加 | `packages/typespec/src/routes/v1/account_settings.tsp`                                  | 認証済み AccountSetting 取得・更新操作と refresh response の AccountSetting snapshot を定義する。                                                                  |
 | 生成 | `packages/typespec/openapi/openapi.json`                                                | OpenAPI 契約を再生成する。                                                                                                                                         |
-| 追加 | `packages/backend/db/migrations/000007_create_account_settings.up.sql`                  | `account_settings` table と locale 制約を追加する。                                                                                                                |
-| 追加 | `packages/backend/db/migrations/000007_create_account_settings.down.sql`                | `account_settings` table を削除する。                                                                                                                              |
+| 更新 | `packages/backend/db/migrations/000001_create_accounts.*.sql`                           | Product DB を Account root から作り直し、`accounts` を作る。                                                                                                       |
+| 更新 | `packages/backend/db/migrations/000002_create_account_settings.*.sql`                   | Account child として `account_settings` を作る。                                                                                                                   |
+| 更新 | `packages/backend/db/migrations/000003_create_account_passkey_credentials.*.sql`        | Account.Auth child として `account_passkey_credentials` を作る。`passkey_credentials` は作らない。                                                                 |
+| 更新 | `packages/backend/db/migrations/000004_*`                                               | Account root の status/session revoked boundary を `accounts` に揃える。                                                                                           |
+| 更新 | `packages/backend/db/migrations/000005_*`、`000006_*`                                   | Admin view/function を Account root と `account_passkey_credentials` に揃える。                                                                                    |
 | 追加 | `packages/backend/internal/account/domain/account.go`                                   | Product 利用主体としての Account root を定義する。                                                                                                                 |
 | 追加 | `packages/backend/internal/account/domain/account_setting.go`                           | AccountSetting と AccountSetting snapshot を定義する。                                                                                                             |
 | 追加 | `packages/backend/internal/account/domain/account_locale.go`                            | AccountSetting.locale 値オブジェクト、検証、既定値を定義する。                                                                                                     |
@@ -257,9 +269,9 @@ www-template
 | 追加 | `packages/backend/internal/adapters/mailer/localized_messages.go`                       | 認証メールの日本語・英語テンプレートを定義する。                                                                                                                   |
 | 生成 | `packages/backend/internal/generated/openapi/openapi.gen.go`                            | Go OpenAPI bindings を再生成する。                                                                                                                                 |
 | 生成 | `packages/frontend/api/src/generated/client.ts`                                         | frontend API client を再生成する。                                                                                                                                 |
-| 更新 | `packages/frontend/api/src/sdk.ts`、`packages/frontend/api/src/api/client.ts`           | 既存 API wrapper 集約点に AccountSetting API を追加する。新しい feature-specific wrapper file は作らない。                                                         |
-| 更新 | `packages/frontend/domain/package.json`、`packages/frontend/domain/src/index.ts`        | AccountSetting domain entrypoint を公開する。                                                                                                                      |
-| 追加 | `packages/frontend/domain/src/account-settings/*`                                       | AccountSetting の state、hook、型、index を追加する。API wrapper file、端末 fallback、DOM/localStorage は持たない。                                                |
+| 更新 | `packages/frontend/api/src/sdk.ts`、`packages/frontend/api/src/api/client.ts`           | API wrapper 集約点に Account / AccountSetting API を公開する。feature-specific wrapper file は作らない。                                                           |
+| 更新 | `packages/frontend/domain/package.json`、`packages/frontend/domain/src/index.ts`        | Account domain entrypoint を公開する。                                                                                                                             |
+| 追加 | `packages/frontend/domain/src/account/*`                                                | Account と AccountSetting の state、hook、型、index を実装する。API wrapper file、端末 fallback、DOM/localStorage は持たない。                                     |
 | 追加 | `packages/frontend/i18n/package.json`、`packages/frontend/i18n/src/*`                   | 共有 i18n 実装を追加する。app/web/admin の locale JSON files は置かない。                                                                                          |
 | 削除 | `packages/frontend/ui/src/components/device-manager/device-manager.svelte`              | app 固有の device/session 文言を持つ concrete component は UI package に置かないため削除する。                                                                     |
 | 追加 | `packages/frontend/app/src/components/device-manager/device-manager.svelte`             | `DeviceManager` を認証済み app 側へ移し、app-owned locale JSON files と `@www-template/i18n` から文言と formatter を受け取って描画する。                           |
@@ -272,14 +284,14 @@ www-template
 flowchart LR
   Visitor[公開閲覧者] -->|/ja または /en| Web[packages/web]
   User[認証済み利用者] --> App[packages/frontend/app]
-  App --> Domain[frontend/domain account-settings]
+  App --> Domain[frontend/domain account]
   Domain --> ApiClient[packages/frontend/api]
   ApiClient --> ProductAPI[Go Product API]
   ProductAPI --> Account[Account]
   Account --> AccountSetting[AccountSetting.locale]
   Account --> AccountAuth[Account.Auth]
   AccountSetting --> ProductDB[(account_settings)]
-  AccountAuth --> AuthDB[(accounts + passkey_credentials)]
+  AccountAuth --> AuthDB[(accounts + account_passkey_credentials)]
   ProductAPI --> Mailer[多言語メール送信]
   Mailer --> AccountSetting
   I18n[packages/frontend/i18n]
@@ -298,7 +310,7 @@ flowchart TB
   Web[packages/web] --> FrontendI18n[packages/frontend/i18n]
   App[packages/frontend/app] --> FrontendI18n
   App --> UI[frontend/ui localized labels-formatters]
-  App --> Domain[frontend/domain/account-settings]
+  App --> Domain[frontend/domain/account]
   Domain --> Api[packages/frontend/api]
   Api --> TypeSpec[Product TypeSpec generated SDK]
   BackendHTTP[backend adapters/http] --> AuthApp[auth/application Account.Auth]
@@ -333,7 +345,7 @@ sequenceDiagram
   DB-->>ACC: AccountSetting.locale
   ACC-->>API: AccountSetting
   API-->>D: no-store AccountSetting response
-  D-->>A: AccountSetting state
+  D-->>A: Account state with AccountSetting child
   U->>A: en を選択する
   A->>D: AccountSetting.locale を en に更新する
   D->>API: PATCH /api/v1/account/settings
@@ -344,7 +356,7 @@ sequenceDiagram
   DB-->>ACC: 更新後 AccountSetting
   ACC-->>API: AccountSetting
   API-->>D: no-store AccountSetting response
-  D-->>A: 更新済み AccountSetting state
+  D-->>A: 更新済み Account state with AccountSetting child
   A-->>U: 英語文言で表示する
   A->>API: POST /api/v1/auth/refresh
   API->>AUTH: refresh token を rotation する
@@ -411,7 +423,7 @@ erDiagram
     text account_id PK
     text locale
   }
-  PASSKEY_CREDENTIALS {
+  ACCOUNT_PASSKEY_CREDENTIALS {
     text id PK
     text account_id FK
     text identifier
@@ -426,7 +438,7 @@ erDiagram
     text locale
   }
   ACCOUNTS ||--|| ACCOUNT_SETTINGS : owns
-  ACCOUNTS ||--o{ PASSKEY_CREDENTIALS : authenticates_with
+  ACCOUNTS ||--o{ ACCOUNT_PASSKEY_CREDENTIALS : authenticates_with
 ```
 
 ## Package-Level Design
@@ -436,11 +448,11 @@ erDiagram
 | Package                                                   | Purpose / Responsibility                                                         | Public API                                                                 | Dependencies                                                     |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `packages/web`                                            | 公開 URL ロケール選択、web-owned locale JSON files、共有 i18n 適用               | `/ja`、`/en`、`/`                                                          | `@www-template/ui`、`@www-template/i18n`                         |
-| `packages/frontend/app`                                   | 認証済み UI、app-owned locale JSON files、AccountSetting 同期、共有 i18n 適用    | Svelte routes                                                              | `@www-template/domain`、`@www-template/ui`、`@www-template/i18n` |
-| `packages/frontend/domain`                                | AccountSetting state と domain use case。API wrapper は所有しない                | `useAccountSetting`                                                        | `@www-template/api` の public wrapper                            |
+| `packages/frontend/app`                                   | 認証済み UI、app-owned locale JSON files、Account state 同期、共有 i18n 適用     | Svelte routes                                                              | `@www-template/domain`、`@www-template/ui`、`@www-template/i18n` |
+| `packages/frontend/domain`                                | Account と AccountSetting state の domain use case。API wrapper は所有しない     | `useAccount`                                                               | `@www-template/api` の public wrapper                            |
 | `packages/frontend/ui`                                    | 再利用 UI の構造と表示 primitive。言語と i18n import は所有しない                | localized label / formatter props                                          | なし、または UI 内部 primitive                                   |
 | `packages/frontend/i18n`                                  | web/app/admin 共通の i18n 実装。locale JSON files は所有しない                   | locale resolver、JSON catalog loader、translator、formatter、coverage util | TypeScript のみ                                                  |
-| `packages/frontend/api`                                   | 型付き API wrapper の集約。AccountSetting も既存 `client.ts` に追加する          | `accountSettingApi`                                                        | 生成 SDK                                                         |
+| `packages/frontend/api`                                   | 型付き API wrapper の集約。Account / AccountSetting API を公開する               | `accountApi`                                                               | 生成 SDK                                                         |
 | `packages/typespec`                                       | Product API AccountSetting 契約                                                  | AccountSetting models/routes                                               | TypeSpec emitters                                                |
 | `packages/backend/internal/account`                       | Product Account root と AccountSetting                                           | AccountSetting service、snapshot reader                                    | account domain、PostgreSQL port                                  |
 | `packages/backend/internal/auth`                          | Account にぶら下がる Auth。本人確認、session、token、passkey/recovery 認証フロー | AuthService、TokenService                                                  | auth domain、Valkey、AccountAuth repository                      |
@@ -469,7 +481,7 @@ erDiagram
 - 公開入口: `AuthService`、`TokenService`、`AccountAuth`、`AccountAuthRepository`。
 - 主なデータ: `AccountAuth`、passkey credential、session metadata、refresh token record、account status / session revoked boundary。
 - 主な流れ: bearer session を検証して AccountID を返し、refresh token を rotation して token pair と AccountID を返す。AccountSetting snapshot は HTTP adapter が account application から読み込んで response に合成する。
-- 禁止事項: `AuthAccount`、`AuthSubject`、AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を所有しない。Auth repository は `account_settings` table を読まない。
+- 禁止事項: `AuthAccount`、`AuthSubject`、AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を所有しない。Auth repository は `account_settings` table と `passkey_credentials` table を読まない。
 - テスト: Auth service/token test と source guard で `LOCALIZATION-BE-S014`、`ARCH-BE-ACCOUNT-AUTH-SUBORDINATION`、`ARCH-BE-AUTH-NO-ACCOUNT-SETTING` を確認する。
 
 #### `packages/backend/internal/adapters/http`
@@ -495,9 +507,9 @@ erDiagram
 
 #### `packages/frontend/domain`
 
-- 責務: 認証済み AccountSetting state と domain use case を管理する。HTTP/generated SDK の wrapper file は所有しない。
-- 公開入口: `useAccountSetting(): { data, actions }` と AccountSetting 型。
-- 主な流れ: auth session 由来の Authorization header を受け取り、`@www-template/api` の既存 `client.ts` から公開される `accountSettingApi` を呼び出して state を更新し、エラーを domain state に正規化する。
+- 責務: 認証済み Account state の domain use case を管理し、AccountSetting を Account child state として扱う。HTTP/generated SDK の wrapper file は所有しない。
+- 公開入口: `useAccount(): { data, actions }` と Account / AccountSetting 型。
+- 主な流れ: auth session 由来の Authorization header を受け取り、`@www-template/api` の `accountApi` を呼び出して Account state を更新し、エラーを domain state に正規化する。
 - 禁止事項: `account_setting_api.ts` や `account_settings_api.ts` などの新規 feature-specific API wrapper file、generated SDK の直接 import、`localStorage`、browser/OS language、DOM globals、UI component import、`@www-template/i18n` import、app/web/admin i18n module import、直接 `fetch` を使わない。
 - テスト: `LOCALIZATION-FE-S004` から `LOCALIZATION-FE-S006`、`LOCALIZATION-FE-S012` の state 挙動を Vitest で確認し、domain/API 配置境界は `ARCH-FE-DOMAIN-API-BOUNDARY` source guard で確認する。
 
@@ -545,13 +557,13 @@ erDiagram
 flowchart TD
   A[1. Account / AccountSetting / Account.Auth の語彙とDB境界を固定する] --> B[2. Product TypeSpec に AccountSetting API と snapshot を追加する]
   B --> C[3. API と Go bindings を生成する]
-  B --> D[4. Product DB に account_settings を追加する]
+  B --> D[4. Product DB を Account root から組み直す]
   D --> E0[5. internal/account に Account と AccountSetting を実装する]
   E0 --> E2[6. AuthAccount/AuthSubject を AccountAuth へ置換する]
   C --> E1[7. HTTP handler で Auth と AccountSetting を合成する]
   E2 --> E1
   E1 --> F[8. Product 認証メールを AccountSetting.locale で多言語化する]
-  C --> G[9. frontend API/domain の AccountSetting state を追加する]
+  C --> G[9. frontend API/domain の Account state を実装する]
   G --> H0[10. DeviceManager を app へ移し frontend/ui の言語所有を取り除く]
   H0 --> H[11. 認証済みアプリと settings UI を多言語化する]
   A --> I[12. web のパスベース locale route を追加する]
@@ -578,39 +590,51 @@ flowchart TD
 
 ### Automated Test Matrix
 
-| Test Name                                                                                                          | Package                        | Scenario             | Expected Behavior                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `[LOCALIZATION-BE-S001] AccountSetting get は現在値を返す`                                                         | backend/http                   | LOCALIZATION-BE-S001 | 200 no-store response に `locale: ja` が含まれる。                                                                                   |
-| `[LOCALIZATION-BE-S002] AccountSetting patch は locale を保存する`                                                 | backend/http                   | LOCALIZATION-BE-S002 | `account_settings.locale` と response が `en` になる。                                                                               |
-| `[LOCALIZATION-BE-S003] 未対応 AccountSetting.locale は拒否される`                                                 | backend/http                   | LOCALIZATION-BE-S003 | error response となり永続値は変化しない。                                                                                            |
-| `[LOCALIZATION-BE-S004] 未認証 AccountSetting request は拒否される`                                                | backend/http                   | LOCALIZATION-BE-S004 | auth failure となり永続値は変化しない。                                                                                              |
-| `[LOCALIZATION-BE-S005] Product Account は既定 AccountSetting.locale を持つ`                                       | backend/account                | LOCALIZATION-BE-S005 | AccountSetting が無い Account は `ja` として扱われる。                                                                               |
-| `[LOCALIZATION-BE-S006] recovery email は AccountSetting.locale を使う`                                            | backend/mailer                 | LOCALIZATION-BE-S006 | 件名と本文が英語になり token は log に出ない。                                                                                       |
-| `[LOCALIZATION-BE-S007] device-link completion email は AccountSetting.locale を使う`                              | backend/mailer                 | LOCALIZATION-BE-S007 | 件名と本文が日本語になる。                                                                                                           |
-| `[LOCALIZATION-BE-S008] 不正 AccountSetting.locale は拒否される`                                                   | backend/account                | LOCALIZATION-BE-S008 | domain または persistence が拒否する。                                                                                               |
-| `[LOCALIZATION-BE-S009] Admin context は operator locale を読み込む`                                               | admin                          | LOCALIZATION-BE-S009 | locals.operator.locale が設定される。                                                                                                |
-| `[LOCALIZATION-BE-S010] operator は自分の locale を更新できる`                                                     | admin                          | LOCALIZATION-BE-S010 | 自分の record だけが更新される。                                                                                                     |
-| `[LOCALIZATION-BE-S011] Admin の未対応 locale 更新は拒否される`                                                    | admin                          | LOCALIZATION-BE-S011 | 保存済み operator locale は変化しない。                                                                                              |
-| `[LOCALIZATION-BE-S012] Operator 管理操作は locale を暗黙変更しない`                                               | admin                          | LOCALIZATION-BE-S012 | 対象 operator の locale は mutation 前の値を保持する。                                                                               |
-| `[LOCALIZATION-BE-S013] refresh は AccountSetting snapshot を返す`                                                 | backend/http                   | LOCALIZATION-BE-S013 | token pair と AccountSetting snapshot `locale: en` が返る。                                                                          |
-| `[LOCALIZATION-BE-S014][ARCH-BE-ACCOUNT-AUTH-SUBORDINATION] Auth projection は AccountSetting を所有しない`        | backend/auth                   | LOCALIZATION-BE-S014 | `AuthAccount` / `AuthSubject` は残らず、`AccountAuth` は AccountSetting を持たず、Auth repository は `account_settings` を読まない。 |
-| `[LOCALIZATION-FE-S001] 公開 root は対応ロケールへ到達する`                                                        | web                            | LOCALIZATION-FE-S001 | `/` が `ja` または `en` の URL/内容へ解決される。                                                                                    |
-| `[LOCALIZATION-FE-S002] 公開ロケールページはロケール別文言を表示する`                                              | web                            | LOCALIZATION-FE-S002 | `/ja` と `/en` で文言と metadata が切り替わる。                                                                                      |
-| `[LOCALIZATION-FE-S003] 未対応ロケールは翻訳済みページとして扱われない`                                            | web                            | LOCALIZATION-FE-S003 | 対応ロケールへの誘導または not found になる。                                                                                        |
-| `[LOCALIZATION-FE-S004] AccountSetting.locale は app 表示へ反映する`                                               | frontend/domain + frontend/app | LOCALIZATION-FE-S004 | navigation、heading、操作 label が英語になる。                                                                                       |
-| `[LOCALIZATION-FE-S005] AccountSetting.locale 更新でアプリ文言が切り替わる`                                        | frontend/app                   | LOCALIZATION-FE-S005 | 成功表示と navigation が英語になる。                                                                                                 |
-| `[LOCALIZATION-FE-S006] login は localStorage または system locale で表示する`                                     | frontend/app                   | LOCALIZATION-FE-S006 | AccountSetting API は呼ばれず fallback 文言が表示される。                                                                            |
-| `[LOCALIZATION-FE-S007] Admin layout は operator locale を使う`                                                    | admin                          | LOCALIZATION-FE-S007 | Admin navigation label が英語になる。                                                                                                |
-| `[LOCALIZATION-FE-S008] operator locale 更新で Admin 文言が切り替わる`                                             | admin                          | LOCALIZATION-FE-S008 | Admin layout/settings が英語になる。                                                                                                 |
-| `[LOCALIZATION-FE-S009] Admin 認証前画面は代替言語で表示される`                                                    | admin                          | LOCALIZATION-FE-S009 | operator DB の認証済み読み取りを要求しない。                                                                                         |
-| `[LOCALIZATION-FE-S010][ARCH-I18N-DICTIONARY-COVERAGE] 辞書欠落 key は検証で失敗する`                              | tooling                        | LOCALIZATION-FE-S010 | 欠落 key path と所有 package が報告される。                                                                                          |
-| `[LOCALIZATION-FE-S011][ARCH-I18N-LITERAL-GUARD] 未翻訳 UI literal は lint で失敗する`                             | tooling                        | LOCALIZATION-FE-S011 | 違反 file と rule が報告される。                                                                                                     |
-| `[LOCALIZATION-FE-S012] refresh 後に AccountSetting snapshot locale を表示する`                                    | frontend/app                   | LOCALIZATION-FE-S012 | fallback 表示が保存済み AccountSetting.locale へ置き換わる。                                                                         |
-| `[LOCALIZATION-FE-S013][ARCH-FE-UI-LOCALIZED-PROPS][ARCH-FE-UI-NO-I18N-IMPORT] reusable UI は表示言語を所有しない` | frontend/ui + frontend/app     | LOCALIZATION-FE-S013 | UI は i18n import を持たず、DeviceManager は app 側に存在する。                                                                      |
+| Test Name                                                                                                          | Package                        | Scenario              | Expected Behavior                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[LOCALIZATION-BE-S001] AccountSetting get は現在値を返す`                                                         | backend/http                   | LOCALIZATION-BE-S001  | 200 no-store response に `locale: ja` が含まれる。                                                                                                            |
+| `[LOCALIZATION-BE-S002] AccountSetting patch は locale を保存する`                                                 | backend/http                   | LOCALIZATION-BE-S002  | `account_settings.locale` と response が `en` になる。                                                                                                        |
+| `[LOCALIZATION-BE-S003] 未対応 AccountSetting.locale は拒否される`                                                 | backend/http                   | LOCALIZATION-BE-S003  | error response となり永続値は変化しない。                                                                                                                     |
+| `[LOCALIZATION-BE-S004] 未認証 AccountSetting request は拒否される`                                                | backend/http                   | LOCALIZATION-BE-S004  | auth failure となり永続値は変化しない。                                                                                                                       |
+| `[LOCALIZATION-BE-S005] Product Account は既定 AccountSetting.locale を持つ`                                       | backend/account                | LOCALIZATION-BE-S005  | Account 作成時に `ja` の AccountSetting が同じ Account child として作られる。                                                                                 |
+| `[LOCALIZATION-BE-S006] recovery email は AccountSetting.locale を使う`                                            | backend/mailer                 | LOCALIZATION-BE-S006  | 件名と本文が英語になり token は log に出ない。                                                                                                                |
+| `[LOCALIZATION-BE-S007] device-link completion email は AccountSetting.locale を使う`                              | backend/mailer                 | LOCALIZATION-BE-S007  | 件名と本文が日本語になる。                                                                                                                                    |
+| `[LOCALIZATION-BE-S008] 不正 AccountSetting.locale は拒否される`                                                   | backend/account                | LOCALIZATION-BE-S008  | domain または persistence が拒否する。                                                                                                                        |
+| `[LOCALIZATION-BE-S009] Admin context は operator locale を読み込む`                                               | admin                          | LOCALIZATION-BE-S009  | locals.operator.locale が設定される。                                                                                                                         |
+| `[LOCALIZATION-BE-S010] operator は自分の locale を更新できる`                                                     | admin                          | LOCALIZATION-BE-S010  | 自分の record だけが更新される。                                                                                                                              |
+| `[LOCALIZATION-BE-S011] Admin の未対応 locale 更新は拒否される`                                                    | admin                          | LOCALIZATION-BE-S011  | 保存済み operator locale は変化しない。                                                                                                                       |
+| `[LOCALIZATION-BE-S012] Operator 管理操作は locale を暗黙変更しない`                                               | admin                          | LOCALIZATION-BE-S012  | 対象 operator の locale は mutation 前の値を保持する。                                                                                                        |
+| `[LOCALIZATION-BE-S013] refresh は AccountSetting snapshot を返す`                                                 | backend/http                   | LOCALIZATION-BE-S013  | token pair と AccountSetting snapshot `locale: en` が返る。                                                                                                   |
+| `[LOCALIZATION-BE-S014][ARCH-BE-ACCOUNT-AUTH-SUBORDINATION] Auth projection は AccountSetting を所有しない`        | backend/auth                   | LOCALIZATION-BE-S014  | `AuthAccount` / `AuthSubject` は残らず、`AccountAuth` は AccountSetting を持たず、Auth repository は `account_settings` と `passkey_credentials` を読まない。 |
+| `[ADMIN-CONSOLE-BE-S007] Account status は active で作成される`                                                    | backend/migrations             | ADMIN-CONSOLE-BE-S007 | Account root record は `active` status と NULL `session_revoked_after` を持つ。                                                                               |
+| `[ADMIN-CONSOLE-BE-S008] suspend_account は active Account を停止する`                                             | backend/migrations             | ADMIN-CONSOLE-BE-S008 | `admin_op.suspend_account` が status と `session_revoked_after` を更新する。                                                                                  |
+| `[ADMIN-CONSOLE-BE-S009] suspend_account は非 active Account を拒否する`                                           | backend/migrations             | ADMIN-CONSOLE-BE-S009 | `account_not_active` が返る。                                                                                                                                 |
+| `[ADMIN-CONSOLE-BE-S010] restore_account は suspended Account を復旧する`                                          | backend/migrations             | ADMIN-CONSOLE-BE-S010 | status が `active` になり `session_revoked_after` は戻らない。                                                                                                |
+| `[ADMIN-CONSOLE-BE-S011] restore_account は非 suspended Account を拒否する`                                        | backend/migrations             | ADMIN-CONSOLE-BE-S011 | `account_not_suspended` が返る。                                                                                                                              |
+| `[ADMIN-CONSOLE-BE-S012] account_summaries は Account と passkey_count を返す`                                     | backend/migrations             | ADMIN-CONSOLE-BE-S012 | passkey_count は `account_passkey_credentials` に基づく。                                                                                                     |
+| `[ADMIN-CONSOLE-BE-S013] account_passkeys は Account.Auth passkey を返す`                                          | backend/migrations             | ADMIN-CONSOLE-BE-S013 | view は `account_passkey_credentials` を参照し、`passkey_credentials` を参照しない。                                                                          |
+| `[ADMIN-CONSOLE-BE-S037] SECURITY DEFINER 関数は search_path を固定する`                                           | backend/migrations             | ADMIN-CONSOLE-BE-S037 | `SET search_path = pg_catalog, admin_op` と schema-qualified Product table 参照を持つ。                                                                       |
+| `[ADMIN-CONSOLE-BE-S038] SECURITY DEFINER 関数は PUBLIC 実行権限を剥奪する`                                        | backend/migrations             | ADMIN-CONSOLE-BE-S038 | PUBLIC EXECUTE が REVOKE される。                                                                                                                             |
+| `[ADMIN-CONSOLE-BE-S042] admin_console_read は admin_view SELECT のみ許可される`                                   | backend/migrations             | ADMIN-CONSOLE-BE-S042 | read role は `admin_op` EXECUTE を持たない。                                                                                                                  |
+| `[ADMIN-CONSOLE-BE-S043] admin_console_write のみ admin_op 関数を実行できる`                                       | backend/migrations             | ADMIN-CONSOLE-BE-S043 | EXECUTE は write role のみに GRANT される。                                                                                                                   |
+| `[ADMIN-CONSOLE-BE-S044] PRODUCT_DATABASE_URL は最小権限 role を使う`                                              | backend/migrations             | ADMIN-CONSOLE-BE-S044 | login role は `admin_console_write` member であり owner/superuser ではない。                                                                                  |
+| `[LOCALIZATION-FE-S001] 公開 root は対応ロケールへ到達する`                                                        | web                            | LOCALIZATION-FE-S001  | `/` が `ja` または `en` の URL/内容へ解決される。                                                                                                             |
+| `[LOCALIZATION-FE-S002] 公開ロケールページはロケール別文言を表示する`                                              | web                            | LOCALIZATION-FE-S002  | `/ja` と `/en` で文言と metadata が切り替わる。                                                                                                               |
+| `[LOCALIZATION-FE-S003] 未対応ロケールは翻訳済みページとして扱われない`                                            | web                            | LOCALIZATION-FE-S003  | 対応ロケールへの誘導または not found になる。                                                                                                                 |
+| `[LOCALIZATION-FE-S004] AccountSetting.locale は app 表示へ反映する`                                               | frontend/domain + frontend/app | LOCALIZATION-FE-S004  | navigation、heading、操作 label が英語になる。                                                                                                                |
+| `[LOCALIZATION-FE-S005] AccountSetting.locale 更新でアプリ文言が切り替わる`                                        | frontend/app                   | LOCALIZATION-FE-S005  | 成功表示と navigation が英語になる。                                                                                                                          |
+| `[LOCALIZATION-FE-S006] login は localStorage または system locale で表示する`                                     | frontend/app                   | LOCALIZATION-FE-S006  | AccountSetting API は呼ばれず fallback 文言が表示される。                                                                                                     |
+| `[LOCALIZATION-FE-S007] Admin layout は operator locale を使う`                                                    | admin                          | LOCALIZATION-FE-S007  | Admin navigation label が英語になる。                                                                                                                         |
+| `[LOCALIZATION-FE-S008] operator locale 更新で Admin 文言が切り替わる`                                             | admin                          | LOCALIZATION-FE-S008  | Admin layout/settings が英語になる。                                                                                                                          |
+| `[LOCALIZATION-FE-S009] Admin 認証前画面は代替言語で表示される`                                                    | admin                          | LOCALIZATION-FE-S009  | operator DB の認証済み読み取りを要求しない。                                                                                                                  |
+| `[LOCALIZATION-FE-S010][ARCH-I18N-DICTIONARY-COVERAGE] 辞書欠落 key は検証で失敗する`                              | tooling                        | LOCALIZATION-FE-S010  | 欠落 key path と所有 package が報告される。                                                                                                                   |
+| `[LOCALIZATION-FE-S011][ARCH-I18N-LITERAL-GUARD] 未翻訳 UI literal は lint で失敗する`                             | tooling                        | LOCALIZATION-FE-S011  | 違反 file と rule が報告される。                                                                                                                              |
+| `[LOCALIZATION-FE-S012] refresh 後に AccountSetting snapshot locale を表示する`                                    | frontend/app                   | LOCALIZATION-FE-S012  | fallback 表示が保存済み AccountSetting.locale へ置き換わる。                                                                                                  |
+| `[LOCALIZATION-FE-S013][ARCH-FE-UI-LOCALIZED-PROPS][ARCH-FE-UI-NO-I18N-IMPORT] reusable UI は表示言語を所有しない` | frontend/ui + frontend/app     | LOCALIZATION-FE-S013  | UI は i18n import を持たず、DeviceManager は app 側に存在する。                                                                                               |
 
 ## Rollback / Migration
 
-- Product DB rollback は `000007_create_account_settings.down.sql` で `account_settings` table を削除する。Account root の `accounts` table は削除しない。
+- Product DB rollback は Account root schema の down migration で `account_passkey_credentials`、`account_settings`、`accounts`、Account 中心 admin views/functions を同じ責務単位で削除する。
 - Admin DB rollback は Prisma migration rollback、または `admin.operators.locale` を削除する rollback SQL で行う。
 - 契約 rollback は TypeSpec の AccountSetting route/model を戻し、`pnpm gen` で OpenAPI、frontend SDK、Go bindings を再生成する。
 - アプリケーション rollback は AccountSetting UI、API wrapper、メール文面選択、lint 強制をまとめて戻し、生成 symbol や lint rule の不整合を残さない。
@@ -631,13 +655,14 @@ flowchart TD
 
 - Product BE で Account root、AccountSetting、Account.Auth projection の責務が分離される。
 - `AccountSetting.locale` は `account_settings` table に保存され、`accounts` root table と外部キーで紐づく。
+- Product DB は `accounts`、`account_settings`、`account_passkey_credentials` を正とし、`passkey_credentials`、`auth_accounts`、`accounts.locale` を持たない。
 - `AuthAccount`、`AuthSubject`、`AccountClientSettings` は残らず、Auth projection は `AccountAuth` として AccountSetting を所有しない。
 - Product API が AccountSetting 取得・更新を提供し、未対応 locale と未認証 AccountSetting request を拒否し、永続値を変更しない。
 - refresh response は Auth の token pair と AccountSetting snapshot を composition して返す。
 - Product TypeSpec/generated SDK が Product AccountSetting だけを表し、Admin operator locale や `/api/admin/**` を含まない。
 - Product 認証メールが AccountSetting.locale から日本語または英語文面を選ぶ。
-- 認証済みアプリが domain/API 境界を守って AccountSetting.locale を読み書きし、app route から Product API を直接 import しない。
-- account setting API wrapper は既存 `packages/frontend/api/src/api/client.ts` に存在し、`packages/frontend/domain/src/account-settings` は API wrapper file と generated SDK import を持たない。
+- 認証済みアプリが domain/API 境界を守って Account.setting.locale を読み書きし、app route から Product API を直接 import しない。
+- account API wrapper は `packages/frontend/api/src/api/client.ts` に存在し、`packages/frontend/domain/src/account` は API wrapper file と generated SDK import を持たない。`packages/frontend/domain/src/account-settings` は存在しない。
 - 公開 Web が `/ja` と `/en` で locale 別文言と metadata を表示し、`/` が対応ロケールへ到達する。
 - `packages/frontend/i18n` が共有 i18n 実装として locale 定義、loader/config、JSON catalog loader、typed translator、formatter、辞書 key coverage utility を提供し、locale JSON files は持たない。
 - `AGENTS.md`、`CODING_STANDARDS.md`、`eslint.config.js` が `packages/frontend/i18n` を正式な共有 frontend package として扱い、web/app/admin からの利用を許可し、domain/ui からの i18n 依存を禁止する。

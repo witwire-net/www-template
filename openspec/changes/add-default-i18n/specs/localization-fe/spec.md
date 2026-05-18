@@ -37,7 +37,7 @@
 
 ### Requirement: 認証済みアプリは AccountSetting.locale で SHALL 表示される
 
-システムは、AccountSetting.locale が利用可能になった後、ログイン中 Account の標準言語で認証済みアプリの文言を SHALL 表示する。認証済みアプリは、ログイン中利用者が AccountSetting.locale を確認・更新できる設定画面を SHALL 提供する。AccountSetting.locale を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。認証前に AccountSetting を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。アクセストークンリフレッシュ後に DB 由来の AccountSetting snapshot が返った場合、認証済みアプリはその locale を SHALL 採用し、未ログイン fallback 表示を保存済み AccountSetting.locale へ置き換える。認証済みアプリの UI ラベル、検証メッセージ、ナビゲーション、空状態、認証案内はロケール辞書から SHALL 取得する。
+システムは、AccountSetting.locale が利用可能になった後、ログイン中 Account の標準言語で認証済みアプリの文言を SHALL 表示する。認証済みアプリの handwritten frontend domain は Account を root state として SHALL 扱い、AccountSetting を Account の child state として公開しなければならない（MUST）。frontend domain の Account entrypoint は `packages/frontend/domain/src/account` と `useAccount` でなければならず（MUST）、`packages/frontend/domain/src/account-settings` や `useAccountSetting` を root entrypoint として提供してはならない（MUST NOT）。認証済みアプリは、ログイン中利用者が AccountSetting.locale を確認・更新できる設定画面を SHALL 提供する。AccountSetting.locale を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。認証前に AccountSetting を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。アクセストークンリフレッシュ後に DB 由来の AccountSetting snapshot が返った場合、認証済みアプリはその locale を SHALL 採用し、未ログイン fallback 表示を保存済み AccountSetting.locale へ置き換える。認証済みアプリの UI ラベル、検証メッセージ、ナビゲーション、空状態、認証案内はロケール辞書から SHALL 取得する。
 
 **Customer Context**
 
@@ -46,6 +46,8 @@
 **要求**
 
 - システムは、AccountSetting.locale が利用可能になった後、ログイン中 Account の標準言語で認証済みアプリの文言を SHALL 表示する。
+- 認証済みアプリの handwritten frontend domain は Account を root state として SHALL 扱い、AccountSetting を Account の child state として公開しなければならない（MUST）。
+- frontend domain の Account entrypoint は `packages/frontend/domain/src/account` と `useAccount` でなければならず（MUST）、`packages/frontend/domain/src/account-settings` や `useAccountSetting` を root entrypoint として提供してはならない（MUST NOT）。
 - 認証済みアプリは、ログイン中利用者が AccountSetting.locale を確認・更新できる設定画面を SHALL 提供する。
 - AccountSetting.locale を更新した場合、別ブラウザや別端末の設定を要求せずに、表示中のアプリ文言も SHALL 更新する。
 - 認証前に AccountSetting を取得できない場合、未認証画面は端末に保存された対応 locale を最優先し、存在しない場合はアクセス時のブラウザまたは OS 言語から対応 locale へ SHALL 解決し、Product API の認証済みアクセスを要求してはならない（MUST NOT）。
@@ -56,7 +58,7 @@
 
 - **前提** 利用者が AccountSetting.locale `en` を持つ Account でログインしている
 - **操作** 認証済みアプリの画面が表示される
-- **結果** ナビゲーション、見出し、操作ラベル、説明文は英語で表示される
+- **結果** `useAccount` の Account state は AccountSetting.locale `en` を child state として保持し、ナビゲーション、見出し、操作ラベル、説明文は英語で表示される
 
 #### Scenario: AccountSetting.locale を更新すると表示言語が切り替わる (LOCALIZATION-FE-S005)
 
