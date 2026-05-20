@@ -112,6 +112,7 @@ function createEvent(input: { origin: string; headerToken?: string; cookieToken?
         id: 'op-1',
         email: 'admin@example.test',
         role: 'admin',
+        locale: 'ja',
         sessionId: 'sess-1',
         jti: 'jti-1',
       },

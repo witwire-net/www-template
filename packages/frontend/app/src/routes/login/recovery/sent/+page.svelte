@@ -2,8 +2,10 @@
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { Card, CardContent, Separator } from '@www-template/ui/components';
+  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   const { data } = useRecoveryFlow();
+  const i18n = useI18n(resolveUnauthenticatedLocale());
 </script>
 
 <AuthLayout>
@@ -22,12 +24,12 @@
 
         <Separator />
 
-        <a href="/login" class="text-sm text-muted-foreground no-underline hover:underline">ログインに戻る</a>
+        <a href="/login" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoverySentBackToLogin')}</a>
       </div>
     </CardContent>
   </Card>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトに戻る</a>
+    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoverySentBackToPublic')}</a>
   {/snippet}
 </AuthLayout>

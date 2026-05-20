@@ -1,5 +1,7 @@
 import type { PasskeyItem, PasskeyManagementState } from '../../types';
 
+const ERROR_CODE_PATTERN = /^[a-z][a-z0-9_-]*$/u;
+
 /** passkey management state の初期値を作る。 */
 function createPasskeyManagementInitialState(): PasskeyManagementState {
   return {
@@ -38,11 +40,13 @@ function applyPasskeyError(state: PasskeyManagementState, message: string): void
 
 /** passkey operation エラーを状態メッセージへ正規化する。 */
 function toPasskeyManagementErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
+  if (error instanceof Error && ERROR_CODE_PATTERN.test(error.message)) {
+    // API が返す機械可読コードは UI 層の i18n マッピングへ渡す。
     return error.message;
   }
 
-  return 'パスキー操作に失敗しました。時間を置いて再度お試しください。';
+  // ブラウザーやネットワーク由来の例外文は locale 非対応のため、汎用コードに丸める。
+  return 'passkeyOperationFailed';
 }
 
 export {

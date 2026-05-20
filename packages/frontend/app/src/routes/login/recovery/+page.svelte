@@ -4,8 +4,10 @@
   import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Button, Card, CardContent, Input, Label, Separator } from '@www-template/ui/components';
+  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   const { data, actions } = useRecoveryFlow();
+  const i18n = useI18n(resolveUnauthenticatedLocale());
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -24,9 +26,9 @@
   <Card class="w-full">
     <CardContent>
       <div class="flex flex-col items-center gap-4 text-center">
-        <h1 class="m-0 text-2xl font-bold text-center">パスキー復旧</h1>
+        <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryTitle')}</h1>
         <p class="m-0 text-sm text-muted-foreground text-center">
-          登録済みのメールアドレスを入力してください。復旧用のリンクをお送りします。
+          {i18n.t('common.recoveryDescription')}
         </p>
 
         {#if data.state.error}
@@ -35,13 +37,13 @@
 
         <form class="w-full flex flex-col gap-2" onsubmit={handleSubmit}>
           <div class="flex flex-col gap-1 text-left">
-            <Label for="recovery-email">メールアドレス</Label>
+            <Label for="recovery-email">{i18n.t('common.recoveryEmailLabel')}</Label>
             <Input
               id="recovery-email"
               type="email"
               autocomplete="email"
               required
-              placeholder="you@example.com"
+              placeholder={i18n.t('common.recoveryEmailPlaceholder')}
               value={data.state.email}
               oninput={handleEmailInput}
               disabled={data.state.phase === 'submitting'}
@@ -54,21 +56,21 @@
             disabled={data.state.phase === 'submitting' || data.state.email.trim() === ''}
           >
             {#if data.state.phase === 'submitting'}
-              送信中…
+              {i18n.t('common.recoverySending')}
             {:else}
-              復旧メールを送信
+              {i18n.t('common.recoverySubmit')}
             {/if}
           </Button>
         </form>
 
         <Separator />
 
-        <a href="/login" class="text-sm text-muted-foreground no-underline hover:underline">ログインに戻る</a>
+        <a href="/login" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryBackToLogin')}</a>
       </div>
     </CardContent>
   </Card>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトに戻る</a>
+    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryBackToPublic')}</a>
   {/snippet}
 </AuthLayout>

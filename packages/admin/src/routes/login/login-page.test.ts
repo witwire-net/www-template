@@ -5,13 +5,26 @@ import { describe, expect, it, vi } from 'vitest';
 
 const loginPageMocks = vi.hoisted(() => ({
   getPlatformConfig: vi.fn(() => ({ isProduction: false })),
+  createAdminI18n: vi.fn(() => ({
+    locale: 'ja',
+    t: (key: string) =>
+      key === 'login.error'
+        ? 'パスキー認証に失敗しました。入力内容を確認してもう一度お試しください。'
+        : key === 'login.title'
+          ? 'Admin Login'
+          : key,
+  })),
 }));
 
 vi.mock('$lib/server/infrastructure/config/platform.js', () => ({
   getPlatformConfig: loginPageMocks.getPlatformConfig,
 }));
 
-import { actions } from './+page.server.js';
+vi.mock('$lib/i18n', () => ({
+  createAdminI18n: loginPageMocks.createAdminI18n,
+}));
+
+import { actions, load } from './+page.server.js';
 
 const loginPageSource = readFileSync(
   fileURLToPath(new URL('./+page.svelte', import.meta.url)),
@@ -89,9 +102,22 @@ describe('login page passkey actions', () => {
     expect(loginPageSource).toContain('if (isSubmitting) return;');
     expect(loginPageSource).toContain('isSubmitting = true;');
     expect(loginPageSource).toContain("disabled={isSubmitting || email.trim() === ''}");
-    expect(loginPageSource).toContain('<Spinner />');
-    expect(loginPageSource).toContain('認証中…');
+    expect(loginPageSource).toContain('<Spinner aria-hidden="true" />');
+    expect(loginPageSource).toContain('{data.labels.submitting}');
     expect(loginPageSource).toContain('isSubmitting = false;');
+  });
+
+  it('LOCALIZATION-FE-S009 Admin 認証前画面は operator DB を要求せず fallback translator を使う', () => {
+    // 未認証ログイン画面は operator locale を読めないため、Admin i18n の安全な fallback translator だけで文言を解決する。
+    const loaded = load({} as never);
+    expect(loaded).toMatchObject({
+      labels: {
+        title: 'Admin Login',
+        error: expect.stringContaining('パスキー認証に失敗しました'),
+      },
+    });
+    expect(loginPageSource).toContain('{data.labels.title}');
+    expect(loginPageSource).toContain('message = data.labels.error');
   });
 });
 

@@ -43,6 +43,17 @@ const frontendUiSourceFiles = [
   'packages/frontend/ui/src/**/*.svelte.js',
 ];
 
+const frontendI18nSourceFiles = [
+  'packages/frontend/i18n/src/**/*.ts',
+  'packages/frontend/i18n/src/**/*.svelte.ts',
+  'packages/frontend/i18n/src/**/*.svelte.js',
+];
+
+const frontendWebLocaleJsonFiles = ['packages/web/src/**/*.json'];
+const frontendAppLocaleJsonFiles = ['packages/frontend/app/src/**/*.json'];
+const frontendUiLocaleJsonFiles = ['packages/frontend/ui/src/**/*.json'];
+const adminLocaleJsonFiles = ['packages/admin/src/**/*.json'];
+
 const frontendSvelteFiles = [
   'packages/frontend/**/*.svelte',
   'packages/frontend/**/*.svelte.ts',
@@ -88,6 +99,7 @@ const frontendNonReactSourceFiles = [
   ...frontendWebSourceFiles,
   ...frontendDomainSourceFiles,
   ...frontendUiSourceFiles,
+  ...frontendI18nSourceFiles,
 ];
 
 const frontendWebSvelteKitImportFiles = [
@@ -125,7 +137,8 @@ const frontendAppSvelteKitHookModuleFiles = [
 ];
 
 const frontendWebSvelteKitPageServerModuleFiles = [
-  'packages/web/src/routes/**/+page.server.{ts,js}',
+  'packages/web/src/routes/+page.server.{ts,js}',
+  'packages/web/src/routes/*/**/+page.server.{ts,js}',
 ];
 
 const frontendAppSvelteKitPageServerModuleFiles = [
@@ -686,6 +699,87 @@ const frontendAppPrimitiveUiPlugin = {
   },
 };
 
+const frontendI18nLiteralGuardPlugin = {
+  rules: {
+    'no-user-facing-literals': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          forbidden:
+            'ARCH-I18N-LITERAL-GUARD: ユーザー向け文言は辞書から取得してください。直書き文言「{{value}}」は許可されません。',
+        },
+      },
+      create(context) {
+        const allowedTechnicalLiteralPatterns = [
+          /^\/[A-Za-z0-9._~/-]+$/u,
+          /^(?:https?:\/\/|mailto:|tel:).+$/u,
+          /^(?:[A-Z0-9_:-]+)$/u,
+          /^(?:ja|en)(?:-[A-Z]{2})?$/u,
+          /^(?:[0-9]+(?:\.[0-9]+)?)$/u,
+          /^www-template(?:\s+UI)?$/iu,
+        ];
+
+        const isAllowedLiteral = (value) => {
+          const trimmed = value.trim();
+          if (trimmed.length === 0) {
+            return true;
+          }
+
+          return allowedTechnicalLiteralPatterns.some((pattern) => pattern.test(trimmed));
+        };
+
+        const reportLiteral = (node, value) => {
+          if (typeof value !== 'string') {
+            return;
+          }
+
+          if (isAllowedLiteral(value)) {
+            return;
+          }
+
+          const trimmed = value.trim();
+          if (trimmed.length === 0) {
+            return;
+          }
+
+          context.report({
+            node,
+            messageId: 'forbidden',
+            data: { value: trimmed.slice(0, 80) },
+          });
+        };
+
+        return {
+          SvelteText(node) {
+            reportLiteral(node, node.value);
+          },
+          SvelteAttribute(node) {
+            const userFacingAttributes = new Set([
+              'alt',
+              'aria-description',
+              'aria-label',
+              'label',
+              'placeholder',
+              'title',
+            ]);
+
+            if (!userFacingAttributes.has(node.key?.name ?? '')) {
+              return;
+            }
+
+            for (const value of node.value) {
+              if (value.type === 'Literal') {
+                reportLiteral(value, value.value);
+              }
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 const frontendCssPolicyPlugin = {
   rules: {
     'no-svelte-style-tag': {
@@ -1078,6 +1172,25 @@ export default tseslint.config(
     },
   },
 
+  // 表示面の Svelte テキストは shared i18n runtime を経由させる
+  {
+    files: [...frontendSvelteFiles, ...adminSvelteFiles],
+    ignores: [
+      '**/*.test.svelte',
+      '**/*.spec.svelte',
+      '**/*.test.svelte.ts',
+      '**/*.spec.svelte.ts',
+      '**/*.test.svelte.js',
+      '**/*.spec.svelte.js',
+    ],
+    plugins: {
+      'frontend-i18n-literal-guard': frontendI18nLiteralGuardPlugin,
+    },
+    rules: {
+      'frontend-i18n-literal-guard/no-user-facing-literals': 'error',
+    },
+  },
+
   {
     files: ['packages/frontend/ui/src/SafeHTML.svelte'],
     rules: {
@@ -1150,6 +1263,12 @@ export default tseslint.config(
         { type: 'frontend-app', pattern: 'packages/frontend/app/src/**/*', mode: 'full' },
         { type: 'frontend-web', pattern: 'packages/web/src/**/*', mode: 'full' },
         { type: 'ui', pattern: 'packages/frontend/ui/src/**/*', mode: 'full' },
+        { type: 'frontend-i18n', pattern: 'packages/frontend/i18n/src/**/*', mode: 'full' },
+        { type: 'frontend-app-i18n', pattern: 'packages/frontend/app/src/**/*.json', mode: 'full' },
+        { type: 'frontend-web-i18n', pattern: 'packages/web/src/**/*.json', mode: 'full' },
+        { type: 'frontend-ui-i18n', pattern: 'packages/frontend/ui/src/**/*.json', mode: 'full' },
+        { type: 'admin-i18n', pattern: 'packages/admin/src/lib/i18n/**/*', mode: 'full' },
+        { type: 'admin-i18n', pattern: 'packages/admin/src/**/*.json', mode: 'full' },
         {
           type: 'domain-auth',
           pattern: 'packages/frontend/domain/src/auth/**/*',
@@ -1369,43 +1488,90 @@ export default tseslint.config(
             },
             {
               from: ['frontend-app'],
-              allow: ['frontend-app', 'frontend-domain', 'ui'],
+              allow: [
+                'frontend-app',
+                'frontend-domain',
+                'ui',
+                'frontend-i18n',
+                'frontend-app-i18n',
+              ],
             },
             {
               from: ['frontend-web'],
-              allow: ['frontend-web', 'ui'],
+              allow: ['frontend-web', 'ui', 'frontend-i18n', 'frontend-web-i18n'],
             },
             {
               from: ['ui'],
               allow: ['ui'],
             },
             {
+              from: ['frontend-i18n'],
+              allow: ['frontend-i18n'],
+            },
+            {
+              from: ['admin-i18n'],
+              allow: ['admin-i18n', 'frontend-i18n'],
+            },
+            {
               from: ['admin-view'],
-              allow: ['admin-view', 'admin-route-view', 'ui'],
+              allow: ['admin-view', 'admin-route-view', 'ui', 'frontend-i18n', 'admin-i18n'],
             },
             {
               from: ['admin-route-view'],
-              allow: ['admin-route-view', 'admin-controller', 'admin-view', 'ui'],
+              allow: [
+                'admin-route-view',
+                'admin-controller',
+                'admin-view',
+                'ui',
+                'frontend-i18n',
+                'admin-i18n',
+              ],
             },
             {
               from: ['admin-controller'],
-              allow: ['admin-controller', 'admin-service', 'admin-model', 'admin-infrastructure'],
+              allow: [
+                'admin-controller',
+                'admin-service',
+                'admin-model',
+                'admin-infrastructure',
+                'frontend-i18n',
+                'admin-i18n',
+              ],
             },
             {
               from: ['admin-service'],
-              allow: ['admin-service', 'admin-model', 'admin-infrastructure', 'prisma-client'],
+              allow: [
+                'admin-service',
+                'admin-model',
+                'admin-infrastructure',
+                'prisma-client',
+                'frontend-i18n',
+                'admin-i18n',
+              ],
             },
             {
               from: ['admin-model'],
-              allow: ['admin-model', 'admin-infrastructure', 'prisma-client'],
+              allow: [
+                'admin-model',
+                'admin-infrastructure',
+                'prisma-client',
+                'frontend-i18n',
+                'admin-i18n',
+              ],
             },
             {
               from: ['admin-infrastructure'],
-              allow: ['admin-infrastructure', 'admin-model', 'prisma-client'],
+              allow: [
+                'admin-infrastructure',
+                'admin-model',
+                'prisma-client',
+                'frontend-i18n',
+                'admin-i18n',
+              ],
             },
             {
               from: ['admin-hooks'],
-              allow: ['admin-hooks', 'admin-infrastructure'],
+              allow: ['admin-hooks', 'admin-infrastructure', 'frontend-i18n', 'admin-i18n'],
             },
           ],
         },
@@ -1495,18 +1661,26 @@ export default tseslint.config(
       ...frontendDomainSourceFiles,
       ...frontendUiSourceFiles,
       ...adminSourceFiles,
+      ...frontendAppLocaleJsonFiles,
+      ...frontendWebLocaleJsonFiles,
+      ...frontendUiLocaleJsonFiles,
+      ...adminLocaleJsonFiles,
+      ...frontendI18nSourceFiles,
     ],
     ignores: [
       // .svelte ファイルは SvelteKit 仮想モジュール ($app/*, $lib/*) を import するため除外
       'packages/frontend/**/*.svelte',
       'packages/frontend/**/*.svelte.ts',
       'packages/frontend/**/*.svelte.js',
+      'packages/frontend/**/*.json',
       'packages/web/**/*.svelte',
       'packages/web/**/*.svelte.ts',
       'packages/web/**/*.svelte.js',
+      'packages/web/**/*.json',
       'packages/admin/**/*.svelte',
       'packages/admin/**/*.svelte.ts',
       'packages/admin/**/*.svelte.js',
+      'packages/admin/**/*.json',
       'packages/admin/src/app.d.ts',
       'packages/admin/src/lib/server/infrastructure/**/*.test.ts',
     ],
@@ -2736,7 +2910,7 @@ export default tseslint.config(
         {
           names: ['actions'],
           message:
-            'frontend app では SvelteKit の form action export（`{{name}}`）を禁止します。API は backend に集約してください。',
+            'frontend app / web では SvelteKit の form action export（`{{name}}`）を禁止します。API は backend に集約してください。',
         },
       ],
     },
@@ -2760,7 +2934,7 @@ export default tseslint.config(
   {
     files: [
       'packages/web/src/routes/**/+server.{ts,js}',
-      'packages/web/src/routes/**/+page.server.{ts,js}',
+      'packages/web/src/routes/*/**/+page.server.{ts,js}',
       'packages/web/src/routes/**/+layout.server.{ts,js}',
       'packages/web/src/hooks.server.{ts,js}',
       'packages/web/src/lib/server/**/*.{ts,js,svelte}',
@@ -2791,6 +2965,7 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': 'off',
       'no-restricted-syntax': 'off',
+      'sveltekit-app-policy/no-forbidden-imports': 'off',
     },
   },
   // ESLint 設定ファイルやテストのゆるめ設定
@@ -2969,6 +3144,7 @@ export default tseslint.config(
       '**/.mcp/**',
       '**/.opencode/**',
       '**/.serena/**',
+      '**/*.json',
       'packages/typespec/openapi/**',
       'packages/typespec/tsp-output/**',
       '**/pnpm-lock.yaml',

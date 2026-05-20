@@ -24,6 +24,7 @@
     "@opentelemetry/sdk-trace-web": "^2.7.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@www-template/domain": "workspace:*",
+    "@www-template/i18n": "workspace:*",
     "@www-template/ui": "workspace:*"
   },
   "devDependencies": {

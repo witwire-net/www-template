@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"time"
 
-	"www-template/packages/backend/internal/auth/domain"
+	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/id"
 )
 

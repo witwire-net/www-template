@@ -1,0 +1,14 @@
+{
+  "sectionAriaLabel": "デバイス管理",
+  "loadingText": "読み込み中…",
+  "emptyText": "ログイン中のデバイスはありません",
+  "loginAtLabel": "ログイン",
+  "lastActiveAtLabel": "最終アクティブ",
+  "currentDeviceBadge": "現在のデバイス",
+  "logoutButtonAriaLabel": "{deviceName} をログアウト",
+  "logoutButtonText": "ログアウト",
+  "revokeOthersButtonText": "他のすべてのデバイスをログアウト",
+  "error": "デバイス一覧の取得に失敗しました。",
+  "logoutError": "デバイスのログアウトに失敗しました。",
+  "revokeOthersError": "他のデバイスのログアウトに失敗しました。"
+}

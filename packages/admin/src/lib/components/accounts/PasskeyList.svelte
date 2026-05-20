@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Card, CardContent, CardHeader, CardTitle, Badge, EmptyState, Button, Item } from '@www-template/ui/components';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	interface PasskeyInfo {
 		id: string;
 		credential_handle: string;
@@ -11,11 +13,26 @@
 		passkeys,
 		onAdd,
 		onDelete,
+		labels = createPasskeyListLabels(),
 	}: {
 		passkeys: PasskeyInfo[];
 		onAdd?: () => void;
 		onDelete?: (id: string) => void;
+		labels?: ReturnType<typeof createPasskeyListLabels>;
 	} = $props();
+
+	function createPasskeyListLabels() {
+		// Account detail 以外から使われた場合も Admin fallback 辞書で表示できるようにする。
+		const { t } = createAdminI18n();
+		return {
+			title: t('passkeyList.title'),
+			emptyTitle: t('passkeyList.emptyTitle'),
+			emptyDescription: t('passkeyList.emptyDescription'),
+			badge: t('passkeyList.badge'),
+			delete: t('passkeyList.delete'),
+			add: t('passkeyList.add'),
+		};
+	}
 
 	function truncateHandle(handle: string): string {
 		return handle.length > 20 ? handle.slice(0, 20) + '...' : handle;
@@ -24,11 +41,11 @@
 
 <Card>
 	<CardHeader>
-		<CardTitle>Passkeys</CardTitle>
+		<CardTitle>{labels.title}</CardTitle>
 	</CardHeader>
 	<CardContent>
 		{#if passkeys.length === 0}
-			<EmptyState title="No Passkeys" description="This account has no registered passkeys." />
+			<EmptyState title={labels.emptyTitle} description={labels.emptyDescription} />
 		{:else}
 			{#each passkeys as pk (pk.id)}
 				<Item.Item>
@@ -37,16 +54,16 @@
 						<Item.ItemDescription>{pk.created_at}</Item.ItemDescription>
 					</Item.ItemContent>
 					<Item.ItemActions>
-						<Badge variant="outline">Passkey</Badge>
+						<Badge variant="outline">{labels.badge}</Badge>
 					{#if onDelete != null && passkeys.length > 1}
-						<Button variant="destructive" size="xs" onclick={() => { onDelete(pk.id); }}>Delete</Button>
+						<Button variant="destructive" size="xs" onclick={() => { onDelete(pk.id); }}>{labels.delete}</Button>
 					{/if}
 					</Item.ItemActions>
 				</Item.Item>
 			{/each}
 		{/if}
 		{#if onAdd}
-			<Button onclick={onAdd}>Add Passkey</Button>
+			<Button onclick={onAdd}>{labels.add}</Button>
 		{/if}
 	</CardContent>
 </Card>

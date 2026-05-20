@@ -11,3 +11,4 @@
 @import 'tailwindcss' source(none);
 @source "./routes";
 @source "./lib";
+@source "./components";

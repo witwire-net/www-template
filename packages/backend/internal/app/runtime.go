@@ -4,9 +4,9 @@ import (
 	"context"
 	stdhttp "net/http"
 
-	backendhttp "www-template/packages/backend/internal/adapters/http"
-	"www-template/packages/backend/internal/adapters/persistence/postgres"
-	"www-template/packages/backend/internal/adapters/persistence/valkey"
+	backendhttp "www-template/packages/backend/internal/adapter/http"
+	"www-template/packages/backend/internal/adapter/postgres"
+	"www-template/packages/backend/internal/adapter/valkey"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/health"
 	"www-template/packages/backend/internal/platform/observability"
@@ -59,9 +59,11 @@ func NewRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Runtime, err
 	}
 
 	handler := backendhttp.NewRouter(cfg, backendhttp.Dependencies{
-		Auth:           container.Auth,
-		TokenService:   container.TokenService,
-		SessionService: container.SessionService,
+		Auth:            container.Auth,
+		AccountSetting:  container.AccountSetting,
+		AccountSnapshot: container.AccountSnapshot,
+		TokenService:    container.TokenService,
+		SessionService:  container.SessionService,
 	})
 	server := &stdhttp.Server{
 		Addr:              ":" + cfg.Port,

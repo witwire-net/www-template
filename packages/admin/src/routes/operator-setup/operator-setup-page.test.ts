@@ -92,6 +92,7 @@ function authedOperator(): NonNullable<App.Locals['operator']> {
     id: 'op-1',
     email: 'admin@example.test',
     role: 'operator',
+    locale: 'ja',
     sessionId: 'sess-1',
     jti: 'jti-1',
   };

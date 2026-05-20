@@ -4,8 +4,10 @@
 
   import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
+  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   const supportHref = env.PUBLIC_SUPPORT_URL ?? '/login/recovery';
+  const i18n = useI18n(resolveUnauthenticatedLocale());
 </script>
 
 <AuthLayout>
@@ -18,13 +20,13 @@
           <path d="M14.5 9.5 9.5 14.5" />
         </svg>
       </span>
-      <p class="m-0 text-xs font-semibold uppercase tracking-wide text-destructive">Account unavailable</p>
-      <h1 class="m-0 text-2xl font-bold text-center">このアカウントは現在ご利用いただけません</h1>
+      <p class="m-0 text-xs font-semibold uppercase tracking-wide text-destructive">{i18n.t('common.accountSuspendedEyebrow')}</p>
+      <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.accountSuspendedTitle')}</h1>
       <p class="m-0 text-sm text-muted-foreground text-center">
-        安全確認のため、このアカウントのセッションを終了しました。解除や詳細確認が必要な場合はサポートまでお問い合わせください。
+        {i18n.t('common.accountSuspendedDescription1')}
       </p>
       <p class="m-0 text-sm text-muted-foreground text-center">
-        お問い合わせ時は、登録メールアドレスとこの画面が表示された時刻をお伝えください。
+        {i18n.t('common.accountSuspendedDescription2')}
       </p>
       <Button
         class="w-full"
@@ -32,13 +34,13 @@
         target={supportHref.startsWith('http') ? '_blank' : undefined}
         rel={supportHref.startsWith('http') ? 'noreferrer' : undefined}
       >
-        サポート窓口へ進む
+        {i18n.t('common.accountSuspendedSupportButton')}
       </Button>
       <Button class="w-full" variant="outline" onclick={() => { void goto('/login'); }}>
-        別のアカウントでログイン
+        {i18n.t('common.accountSuspendedAlternativeLogin')}
       </Button>
       <Separator />
-      <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトへ</a>
+      <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.accountSuspendedPublicLink')}</a>
     </CardContent>
   </Card>
 </AuthLayout>

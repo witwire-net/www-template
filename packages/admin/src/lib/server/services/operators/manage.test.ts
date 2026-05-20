@@ -51,6 +51,7 @@ function createOperatorDomain(overrides: Partial<Operator> = {}): Operator {
     displayName: 'Operator One',
     role: 'operator',
     isActive: true,
+    locale: 'ja',
     setupTokenHash: null,
     setupTokenExpiresAt: null,
     lastLoginAt: null,
@@ -71,6 +72,7 @@ function toOperatorRow(operator: Operator): OperatorRow {
     display_name: operator.displayName,
     role: operator.role,
     is_active: operator.isActive,
+    locale: operator.locale,
     setup_token_hash: operator.setupTokenHash,
     setup_token_expires_at: operator.setupTokenExpiresAt,
     last_login_at: operator.lastLoginAt,
@@ -129,6 +131,7 @@ interface OperatorRow {
   display_name: string;
   role: string;
   is_active: boolean;
+  locale: string;
   setup_token_hash: string | null;
   setup_token_expires_at: Date | null;
   last_login_at: Date | null;
@@ -262,6 +265,35 @@ describe('services/operators/manage', () => {
       eventId: 'audit-role',
       phase: 'mark_succeeded',
     });
+  });
+
+  it('LOCALIZATION-BE-S012 Operator 管理操作は locale を暗黙変更しない', async () => {
+    // role 更新は role だけを mutation 対象にし、保存済み operator locale を data に含めない。
+    const findOperator = vi
+      .fn()
+      .mockResolvedValue(toOperatorRow(createOperatorDomain({ role: 'viewer', locale: 'en' })));
+    const updateOperator = vi
+      .fn()
+      .mockResolvedValue(toOperatorRow(createOperatorDomain({ role: 'operator', locale: 'en' })));
+    const adminPrisma = createAdminPrismaMock({ findOperator, updateOperator });
+
+    const operator = await updateOperatorRole(
+      adminPrisma as Parameters<typeof updateOperatorRole>[0],
+      'operator-1',
+      'operator',
+      'admin-1'
+    );
+
+    expect(updateOperator).toHaveBeenCalledWith({
+      where: { id: 'operator-1' },
+      data: { role: 'operator' },
+    });
+    expect(updateOperator).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ locale: expect.any(String) as string }),
+      })
+    );
+    expect(operator.locale).toBe('en');
   });
 
   it('operator role mutation 失敗時は stable fallback error_code で failed outcome にする', async () => {

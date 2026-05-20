@@ -70,13 +70,13 @@ describe('Prisma and product DB migrations', () => {
   });
 
   it('17.5 account_summaries view は全 accounts を LEFT JOIN で返す', async () => {
-    // passkey 未登録アカウントも管理対象なので、LEFT JOIN と accounts 起点の view を確認する。
+    // passkey 未登録アカウントも管理対象なので、account_passkey_credentials への LEFT JOIN と accounts 起点の view を確認する。
     const sql = normalizeSql(
       await readSql('../backend/db/migrations/000005_create_admin_views.up.sql')
     );
     expect(sql).toContain('CREATE OR REPLACE VIEW admin_view.account_summaries AS SELECT');
     expect(sql).toContain(
-      'FROM public.accounts a LEFT JOIN public.passkey_credentials p ON p.account_id = a.id'
+      'FROM public.accounts a LEFT JOIN public.account_passkey_credentials p ON p.account_id = a.id'
     );
     expect(sql).toContain('COUNT(p.id)::bigint AS passkey_count');
   });
@@ -132,6 +132,18 @@ describe('Prisma and product DB migrations', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin.operators');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin.operator_passkeys');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin.audit_events');
+  });
+
+  it('Admin operator locale migration は既定値と制約を持つ', async () => {
+    // Admin operator locale は Admin DB 内だけで保持し、未対応値を DB 制約で fail-closed に拒否する。
+    const schema = await readSql('prisma/admin/schema.prisma');
+    const sql = normalizeSql(
+      await readSql('prisma/admin/migrations/000002_add_operator_locale/migration.sql')
+    );
+    expect(schema).toContain('locale               String   @default("ja") @map("locale")');
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'ja'");
+    expect(sql).toContain("ADD CONSTRAINT operators_locale_check CHECK (locale IN ('ja', 'en'))");
+    expect(`${schema} ${sql}`).not.toMatch(/AccountSetting|AccountLocale|Product AccountSetting/);
   });
 
   it('13.13 Admin Prisma migration は初期オペレーターを seed しない', async () => {

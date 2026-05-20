@@ -255,7 +255,7 @@ async function executeRefreshActiveSession(
     const response = await refreshToken({ refreshToken: refreshTokenValue });
 
     if (response.status === 200 && 'accessToken' in response.data) {
-      const { accessToken, refreshToken: newRefreshToken } = response.data;
+      const { accessToken, refreshToken: newRefreshToken, accountSetting } = response.data;
       const claims = decodeAccessToken(accessToken);
       if (claims == null) {
         return handleRefreshFailureForTarget(authState, targetSessionId);
@@ -276,6 +276,11 @@ async function executeRefreshActiveSession(
       // activeSessionId が同一の場合のみ active session proxy を差し替える
       if (authState.activeSessionId === targetSessionId) {
         authState.session = updatedSession;
+      }
+
+      // AccountSetting snapshot が含まれていれば state に保存する
+      if (accountSetting?.locale !== undefined) {
+        authState.lastAccountSettingSnapshot = { locale: accountSetting.locale };
       }
 
       return null;

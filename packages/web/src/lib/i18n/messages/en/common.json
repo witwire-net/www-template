@@ -1,0 +1,10 @@
+{
+  "heroEyebrow": "SvelteKit + Cloudflare Workers",
+  "heroTitle": "A reusable architecture for public and authenticated surfaces.",
+  "heroDescription": "packages/web handles public routes with SSR, while packages/frontend/app serves the authenticated SvelteKit SPA on a separate domain.",
+  "highlight1": "Public routes run as SSR SvelteKit",
+  "highlight2": "Auth UI is separated as a CSR app on another domain",
+  "loginCta": "Try Login",
+  "languageSwitchAriaLabel": "Language switch",
+  "home": "Home"
+}

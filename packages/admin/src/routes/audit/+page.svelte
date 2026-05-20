@@ -5,6 +5,7 @@
 
 	import AuditFilterBar from '$lib/components/audit/AuditFilterBar.svelte';
 	import AuditLogTable from '$lib/components/audit/AuditLogTable.svelte';
+	import { createAdminI18n } from '$lib/i18n';
 
 	interface AuditRow {
 		id: string;
@@ -23,8 +24,9 @@
 	}
 
 	const { data } = $props<{
-		data: { events: AuditRow[]; operators: OperatorRow[]; page: number; totalPages: number; filters: Record<string, string> };
+		data: { locale: 'ja' | 'en'; events: AuditRow[]; operators: OperatorRow[]; page: number; totalPages: number; filters: Record<string, string> };
 	}>();
+	const i18n = $derived(createAdminI18n(data.locale));
 
 	const events = $derived(data.events.map((event: AuditRow) => ({ id: event.id, operator_email: data.operators.find((operator: OperatorRow) => operator.id === event.operatorId)?.email, action: event.action, target_type: event.targetType, target_id: event.targetId, outcome: event.outcome, details: event.details ?? undefined, created_at: new Date(event.createdAt).toISOString() })));
 
@@ -41,17 +43,17 @@
 
 <main class="space-y-6 p-8">
 	<section class="space-y-2">
-		<h1 class="text-3xl font-bold tracking-tight">Audit Log</h1>
-		<p class="text-slate-600">管理操作を operator・action・日付で絞り込みます。</p>
+		<h1 class="text-3xl font-bold tracking-tight">{i18n.t('audit.title')}</h1>
+		<p class="text-slate-600">{i18n.t('audit.description')}</p>
 	</section>
 	<CardNS.Card>
-		<CardNS.CardHeader><CardNS.CardTitle>Filters</CardNS.CardTitle></CardNS.CardHeader>
-		<CardNS.CardContent><AuditFilterBar operators={data.operators} onFilter={(filters: Record<string, string | undefined>) => { applyFilters(filters); }} /></CardNS.CardContent>
+		<CardNS.CardHeader><CardNS.CardTitle>{i18n.t('audit.filters')}</CardNS.CardTitle></CardNS.CardHeader>
+		<CardNS.CardContent><AuditFilterBar labels={{ operator: i18n.t('audit.operator'), all: i18n.t('audit.all'), action: i18n.t('audit.action'), actionPlaceholder: i18n.t('audit.actionPlaceholder'), from: i18n.t('audit.from'), to: i18n.t('audit.to'), filter: i18n.t('audit.filter'), clear: i18n.t('audit.clear') }} operators={data.operators} onFilter={(filters: Record<string, string | undefined>) => { applyFilters(filters); }} /></CardNS.CardContent>
 	</CardNS.Card>
 	<CardNS.Card>
-		<CardNS.CardHeader><CardNS.CardTitle>Events</CardNS.CardTitle></CardNS.CardHeader>
+		<CardNS.CardHeader><CardNS.CardTitle>{i18n.t('audit.events')}</CardNS.CardTitle></CardNS.CardHeader>
 		<CardNS.CardContent>
-			{#if events.length === 0}<EmptyState title="No audit events" description="条件に一致する監査イベントはありません。" />{:else}<AuditLogTable {events} page={data.page} totalPages={data.totalPages} onPageChange={(page: number) => { applyFilters(data.filters, page); }} />{/if}
+			{#if events.length === 0}<EmptyState title={i18n.t('audit.emptyTitle')} description={i18n.t('audit.emptyDescription')} />{:else}<AuditLogTable labels={{ caption: i18n.t('audit.tableCaption'), timestamp: i18n.t('audit.timestamp'), operator: i18n.t('audit.operator'), action: i18n.t('audit.action'), target: i18n.t('audit.target'), outcome: i18n.t('audit.outcome'), details: i18n.t('audit.details'), show: i18n.t('audit.show'), hide: i18n.t('audit.hide'), pagination: i18n.t('shared.pagination'), previousPage: i18n.t('shared.previousPage'), nextPage: i18n.t('shared.nextPage') }} {events} page={data.page} totalPages={data.totalPages} onPageChange={(page: number) => { applyFilters(data.filters, page); }} />{/if}
 		</CardNS.CardContent>
 	</CardNS.Card>
 </main>

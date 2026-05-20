@@ -7,10 +7,17 @@ declare global {
     interface Locals {
       /**
        * 認証済みオペレーター情報。
-       * hooks.server.ts で JWT cookie → Valkey active session → DB current role の検証を経て設定される。
+       * hooks.server.ts で JWT cookie → Valkey active session → DB current role/locale の検証を経て設定される。
        * 未認証時は null。
        */
-      operator: { id: string; email: string; role: string; sessionId: string; jti: string } | null;
+      operator: {
+        id: string;
+        email: string;
+        role: string;
+        locale: 'ja' | 'en';
+        sessionId: string;
+        jti: string;
+      } | null;
     }
 
     interface Platform {

@@ -4,10 +4,12 @@
   import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
+  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   import { removeQueryParamFromUrl } from '../../../../lib/auth/url';
 
   const { data, actions } = useRecoveryFlow();
+  const i18n = useI18n(resolveUnauthenticatedLocale());
 
   /**
    * consume 完了後の表示フェーズ。
@@ -67,35 +69,35 @@
           デバイスリンク用 token の consume が成功した場合の案内。
           recovery とは異なり、すぐに登録画面へ遷移せずユーザー操作を待つ。
         -->
-        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label="デバイスリンク確認完了">
-          <h1 class="m-0 text-2xl font-bold text-center">ログイン有効化リンクを確認しました</h1>
+        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label={i18n.t('common.recoveryConsumeDoneTitle')}>
+          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeDoneTitle')}</h1>
           <p class="m-0 text-sm text-muted-foreground text-center">
-            以下のボタンからパスキーを登録して、この端末でのログインを有効にしてください。
+            {i18n.t('common.recoveryConsumeDoneDescription')}
           </p>
 
           <Separator />
 
           <Button onclick={goToRegisterPasskey}>
-            パスキーを登録する
+            {i18n.t('common.recoveryConsumeDoneButton')}
           </Button>
         </div>
       {:else}
-        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label="復旧リンク確認">
+        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label={i18n.t('common.recoveryConsumeCheckingTitle')}>
           {#if data.state.phase === 'consuming'}
-            <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認中…</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">しばらくお待ちください。</p>
+            <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeCheckingTitle')}</h1>
+            <p class="m-0 text-sm text-muted-foreground text-center">{i18n.t('common.recoveryConsumeCheckingDescription')}</p>
           {:else if data.state.phase === 'invalid'}
-            <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認できません</h1>
+            <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeInvalidTitle')}</h1>
             <p class="m-0 text-sm text-muted-foreground text-center">
-              {data.state.error ?? '復旧リンクが無効または期限切れです。再度復旧をお試しください。'}
+              {data.state.error ?? i18n.t('common.recoveryConsumeInvalidDescription')}
             </p>
 
             <Separator />
 
-            <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">復旧をやり直す</a>
+            <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryConsumeRetry')}</a>
           {:else}
-            <h1 class="m-0 text-2xl font-bold text-center">復旧リンクを確認中…</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">しばらくお待ちください。</p>
+            <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeCheckingTitle')}</h1>
+            <p class="m-0 text-sm text-muted-foreground text-center">{i18n.t('common.recoveryConsumeCheckingDescription')}</p>
           {/if}
         </div>
       {/if}
@@ -103,6 +105,6 @@
   </Card>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトに戻る</a>
+    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryConsumeBackToPublic')}</a>
   {/snippet}
 </AuthLayout>

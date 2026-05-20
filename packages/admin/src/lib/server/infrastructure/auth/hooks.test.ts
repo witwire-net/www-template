@@ -71,6 +71,7 @@ describe('Admin hooks infrastructure contract', () => {
       email: 'admin@example.test',
       role: 'viewer',
       isActive: true,
+      locale: 'en',
     });
     const event = createHookEvent();
 
@@ -80,6 +81,7 @@ describe('Admin hooks infrastructure contract', () => {
         // route/load が参照する locals は DB 現在 role で上書きされている必要がある。
         expect(resolvedEvent.locals.operator).toMatchObject({
           role: 'viewer',
+          locale: 'en',
           sessionId: 'sess-1',
           jti: 'jti-1',
         });
@@ -88,7 +90,22 @@ describe('Admin hooks infrastructure contract', () => {
     } as never);
 
     expect(response.status).toBe(200);
-    expect(event.locals.operator).toMatchObject({ role: 'viewer' });
+    expect(event.locals.operator).toMatchObject({ role: 'viewer', locale: 'en' });
+  });
+
+  it('LOCALIZATION-BE-S009 Admin 認証 context は DB 保存済み operator locale を読み込む', async () => {
+    mockValidSession({ locale: 'en' });
+    const event = createHookEvent();
+
+    await handle({ event, resolve: async () => new Response('ok') } as never);
+
+    expect(event.locals.operator).toMatchObject({
+      id: 'op-1',
+      role: 'admin',
+      sessionId: 'sess-1',
+      jti: 'jti-1',
+      locale: 'en',
+    });
   });
 
   it('valid cookie は operator locals と no-store / CSRF cookie を付与する', async () => {
@@ -138,6 +155,7 @@ describe('Admin hooks infrastructure contract', () => {
       email: 'admin@example.test',
       role: 'admin',
       isActive: false,
+      locale: 'ja',
     });
     const event = createHookEvent({ pathname: '/accounts' });
 
@@ -227,7 +245,7 @@ describe('Admin hooks infrastructure contract', () => {
   });
 });
 
-function mockValidSession(): void {
+function mockValidSession(input: { locale?: 'ja' | 'en' } = {}): void {
   // 有効 cookie の検証済み session と active operator をセットにし、hook の正常 path を簡潔に再利用する。
   hookMocks.verifyOperatorSession.mockResolvedValue({
     operatorId: 'op-1',
@@ -241,6 +259,7 @@ function mockValidSession(): void {
     email: 'admin@example.test',
     role: 'admin',
     isActive: true,
+    locale: input.locale ?? 'ja',
   });
 }
 

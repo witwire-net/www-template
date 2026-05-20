@@ -14,7 +14,6 @@
 <nav
 	bind:this={ref}
 	data-slot="breadcrumb"
-	aria-label="breadcrumb"
 	class={cn("cn-breadcrumb", className)}
 	{...restProps}
 >

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Badge, Table, Button, Pagination } from '@www-template/ui/components';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	interface AccountSummary {
 		id: string;
 		email: string;
@@ -14,23 +16,41 @@
 		page = 1,
 		totalPages = 1,
 		onPageChange,
+		labels = createAccountTableLabels(),
 	}: {
 		accounts: AccountSummary[];
 		onSelect?: (id: string) => void;
 		page?: number;
 		totalPages?: number;
 		onPageChange?: (page: number) => void;
+		labels?: ReturnType<typeof createAccountTableLabels>;
 	} = $props();
+
+	function createAccountTableLabels() {
+		// 親 route が labels を渡さない利用でも、Admin-owned fallback 辞書から表示文言を作る。
+		const { t } = createAdminI18n();
+		return {
+			caption: t('accounts.tableCaption'),
+			email: t('accounts.email'),
+			status: t('accounts.status'),
+			created: t('accounts.created'),
+			actions: t('accounts.actions'),
+			view: t('accounts.view'),
+			pagination: t('shared.pagination'),
+			previousPage: t('shared.previousPage'),
+			nextPage: t('shared.nextPage'),
+		};
+	}
 </script>
 
 <Table.Table>
-	<Table.TableCaption>Account list</Table.TableCaption>
+	<Table.TableCaption>{labels.caption}</Table.TableCaption>
 	<Table.TableHeader>
 		<Table.TableRow>
-			<Table.TableHead>Email</Table.TableHead>
-			<Table.TableHead>Status</Table.TableHead>
-			<Table.TableHead>Created</Table.TableHead>
-			<Table.TableHead>Actions</Table.TableHead>
+			<Table.TableHead>{labels.email}</Table.TableHead>
+			<Table.TableHead>{labels.status}</Table.TableHead>
+			<Table.TableHead>{labels.created}</Table.TableHead>
+			<Table.TableHead>{labels.actions}</Table.TableHead>
 		</Table.TableRow>
 	</Table.TableHeader>
 	<Table.TableBody>
@@ -44,7 +64,7 @@
 				</Table.TableCell>
 				<Table.TableCell>{account.created_at}</Table.TableCell>
 				<Table.TableCell>
-					<Button variant="outline" size="xs">View</Button>
+					<Button variant="outline" size="xs">{labels.view}</Button>
 				</Table.TableCell>
 			</Table.TableRow>
 		{/each}
@@ -52,10 +72,10 @@
 </Table.Table>
 
 {#if totalPages > 1}
-	<Pagination.Pagination count={totalPages * 10} perPage={10} {page} onPageChange={(p: number) => { onPageChange?.(p); }}>
+	<Pagination.Pagination aria-label={labels.pagination} count={totalPages * 10} perPage={10} {page} onPageChange={(p: number) => { onPageChange?.(p); }}>
 		<Pagination.PaginationContent>
 			<Pagination.PaginationItem>
-				<Pagination.PaginationPrevButton />
+				<Pagination.PaginationPrevButton aria-label={labels.previousPage} />
 			</Pagination.PaginationItem>
 			<Pagination.PaginationItem>
 				<Pagination.PaginationLink page={{ type: 'page', value: page }} isActive>
@@ -63,7 +83,7 @@
 				</Pagination.PaginationLink>
 			</Pagination.PaginationItem>
 			<Pagination.PaginationItem>
-				<Pagination.PaginationNextButton />
+				<Pagination.PaginationNextButton aria-label={labels.nextPage} />
 			</Pagination.PaginationItem>
 		</Pagination.PaginationContent>
 	</Pagination.Pagination>

@@ -18,7 +18,6 @@
 	bind:ref
 	bind:page
 	role="navigation"
-	aria-label="pagination"
 	data-slot="pagination"
 	{count}
 	{perPage}

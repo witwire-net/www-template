@@ -3,6 +3,9 @@
 
   import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
+  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
+
+  const i18n = useI18n(resolveUnauthenticatedLocale());
 </script>
 
 <AuthLayout>
@@ -15,15 +18,13 @@
           <path d="M12 17h.01"/>
         </svg>
       </span>
-      <h1 class="m-0 text-2xl font-bold text-center">セッションが切れました</h1>
-      <p class="m-0 text-sm text-muted-foreground text-center">
-        セキュリティのため、セッションが終了しました。再度ログインしてください。
-      </p>
+      <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.sessionExpiredTitle')}</h1>
+      <p class="m-0 text-sm text-muted-foreground text-center">{i18n.t('common.sessionExpiredDescription')}</p>
       <Button class="w-full" onclick={() => { void goto('/login'); }}>
-        ログインへ
+        {i18n.t('common.sessionExpiredLoginButton')}
       </Button>
       <Separator />
-      <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">公開サイトへ</a>
+      <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.sessionExpiredPublicLink')}</a>
     </CardContent>
   </Card>
 </AuthLayout>

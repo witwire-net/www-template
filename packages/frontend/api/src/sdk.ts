@@ -227,3 +227,14 @@ export { createApiSdk };
 export { listSessions, refreshToken, revokeOtherSessions, revokeSession };
 
 export type { listSessionsResponse };
+
+// AccountSetting generated SDK exports
+export {
+  getAccountSettings,
+  updateAccountSettings,
+  type AccountLocale,
+  type AccountSetting,
+  type AccountSettingResponse,
+  type AccountSettingSnapshot,
+  type UpdateAccountSettingRequest,
+} from './generated/client';

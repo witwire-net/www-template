@@ -4,18 +4,24 @@
 	const {
 		operatorName = '',
 		csrfToken = '',
+		adminLabel,
+		operatorFallback,
+		logoutLabel,
 	}: {
 		operatorName?: string;
 		csrfToken?: string;
+		adminLabel: string;
+		operatorFallback: string;
+		logoutLabel: string;
 	} = $props();
 </script>
 
 
-<header class="flex min-h-16 items-center justify-between border-b bg-white px-6 shadow-sm">
-	<Breadcrumb.Breadcrumb>
+	<header class="flex min-h-16 items-center justify-between border-b bg-white px-6 shadow-sm">
+	<Breadcrumb.Breadcrumb aria-label={adminLabel}>
 		<Breadcrumb.BreadcrumbList>
 			<Breadcrumb.BreadcrumbItem>
-				<Breadcrumb.BreadcrumbLink href="/">Admin</Breadcrumb.BreadcrumbLink>
+				<Breadcrumb.BreadcrumbLink href="/">{adminLabel}</Breadcrumb.BreadcrumbLink>
 			</Breadcrumb.BreadcrumbItem>
 		</Breadcrumb.BreadcrumbList>
 	</Breadcrumb.Breadcrumb>
@@ -24,14 +30,14 @@
 			<Avatar.Avatar class="h-6 w-6">
 				<Avatar.AvatarFallback>{(operatorName !== '' ? operatorName : 'O')[0]}</Avatar.AvatarFallback>
 			</Avatar.Avatar>
-			{operatorName !== '' ? operatorName : 'Operator'}
+			{operatorName !== '' ? operatorName : operatorFallback}
 		</DropdownMenu.DropdownMenuTriggerButton>
 		<DropdownMenu.DropdownMenuContent align="end">
 			<DropdownMenu.DropdownMenuLabel>{operatorName}</DropdownMenu.DropdownMenuLabel>
 			<DropdownMenu.DropdownMenuSeparator />
 			<form method="POST" action="/api/admin/auth/logout">
 				<Input type="hidden" name="_csrf" value={csrfToken} />
-				<Button type="submit" variant="ghost" class="w-full justify-start">Logout</Button>
+				<Button type="submit" variant="ghost" class="w-full justify-start">{logoutLabel}</Button>
 			</form>
 		</DropdownMenu.DropdownMenuContent>
 	</DropdownMenu.DropdownMenu>

@@ -77,11 +77,12 @@ async function loadOperatorFromCookie(event: RequestEvent): Promise<App.Locals['
     return null;
   }
 
-  // 後続 load/action/BFF が DB current role だけを参照できるよう locals に最小情報を設定する。
+  // 後続 load/action/BFF が DB current role と operator locale だけを参照できるよう locals に最小情報を設定する。
   return {
     id: operator.id,
     email: operator.email,
     role: operator.role,
+    locale: operator.locale,
     sessionId: session.sessionId,
     jti: session.jti,
   };

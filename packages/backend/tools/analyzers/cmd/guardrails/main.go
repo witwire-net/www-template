@@ -22,44 +22,42 @@ var migrationFilePattern = regexp.MustCompile(`^\d{6}_[a-z0-9_]+\.(up|down)\.sql
 // allowedInternalImports は層間の依存方向を定義する。
 // 新しい feature を増やしてもこのマップに変更は不要。
 var allowedInternalImports = map[string][]string{
-	"cmd":                  {"app"},
-	"app":                  {"platform", "adapters-http", "adapters-persistence", "adapters-other", "application", "domain"},
-	"platform":             {"platform"},
-	"domain":               {"platform"},
-	"application":          {"domain", "platform", "application"},
-	"adapters-http":        {"generated", "application", "platform", "domain"},
-	"adapters-persistence": {"domain", "application", "platform"},
-	"adapters-other":       {"domain", "application", "platform"},
-	"generated":            {},
+	"cmd":              {"app"},
+	"app":              {"platform", "adapter-http", "adapter-postgres", "adapter-valkey", "adapter-webauthn", "adapter-mailer", "application", "domain"},
+	"platform":         {"platform"},
+	"domain":           {"domain"},
+	"application":      {"domain", "platform", "application"},
+	"adapter-http":     {"generated", "application", "platform", "domain"},
+	"adapter-postgres": {"domain", "application", "platform"},
+	"adapter-valkey":   {"domain", "application", "platform"},
+	"adapter-webauthn": {"domain", "application", "platform"},
+	"adapter-mailer":   {"domain", "application", "platform"},
+	"generated":        {},
 }
 
 // allowedExternalImports は各層が使ってよい外部ライブラリを定義する。
 var allowedExternalImports = map[string][]string{
-	"app": {
-		"github.com/pelletier/go-toml/v2",
-		"github.com/go-webauthn/webauthn/webauthn",
-		"github.com/go-webauthn/webauthn/protocol",
-	},
-	"adapters-http": {
+	"app": {},
+	"adapter-http": {
 		"github.com/gin-contrib/cors",
 		"github.com/gin-gonic/gin",
 		"github.com/oapi-codegen/runtime/types",
 		"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
 	},
-	"adapters-persistence": {
-		"github.com/redis/go-redis/v9",
+	"adapter-postgres": {
 		"gorm.io/driver/postgres",
 		"gorm.io/gorm",
 	},
-	"adapters-other": {
+	"adapter-valkey": {
+		"github.com/redis/go-redis/v9",
+	},
+	"adapter-webauthn": {
 		"github.com/go-webauthn/webauthn/protocol",
 		"github.com/go-webauthn/webauthn/webauthn",
 	},
 	"platform": {
-		"github.com/gin-gonic/gin",
 		"github.com/oklog/ulid/v2",
 		"github.com/pelletier/go-toml/v2",
-		"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
 		"go.opentelemetry.io/contrib/instrumentation/runtime",
 		"go.opentelemetry.io/otel",
 		"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
@@ -101,36 +99,34 @@ var allowedPackageNames = []struct {
 	{pathPattern: "internal/platform/id/", isRegex: false, packageName: "id"},
 	{pathPattern: "internal/generated/openapi/", isRegex: false, packageName: "openapi"},
 	{pathPattern: "tools/analyzers/", isRegex: false, packageName: "main"},
-	// internal/{feature}/domain/
-	{pathPattern: `^internal/[^/]+/domain/`, isRegex: true, packageName: "domain"},
-	// internal/{feature}/application/
-	{pathPattern: `^internal/[^/]+/application/`, isRegex: true, packageName: "application"},
-	// internal/adapters/http/
-	{pathPattern: "internal/adapters/http/", isRegex: false, packageName: "http"},
-	// internal/adapters/persistence/postgres/
-	{pathPattern: "internal/adapters/persistence/postgres/", isRegex: false, packageName: "postgres"},
-	// internal/adapters/persistence/valkey/
-	{pathPattern: "internal/adapters/persistence/valkey/", isRegex: false, packageName: "valkey"},
-	// internal/adapters/webauthn/
-	{pathPattern: "internal/adapters/webauthn/", isRegex: false, packageName: "webauthn"},
-	// internal/adapters/mailer/
-	{pathPattern: "internal/adapters/mailer/", isRegex: false, packageName: "mailer"},
+	{pathPattern: "internal/domain/", isRegex: false, packageName: "domain"},
+	{pathPattern: "internal/application/", isRegex: false, packageName: "application"},
+	// internal/adapter/http/
+	{pathPattern: "internal/adapter/http/", isRegex: false, packageName: "http"},
+	// internal/adapter/postgres/
+	{pathPattern: "internal/adapter/postgres/", isRegex: false, packageName: "postgres"},
+	// internal/adapter/valkey/
+	{pathPattern: "internal/adapter/valkey/", isRegex: false, packageName: "valkey"},
+	// internal/adapter/webauthn/
+	{pathPattern: "internal/adapter/webauthn/", isRegex: false, packageName: "webauthn"},
+	// internal/adapter/mailer/
+	{pathPattern: "internal/adapter/mailer/", isRegex: false, packageName: "mailer"},
 }
 
 var usecaseDomainTouchPrefixes = []string{"Create", "Update", "Change", "Rename", "Set", "Add"}
 
 var forbiddenPortTypeImportPrefixes = []string{
 	modulePath + "/internal/generated",
-	modulePath + "/internal/adapters/http",
-	modulePath + "/internal/adapters/persistence",
+	modulePath + "/internal/adapter/http",
+	modulePath + "/internal/adapter",
 	"github.com/gin-contrib/cors",
 	"github.com/gin-gonic/gin",
 	"github.com/oapi-codegen/runtime/types",
 	"gorm.io/",
 }
 
-// domainImportPattern は feature-based domain パッケージの import path にマッチする。
-var domainImportPattern = regexp.MustCompile(`^` + regexp.QuoteMeta(modulePath+"/internal/") + `([^/]+)/domain`)
+// domainImportPattern は layer-axis domain パッケージの import path にマッチする。
+var domainImportPattern = regexp.MustCompile(`^` + regexp.QuoteMeta(modulePath+"/internal/domain") + `$`)
 
 func main() {
 	flag.Parse()
@@ -217,7 +213,7 @@ func verifyGoFilePlacement(path string) []string {
 		"cmd/api/",
 		"internal/app/",
 		"internal/platform/",
-		"internal/adapters/",
+		"internal/adapter/",
 		"internal/generated/",
 		"tools/analyzers/",
 	}
@@ -228,13 +224,12 @@ func verifyGoFilePlacement(path string) []string {
 		}
 	}
 
-	// internal/{feature}/domain/ または internal/{feature}/application/ を許可
-	if regexp.MustCompile(`^internal/[^/]+/domain/`).MatchString(path) ||
-		regexp.MustCompile(`^internal/[^/]+/application/`).MatchString(path) {
+	// flat な internal/domain または internal/application を許可
+	if strings.HasPrefix(path, "internal/domain/") || strings.HasPrefix(path, "internal/application/") {
 		return nil
 	}
 
-	return []string{fmt.Sprintf("%s: go files must live under cmd/api, internal/app, internal/platform, internal/{feature}/domain, internal/{feature}/application, internal/adapters, or internal/generated", path)}
+	return []string{fmt.Sprintf("%s: go files must live under cmd/api, internal/app, internal/platform, internal/domain, internal/application, internal/adapter, or internal/generated", path)}
 }
 
 func verifyGeneratedFile(path string) []string {
@@ -307,7 +302,7 @@ func splitMigrationName(name string) (string, string) {
 }
 
 func checkImports(path string, file *ast.File) []string {
-	layer, sourceFeature := layerFromPath(path)
+	layer, _ := layerFromPath(path)
 	if layer == "generated" || layer == "" {
 		return nil
 	}
@@ -317,21 +312,15 @@ func checkImports(path string, file *ast.File) []string {
 		importPath := strings.Trim(imported.Path.Value, "\"")
 
 		if strings.HasPrefix(importPath, modulePath+"/") {
-			targetLayer, targetFeature := layerFromPath(strings.TrimPrefix(importPath, modulePath+"/"))
+			targetLayer, _ := layerFromPath(strings.TrimPrefix(importPath, modulePath+"/"))
 			if targetLayer == "" {
 				violations = append(violations, fmt.Sprintf("%s: internal import %s does not map to an allowed backend layer", path, importPath))
 				continue
 			}
 
-			// generated/openapi は adapters-http のみ import 可能
-			if importPath == modulePath+"/internal/generated/openapi" && layer != "adapters-http" {
-				violations = append(violations, fmt.Sprintf("%s: only adapters-http may import internal/generated/openapi", path))
-				continue
-			}
-
-			// domain 層は他 feature の domain を import 禁止
-			if layer == "domain" && targetLayer == "domain" && sourceFeature != "" && targetFeature != "" && sourceFeature != targetFeature {
-				violations = append(violations, fmt.Sprintf("%s: domain must not import other feature's domain (%s)", path, targetFeature))
+			// generated/openapi は adapter-http のみ import 可能
+			if importPath == modulePath+"/internal/generated/openapi" && layer != "adapter-http" {
+				violations = append(violations, fmt.Sprintf("%s: only adapter-http may import internal/generated/openapi", path))
 				continue
 			}
 
@@ -345,8 +334,8 @@ func checkImports(path string, file *ast.File) []string {
 			continue
 		}
 
-		if strings.HasPrefix(importPath, "gorm.io/") && layer != "adapters-persistence" {
-			violations = append(violations, fmt.Sprintf("%s: gorm imports are only allowed in adapters-persistence", path))
+		if strings.HasPrefix(importPath, "gorm.io/") && layer != "adapter-postgres" {
+			violations = append(violations, fmt.Sprintf("%s: gorm imports are only allowed in adapter-postgres", path))
 			continue
 		}
 
@@ -544,7 +533,7 @@ func checkErrorStringMatching(path string, file *ast.File) []string {
 
 func checkHTTPDomainBoundary(path string, file *ast.File) []string {
 	layer, _ := layerFromPath(path)
-	if isTestFile(path) || layer != "adapters-http" {
+	if isTestFile(path) || layer != "adapter-http" {
 		return nil
 	}
 
@@ -575,7 +564,7 @@ func checkHTTPDomainBoundary(path string, file *ast.File) []string {
 			return true
 		}
 
-		violations = append(violations, fmt.Sprintf("%s: adapters-http must not depend on domain.%s directly; map transport DTOs to application DTOs instead", path, selector.Sel.Name))
+		violations = append(violations, fmt.Sprintf("%s: adapter-http must not depend on domain.%s directly; map transport DTOs to application DTOs instead", path, selector.Sel.Name))
 		return true
 	})
 
@@ -744,7 +733,7 @@ func checkUsecaseInlineBusinessValidation(path string, file *ast.File) []string 
 
 func checkRoutePolicy(path string, file *ast.File) []string {
 	layer, _ := layerFromPath(path)
-	if layer != "adapters-http" {
+	if layer != "adapter-http" {
 		return nil
 	}
 
@@ -943,6 +932,9 @@ func containsForbiddenUsecaseDomainType(fields *ast.FieldList, imports map[strin
 			if strings.HasSuffix(selector.Sel.Name, "Repository") || strings.HasSuffix(selector.Sel.Name, "Port") {
 				return false
 			}
+			if isAllowedApplicationBoundaryDomainType(selector.Sel.Name) {
+				return false
+			}
 
 			found = true
 			return true
@@ -954,6 +946,15 @@ func containsForbiddenUsecaseDomainType(fields *ast.FieldList, imports map[strin
 	}
 
 	return false
+}
+
+func isAllowedApplicationBoundaryDomainType(typeName string) bool {
+	switch typeName {
+	case "AccountID", "AccountLocale", "TokenKind", "WebAuthnCredentialData", "WebAuthnStoredCredential", "PasskeyCredential":
+		return true
+	default:
+		return false
+	}
 }
 
 func functionBodyTouchesDomain(body *ast.BlockStmt, imports map[string]string) bool {
@@ -1234,22 +1235,20 @@ func layerFromPath(path string) (layer string, feature string) {
 		return "platform", ""
 	case strings.HasPrefix(path, "internal/generated/") || path == "internal/generated":
 		return "generated", ""
-	case strings.HasPrefix(path, "internal/adapters/http/") || path == "internal/adapters/http":
-		return "adapters-http", ""
-	case strings.HasPrefix(path, "internal/adapters/persistence/") || path == "internal/adapters/persistence":
-		return "adapters-persistence", ""
-	case strings.HasPrefix(path, "internal/adapters/") || path == "internal/adapters":
-		return "adapters-other", ""
-	}
-
-	// internal/{feature}/domain/
-	if m := regexp.MustCompile(`^internal/([^/]+)/domain($|/)`).FindStringSubmatch(path); m != nil {
-		return "domain", m[1]
-	}
-
-	// internal/{feature}/application/
-	if m := regexp.MustCompile(`^internal/([^/]+)/application($|/)`).FindStringSubmatch(path); m != nil {
-		return "application", m[1]
+	case strings.HasPrefix(path, "internal/adapter/http/") || path == "internal/adapter/http":
+		return "adapter-http", ""
+	case strings.HasPrefix(path, "internal/adapter/postgres/") || path == "internal/adapter/postgres":
+		return "adapter-postgres", ""
+	case strings.HasPrefix(path, "internal/adapter/valkey/") || path == "internal/adapter/valkey":
+		return "adapter-valkey", ""
+	case strings.HasPrefix(path, "internal/adapter/webauthn/") || path == "internal/adapter/webauthn":
+		return "adapter-webauthn", ""
+	case strings.HasPrefix(path, "internal/adapter/mailer/") || path == "internal/adapter/mailer":
+		return "adapter-mailer", ""
+	case strings.HasPrefix(path, "internal/domain/") || path == "internal/domain":
+		return "domain", ""
+	case strings.HasPrefix(path, "internal/application/") || path == "internal/application":
+		return "application", ""
 	}
 
 	return "", ""

@@ -81,6 +81,7 @@ type tomlConfig struct {
 	} `toml:"smtp"`
 	Mail struct {
 		FromAddress string `toml:"from_address"`
+		ProductName string `toml:"product_name"`
 	} `toml:"mail"`
 	Observability struct {
 		OTELExporterOTLPEndpoint       string `toml:"otel_exporter_otlp_endpoint"`
@@ -161,6 +162,7 @@ func LoadConfig() Config {
 			},
 			Mail: MailConfig{
 				FromAddress: strings.TrimSpace(raw.Mail.FromAddress),
+				ProductName: defaultString(raw.Mail.ProductName, "www-template"),
 			},
 			ObjectStorage: ObjectStorageConfig{
 				Endpoint:        strings.TrimSpace(raw.ObjectStorage.Endpoint),

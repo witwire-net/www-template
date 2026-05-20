@@ -12,11 +12,13 @@ describe('passkey management page source contract', () => {
   it('登録済み passkey の安全な identifier と一覧 metadata を画面に描画する', () => {
     // Svelte component は node 環境の Admin Vitest で直接 mount しないため、一覧描画の契約を source 上で固定する。
     expect(passkeysPageSource).toContain('{#each passkeys as passkey, index (passkey.id)}');
-    expect(passkeysPageSource).toContain('Passkey {index + 1}');
-    expect(passkeysPageSource).toContain('Credential ID: {passkey.id}');
-    expect(passkeysPageSource).toContain('登録日時: {formatDate(passkey.createdAt)}');
+    expect(passkeysPageSource).toContain("{i18n.t('passkeys.passkey')} {index + 1}");
+    expect(passkeysPageSource).toContain("{i18n.t('passkeys.credentialId')} {passkey.id}");
     expect(passkeysPageSource).toContain(
-      "バックアップ: {passkey.backupEligible ? (passkey.backupState ? '同期済み' : '対応') : '端末固定'}"
+      "{i18n.t('passkeys.createdAt')} {formatDate(passkey.createdAt)}"
+    );
+    expect(passkeysPageSource).toContain(
+      "{i18n.t('passkeys.backup')} {passkey.backupEligible ? (passkey.backupState ? i18n.t('passkeys.backupSynced') : i18n.t('passkeys.backupEligible')) : i18n.t('passkeys.backupDeviceBound')}"
     );
   });
 
@@ -28,7 +30,7 @@ describe('passkey management page source contract', () => {
     );
     expect(passkeysPageSource).toContain("globalThis.fetch('/api/admin/auth/passkeys/finish'");
     expect(passkeysPageSource).toContain('await refreshPasskeys();');
-    expect(passkeysPageSource).toContain("message = 'この端末のパスキーを追加しました。';");
+    expect(passkeysPageSource).toContain("message = i18n.t('passkeys.addSuccess');");
   });
 
   it('最後の 1 件は削除不可で、2 件以上は確認 dialog 経由で削除できる', () => {
@@ -46,9 +48,7 @@ describe('passkey management page source contract', () => {
     const catchStart = passkeysPageSource.indexOf('} catch {');
     const finallyStart = passkeysPageSource.indexOf('} finally {', catchStart);
     const catchBlock = passkeysPageSource.slice(catchStart, finallyStart);
-    expect(catchBlock).toContain(
-      "message = 'パスキーを追加できませんでした。認証状態を確認して再試行してください。';"
-    );
+    expect(catchBlock).toContain("message = i18n.t('passkeys.addError');");
     expect(catchBlock).not.toContain('refreshPasskeys');
   });
 });

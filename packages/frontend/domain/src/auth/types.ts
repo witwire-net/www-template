@@ -20,6 +20,11 @@ export interface AuthSessionSummary {
   refreshToken?: string;
 }
 
+/** refresh response から取得した AccountSetting snapshot。 */
+export interface AccountSettingSnapshot {
+  locale: 'ja' | 'en';
+}
+
 /** 共有 auth session state。 */
 export interface AuthSessionState {
   phase:
@@ -38,6 +43,8 @@ export interface AuthSessionState {
   lastFailure: AuthFailureState | null;
   lastError: string | null;
   lastCacheControl: string | null;
+  /** 最後の refresh で取得した AccountSetting snapshot。 */
+  lastAccountSettingSnapshot: AccountSettingSnapshot | null;
 }
 
 /** passkey login hook state。 */

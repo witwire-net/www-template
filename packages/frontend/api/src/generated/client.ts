@@ -4,6 +4,43 @@
  * www-template API
  * OpenAPI spec version: 1.0.0
  */
+/**
+ * Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。
+ */
+export type AccountLocale = (typeof AccountLocale)[keyof typeof AccountLocale];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AccountLocale = {
+  ja: 'ja',
+  en: 'en',
+} as const;
+
+/**
+ * Product Account に属する現在の設定。AccountSetting は Account の表示・通知設定を表し、Auth 情報や運用者向け設定を含まない。
+ */
+export interface AccountSetting {
+  /** 現在の Product Account に保存されている表示・通知ロケール。対応値は AccountLocale の ja または en のみ。 */
+  locale: AccountLocale;
+}
+
+/**
+ * 現在の Product Account の AccountSetting を返すレスポンス。requestId は追跡用であり、setting には Account 本人の保存済み設定だけを含める。
+ */
+export interface AccountSettingResponse {
+  /** AccountSetting 取得または更新 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** 現在の Product Account に属する保存済み AccountSetting。 */
+  setting: AccountSetting;
+}
+
+/**
+ * 認証処理の合成結果として返す Product AccountSetting のスナップショット。refresh token rotation 自体は Auth が担当し、この snapshot は確定した AccountID から AccountSetting を読み込んだ結果だけを表す。
+ */
+export interface AccountSettingSnapshot {
+  /** refresh response の合成時点で Product Account に保存されていた表示・通知ロケール。 */
+  locale: AccountLocale;
+}
+
 export type AuthFailureClassification =
   (typeof AuthFailureClassification)[keyof typeof AuthFailureClassification];
 
@@ -265,11 +302,15 @@ export interface RefreshTokenRequest {
 }
 
 /**
- * リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。
+ * リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
  */
 export interface RefreshTokenResponse {
+  /** ローテーション後に発行された短命の JWT アクセストークン。 */
   accessToken: string;
+  /** 次回以降の rotation に使用する新しいリフレッシュトークン。 */
   refreshToken: string;
+  /** refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。 */
+  accountSetting?: AccountSettingSnapshot;
 }
 
 /**
@@ -312,6 +353,14 @@ export const TokenKind = {
  * Canonical ULID string used for auth-owned resource and correlation identifiers.
  */
 export type UlidId = string;
+
+/**
+ * 現在の Product Account の AccountSetting.locale を更新するリクエスト。Account ID は bearer session から確定するため body には含めない。
+ */
+export interface UpdateAccountSettingRequest {
+  /** 保存したい Product AccountSetting.locale。対応値以外は API 実装で拒否し、永続値を変更しない。 */
+  locale: AccountLocale;
+}
 
 /**
  * WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
@@ -402,6 +451,127 @@ export type SendDeviceLink403 = AuthOperationErrorResponse | AuthFailureResponse
 export type DeletePasskey403 = AuthOperationErrorResponse | AuthFailureResponse;
 
 export type RevokeSession403 = AuthOperationErrorResponse | AuthFailureResponse;
+
+/**
+ * @summary Gets the current account settings
+ */
+export type getAccountSettingsResponse200 = {
+  data: AccountSettingResponse;
+  status: 200;
+};
+
+export type getAccountSettingsResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type getAccountSettingsResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
+export type getAccountSettingsResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type getAccountSettingsResponseSuccess = getAccountSettingsResponse200 & {
+  headers: Headers;
+};
+export type getAccountSettingsResponseError = (
+  | getAccountSettingsResponse401
+  | getAccountSettingsResponse403
+  | getAccountSettingsResponse503
+) & {
+  headers: Headers;
+};
+
+export type getAccountSettingsResponse =
+  | getAccountSettingsResponseSuccess
+  | getAccountSettingsResponseError;
+
+export const getGetAccountSettingsUrl = () => {
+  return `/api/v1/account/settings`;
+};
+
+export const getAccountSettings = async (
+  options?: RequestInit
+): Promise<getAccountSettingsResponse> => {
+  const res = await fetch(getGetAccountSettingsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAccountSettingsResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getAccountSettingsResponse;
+};
+
+/**
+ * @summary Updates the current account settings
+ */
+export type updateAccountSettingsResponse200 = {
+  data: AccountSettingResponse;
+  status: 200;
+};
+
+export type updateAccountSettingsResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type updateAccountSettingsResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type updateAccountSettingsResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
+export type updateAccountSettingsResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type updateAccountSettingsResponseSuccess = updateAccountSettingsResponse200 & {
+  headers: Headers;
+};
+export type updateAccountSettingsResponseError = (
+  | updateAccountSettingsResponse400
+  | updateAccountSettingsResponse401
+  | updateAccountSettingsResponse403
+  | updateAccountSettingsResponse503
+) & {
+  headers: Headers;
+};
+
+export type updateAccountSettingsResponse =
+  | updateAccountSettingsResponseSuccess
+  | updateAccountSettingsResponseError;
+
+export const getUpdateAccountSettingsUrl = () => {
+  return `/api/v1/account/settings`;
+};
+
+export const updateAccountSettings = async (
+  updateAccountSettingRequest: UpdateAccountSettingRequest,
+  options?: RequestInit
+): Promise<updateAccountSettingsResponse> => {
+  const res = await fetch(getUpdateAccountSettingsUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAccountSettingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAccountSettingsResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateAccountSettingsResponse;
+};
 
 /**
  * @summary Revokes the current bearer session

@@ -2,7 +2,7 @@
 description: Build agent helper
 mode: subagent
 hidden: false
-model: openai/gpt-5.4-mini
+model: openai/gpt-5.5
 reasoningEffort: 'high'
 permission:
   edit: allow

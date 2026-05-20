@@ -1,3 +1,5 @@
+import type { OperatorLocale } from './operator_locale.js';
+
 /**
  * オペレータードメイン型
  */
@@ -7,6 +9,7 @@ export interface Operator {
   displayName: string;
   role: 'admin' | 'operator' | 'viewer';
   isActive: boolean;
+  locale: OperatorLocale;
   setupTokenHash: string | null;
   setupTokenExpiresAt: Date | null;
   lastLoginAt: Date | null;

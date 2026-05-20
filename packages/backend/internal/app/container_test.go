@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"www-template/packages/backend/internal/adapters/webauthn"
-	"www-template/packages/backend/internal/auth/application"
-	"www-template/packages/backend/internal/auth/domain"
+	"www-template/packages/backend/internal/adapter/webauthn"
+	application "www-template/packages/backend/internal/application"
+	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
 
@@ -20,8 +20,8 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	_, err := buildContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
-			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
+		func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
+			return stubAccountAuthRepository{}, stubAccountSettingRepository{}, func(context.Context) error { return nil }, nil
 		},
 		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			called = true
@@ -42,8 +42,8 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	container, err := buildContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
-			return stubAuthAccountRepository{}, func(context.Context) error { return nil }, nil
+		func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
+			return stubAccountAuthRepository{}, stubAccountSettingRepository{}, func(context.Context) error { return nil }, nil
 		},
 		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
 			return fakeAuthStateRepository{}, func(context.Context) error { return nil }, nil
@@ -70,8 +70,8 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 	_, err := buildContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
-		func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error) {
-			return stubAuthAccountRepository{}, func(context.Context) error {
+		func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
+			return stubAccountAuthRepository{}, stubAccountSettingRepository{}, func(context.Context) error {
 				closed = true
 				return nil
 			}, nil
@@ -89,41 +89,41 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 	}
 }
 
-type stubAuthAccountRepository struct{}
+type stubAccountAuthRepository struct{}
 
-func (stubAuthAccountRepository) FindByIdentifier(context.Context, string) (domain.AuthAccount, error) {
-	return emptyAuthAccountForContainerTest(), nil
+func (stubAccountAuthRepository) FindByIdentifier(context.Context, string) (domain.AccountAuth, error) {
+	return emptyAccountAuthForContainerTest(), nil
 }
 
-func (stubAuthAccountRepository) FindByCredential(context.Context, string) (domain.AuthAccount, error) {
-	return emptyAuthAccountForContainerTest(), nil
+func (stubAccountAuthRepository) FindByCredential(context.Context, string) (domain.AccountAuth, error) {
+	return emptyAccountAuthForContainerTest(), nil
 }
 
-func (stubAuthAccountRepository) FindByEmail(context.Context, string) (domain.AuthAccount, error) {
-	return emptyAuthAccountForContainerTest(), nil
+func (stubAccountAuthRepository) FindByEmail(context.Context, string) (domain.AccountAuth, error) {
+	return emptyAccountAuthForContainerTest(), nil
 }
 
-func (stubAuthAccountRepository) AddPasskey(_ context.Context, _, _, _ string, _ domain.WebAuthnCredentialData) (domain.AuthAccount, error) {
-	return emptyAuthAccountForContainerTest(), nil
+func (stubAccountAuthRepository) AddPasskey(_ context.Context, _ domain.AccountID, _, _ string, _ domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
+	return emptyAccountAuthForContainerTest(), nil
 }
 
-func (stubAuthAccountRepository) ListPasskeys(_ context.Context, _ string) ([]domain.PasskeyCredential, error) {
+func (stubAccountAuthRepository) ListPasskeys(_ context.Context, _ domain.AccountID) ([]domain.PasskeyCredential, error) {
 	return nil, nil
 }
 
-func (stubAuthAccountRepository) DeletePasskeyByID(_ context.Context, _, _ string) error {
+func (stubAccountAuthRepository) DeletePasskeyByID(_ context.Context, _ domain.AccountID, _ string) error {
 	return nil
 }
 
-func (stubAuthAccountRepository) FindWebAuthnCredential(_ context.Context, _ string) (domain.WebAuthnStoredCredential, error) {
-	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthAccountNotFound
+func (stubAccountAuthRepository) FindWebAuthnCredential(_ context.Context, _ string) (domain.WebAuthnStoredCredential, error) {
+	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAccountAuthNotFound
 }
 
-func (stubAuthAccountRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
+func (stubAccountAuthRepository) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
 	return nil
 }
-func (stubAuthAccountRepository) FindByID(_ context.Context, _ string) (domain.AuthAccount, error) {
-	return emptyAuthAccountForContainerTest(), nil
+func (stubAccountAuthRepository) FindByID(_ context.Context, _ domain.AccountID) (domain.AccountAuth, error) {
+	return emptyAccountAuthForContainerTest(), nil
 }
 
 type fakeAuthStateRepository struct{}
@@ -174,26 +174,40 @@ func emptyChallengeForContainerTest() domain.AuthChallenge {
 }
 
 func emptyRecoveryTokenForContainerTest() domain.RecoveryToken {
-	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
+	token, _ := domain.NewRecoveryToken("01ARZ3NDEKTSV4RRFFQ69G5FAV", testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "placeholder", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return token
 }
 
 func emptyRecoverySessionForContainerTest() domain.RecoverySession {
-	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", domain.TokenKindRecovery, time.Unix(1, 0).UTC())
+	session, _ := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), domain.TokenKindRecovery, time.Unix(1, 0).UTC())
 	return session
 }
 
 func emptyReauthenticationSessionForContainerTest() domain.ReauthenticationSession {
 	session, _ := domain.NewReauthenticationSession(
-		"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW", "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+		"01ARZ3NDEKTSV4RRFFQ69G5FAV", testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "01ARZ3NDEKTSV4RRFFQ69G5FAX",
 		"device-link", "01ARZ3NDEKTSV4RRFFQ69G5FAY", time.Unix(1, 0).UTC(),
 	)
 	return session
 }
 
-func emptyAuthAccountForContainerTest() domain.AuthAccount {
-	account, _ := domain.NewAuthAccount("01ARZ3NDEKTSV4RRFFQ69G5FAV", "member@example.com", "member@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential")
+func emptyAccountAuthForContainerTest() domain.AccountAuth {
+	account, _ := domain.NewAccountAuth(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAV"), "member@example.com", "member@example.com", "01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential")
 	return account
+}
+
+type stubAccountSettingRepository struct{}
+
+func (stubAccountSettingRepository) CreateDefault(_ context.Context, accountID domain.AccountID) (domain.AccountSetting, error) {
+	return domain.NewDefaultAccountSetting(accountID)
+}
+
+func (stubAccountSettingRepository) Get(_ context.Context, accountID domain.AccountID) (domain.AccountSetting, error) {
+	return domain.NewDefaultAccountSetting(accountID)
+}
+
+func (stubAccountSettingRepository) UpdateLocale(_ context.Context, accountID domain.AccountID, locale domain.AccountLocale) (domain.AccountSetting, error) {
+	return domain.NewAccountSetting(accountID, locale)
 }
 
 // fakeChallengeStore はテスト用のインメモリ challengeStore 実装。

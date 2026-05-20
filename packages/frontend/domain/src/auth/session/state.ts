@@ -23,6 +23,7 @@ function createAuthSessionInitialState(): AuthSessionState {
     lastFailure: null,
     lastError: null,
     lastCacheControl: null,
+    lastAccountSettingSnapshot: null,
   };
 }
 

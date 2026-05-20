@@ -106,14 +106,7 @@ const createListPasskeys =
       const response = await authApi.listPasskeys({
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (
-        handlePasskeyFailureResponse(
-          response,
-          'パスキー一覧を取得できませんでした。',
-          state,
-          authSession
-        )
-      ) {
+      if (handlePasskeyFailureResponse(response, 'passkeysListLoadFailed', state, authSession)) {
         return;
       }
       if (response.status === 200) {
@@ -135,14 +128,7 @@ const createAddPasskey =
       const startResponse = await authApi.startPasskeyAddition({
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (
-        handlePasskeyFailureResponse(
-          startResponse,
-          'パスキー追加を開始できませんでした。',
-          state,
-          authSession
-        )
-      ) {
+      if (handlePasskeyFailureResponse(startResponse, 'passkeyAddFailed', state, authSession)) {
         return;
       }
       if (startResponse.status !== 200) return;
@@ -160,14 +146,7 @@ const createAddPasskey =
       const finishResponse = await authApi.finishPasskeyAddition(credential, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (
-        handlePasskeyFailureResponse(
-          finishResponse,
-          'パスキー追加を完了できませんでした。',
-          state,
-          authSession
-        )
-      ) {
+      if (handlePasskeyFailureResponse(finishResponse, 'passkeyAddFailed', state, authSession)) {
         return;
       }
       if (finishResponse.status === 200) {
@@ -189,18 +168,11 @@ const createDeletePasskey =
       const response = await authApi.deletePasskey(id, reauthSession, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (
-        handlePasskeyFailureResponse(
-          response,
-          'パスキーを削除できませんでした。',
-          state,
-          authSession
-        )
-      ) {
+      if (handlePasskeyFailureResponse(response, 'passkeyDeleteFailed', state, authSession)) {
         return;
       }
       if (response.status === 409) {
-        handleApiError(response.data.error, 'パスキーを削除できませんでした。', state, authSession);
+        handleApiError(response.data.error, 'passkeyDeleteFailed', state, authSession);
         return;
       }
       applyPasskeyDeleted(state, id);
@@ -221,22 +193,12 @@ const createSendDeviceLink =
         headers: authSession.actions.createAuthorizationHeaders(),
       });
       if (response.status === 401 || response.status === 503) {
-        handleApiError(
-          response.data.error,
-          'ログイン有効化リンクを送信できませんでした。',
-          state,
-          authSession
-        );
+        handleApiError(response.data.error, 'deviceLinkSendFailed', state, authSession);
         return false;
       }
       if (response.status === 400 || response.status === 403) {
         if (
-          handleAuthOnlyFailure(
-            response.data.error,
-            'ログイン有効化リンクを送信できませんでした。',
-            state,
-            authSession
-          )
+          handleAuthOnlyFailure(response.data.error, 'deviceLinkSendFailed', state, authSession)
         ) {
           return false;
         }
@@ -269,14 +231,7 @@ const createPerformReauth =
       const startResponse = await authApi.startReauthentication(kind, {
         headers: authSession.actions.createAuthorizationHeaders(),
       });
-      if (
-        handlePasskeyFailureResponse(
-          startResponse,
-          '再認証を開始できませんでした。',
-          state,
-          authSession
-        )
-      ) {
+      if (handlePasskeyFailureResponse(startResponse, 'reauthRequired', state, authSession)) {
         return null;
       }
       if (startResponse.status !== 200) return null;
@@ -297,14 +252,7 @@ const createPerformReauth =
           headers: authSession.actions.createAuthorizationHeaders(),
         }
       );
-      if (
-        handlePasskeyFailureResponse(
-          finishResponse,
-          '再認証を完了できませんでした。',
-          state,
-          authSession
-        )
-      ) {
+      if (handlePasskeyFailureResponse(finishResponse, 'reauthRequired', state, authSession)) {
         return null;
       }
       if (finishResponse.status === 200) {

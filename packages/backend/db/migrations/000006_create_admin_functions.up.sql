@@ -27,7 +27,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA admin_view TO admin_console_read;
 -- 将来作成されるビューにも自動適用
 ALTER DEFAULT PRIVILEGES IN SCHEMA admin_view GRANT SELECT ON TABLES TO admin_console_read;
 
--- 管理関数用スキーマ
+-- 管理関数用スキーマを作成し、Product app surface とは別の操作面を固定する。
 CREATE SCHEMA IF NOT EXISTS admin_op;
 
 -- suspend_account: active アカウントを停止し、同一 transaction 内で session_revoked_after を更新する。

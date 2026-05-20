@@ -10,7 +10,9 @@
       "$lib/*": ["src/lib/*"],
       "$components/*": ["src/lib/components/*"],
       "$server/*": ["src/lib/server/*"],
-      "@www-template/admin/*": ["src/*"]
+      "@www-template/admin/*": ["src/*"],
+      "@www-template/i18n": ["../frontend/i18n/src/index.ts"],
+      "@www-template/i18n/*": ["../frontend/i18n/src/*"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

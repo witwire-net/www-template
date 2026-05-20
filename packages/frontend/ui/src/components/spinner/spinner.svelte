@@ -5,14 +5,13 @@
 
 	let {
 		class: className,
-		role = "status",
 		// we add name, color, and stroke for compatibility with different icon libraries props
 		name,
 		color,
 		stroke,
-		"aria-label": ariaLabel = "Loading",
+		"aria-hidden": ariaHidden = "true",
 		...restProps
 	}: SVGAttributes<SVGSVGElement> = $props();
 </script>
 
-<Loader2Icon {role} name={name === null ? undefined : name} color={color === null ? undefined : color} stroke={stroke === null ? undefined : stroke} aria-label={ariaLabel} class={cn("size-4 animate-spin", className)} {...restProps} />
+<Loader2Icon name={name === null ? undefined : name} color={color === null ? undefined : color} stroke={stroke === null ? undefined : stroke} aria-hidden={ariaHidden} class={cn("size-4 animate-spin", className)} {...restProps} />

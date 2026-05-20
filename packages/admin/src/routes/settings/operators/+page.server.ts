@@ -45,7 +45,7 @@ export const actions: Actions = {
       displayName: getFormString(form, 'displayName'),
       role: getFormString(form, 'role'),
     });
-    if (!parsed.success) return fail(400, { message: '入力値を確認してください。' });
+    if (!parsed.success) return fail(400, { messageKey: 'operators.createError' });
     const result = await createOperator(getAdminPrisma(), parsed.data, locals.operator?.id ?? '');
     return { setupToken: result.plaintextToken, setupTokenEmail: result.operator.email };
   },
@@ -55,7 +55,7 @@ export const actions: Actions = {
     const operatorId = getFormString(form, 'operatorId');
     const parsed = updateRoleSchema.safeParse({ role: getFormString(form, 'role') });
     if (operatorId === '' || !parsed.success)
-      return fail(400, { message: 'ロール更新の入力値を確認してください。' });
+      return fail(400, { messageKey: 'operators.updateRoleError' });
     await updateOperatorRole(
       getAdminPrisma(),
       operatorId,
@@ -67,14 +67,14 @@ export const actions: Actions = {
   deactivate: async ({ locals, request }) => {
     requirePermission(locals.operator, 'operators:deactivate');
     const operatorId = getFormString(await request.formData(), 'operatorId');
-    if (operatorId === '') return fail(400, { message: '対象オペレーターを指定してください。' });
+    if (operatorId === '') return fail(400, { messageKey: 'operators.deactivateError' });
     await deactivateOperator(getAdminPrisma(), operatorId, locals.operator?.id ?? '');
     return redirect(303, '/settings/operators');
   },
   rotate: async ({ locals, request }) => {
     requirePermission(locals.operator, 'operators:setup_token');
     const operatorId = getFormString(await request.formData(), 'operatorId');
-    if (operatorId === '') return fail(400, { message: '対象オペレーターを指定してください。' });
+    if (operatorId === '') return fail(400, { messageKey: 'operators.rotateError' });
     const result = await rotateSetupToken(getAdminPrisma(), operatorId, locals.operator?.id ?? '');
     return { setupToken: result.plaintextToken, setupTokenEmail: result.operator.email };
   },

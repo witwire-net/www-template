@@ -12,7 +12,7 @@ permission:
     'planner': allow
     'unit/backend/engineer': allow
     'unit/backend/reviewer': allow
-    'unit/frontend/engineer': allow
+    'unit/frontend/engineer': deny
     'unit/frontend/reviewer': allow
     'unit/build/builder': allow
     'unit/build/reviewer': allow

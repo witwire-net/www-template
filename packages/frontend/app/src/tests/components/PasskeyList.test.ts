@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PasskeyList from '../../lib/profiles/PasskeyList.svelte';
 
@@ -12,6 +12,14 @@ import PasskeyList from '../../lib/profiles/PasskeyList.svelte';
  * - domain hook の $state rune を使う親 page とは分離して、props 経由の振る舞いを検証する。
  */
 describe('PasskeyList', () => {
+  beforeEach(() => {
+    localStorage.setItem('www-template:locale', 'ja');
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
   it('[AUTH-FE-S016] deviceLinkSent=true の場合、メール送信済み guidance が表示される', () => {
     // Arrange: デバイスリンク送信済み状態でレンダリング
     render(PasskeyList, {
@@ -38,7 +46,7 @@ describe('PasskeyList', () => {
   });
 
   it('[AUTH-FE-S022] 再認証エラー時に Alert が表示される', () => {
-    // Arrange: 再認証が必要なエラー状態でレンダリング
+    // Arrange: 再認証が必要なエラーコードでレンダリング
     render(PasskeyList, {
       props: {
         passkeys: [
@@ -49,7 +57,7 @@ describe('PasskeyList', () => {
           },
         ],
         loading: false,
-        error: '再認証が必要です。',
+        error: 'reauthRequired',
         deviceLinkSent: false,
         onAddPasskey: vi.fn(),
         onDeletePasskey: vi.fn(),
@@ -65,5 +73,26 @@ describe('PasskeyList', () => {
     // 削除ボタンは表示されるが、実際の削除は親 page の reauth ガードでブロックされる
     const deleteButton = screen.getByLabelText('MacBook Pro を削除');
     expect(deleteButton).toBeInTheDocument();
+  });
+
+  it('[LOCALIZATION-FE-S006] passkey error code は保存済み locale に合わせて英語表示される', () => {
+    // Arrange: 英語 locale を保存し、WebAuthn 非対応コードでレンダリングする
+    localStorage.setItem('www-template:locale', 'en');
+    render(PasskeyList, {
+      props: {
+        passkeys: [],
+        loading: false,
+        error: 'passkeyOperationNotSupported',
+        deviceLinkSent: false,
+        onAddPasskey: vi.fn(),
+        onDeletePasskey: vi.fn(),
+        onSendDeviceLink: vi.fn(),
+      },
+    });
+
+    // Assert: domain のコードではなく app catalog の英語文言が表示される
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('This browser or device does not support passkeys.');
+    expect(alert.textContent).not.toContain('passkeyOperationNotSupported');
   });
 });

@@ -1,12 +1,38 @@
 import { fail, redirect } from '@sveltejs/kit';
 
+import { createAdminI18n } from '$lib/i18n';
 import { getPlatformConfig } from '$lib/server/infrastructure/config/platform.js';
 
-import type { Actions } from '@sveltejs/kit';
+import type { Actions, ServerLoad } from '@sveltejs/kit';
 
 const NON_REVEALING_LOGIN_ERROR =
   'パスキー認証に失敗しました。入力内容を確認してもう一度お試しください。';
 const SESSION_COOKIE_MAX_AGE_SECONDS = 86400;
+
+/**
+ * Admin ログインページの読み込み処理。
+ *
+ * 認証前画面は operator DB locale を持たないため、Admin package-local fallback locale の文言だけを返す。
+ */
+export const load: ServerLoad = () => {
+  // 認証前 surface では DB 参照を行わず、固定 fallback translator で安全に label を生成する。
+  const { t } = createAdminI18n(null);
+  return {
+    labels: {
+      title: t('login.title'),
+      eyebrow: t('login.eyebrow'),
+      heading: t('login.heading'),
+      description: t('login.description'),
+      cardTitle: t('login.cardTitle'),
+      cardDescription: t('login.cardDescription'),
+      emailLabel: t('login.emailLabel'),
+      error: t('login.error'),
+      submitting: t('login.submitting'),
+      submit: t('login.submit'),
+      setupToken: t('login.setupToken'),
+    },
+  };
+};
 
 function parseJsonFormField(
   value: FormDataEntryValue | null

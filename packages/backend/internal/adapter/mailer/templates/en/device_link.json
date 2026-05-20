@@ -1,0 +1,5 @@
+{
+  "subject": "{{.ProductName}} Device Login Link",
+  "body_html": "<p>Use the link below to sign in on a new device.</p><p><a href=\"{{.URL}}\">{{.URL}}</a></p><p>Request ID: {{.RequestID}}</p>",
+  "body_text": "Use the link below to sign in on a new device.\n{{.URL}}\nRequest ID: {{.RequestID}}"
+}

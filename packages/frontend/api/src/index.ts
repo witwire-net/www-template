@@ -1,6 +1,7 @@
 export * from './api';
 export * from './types';
 export { listSessions, refreshToken, revokeOtherSessions, revokeSession } from './sdk';
+export { authApi, statusApi, accountApi } from './api/client';
 export type {
   AuthFailureClassification,
   AuthFailureResponse,
@@ -39,4 +40,9 @@ export type {
   startPasskeyAdditionResponse,
   startPasskeyAuthenticationResponse,
   startPasskeyRegistrationResponse,
+  AccountLocale,
+  AccountSetting,
+  AccountSettingResponse,
+  AccountSettingSnapshot,
+  UpdateAccountSettingRequest,
 } from './sdk';

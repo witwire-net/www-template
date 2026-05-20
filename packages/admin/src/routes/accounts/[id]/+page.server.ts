@@ -66,8 +66,7 @@ export const actions: Actions = {
     const form = await request.formData();
     const accountId = getAccountId(params);
     const reason = suspendReasonSchema.safeParse(getFormString(form, 'reason'));
-    if (!reason.success)
-      return fail(400, { message: '停止理由を 1〜500 文字で入力してください。' });
+    if (!reason.success) return fail(400, { messageKey: 'accountDetail.suspendError' });
     await suspendAccount({
       adminPrisma: getAdminPrisma(),
       productPrisma: await getProductPrisma(),
@@ -91,8 +90,7 @@ export const actions: Actions = {
     const reason = suspendReasonSchema.safeParse(
       getFormString(form, 'reason', 'restored by operator')
     );
-    if (!reason.success)
-      return fail(400, { message: '復旧理由を 1〜500 文字で入力してください。' });
+    if (!reason.success) return fail(400, { messageKey: 'accountDetail.restoreError' });
     await restoreAccount({
       adminPrisma: getAdminPrisma(),
       productPrisma: await getProductPrisma(),

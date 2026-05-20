@@ -11,6 +11,8 @@
 		role = 'viewer',
 		currentPath = '/',
 		navItems = [],
+		labels,
+		brandLabel,
 		operatorName = '',
 		csrfToken = '',
 	}: {
@@ -18,15 +20,17 @@
 		role?: string;
 		currentPath?: string;
 		navItems?: { label: string; href: string; activePrefix: string }[];
+		labels: { admin: string; operatorFallback: string; logout: string; close: string };
+		brandLabel: string;
 		operatorName?: string;
 		csrfToken?: string;
 	} = $props();
 </script>
 
-<Sidebar.SidebarProvider>
-	<AdminSidebar {role} {currentPath} {navItems} />
-	<Sidebar.SidebarInset>
-		<AdminHeader {operatorName} {csrfToken} />
-		{@render children()}
-	</Sidebar.SidebarInset>
+	<Sidebar.SidebarProvider>
+		<AdminSidebar {role} {currentPath} {navItems} {brandLabel} closeLabel={labels.close} />
+		<Sidebar.SidebarInset>
+			<AdminHeader {operatorName} {csrfToken} adminLabel={labels.admin} operatorFallback={labels.operatorFallback} logoutLabel={labels.logout} />
+			{@render children()}
+		</Sidebar.SidebarInset>
 </Sidebar.SidebarProvider>

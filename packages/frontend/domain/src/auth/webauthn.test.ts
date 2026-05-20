@@ -20,6 +20,7 @@ import {
   bufferToBase64url,
   createWebAuthnAttestation,
   getWebAuthnAssertion,
+  normalizeWebAuthnError,
 } from './webauthn';
 
 // ---------------------------------------------------------------------------
@@ -84,6 +85,27 @@ describe('base64urlToBuffer / bufferToBase64url', () => {
 
   it('空バッファは空文字列になる', () => {
     expect(bufferToBase64url(new Uint8Array(0).buffer)).toBe('');
+  });
+});
+
+describe('normalizeWebAuthnError', () => {
+  it('DOMException name を UI 翻訳用の安定コードへ正規化する', () => {
+    // Arrange: ユーザーキャンセルやタイムアウトを表すブラウザー標準エラーを用意する
+    const error = new DOMException(
+      'The operation either timed out or was not allowed.',
+      'NotAllowedError'
+    );
+
+    // Act & Assert: ユーザー向け文言ではなく i18n 用コードが返る
+    expect(normalizeWebAuthnError(error)).toBe('passkeyOperationCancelledOrTimedOut');
+  });
+
+  it('未知の例外文は表示せず汎用コードへ fail-close する', () => {
+    // Arrange: 環境依存の英語メッセージを持つ通常 Error を用意する
+    const error = new Error('platform-specific browser failure');
+
+    // Act & Assert: 生メッセージを返さず、app catalog で翻訳できる汎用コードへ丸める
+    expect(normalizeWebAuthnError(error)).toBe('passkeyOperationFailed');
   });
 });
 

@@ -10,6 +10,8 @@
 		side = "left",
 		variant = "sidebar",
 		collapsible = "offcanvas",
+		ariaLabel,
+		closeLabel,
 		class: className,
 		children,
 		...restProps
@@ -17,6 +19,8 @@
 		side?: "left" | "right";
 		variant?: "sidebar" | "floating" | "inset";
 		collapsible?: "offcanvas" | "icon" | "none";
+		ariaLabel: string;
+		closeLabel: string;
 	} = $props();
 
 	const sidebar = useSidebar();
@@ -38,22 +42,20 @@
 		bind:open={() => sidebar.openMobile, (v) => sidebar.setOpenMobile(v)}
 		{...restProps}
 	>
-		<Sheet.Content
-			bind:ref
-			data-sidebar="sidebar"
-			data-slot="sidebar"
-			data-mobile="true"
-			class={cn(
+			<Sheet.Content
+				bind:ref
+				data-sidebar="sidebar"
+				data-slot="sidebar"
+				data-mobile="true"
+				aria-label={ariaLabel}
+				closeLabel={closeLabel}
+				class={cn(
 				"bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden",
 				className
 			)}
 			style="--sidebar-width: {SIDEBAR_WIDTH_MOBILE};"
 			{side}
 		>
-			<Sheet.Header class="sr-only">
-				<Sheet.Title>Sidebar</Sheet.Title>
-				<Sheet.Description>Displays the mobile sidebar.</Sheet.Description>
-			</Sheet.Header>
 			<div class="flex h-full w-full flex-col">
 				{@render children?.()}
 			</div>

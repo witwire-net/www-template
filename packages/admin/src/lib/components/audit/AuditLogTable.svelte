@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Badge, Button, CodeBlock, Pagination, Table } from '@www-template/ui/components';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	interface AuditEvent {
 		id: string;
 		operator_email?: string;
@@ -17,12 +19,33 @@
 		page = 1,
 		totalPages = 1,
 		onPageChange,
+		labels = createAuditTableLabels(),
 	}: {
 		events: AuditEvent[];
 		page?: number;
 		totalPages?: number;
 		onPageChange?: (page: number) => void;
+		labels?: ReturnType<typeof createAuditTableLabels>;
 	} = $props();
+
+	function createAuditTableLabels() {
+		// 監査 table component 単体利用時も Admin-owned fallback 辞書で文言を取得する。
+		const { t } = createAdminI18n();
+		return {
+			caption: t('audit.tableCaption'),
+			timestamp: t('audit.timestamp'),
+			operator: t('audit.operator'),
+			action: t('audit.action'),
+			target: t('audit.target'),
+			outcome: t('audit.outcome'),
+			details: t('audit.details'),
+			show: t('audit.show'),
+			hide: t('audit.hide'),
+			pagination: t('shared.pagination'),
+			previousPage: t('shared.previousPage'),
+			nextPage: t('shared.nextPage'),
+		};
+	}
 
 	let expandedId = $state<string | null>(null);
 
@@ -36,15 +59,15 @@
 </script>
 
 <Table.Table>
-	<Table.TableCaption>Audit log</Table.TableCaption>
+	<Table.TableCaption>{labels.caption}</Table.TableCaption>
 	<Table.TableHeader>
 		<Table.TableRow>
-			<Table.TableHead>Timestamp</Table.TableHead>
-			<Table.TableHead>Operator</Table.TableHead>
-			<Table.TableHead>Action</Table.TableHead>
-			<Table.TableHead>Target</Table.TableHead>
-			<Table.TableHead>Outcome</Table.TableHead>
-			<Table.TableHead>Details</Table.TableHead>
+			<Table.TableHead>{labels.timestamp}</Table.TableHead>
+			<Table.TableHead>{labels.operator}</Table.TableHead>
+			<Table.TableHead>{labels.action}</Table.TableHead>
+			<Table.TableHead>{labels.target}</Table.TableHead>
+			<Table.TableHead>{labels.outcome}</Table.TableHead>
+			<Table.TableHead>{labels.details}</Table.TableHead>
 		</Table.TableRow>
 	</Table.TableHeader>
 	<Table.TableBody>
@@ -62,7 +85,7 @@
 				<Table.TableCell>
 					{#if event.details != null}
 						<Button variant="ghost" size="xs" onclick={() => { toggleExpand(event.id); }}>
-							{expandedId === event.id ? 'Hide' : 'Show'}
+						{expandedId === event.id ? labels.hide : labels.show}
 						</Button>
 					{/if}
 				</Table.TableCell>
@@ -79,10 +102,10 @@
 </Table.Table>
 
 {#if totalPages > 1}
-	<Pagination.Pagination count={totalPages * 10} perPage={10} {page} onPageChange={(p: number) => { onPageChange?.(p); }}>
+	<Pagination.Pagination aria-label={labels.pagination} count={totalPages * 10} perPage={10} {page} onPageChange={(p: number) => { onPageChange?.(p); }}>
 		<Pagination.PaginationContent>
 			<Pagination.PaginationItem>
-				<Pagination.PaginationPrevButton />
+				<Pagination.PaginationPrevButton aria-label={labels.previousPage} />
 			</Pagination.PaginationItem>
 			<Pagination.PaginationItem>
 				<Pagination.PaginationLink page={{ type: 'page', value: page }} isActive>
@@ -90,7 +113,7 @@
 				</Pagination.PaginationLink>
 			</Pagination.PaginationItem>
 			<Pagination.PaginationItem>
-				<Pagination.PaginationNextButton />
+				<Pagination.PaginationNextButton aria-label={labels.nextPage} />
 			</Pagination.PaginationItem>
 		</Pagination.PaginationContent>
 	</Pagination.Pagination>

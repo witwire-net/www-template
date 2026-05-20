@@ -12,10 +12,222 @@
       "name": "status"
     },
     {
+      "name": "account-settings"
+    },
+    {
       "name": "app-auth"
     }
   ],
   "paths": {
+    "/api/v1/account/settings": {
+      "get": {
+        "operationId": "getAccountSettings",
+        "summary": "Gets the current account settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSettingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["account-settings"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "updateAccountSettings",
+        "summary": "Updates the current account settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSettingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The server could not understand the request due to invalid syntax.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOperationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["account-settings"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountSettingRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "logout",
@@ -1815,6 +2027,64 @@
   },
   "components": {
     "schemas": {
+      "AccountLocale": {
+        "type": "string",
+        "enum": ["ja", "en"],
+        "description": "Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。"
+      },
+      "AccountSetting": {
+        "type": "object",
+        "required": ["locale"],
+        "properties": {
+          "locale": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountLocale"
+              }
+            ],
+            "description": "現在の Product Account に保存されている表示・通知ロケール。対応値は AccountLocale の ja または en のみ。"
+          }
+        },
+        "description": "Product Account に属する現在の設定。AccountSetting は Account の表示・通知設定を表し、Auth 情報や運用者向け設定を含まない。"
+      },
+      "AccountSettingResponse": {
+        "type": "object",
+        "required": ["requestId", "setting"],
+        "properties": {
+          "requestId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UlidId"
+              }
+            ],
+            "description": "AccountSetting 取得または更新 request に対応する canonical ULID の追跡 ID。"
+          },
+          "setting": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountSetting"
+              }
+            ],
+            "description": "現在の Product Account に属する保存済み AccountSetting。"
+          }
+        },
+        "description": "現在の Product Account の AccountSetting を返すレスポンス。requestId は追跡用であり、setting には Account 本人の保存済み設定だけを含める。"
+      },
+      "AccountSettingSnapshot": {
+        "type": "object",
+        "required": ["locale"],
+        "properties": {
+          "locale": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountLocale"
+              }
+            ],
+            "description": "refresh response の合成時点で Product Account に保存されていた表示・通知ロケール。"
+          }
+        },
+        "description": "認証処理の合成結果として返す Product AccountSetting のスナップショット。refresh token rotation 自体は Auth が担当し、この snapshot は確定した AccountID から AccountSetting を読み込んだ結果だけを表す。"
+      },
       "AuthFailureClassification": {
         "type": "string",
         "enum": ["unauthenticated", "session-expired", "account-suspended", "internal-error"]
@@ -2286,13 +2556,23 @@
         "required": ["accessToken", "refreshToken"],
         "properties": {
           "accessToken": {
-            "type": "string"
+            "type": "string",
+            "description": "ローテーション後に発行された短命の JWT アクセストークン。"
           },
           "refreshToken": {
-            "type": "string"
+            "type": "string",
+            "description": "次回以降の rotation に使用する新しいリフレッシュトークン。"
+          },
+          "accountSetting": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountSettingSnapshot"
+              }
+            ],
+            "description": "refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。"
           }
         },
-        "description": "リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。"
+        "description": "リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。"
       },
       "SessionItem": {
         "type": "object",
@@ -2365,6 +2645,21 @@
       "UlidId": {
         "type": "string",
         "description": "Canonical ULID string used for auth-owned resource and correlation identifiers."
+      },
+      "UpdateAccountSettingRequest": {
+        "type": "object",
+        "required": ["locale"],
+        "properties": {
+          "locale": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountLocale"
+              }
+            ],
+            "description": "保存したい Product AccountSetting.locale。対応値以外は API 実装で拒否し、永続値を変更しない。"
+          }
+        },
+        "description": "現在の Product Account の AccountSetting.locale を更新するリクエスト。Account ID は bearer session から確定するため body には含めない。"
       },
       "WebAuthnAssertionCredential": {
         "type": "object",

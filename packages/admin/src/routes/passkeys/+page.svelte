@@ -3,6 +3,8 @@
 
 	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, ConfirmDialog, EmptyState, Spinner } from '@www-template/ui/components';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	interface PasskeyItem {
 		id: string;
 		createdAt: string;
@@ -20,7 +22,8 @@
 		passkeys: PasskeyItem[];
 	}
 
-	const { data }: { data: { operator: { email: string }; passkeys: PasskeyItem[] } } = $props();
+	const { data }: { data: { locale: 'ja' | 'en'; operator: { email: string }; passkeys: PasskeyItem[] } } = $props();
+	const i18n = $derived(createAdminI18n(data.locale));
 
 	let passkeys = $state(initialPasskeys());
 	let isAdding = $state(false);
@@ -41,8 +44,8 @@
 	}
 
 	function formatDate(iso: string): string {
-		// DB の ISO 文字列を運用者が読める日本語日時に整形する。
-		return new Date(iso).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' });
+		// DB の ISO 文字列を operator locale に合わせた日時へ整形する。
+		return new Date(iso).toLocaleString(i18n.locale === 'en' ? 'en-US' : 'ja-JP', { dateStyle: 'medium', timeStyle: 'short' });
 	}
 
 	async function refreshPasskeys(): Promise<void> {
@@ -79,10 +82,10 @@
 			});
 			if (!finishResponse.ok) throw new Error('passkey-add-finish-failed');
 			await refreshPasskeys();
-			message = 'この端末のパスキーを追加しました。';
+			message = i18n.t('passkeys.addSuccess');
 		} catch {
 			// WebAuthn cancel / CSRF / server error の詳細を分けず、安全な再試行メッセージにする。
-			message = 'パスキーを追加できませんでした。認証状態を確認して再試行してください。';
+			message = i18n.t('passkeys.addError');
 		} finally {
 			// 成功・失敗にかかわらず追加操作を再度行えるようにする。
 			isAdding = false;
@@ -110,10 +113,10 @@
 			});
 			if (!response.ok) throw new Error('passkey-delete-failed');
 			await refreshPasskeys();
-			message = 'パスキーを削除しました。';
+			message = i18n.t('passkeys.deleteSuccess');
 		} catch {
 			// 削除失敗時は対象有無や最後の passkey かどうかを必要以上に露出しない。
-			message = 'パスキーを削除できませんでした。最後のパスキーは削除できません。';
+			message = i18n.t('passkeys.deleteError');
 		} finally {
 			// dialog の対象と loading をクリアし、次の操作に備える。
 			pendingDeleteId = null;
@@ -123,23 +126,23 @@
 </script>
 
 <svelte:head>
-	<title>Admin Passkeys</title>
+	<title>{i18n.t('passkeys.title')}</title>
 </svelte:head>
 
 <main class="min-h-screen bg-background px-6 py-10 text-foreground">
 	<section class="mx-auto max-w-5xl space-y-8">
 		<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
 			<div class="space-y-2">
-				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Credential control</p>
-				<h1 class="text-4xl font-black tracking-tight">パスキー管理</h1>
-				<p class="text-sm text-muted-foreground">{data.operator.email} のログイン用パスキーを管理します。</p>
+				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{i18n.t('passkeys.eyebrow')}</p>
+				<h1 class="text-4xl font-black tracking-tight">{i18n.t('passkeys.heading')}</h1>
+				<p class="text-sm text-muted-foreground">{i18n.t('passkeys.description', { email: data.operator.email })}</p>
 			</div>
-			<Button disabled={isAdding} onclick={handleAddPasskey}>
-				{#if isAdding}
-					<Spinner />
-					追加中…
-				{:else}
-					パスキーを追加
+				<Button disabled={isAdding} onclick={handleAddPasskey}>
+					{#if isAdding}
+						<Spinner aria-hidden="true" />
+						{i18n.t('passkeys.adding')}
+					{:else}
+					{i18n.t('passkeys.add')}
 				{/if}
 			</Button>
 		</div>
@@ -150,28 +153,28 @@
 
 		<Card>
 			<CardHeader>
-				<CardTitle>登録済みパスキー</CardTitle>
-				<CardDescription>最後のパスキーはロックアウト防止のため削除できません。</CardDescription>
+				<CardTitle>{i18n.t('passkeys.registeredTitle')}</CardTitle>
+				<CardDescription>{i18n.t('passkeys.registeredDescription')}</CardDescription>
 			</CardHeader>
 			<CardContent>
 				{#if passkeys.length === 0}
-					<EmptyState title="パスキーがありません" description="ログインを継続するにはパスキーを追加してください。" />
+					<EmptyState title={i18n.t('passkeys.emptyTitle')} description={i18n.t('passkeys.emptyDescription')} />
 				{:else}
 					<div class="space-y-3">
 						{#each passkeys as passkey, index (passkey.id)}
 							<div class="flex flex-col gap-4 rounded-3xl border border-border bg-card p-4 md:flex-row md:items-center md:justify-between">
 								<div class="space-y-1">
-									<p class="text-sm font-bold">Passkey {index + 1}</p>
-									<p class="text-xs text-muted-foreground">Credential ID: {passkey.id}</p>
-									<p class="text-sm text-muted-foreground">登録日時: {formatDate(passkey.createdAt)}</p>
-									<p class="text-xs text-muted-foreground">バックアップ: {passkey.backupEligible ? (passkey.backupState ? '同期済み' : '対応') : '端末固定'}</p>
+									<p class="text-sm font-bold">{i18n.t('passkeys.passkey')} {index + 1}</p>
+									<p class="text-xs text-muted-foreground">{i18n.t('passkeys.credentialId')} {passkey.id}</p>
+									<p class="text-sm text-muted-foreground">{i18n.t('passkeys.createdAt')} {formatDate(passkey.createdAt)}</p>
+									<p class="text-xs text-muted-foreground">{i18n.t('passkeys.backup')} {passkey.backupEligible ? (passkey.backupState ? i18n.t('passkeys.backupSynced') : i18n.t('passkeys.backupEligible')) : i18n.t('passkeys.backupDeviceBound')}</p>
 								</div>
-								<Button variant="destructive" disabled={passkeys.length <= 1 || deletingId === passkey.id} onclick={() => { requestDelete(passkey.id); }}>
-									{#if deletingId === passkey.id}
-										<Spinner />
-										削除中…
-									{:else}
-										削除
+							<Button variant="destructive" disabled={passkeys.length <= 1 || deletingId === passkey.id} onclick={() => { requestDelete(passkey.id); }}>
+								{#if deletingId === passkey.id}
+									<Spinner aria-hidden="true" />
+								{i18n.t('passkeys.deleting')}
+								{:else}
+									{i18n.t('passkeys.delete')}
 									{/if}
 								</Button>
 							</div>
@@ -180,7 +183,7 @@
 				{/if}
 			</CardContent>
 			<CardFooter>
-				<Button variant="outline" href="/">Admin Console に戻る</Button>
+				<Button variant="outline" href="/">{i18n.t('passkeys.back')}</Button>
 			</CardFooter>
 		</Card>
 	</section>
@@ -188,10 +191,10 @@
 
 <ConfirmDialog
 	bind:open={deleteDialogOpen}
-	title="このパスキーを削除しますか？"
-	description="削除後、このパスキーでは Admin Console にログインできません。"
-	confirmText="削除する"
-	cancelText="キャンセル"
+	title={i18n.t('passkeys.deleteTitle')}
+	description={i18n.t('passkeys.deleteDescription')}
+	confirmText={i18n.t('passkeys.deleteConfirm')}
+	cancelText={i18n.t('passkeys.cancel')}
 	confirmVariant="destructive"
 	onConfirm={confirmDelete}
 />

@@ -4,12 +4,13 @@
 	import AdminShell from '$lib/components/layout/AdminShell.svelte';
 	import '../app.css';
 
-	interface LayoutOperator { id: string; email: string; role: string }
-	const { children, data }: { children: Snippet; data: { operator: LayoutOperator | null; csrfToken: string; currentPath: string; navItems: { label: string; href: string; activePrefix: string }[] } } = $props();
+	interface LayoutOperator { id: string; email: string; role: string; locale: 'ja' | 'en' }
+	interface LayoutLabels { title: string; brand: string; admin: string; operatorFallback: string; logout: string; close: string }
+	const { children, data }: { children: Snippet; data: { operator: LayoutOperator | null; csrfToken: string; currentPath: string; locale: 'ja' | 'en'; labels: LayoutLabels; navItems: { label: string; href: string; activePrefix: string }[] } } = $props();
 </script>
 
 <svelte:head>
-	<title>Admin Console</title>
+	<title>{data.labels.title}</title>
 </svelte:head>
 
 
@@ -19,6 +20,8 @@
 			role={data.operator.role}
 			currentPath={data.currentPath}
 			navItems={data.navItems}
+			labels={data.labels}
+			brandLabel={data.labels.brand}
 			operatorName={data.operator.email}
 			csrfToken={data.csrfToken}
 		>

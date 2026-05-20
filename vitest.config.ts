@@ -30,6 +30,15 @@ export default defineConfig({
           name: 'frontend-admin',
         },
       },
+      {
+        root: './',
+        test: {
+          name: 'root',
+          include: ['tests/**/*.test.ts'],
+          environment: 'node',
+          globals: true,
+        },
+      },
     ],
   },
 });

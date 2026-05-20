@@ -106,7 +106,7 @@ function bufferToBase64url(buffer: ArrayBuffer): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Normalises WebAuthn browser errors into user-facing Japanese messages.
+ * WebAuthn ブラウザーエラーを UI 層で翻訳可能なコードへ正規化する。
  *
  * DOMException names and their meanings:
  * - NotAllowedError: user cancelled or operation timed out
@@ -119,29 +119,29 @@ function normalizeWebAuthnError(error: unknown): string {
   if (error instanceof DOMException) {
     switch (error.name) {
       case 'NotAllowedError':
-        return 'パスキー操作がキャンセルされたか、タイムアウトしました。もう一度お試しください。';
+        return 'passkeyOperationCancelledOrTimedOut';
       case 'InvalidStateError':
-        return 'このデバイスにはすでにパスキーが登録されているか、パスキーが見つかりませんでした。';
+        return 'passkeyOperationInvalidState';
       case 'NotSupportedError':
-        return 'このブラウザまたはデバイスはパスキーに対応していません。';
+        return 'passkeyOperationNotSupported';
       case 'SecurityError':
-        return 'セキュリティエラーが発生しました。ページを再読み込みして再試行してください。';
+        return 'passkeyOperationSecurityError';
       case 'AbortError':
-        return 'パスキー操作が中断されました。もう一度お試しください。';
+        return 'passkeyOperationAborted';
       default:
-        return `パスキー操作に失敗しました（${error.name}）。もう一度お試しください。`;
+        return 'passkeyOperationFailed';
     }
   }
 
   if (error instanceof TypeError) {
-    return 'パスキー操作を完了できませんでした。ブラウザがパスキーに対応しているか確認してください。';
+    return 'passkeyOperationBrowserUnsupported';
   }
 
   if (error instanceof Error) {
-    return `パスキー操作に失敗しました。時間を置いて再度お試しください。`;
+    return 'passkeyOperationFailed';
   }
 
-  return 'パスキー操作に失敗しました。時間を置いて再度お試しください。';
+  return 'passkeyOperationFailed';
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +172,9 @@ async function getWebAuthnAssertion(
   const credential = await navigator.credentials.get({ publicKey });
 
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new TypeError('パスキー認証を完了できませんでした。ブラウザの応答が無効でした。');
+    throw new TypeError(
+      'Could not complete passkey authentication. The browser response was invalid.'
+    );
   }
 
   const response = credential.response as AuthenticatorAssertionResponse;
@@ -231,7 +233,9 @@ async function createWebAuthnAttestation(
   const credential = await navigator.credentials.create({ publicKey });
 
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new TypeError('パスキー登録を完了できませんでした。ブラウザの応答が無効でした。');
+    throw new TypeError(
+      'Could not complete passkey registration. The browser response was invalid.'
+    );
   }
 
   const response = credential.response as AuthenticatorAttestationResponse;

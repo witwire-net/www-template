@@ -1,0 +1,14 @@
+{
+  "sectionAriaLabel": "Device Management",
+  "loadingText": "Loading…",
+  "emptyText": "No logged-in devices",
+  "loginAtLabel": "Login",
+  "lastActiveAtLabel": "Last Active",
+  "currentDeviceBadge": "Current Device",
+  "logoutButtonAriaLabel": "Logout {deviceName}",
+  "logoutButtonText": "Logout",
+  "revokeOthersButtonText": "Logout all other devices",
+  "error": "Failed to retrieve device list.",
+  "logoutError": "Failed to logout device.",
+  "revokeOthersError": "Failed to logout other devices."
+}

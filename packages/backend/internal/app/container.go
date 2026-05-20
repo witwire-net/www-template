@@ -6,11 +6,12 @@ import (
 	"log/slog"
 	"time"
 
-	"www-template/packages/backend/internal/adapters/mailer"
-	"www-template/packages/backend/internal/adapters/persistence/postgres"
-	"www-template/packages/backend/internal/adapters/persistence/valkey"
-	"www-template/packages/backend/internal/adapters/webauthn"
-	"www-template/packages/backend/internal/auth/application"
+	"www-template/packages/backend/internal/adapter/mailer"
+	"www-template/packages/backend/internal/adapter/postgres"
+	"www-template/packages/backend/internal/adapter/valkey"
+	"www-template/packages/backend/internal/adapter/webauthn"
+	application "www-template/packages/backend/internal/application"
+	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/observability"
 )
@@ -18,13 +19,15 @@ import (
 const defaultReadHeaderTimeout = 5 * time.Second
 
 type Container struct {
-	Auth           *application.AuthService
-	TokenService   *application.TokenService
-	SessionService *application.SessionService
-	close          func(context.Context) error
+	Auth            *application.AuthService
+	AccountSetting  *application.AccountSettingService
+	AccountSnapshot *application.AccountSettingSnapshotService
+	TokenService    *application.TokenService
+	SessionService  *application.SessionService
+	close           func(context.Context) error
 }
 
-type authAccountRepositoryFactory func(context.Context, string) (application.AuthAccountRepository, func(context.Context) error, error)
+type accountAuthRepositoryFactory func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error)
 type authStateRepositoryFactory func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error)
 type challengeStoreFactory func(context.Context, config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error)
 
@@ -53,48 +56,48 @@ func (n *slogAuditNotifier) EmitCredentialStateUpdateFailure(ctx context.Context
 	)
 }
 
-func (n *slogAuditNotifier) EmitDeviceLinkDeliveryFailure(ctx context.Context, requestID string, accountID string, err error) {
+func (n *slogAuditNotifier) EmitDeviceLinkDeliveryFailure(ctx context.Context, requestID string, accountID domain.AccountID, err error) {
 	n.logger.ErrorContext(ctx, "audit: device-link delivery failed",
 		slog.String("event_type", "device_link.delivery_failed"),
 		slog.String("request_id", requestID),
-		slog.String("account_id", accountID),
+		slog.String("account_id", accountID.String()),
 		slog.String("error", err.Error()),
 	)
 }
 
-func (n *slogAuditNotifier) EmitRecoverySessionRevokeFailure(ctx context.Context, accountID string, err error) {
+func (n *slogAuditNotifier) EmitRecoverySessionRevokeFailure(ctx context.Context, accountID domain.AccountID, err error) {
 	n.logger.ErrorContext(ctx, "audit: recovery session revoke failed",
 		slog.String("event_type", "recovery.session_revoke_failed"),
-		slog.String("account_id", accountID),
+		slog.String("account_id", accountID.String()),
 		slog.String("error", err.Error()),
 	)
 }
 
-func (n *slogAuditNotifier) EmitRecoveryCompleteDeliveryFailure(ctx context.Context, accountID string, err error) {
+func (n *slogAuditNotifier) EmitRecoveryCompleteDeliveryFailure(ctx context.Context, accountID domain.AccountID, err error) {
 	n.logger.ErrorContext(ctx, "audit: recovery complete delivery failed",
 		slog.String("event_type", "recovery.complete_delivery_failed"),
-		slog.String("account_id", accountID),
+		slog.String("account_id", accountID.String()),
 		slog.String("error", err.Error()),
 	)
 }
 
-func (n *slogAuditNotifier) EmitDeviceLinkCompleteDeliveryFailure(ctx context.Context, accountID string, err error) {
+func (n *slogAuditNotifier) EmitDeviceLinkCompleteDeliveryFailure(ctx context.Context, accountID domain.AccountID, err error) {
 	n.logger.ErrorContext(ctx, "audit: device-link complete delivery failed",
 		slog.String("event_type", "device_link.complete_delivery_failed"),
-		slog.String("account_id", accountID),
+		slog.String("account_id", accountID.String()),
 		slog.String("error", err.Error()),
 	)
 }
 
 func BuildContainer(ctx context.Context, cfg config.Config) (*Container, error) {
-	return buildContainer(ctx, cfg, newGormAuthAccountRepository, newValkeyAuthStateRepository, newValkeyChallengeStore)
+	return buildContainer(ctx, cfg, newGormAccountAuthRepository, newValkeyAuthStateRepository, newValkeyChallengeStore)
 }
 
-func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountRepository authAccountRepositoryFactory, newAuthStateRepository authStateRepositoryFactory, newChallengeStore challengeStoreFactory) (*Container, error) {
+func buildContainer(ctx context.Context, cfg config.Config, newAccountAuthRepository accountAuthRepositoryFactory, newAuthStateRepository authStateRepositoryFactory, newChallengeStore challengeStoreFactory) (*Container, error) {
 	authConfig := cfg.AuthRuntime()
 	idPolicy := newAuthIDPolicy()
 
-	accountRepo, closeAccountRepo, err := newAuthAccountRepository(ctx, cfg.Infra.Database.URL)
+	accountRepo, accountSettingRepo, closeAccountRepo, err := newAccountAuthRepository(ctx, cfg.Infra.Database.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +115,10 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 		return nil, fmt.Errorf("challenge store init: %w", challengeStoreErr)
 	}
 
+	accountSettingService := application.NewAccountSettingService(accountSettingRepo)
+	accountSnapshotService := application.NewAccountSettingSnapshotService(accountSettingRepo)
 	smtpSender := mailer.NewSMTPSender(cfg.Infra)
-	recoverySender := mailer.NewAccountRecoverySender(smtpSender, cfg.Infra)
+	recoverySender := mailer.NewAccountRecoverySender(smtpSender, cfg.Infra, accountSnapshotService)
 
 	authSvc := application.NewAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, func() time.Time {
 		return time.Now().UTC()
@@ -136,25 +141,26 @@ func buildContainer(ctx context.Context, cfg config.Config, newAuthAccountReposi
 	}, idPolicy)
 	authSvc.UseTokenService(tokenService)
 	sessionService := application.NewSessionService(sessionStore, refreshStore)
-
 	// RPID が未設定の場合は起動を拒否する（fail-closed）。
 	if authConfig.WebAuthnRPID == "" {
-		_ = composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
+		_ = composeClosers(func(context.Context) error { return valkeyStore.Close() }, closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
 		return nil, fmt.Errorf("webauthn RPID is required: set AUTH_WEBAUTHN_RPID")
 	}
 
 	webAuthnProv, webAuthnErr := webauthn.NewWebAuthnProvider(authConfig.WebAuthnRPID, cfg.AllowedOrigins, authConfig.ChallengeTTL, challengeStore)
 	if webAuthnErr != nil {
-		_ = composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
+		_ = composeClosers(func(context.Context) error { return valkeyStore.Close() }, closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
 		return nil, fmt.Errorf("webauthn provider init: %w", webAuthnErr)
 	}
 	authSvc.UseWebAuthnProvider(webAuthnProv)
 
 	return &Container{
-		Auth:           authSvc,
-		TokenService:   tokenService,
-		SessionService: sessionService,
-		close:          composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo, func(context.Context) error { return valkeyStore.Close() }),
+		Auth:            authSvc,
+		AccountSetting:  accountSettingService,
+		AccountSnapshot: accountSnapshotService,
+		TokenService:    tokenService,
+		SessionService:  sessionService,
+		close:           composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo, func(context.Context) error { return valkeyStore.Close() }),
 	}, nil
 }
 
@@ -167,25 +173,25 @@ func newValkeyChallengeStore(_ context.Context, config config.ValkeyConfig) (web
 	return store, func(context.Context) error { return store.Close() }, nil
 }
 
-func newGormAuthAccountRepository(ctx context.Context, databaseURL string) (application.AuthAccountRepository, func(context.Context) error, error) {
+func newGormAccountAuthRepository(ctx context.Context, databaseURL string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
 	db, err := postgres.OpenDatabase(databaseURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := postgres.PingDatabase(ctx, db); err != nil {
 		sqlDB, dbErr := db.DB()
 		if dbErr == nil {
 			_ = sqlDB.Close()
 		}
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return postgres.NewGormAuthAccountRepository(db), func(context.Context) error {
+	return postgres.NewGormAccountAuthRepository(db), postgres.NewGormAccountSettingRepository(db), func(context.Context) error {
 		return sqlDB.Close()
 	}, nil
 }

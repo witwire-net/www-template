@@ -1,17 +1,21 @@
 <script lang="ts">
 	import { Badge, CardNS, Table } from '@www-template/ui/components';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	const { data } = $props<{
 		data: {
+			locale: 'ja' | 'en';
 			stats: { totalAccounts: number; activeAccounts: number; suspendedAccounts: number; recentAccounts: { id: string; email: string; status: string; createdAt: Date }[] };
 			recentAudit: { id: string; action: string; targetType: string; targetId: string; outcome: string; createdAt: Date }[];
 		};
 	}>();
+	const i18n = $derived(createAdminI18n(data.locale));
 
 	const kpis = $derived([
-		{ label: 'Total accounts', value: data.stats.totalAccounts, tone: 'text-slate-950' },
-		{ label: 'Active accounts', value: data.stats.activeAccounts, tone: 'text-emerald-700' },
-		{ label: 'Suspended accounts', value: data.stats.suspendedAccounts, tone: 'text-rose-700' },
+		{ label: i18n.t('dashboard.totalAccounts'), value: data.stats.totalAccounts, tone: 'text-slate-950' },
+		{ label: i18n.t('dashboard.activeAccounts'), value: data.stats.activeAccounts, tone: 'text-emerald-700' },
+		{ label: i18n.t('dashboard.suspendedAccounts'), value: data.stats.suspendedAccounts, tone: 'text-rose-700' },
 	]);
 
 	function formatDate(value: Date): string {
@@ -22,9 +26,9 @@
 
 <main class="space-y-8 p-8">
 	<section class="space-y-2">
-		<p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Command overview</p>
-		<h1 class="text-3xl font-bold tracking-tight">Admin Console</h1>
-		<p class="max-w-2xl text-slate-600">顧客アカウントの状態と直近の監査イベントを確認します。</p>
+		<p class="text-sm font-semibold uppercase tracking-wide text-slate-500">{i18n.t('dashboard.eyebrow')}</p>
+		<h1 class="text-3xl font-bold tracking-tight">{i18n.t('dashboard.title')}</h1>
+		<p class="max-w-2xl text-slate-600">{i18n.t('dashboard.description')}</p>
 	</section>
 
 	<section class="grid gap-4 md:grid-cols-3">
@@ -41,16 +45,16 @@
 	<section class="grid gap-6 xl:grid-cols-2">
 		<CardNS.Card>
 			<CardNS.CardHeader>
-				<CardNS.CardTitle>Recent accounts</CardNS.CardTitle>
-				<CardNS.CardDescription>新規作成されたアカウントの最新 5 件です。</CardNS.CardDescription>
+				<CardNS.CardTitle>{i18n.t('dashboard.recentAccounts')}</CardNS.CardTitle>
+				<CardNS.CardDescription>{i18n.t('dashboard.recentAccountsDescription')}</CardNS.CardDescription>
 			</CardNS.CardHeader>
 			<CardNS.CardContent>
 				<Table.Table>
 					<Table.TableHeader>
 						<Table.TableRow>
-							<Table.TableHead>Email</Table.TableHead>
-							<Table.TableHead>Status</Table.TableHead>
-							<Table.TableHead>Created</Table.TableHead>
+							<Table.TableHead>{i18n.t('accounts.email')}</Table.TableHead>
+							<Table.TableHead>{i18n.t('accounts.status')}</Table.TableHead>
+							<Table.TableHead>{i18n.t('accounts.created')}</Table.TableHead>
 						</Table.TableRow>
 					</Table.TableHeader>
 					<Table.TableBody>
@@ -68,17 +72,17 @@
 
 		<CardNS.Card>
 			<CardNS.CardHeader>
-				<CardNS.CardTitle>Recent audit</CardNS.CardTitle>
-				<CardNS.CardDescription>直近の管理操作を outcome とともに確認します。</CardNS.CardDescription>
+				<CardNS.CardTitle>{i18n.t('dashboard.recentAudit')}</CardNS.CardTitle>
+				<CardNS.CardDescription>{i18n.t('dashboard.recentAuditDescription')}</CardNS.CardDescription>
 			</CardNS.CardHeader>
 			<CardNS.CardContent>
 				<Table.Table>
 					<Table.TableHeader>
 						<Table.TableRow>
-							<Table.TableHead>Action</Table.TableHead>
-							<Table.TableHead>Target</Table.TableHead>
-							<Table.TableHead>Outcome</Table.TableHead>
-							<Table.TableHead>Created</Table.TableHead>
+							<Table.TableHead>{i18n.t('audit.action')}</Table.TableHead>
+							<Table.TableHead>{i18n.t('audit.target')}</Table.TableHead>
+							<Table.TableHead>{i18n.t('audit.outcome')}</Table.TableHead>
+							<Table.TableHead>{i18n.t('accounts.created')}</Table.TableHead>
 						</Table.TableRow>
 					</Table.TableHeader>
 					<Table.TableBody>

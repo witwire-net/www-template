@@ -9,8 +9,9 @@
 		open = $bindable(false),
 		ref = $bindable(null),
 		value = $bindable(""),
-		title = "Command Palette",
-		description = "Search for a command to run...",
+		title,
+		description,
+		closeLabel,
 		showCloseButton = false,
 		portalProps,
 		children,
@@ -20,8 +21,9 @@
 		WithoutChildrenOrChild<CommandPrimitive.RootProps> & {
 			portalProps?: DialogPrimitive.PortalProps;
 			children: Snippet;
-			title?: string;
-			description?: string;
+			title: string;
+			description: string;
+			closeLabel: string;
 			showCloseButton?: boolean;
 			class?: string;
 		} = $props();
@@ -35,6 +37,7 @@
 	<Dialog.Content
 		class={cn("rounded-4xl! p-0 top-1/3 translate-y-0 overflow-hidden p-0", className)}
 		{showCloseButton}
+		{closeLabel}
 		{portalProps}
 	>
 		<Command {...restProps} bind:value bind:ref {children} />

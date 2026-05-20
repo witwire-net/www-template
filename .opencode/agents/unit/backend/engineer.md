@@ -3,6 +3,7 @@ description: Backend implementation specialist for packages/backend, packages/ty
 mode: subagent
 hidden: true
 model: openai/gpt-5.5
+reasoningEffort: 'high'
 temperature: 0.1
 permission:
   edit: allow

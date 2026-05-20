@@ -1,0 +1,5 @@
+{
+  "subject": "{{.ProductName}} Passkey Recovered",
+  "body_html": "<p>Your passkey has been successfully recovered.</p><p>If this was not you, contact support immediately.</p>",
+  "body_text": "Your passkey has been successfully recovered. If this was not you, contact support immediately."
+}

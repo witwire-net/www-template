@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DeviceManager } from '@www-template/ui/components';
-import type { DeviceSession } from '@www-template/ui/components/device-manager';
+import { DeviceManager } from '../../components/device-manager';
+
+import type { DeviceSession } from '../../components/device-manager';
 
 function createDevice(overrides: Partial<DeviceSession> = {}): DeviceSession {
   return {
@@ -16,6 +17,20 @@ function createDevice(overrides: Partial<DeviceSession> = {}): DeviceSession {
     ...overrides,
   };
 }
+
+const defaultLabels = {
+  sectionAriaLabel: 'デバイス管理',
+  loadingText: '読み込み中…',
+  emptyText: 'ログイン中のデバイスはありません',
+  loginAtLabel: 'ログイン',
+  lastActiveAtLabel: '最終アクティブ',
+  currentDeviceBadge: '現在のデバイス',
+  logoutButtonAriaLabel: (deviceName: string) => `${deviceName} をログアウト`,
+  logoutButtonText: 'ログアウト',
+  revokeOthersButtonText: '他のすべてのデバイスをログアウト',
+};
+
+const defaultFormatDateTime = (iso: string) => new Date(iso).toLocaleString('ja-JP');
 
 describe('DeviceManager', () => {
   it('[AUTH-FE-S034] renders session list with device names and timestamps', () => {
@@ -33,6 +48,8 @@ describe('DeviceManager', () => {
         error: null,
         onRevoke: vi.fn(),
         onRevokeOthers: vi.fn(),
+        formatDateTime: defaultFormatDateTime,
+        labels: defaultLabels,
       },
     });
 
@@ -64,6 +81,8 @@ describe('DeviceManager', () => {
         error: null,
         onRevoke,
         onRevokeOthers: vi.fn(),
+        formatDateTime: defaultFormatDateTime,
+        labels: defaultLabels,
       },
     });
 
@@ -93,6 +112,8 @@ describe('DeviceManager', () => {
         error: null,
         onRevoke: vi.fn(),
         onRevokeOthers,
+        formatDateTime: defaultFormatDateTime,
+        labels: defaultLabels,
       },
     });
 
@@ -116,6 +137,8 @@ describe('DeviceManager', () => {
         error: 'デバイス一覧の取得に失敗しました。',
         onRevoke: vi.fn(),
         onRevokeOthers: vi.fn(),
+        formatDateTime: defaultFormatDateTime,
+        labels: defaultLabels,
       },
     });
 
@@ -139,6 +162,8 @@ describe('DeviceManager', () => {
         error: null,
         onRevoke: vi.fn(),
         onRevokeOthers: vi.fn(),
+        formatDateTime: defaultFormatDateTime,
+        labels: defaultLabels,
       },
     });
 
@@ -159,6 +184,8 @@ describe('DeviceManager', () => {
         error: null,
         onRevoke: vi.fn(),
         onRevokeOthers: vi.fn(),
+        formatDateTime: defaultFormatDateTime,
+        labels: defaultLabels,
       },
     });
 

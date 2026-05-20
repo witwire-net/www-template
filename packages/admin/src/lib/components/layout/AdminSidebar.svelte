@@ -1,32 +1,21 @@
 <script lang="ts">
 	import { Sidebar, Badge } from '@www-template/ui/components';
 
-	interface NavItem {
-		label: string;
-		href: string;
-		roles: string[];
-	}
-
-	const defaultNavItems: NavItem[] = [
-		{ label: 'Dashboard', href: '/', roles: ['admin', 'operator', 'viewer'] },
-		{ label: 'Accounts', href: '/accounts', roles: ['admin', 'operator', 'viewer'] },
-		{ label: 'Audit Log', href: '/audit', roles: ['admin', 'operator', 'viewer'] },
-		{ label: 'Settings', href: '/settings', roles: ['admin'] },
-	];
-
 	const {
 		role = 'viewer',
 		currentPath = '/',
-		navItems,
+		navItems = [],
+		brandLabel,
+		closeLabel,
 	}: {
 		role?: string;
 		currentPath?: string;
 		navItems?: { label: string; href: string; activePrefix?: string }[];
+		brandLabel: string;
+		closeLabel: string;
 	} = $props();
 
-	const visibleItems = $derived(
-		navItems ?? defaultNavItems.filter((item) => item.roles.includes(role))
-	);
+	const visibleItems = $derived(navItems);
 
 	function isActive(href: string): boolean {
 		// `/` は全 route に前方一致してしまうため、dashboard だけ完全一致で判定する。
@@ -35,12 +24,12 @@
 	}
 </script>
 
-<Sidebar.Sidebar>
+<Sidebar.Sidebar ariaLabel={brandLabel} closeLabel={closeLabel}>
 	<Sidebar.SidebarHeader>
 		<Sidebar.SidebarMenu>
 			<Sidebar.SidebarMenuItem>
 				<Sidebar.SidebarMenuButton size="lg">
-					Admin Console
+					{brandLabel}
 				</Sidebar.SidebarMenuButton>
 			</Sidebar.SidebarMenuItem>
 		</Sidebar.SidebarMenu>

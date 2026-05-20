@@ -61,7 +61,7 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 ## Architecture Notes
 
 - Client dependency direction: `web -> frontend/ui` (web is a public LP; it MUST NOT depend on domain or api), `frontend/app -> frontend/domain -> frontend/api` (also `frontend/app -> frontend/ui`)
-- Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/adapters/http|backend/internal/adapters/persistence/postgres|backend/internal/adapters/persistence/valkey|backend/internal/adapters/webauthn|backend/internal/adapters/mailer|backend/internal/auth/application|backend/internal/platform/*) -> backend/internal/auth/domain -> backend/internal/platform/*`
+- Server dependency direction: `backend/cmd -> backend/internal/app -> (backend/internal/adapter/http|backend/internal/adapter/postgres|backend/internal/adapter/valkey|backend/internal/adapter/webauthn|backend/internal/adapter/mailer|backend/internal/application|backend/internal/platform/*) -> backend/internal/domain`
 - API contract direction: implementation must follow TypeSpec; do not generate OpenAPI from server routes for SDK input.
 
 ## Package Responsibility
@@ -72,6 +72,7 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 - `packages/admin`: Admin Console package, including package-local `/api/admin/**` BFF routes, Prisma schemas, admin-only server/runtime code, and admin UI coupled to those routes.
 - Frontend-owned agent scope: `packages/web` and `packages/frontend/**`.
 - `packages/web`: public landing/public site surface; it may depend on `packages/frontend/ui` only.
+- `packages/frontend/i18n`: shared frontend i18n runtime (locale definitions, loader/config, typed translator, formatter, coverage utility). It may be imported by `packages/web`, `packages/frontend/app`, and `packages/admin`, but not by `packages/frontend/ui` or `packages/frontend/domain`.
 - `packages/frontend/app`: authenticated `/app` CSR surface; compose domain hooks and UI components without direct API-client or raw network access.
 - `packages/frontend/domain`: frontend domain hooks, state, and API orchestration; it is the only handwritten frontend layer that depends on `packages/frontend/api`.
 - `packages/frontend/ui`: reusable UI components, styling primitives, assets, and presentation utilities.
@@ -80,7 +81,7 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 ## Backend Guardrails
 
 - API path policy: all product/backend API routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*`, `api/v1/sessions*`, and `api/v1/auth/logout`. Admin Console package-local BFF routes are the only exception: `/api/admin/*` is allowed only under `packages/admin/src/routes/api/admin/**`, must not be exposed from Go backend, and must not be used by generated product SDKs.
-- GORM imports are allowed only under `packages/backend/internal/adapters/persistence/**`
+- GORM imports are allowed only under `packages/backend/internal/adapter/postgres/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow
 

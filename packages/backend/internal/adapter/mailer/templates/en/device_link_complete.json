@@ -1,0 +1,5 @@
+{
+  "subject": "{{.ProductName}} Passkey Added on New Device",
+  "body_html": "<p>A new passkey has been successfully added to your account on a new device.</p><p>If this was not you, contact support immediately.</p>",
+  "body_text": "A new passkey has been successfully added to your account on a new device. If this was not you, contact support immediately."
+}

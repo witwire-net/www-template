@@ -35,14 +35,15 @@
 - app surface は `Authorization: Bearer <token>` 境界を必須にする
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` を必須にする
 - OpenAPI は Spectral lint で path policy と bearer security declaration を検証する
-- GORM は `packages/backend/internal/adapters/persistence/**` のみ
+- backend の依存方向は `cmd/api -> internal/app -> (internal/adapter/* | internal/application | internal/platform/*) -> internal/domain` を守る
+- GORM は `packages/backend/internal/adapter/postgres/**` のみ
 - `AutoMigrate` は禁止。`golang-migrate` 用 SQL を `packages/backend/db/migrations/**` に置く
-- auth/domain / auth/application は Gin, GORM, generated, HTTP infra に依存しない
-- adapters/http は adapters/persistence を直 import しない
+- `internal/domain` / `internal/application` は Gin, GORM, generated, HTTP infra に依存しない
+- `internal/adapter/http` は `internal/adapter/postgres` / `internal/adapter/valkey` などの永続化 adapter を直 import しない
 
 ## Hooks
 
-- `pre-commit`: `pnpm lint-staged` + `pnpm check:codegen`
+- `pre-commit`: `pnpm lint-staged` のみ。codegen drift check は `pnpm lint` と CI の `pnpm check:codegen` で実行する
 - staged `.go` は hook 内で `gofmt` + `goimports` を掛ける
 - staged migration SQL は custom guardrail で filename / pair policy を検証する
 - staged ESLint は inline suppression 無効・warning 失敗で実行する

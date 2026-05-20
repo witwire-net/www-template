@@ -1,3 +1,9 @@
+import {
+  DEFAULT_OPERATOR_LOCALE,
+  parseOperatorLocale,
+  type OperatorLocale,
+} from './operator_locale.js';
+
 import type { Operator } from './types.js';
 import type { PrismaClient as AdminPrismaClient, Prisma } from '.prisma/admin-client';
 
@@ -81,6 +87,7 @@ export async function createInitialAdminOperator(
       display_name: data.displayName,
       role: 'admin',
       is_active: true,
+      locale: DEFAULT_OPERATOR_LOCALE,
     },
   });
   return toOperator(row);
@@ -103,7 +110,28 @@ export async function createOperator(
       display_name: data.displayName,
       role: data.role,
       is_active: true,
+      locale: DEFAULT_OPERATOR_LOCALE,
     },
+  });
+  return toOperator(row);
+}
+
+/**
+ * オペレーター本人の表示 locale を更新する。
+ *
+ * @param adminPrisma Admin PrismaClient
+ * @param id 更新対象のオペレーター ID
+ * @param locale 保存する Admin operator locale
+ * @returns 更新されたオペレーター
+ */
+export async function updateOperatorLocale(
+  adminPrisma: AdminPrismaLike,
+  id: string,
+  locale: OperatorLocale
+): Promise<Operator> {
+  const row = await (adminPrisma as AdminPrismaClient).adminOperator.update({
+    where: { id },
+    data: { locale },
   });
   return toOperator(row);
 }
@@ -225,6 +253,7 @@ function toOperator(row: {
   display_name: string;
   role: string;
   is_active: boolean;
+  locale: string;
   setup_token_hash: string | null;
   setup_token_expires_at: Date | null;
   last_login_at: Date | null;
@@ -237,6 +266,7 @@ function toOperator(row: {
     displayName: row.display_name,
     role: row.role as Operator['role'],
     isActive: row.is_active,
+    locale: parseOperatorLocale(row.locale),
     setupTokenHash: row.setup_token_hash,
     setupTokenExpiresAt: row.setup_token_expires_at,
     lastLoginAt: row.last_login_at,

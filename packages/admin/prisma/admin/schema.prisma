@@ -22,6 +22,7 @@ model AdminOperator {
   display_name         String   @map("display_name")
   role                 String   @default("operator") @map("role")
   is_active            Boolean  @default(true) @map("is_active")
+  locale               String   @default("ja") @map("locale")
   setup_token_hash     String?  @map("setup_token_hash")
   setup_token_expires_at DateTime? @map("setup_token_expires_at")
   last_login_at        DateTime? @map("last_login_at")

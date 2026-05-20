@@ -35,5 +35,4 @@
 	{...restProps}
 >
 	<ChevronRightIcon  />
-	<span class="sr-only">Next slide</span>
 </Button>

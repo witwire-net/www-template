@@ -1,5 +1,7 @@
 import {
   createApiSdk,
+  getAccountSettings,
+  updateAccountSettings,
   type AuthFailureClassification,
   type AuthFailureResponse,
   type AuthOperationErrorResponse,
@@ -21,7 +23,7 @@ import {
   type WebAuthnAttestationCredential,
 } from '../sdk';
 
-import type { Status } from '../types';
+import type { Status, AccountSetting, AccountLocale } from '../types';
 
 const sdk = createApiSdk();
 
@@ -35,6 +37,29 @@ const statusApi = {
   get: async (): Promise<Status> => {
     const { data } = await sdk.status.get();
     return toStatus(data);
+  },
+};
+
+/** AccountSetting API wrapper for authenticated account settings. */
+const accountApi = {
+  getSettings: async (
+    options?: RequestInit
+  ): Promise<{ setting: AccountSetting } | AuthFailureResponse> => {
+    const response = await getAccountSettings(options);
+    if (response.status === 200) {
+      return { setting: response.data.setting };
+    }
+    return response.data;
+  },
+  updateSettings: async (
+    locale: AccountLocale,
+    options?: RequestInit
+  ): Promise<{ setting: AccountSetting } | AuthFailureResponse | AuthOperationErrorResponse> => {
+    const response = await updateAccountSettings({ locale }, options);
+    if (response.status === 200) {
+      return { setting: response.data.setting };
+    }
+    return response.data;
   },
 };
 
@@ -174,6 +199,6 @@ const authApi = {
 };
 
 export type { PasskeyAddFinishRequest, PasskeyItem, PasskeyListResponse, DeviceLinkResponse };
-export { authApi, statusApi };
+export { authApi, statusApi, accountApi };
 
 // SDK types are internal; consumers should use domain types

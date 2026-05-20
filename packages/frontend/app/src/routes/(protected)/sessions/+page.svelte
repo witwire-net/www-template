@@ -1,81 +1,78 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
+  import { useAccount } from '@www-template/domain';
+  import { useDeviceManager, type DeviceManagerErrorCode } from '@www-template/domain';
   import { useAuthSession } from '@www-template/domain/auth/session';
-  import { DeviceManager } from '@www-template/ui/components';
+  import { DeviceManager } from '../../../components/device-manager';
 
-  import type { DeviceSession } from '@www-template/ui/components/device-manager';
+  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
-  const { data, actions } = useAuthSession();
+  const { data } = useAuthSession();
+  const { data: accountData } = useAccount();
+  const { data: deviceData, actions: deviceActions } = useDeviceManager();
+  const locale = $derived(accountData.state.account?.setting.locale ?? resolveUnauthenticatedLocale());
+  const i18n = $derived(useI18n(locale));
 
-  let loading = $state(false);
-  let localError = $state<string | null>(null);
-  let devices = $state<DeviceSession[]>([]);
-
-  /** ページマウント時にデバイス一覧を取得する。 */
-  if (typeof window !== 'undefined') {
-    void loadDevices();
-  }
-
-  async function loadDevices(): Promise<void> {
-    loading = true;
-    localError = null;
-    try {
-      const result = await actions.listDevices();
-      if (result === null) {
-        localError = 'デバイス一覧の取得に失敗しました。';
-        devices = [];
-      } else {
-        devices = result;
-      }
-    } catch {
-      localError = 'デバイス一覧の取得に失敗しました。';
-      devices = [];
-    } finally {
-      loading = false;
+  const deviceError = $derived.by(() => {
+    const errorCode = deviceData.state.errorCode;
+    if (errorCode === null) {
+      return null;
     }
-  }
+
+    const messages: Record<DeviceManagerErrorCode, string> = {
+      load: i18n.t('device-manager.error'),
+      revoke: i18n.t('device-manager.logoutError'),
+      'revoke-others': i18n.t('device-manager.revokeOthersError'),
+    };
+
+    return messages[errorCode];
+  });
 
   async function handleRevoke(sessionId: string): Promise<void> {
-    localError = null;
-    try {
-      const ok = await actions.revokeDevice(sessionId);
-      if (!ok) {
-        localError = 'デバイスのログアウトに失敗しました。';
-        return;
-      }
-      // ローカル一覧から該当デバイスを除去して即座に反映する
-      devices = devices.filter((d) => d.sessionId !== sessionId);
-      // 現在のセッションをログアウトした場合、state が anonymous に遷移するため login へ移動
-      if (data.state.phase === 'anonymous') {
-        await goto('/login');
-      }
-    } catch {
-      localError = 'デバイスのログアウトに失敗しました。';
+    const ok = await deviceActions.revokeDevice(sessionId);
+    if (ok && data.state.phase === 'anonymous') {
+      await goto('/login');
     }
   }
 
   async function handleRevokeOthers(): Promise<void> {
-    localError = null;
-    try {
-      const ok = await actions.revokeOtherDevices();
-      if (!ok) {
-        localError = '他のデバイスのログアウトに失敗しました。';
-        return;
-      }
-      // ローカル一覧から現在のデバイスのみを残す
-      devices = devices.filter((d) => d.sessionId === data.state.activeSessionId);
-    } catch {
-      localError = '他のデバイスのログアウトに失敗しました。';
+    const ok = await deviceActions.revokeOtherDevices();
+    if (ok && data.state.phase === 'anonymous') {
+      await goto('/login');
     }
+  }
+
+  function formatDateTime(iso: string): string {
+    const d = new Date(iso);
+    return i18n.formatters.dateTime(d, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 </script>
 
-<DeviceManager
-  {devices}
+  <DeviceManager
+  devices={deviceData.state.devices}
   currentSessionId={data.state.activeSessionId ?? ''}
-  {loading}
-  error={localError}
+  loading={deviceData.state.loading}
+  error={deviceError}
   onRevoke={handleRevoke}
   onRevokeOthers={handleRevokeOthers}
+  {formatDateTime}
+  labels={{
+    sectionAriaLabel: i18n.t('device-manager.sectionAriaLabel'),
+    loadingText: i18n.t('device-manager.loadingText'),
+    emptyText: i18n.t('device-manager.emptyText'),
+    loginAtLabel: i18n.t('device-manager.loginAtLabel'),
+    lastActiveAtLabel: i18n.t('device-manager.lastActiveAtLabel'),
+    currentDeviceBadge: i18n.t('device-manager.currentDeviceBadge'),
+    logoutButtonAriaLabel: (deviceName) =>
+      i18n.t('device-manager.logoutButtonAriaLabel', { deviceName }),
+    logoutButtonText: i18n.t('device-manager.logoutButtonText'),
+    revokeOthersButtonText: i18n.t('device-manager.revokeOthersButtonText'),
+  }}
 />

@@ -2,6 +2,8 @@
 	import { EmptyState, Button, Table } from '@www-template/ui/components';
 	import { Skeleton } from '@www-template/ui/components/skeleton';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	import type { Snippet } from 'svelte';
 
 	interface Column {
@@ -15,13 +17,15 @@
 		columns,
 		rows,
 		loading = false,
-		emptyMessage = 'データがありません',
+		emptyMessage = createAdminI18n().t('shared.empty'),
+		caption = createAdminI18n().t('shared.dataTable'),
 		onRowClick,
 	}: {
 		columns: Column[];
 		rows: T[];
 		loading?: boolean;
 		emptyMessage?: string;
+		caption?: string;
 		onRowClick?: (row: T) => void;
 	} = $props();
 
@@ -68,7 +72,7 @@
 </script>
 
 <Table.Table data-testid="data-table">
-	<Table.TableCaption class="sr-only">Data table</Table.TableCaption>
+	<Table.TableCaption class="sr-only">{caption}</Table.TableCaption>
 	<Table.TableHeader>
 		<Table.TableRow>
 			{#each columns as col (col.key)}

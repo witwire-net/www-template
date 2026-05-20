@@ -29,7 +29,7 @@ description: Enforce this repository's actual coding rules and verification flow
 
 - root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`
 - TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
-- backend: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapters/http/router_test.go`, `packages/backend/internal/adapters/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
+- backend: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
 - scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/codegen/check.sh`
 
 ### 2) Classify the change before editing
@@ -42,8 +42,8 @@ description: Enforce this repository's actual coding rules and verification flow
 固定の依存方向:
 
 - Client: `packages/web -> packages/frontend/ui` and `packages/frontend/app -> packages/frontend/domain -> packages/frontend/api`
-- Server: `packages/backend/cmd/api -> packages/backend/internal/app -> (packages/backend/internal/adapters/http | packages/backend/internal/adapters/persistence/postgres | packages/backend/internal/adapters/persistence/valkey | packages/backend/internal/adapters/webauthn | packages/backend/internal/adapters/mailer | packages/backend/internal/auth/application | packages/backend/internal/platform/*) -> packages/backend/internal/auth/domain -> packages/backend/internal/platform/*`
-- `packages/backend/internal/generated/openapi` を非 generated code から import できるのは `packages/backend/internal/adapters/http` だけ
+- Server: `packages/backend/cmd/api -> packages/backend/internal/app -> (packages/backend/internal/adapter/http | packages/backend/internal/adapter/postgres | packages/backend/internal/adapter/valkey | packages/backend/internal/adapter/webauthn | packages/backend/internal/adapter/mailer | packages/backend/internal/application | packages/backend/internal/platform/*) -> packages/backend/internal/domain`
+- `packages/backend/internal/generated/openapi` を非 generated code から import できるのは `packages/backend/internal/adapter/http` だけ
 
 ### 3) Implement without breaking enforced rules
 
@@ -58,7 +58,7 @@ description: Enforce this repository's actual coding rules and verification flow
 - Frontend app は SvelteKit SPA（SSR 無効）として保ち、server route / server hook / server-only lib を持ち込まない
 - `packages/web` の SvelteKit route/server 制約と、独立オリジンで動く frontend app の分離を維持する
 - Go file は `packages/backend/cmd/api`, `packages/backend/internal/*`, `packages/backend/tools/analyzers` の許可 layer にだけ置く
-- GORM は `packages/backend/internal/adapters/persistence/**` だけ、`AutoMigrate` は禁止、migration は `packages/backend/db/migrations/*.sql`
+- GORM は `packages/backend/internal/adapter/postgres/**` だけ、`AutoMigrate` は禁止、migration は `packages/backend/db/migrations/*.sql`
 - Non-generated Gin route は `/health` または `/api/v1/*` の string literal だけにする
 - `fmt.Print*`, `print`, `println` と host-derived URL composition を backend code に入れない
 
@@ -94,5 +94,5 @@ Changed-file 向けの軽量チェック:
 - active frontend source での React / TSX
 - `packages/frontend/app` への SvelteKit route / server hook / form action の持ち込み
 - GORM の layer 逸脱、`AutoMigrate`、migration pair 破れ
-- `packages/backend/internal/adapters/http` から `packages/backend/internal/adapters/persistence` の直 import
+- `packages/backend/internal/adapter/http` から `packages/backend/internal/adapter/postgres` / `packages/backend/internal/adapter/valkey` の直 import
 - backend code での `fmt.Print*` や host-derived URL composition

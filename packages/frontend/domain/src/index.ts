@@ -21,3 +21,11 @@ export type {
 export { useStatus } from './status';
 export type { StatusActions, StatusData } from './status';
 export { initObservability, useObservability } from './observability';
+export { useAccount, useAccountTranslator, useAccountLocaleSync } from './account';
+export type { AccountData, AccountActions, Account, AccountState } from './account';
+export { useDeviceManager } from './deviceManager.svelte';
+export type {
+  DeviceManagerActions,
+  DeviceManagerData,
+  DeviceManagerErrorCode,
+} from './deviceManager.svelte';

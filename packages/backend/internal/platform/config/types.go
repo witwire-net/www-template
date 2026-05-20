@@ -35,6 +35,7 @@ type SMTPConfig struct {
 
 type MailConfig struct {
 	FromAddress string
+	ProductName string
 }
 
 type DatabaseConfig struct {

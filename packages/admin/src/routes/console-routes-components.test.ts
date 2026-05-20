@@ -22,10 +22,14 @@ describe('Admin Console route/component scenarios', () => {
     expectContains(page, [
       'encodeURIComponent(query)',
       'encodeURIComponent(status)',
-      'Apply filters',
-      '検索条件に一致するアカウントはありません。',
+      "i18n.t('accounts.applyFilters')",
+      "i18n.t('accounts.emptyDescription')",
     ]);
-    expectContains(table, ['Account list', 'Pagination.Pagination', 'onPageChange?.(p)']);
+    expectContains(table, [
+      "t('accounts.tableCaption')",
+      'Pagination.Pagination',
+      'onPageChange?.(p)',
+    ]);
     expectContains(server, [
       'const PAGE_SIZE = 20',
       'searchAccounts(await getProductPrisma()',
@@ -40,25 +44,27 @@ describe('Admin Console route/component scenarios', () => {
     const server = readRoute('accounts/[id]/+page.server.ts');
     expectContains(page, [
       '{data.account.email}',
-      'Status reason:',
+      "i18n.t('accountDetail.statusReason')",
       'PasskeyList',
       '?/suspend',
       '?/restore',
-      'Suspend reason',
-      'Restore reason',
+      "i18n.t('accountDetail.suspendReason')",
+      "i18n.t('accountDetail.restoreReason')",
+      'i18n.t(form.messageKey)',
     ]);
     expectContains(page, [
       "data.account.status === 'active'",
-      'confirmText="Suspend"',
-      'confirmText="Restore"',
+      "confirmText={i18n.t('accountDetail.suspend')}",
+      "confirmText={i18n.t('accountDetail.restore')}",
       'suspendForm?.requestSubmit()',
       'restoreForm?.requestSubmit()',
     ]);
-    expectContains(passkeys, ['This account has no registered passkeys.', 'Passkeys']);
+    expectContains(passkeys, ["t('passkeyList.emptyDescription')", "t('passkeyList.title')"]);
     expectContains(server, [
       "return redirect(303, '/accounts')",
       "requirePermission(locals.operator, 'accounts:suspend')",
-      '停止理由を 1〜500 文字で入力してください。',
+      "'accountDetail.suspendError'",
+      "'accountDetail.restoreError'",
     ]);
   });
 
@@ -68,18 +74,18 @@ describe('Admin Console route/component scenarios', () => {
     const filter = readRoute('../lib/components/audit/AuditFilterBar.svelte');
     const table = readRoute('../lib/components/audit/AuditLogTable.svelte');
     expectContains(page, [
-      'Audit Log',
-      '条件に一致する監査イベントはありません。',
+      "i18n.t('audit.title')",
+      "i18n.t('audit.emptyDescription')",
       'AuditLogTable',
       'AuditFilterBar',
     ]);
     expectContains(filter, [
-      'Filter by action',
+      "t('audit.actionPlaceholder')",
       "action: action !== '' ? action : undefined",
       'onFilter?.({});',
     ]);
     expectContains(table, [
-      'Audit log',
+      "t('audit.tableCaption')",
       'operator_email',
       'toggleExpand(event.id)',
       'JSON.stringify(details, null, 2)',
@@ -93,26 +99,30 @@ describe('Admin Console route/component scenarios', () => {
     const table = readRoute('../lib/components/operators/OperatorTable.svelte');
     const server = readRoute('settings/operators/+page.server.ts');
     expectContains(page, [
-      'Operator table',
-      'Add operator',
-      'One-time setup token',
-      'Rotate setup token',
+      "i18n.t('operators.tableTitle')",
+      "i18n.t('operators.add')",
+      "i18n.t('operators.setupTokenTitle')",
+      "i18n.t('operators.rotate')",
       '?/create',
       '?/update',
       '?/deactivate',
       '?/rotate',
+      'i18n.t(form.messageKey)',
     ]);
     expectContains(table, [
-      'Operator list',
+      "t('operators.tableCaption')",
       'op.id !== currentOperatorId',
-      'Edit Role',
-      'Deactivate',
-      'Rotate Setup Token',
+      "t('operators.editRole')",
+      "t('operators.deactivate')",
+      "t('operators.rotate')",
     ]);
     expectContains(server, [
       "requirePermission(locals.operator, 'operators:read')",
       "requirePermission(locals.operator, 'operators:write')",
-      '入力値を確認してください。',
+      "'operators.createError'",
+      "'operators.updateRoleError'",
+      "'operators.deactivateError'",
+      "'operators.rotateError'",
       'setupToken: result.plaintextToken',
     ]);
   });
@@ -130,29 +140,25 @@ describe('Admin Console route/component scenarios', () => {
       'AdminShell',
       'operatorName={data.operator.email}',
       'navItems={data.navItems}',
+      'labels={data.labels}',
     ]);
     expectContains(layoutServer, [
+      'createAdminI18n',
       "hasPermission(operator.role, 'operators:read')",
-      'Settings',
+      "t('nav.settings')",
       'currentPath: url.pathname',
     ]);
-    expectContains(sidebar, [
-      'Accounts',
-      'Audit Log',
-      'Settings',
-      'isActive(item.href)',
-      'currentPath.startsWith(href)',
-    ]);
+    expectContains(sidebar, ['isActive(item.href)', 'currentPath.startsWith(href)']);
     expectContains(header, [
-      "{operatorName !== '' ? operatorName : 'Operator'}",
+      "{operatorName !== '' ? operatorName : operatorFallback}",
       'action="/api/admin/auth/logout"',
-      'Logout',
+      '{logoutLabel}',
     ]);
     expectContains(dashboard, [
-      'Total accounts',
-      'Active accounts',
-      'Suspended accounts',
-      'Recent audit',
+      "i18n.t('dashboard.totalAccounts')",
+      "i18n.t('dashboard.activeAccounts')",
+      "i18n.t('dashboard.suspendedAccounts')",
+      "i18n.t('dashboard.recentAudit')",
     ]);
     expectContains(dashboardServer, [
       'getDashboardStats(productPrisma)',
@@ -162,6 +168,45 @@ describe('Admin Console route/component scenarios', () => {
       "cookies.delete('admin_session'",
       "cookies.delete('admin_csrf'",
       "return redirect(303, '/login')",
+    ]);
+  });
+
+  it('LOCALIZATION-FE-S007 Admin layout/settings は保存済み operator locale 由来の辞書 label を使う', () => {
+    // layout と settings が operator locale から Admin-owned translator を作り、表示文言を辞書化していることを検証する。
+    const layoutServer = readRoute('+layout.server.ts');
+    const settingsServer = readRoute('settings/+page.server.ts');
+    const settingsPage = readRoute('settings/+page.svelte');
+    expectContains(layoutServer, [
+      'createAdminI18n(operator?.locale ?? null)',
+      "t('nav.dashboard')",
+      'locale,',
+    ]);
+    expectContains(settingsServer, [
+      'createAdminI18n(operator.locale)',
+      "t('settings.title')",
+      "t('settings.managementButton')",
+    ]);
+    expectContains(settingsPage, [
+      '{data.labels.title}',
+      '{data.labels.languageLabel}',
+      '{data.labels.managementButton}',
+    ]);
+  });
+
+  it('LOCALIZATION-FE-S008 Settings route は本人 locale 更新 form を提供する', () => {
+    // Settings route の action と form が認証済み本人 ID だけで operator locale を更新する導線を持つことを検証する。
+    const settingsServer = readRoute('settings/+page.server.ts');
+    const settingsPage = readRoute('settings/+page.svelte');
+    expectContains(settingsServer, [
+      'updateOwnOperatorLocale',
+      "getFormString(form, 'locale')",
+      "return redirect(303, '/settings?localeUpdated=1')",
+    ]);
+    expectContains(settingsPage, [
+      'action="?/locale"',
+      'name="locale"',
+      'value="ja"',
+      'value="en"',
     ]);
   });
 });

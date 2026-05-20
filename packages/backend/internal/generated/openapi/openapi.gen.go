@@ -20,6 +20,12 @@ const (
 	BearerAuthScopes = "BearerAuth.Scopes"
 )
 
+// Defines values for AccountLocale.
+const (
+	En AccountLocale = "en"
+	Ja AccountLocale = "ja"
+)
+
 // Defines values for AuthFailureClassification.
 const (
 	AccountSuspended AuthFailureClassification = "account-suspended"
@@ -74,6 +80,30 @@ const (
 	TokenKindDeviceLink TokenKind = "device-link"
 	TokenKindRecovery   TokenKind = "recovery"
 )
+
+// AccountLocale Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。
+type AccountLocale string
+
+// AccountSetting Product Account に属する現在の設定。AccountSetting は Account の表示・通知設定を表し、Auth 情報や運用者向け設定を含まない。
+type AccountSetting struct {
+	// Locale 現在の Product Account に保存されている表示・通知ロケール。対応値は AccountLocale の ja または en のみ。
+	Locale AccountLocale `json:"locale"`
+}
+
+// AccountSettingResponse 現在の Product Account の AccountSetting を返すレスポンス。requestId は追跡用であり、setting には Account 本人の保存済み設定だけを含める。
+type AccountSettingResponse struct {
+	// RequestId AccountSetting 取得または更新 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// Setting 現在の Product Account に属する保存済み AccountSetting。
+	Setting AccountSetting `json:"setting"`
+}
+
+// AccountSettingSnapshot 認証処理の合成結果として返す Product AccountSetting のスナップショット。refresh token rotation 自体は Auth が担当し、この snapshot は確定した AccountID から AccountSetting を読み込んだ結果だけを表す。
+type AccountSettingSnapshot struct {
+	// Locale refresh response の合成時点で Product Account に保存されていた表示・通知ロケール。
+	Locale AccountLocale `json:"locale"`
+}
 
 // AuthFailureClassification defines model for AuthFailureClassification.
 type AuthFailureClassification string
@@ -359,9 +389,15 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-// RefreshTokenResponse リフレッシュ成功時に返却される新しいトークンペア。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。
+// RefreshTokenResponse リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
 type RefreshTokenResponse struct {
-	AccessToken  string `json:"accessToken"`
+	// AccessToken ローテーション後に発行された短命の JWT アクセストークン。
+	AccessToken string `json:"accessToken"`
+
+	// AccountSetting refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。
+	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
+
+	// RefreshToken 次回以降の rotation に使用する新しいリフレッシュトークン。
 	RefreshToken string `json:"refreshToken"`
 }
 
@@ -395,6 +431,12 @@ type TokenKind string
 
 // UlidId Canonical ULID string used for auth-owned resource and correlation identifiers.
 type UlidId = string
+
+// UpdateAccountSettingRequest 現在の Product Account の AccountSetting.locale を更新するリクエスト。Account ID は bearer session から確定するため body には含めない。
+type UpdateAccountSettingRequest struct {
+	// Locale 保存したい Product AccountSetting.locale。対応値以外は API 実装で拒否し、永続値を変更しない。
+	Locale AccountLocale `json:"locale"`
+}
 
 // WebAuthnAssertionCredential WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
 type WebAuthnAssertionCredential struct {
@@ -482,6 +524,9 @@ type SendDeviceLinkParams struct {
 type DeletePasskeyParams struct {
 	XReauthSession string `json:"X-Reauth-Session"`
 }
+
+// UpdateAccountSettingsJSONRequestBody defines body for UpdateAccountSettings for application/json ContentType.
+type UpdateAccountSettingsJSONRequestBody = UpdateAccountSettingRequest
 
 // FinishPasskeyAuthenticationJSONRequestBody defines body for FinishPasskeyAuthentication for application/json ContentType.
 type FinishPasskeyAuthenticationJSONRequestBody = PasskeyFinishRequest
@@ -577,6 +622,12 @@ func (t *PasskeyRegisterRequest) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Gets the current account settings
+	// (GET /api/v1/account/settings)
+	GetAccountSettings(c *gin.Context)
+	// Updates the current account settings
+	// (PATCH /api/v1/account/settings)
+	UpdateAccountSettings(c *gin.Context)
 	// Revokes the current bearer session
 	// (POST /api/v1/auth/logout)
 	Logout(c *gin.Context)
@@ -644,6 +695,36 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(c *gin.Context)
+
+// GetAccountSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetAccountSettings(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetAccountSettings(c)
+}
+
+// UpdateAccountSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAccountSettings(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.UpdateAccountSettings(c)
+}
 
 // Logout operation middleware
 func (siw *ServerInterfaceWrapper) Logout(c *gin.Context) {
@@ -1019,6 +1100,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
+	router.GET(options.BaseURL+"/api/v1/account/settings", wrapper.GetAccountSettings)
+	router.PATCH(options.BaseURL+"/api/v1/account/settings", wrapper.UpdateAccountSettings)
 	router.POST(options.BaseURL+"/api/v1/auth/logout", wrapper.Logout)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
@@ -1038,6 +1121,174 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.DELETE(options.BaseURL+"/api/v1/sessions/others", wrapper.RevokeOtherSessions)
 	router.DELETE(options.BaseURL+"/api/v1/sessions/:id", wrapper.RevokeSession)
 	router.GET(options.BaseURL+"/api/v1/status", wrapper.GetStatus)
+}
+
+type GetAccountSettingsRequestObject struct {
+}
+
+type GetAccountSettingsResponseObject interface {
+	VisitGetAccountSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetAccountSettings200ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetAccountSettings200JSONResponse struct {
+	Body    AccountSettingResponse
+	Headers GetAccountSettings200ResponseHeaders
+}
+
+func (response GetAccountSettings200JSONResponse) VisitGetAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAccountSettings401ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetAccountSettings401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers GetAccountSettings401ResponseHeaders
+}
+
+func (response GetAccountSettings401JSONResponse) VisitGetAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAccountSettings403ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetAccountSettings403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers GetAccountSettings403ResponseHeaders
+}
+
+func (response GetAccountSettings403JSONResponse) VisitGetAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAccountSettings503ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetAccountSettings503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers GetAccountSettings503ResponseHeaders
+}
+
+func (response GetAccountSettings503JSONResponse) VisitGetAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAccountSettingsRequestObject struct {
+	Body *UpdateAccountSettingsJSONRequestBody
+}
+
+type UpdateAccountSettingsResponseObject interface {
+	VisitUpdateAccountSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateAccountSettings200ResponseHeaders struct {
+	CacheControl string
+}
+
+type UpdateAccountSettings200JSONResponse struct {
+	Body    AccountSettingResponse
+	Headers UpdateAccountSettings200ResponseHeaders
+}
+
+func (response UpdateAccountSettings200JSONResponse) VisitUpdateAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAccountSettings400ResponseHeaders struct {
+	CacheControl string
+}
+
+type UpdateAccountSettings400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers UpdateAccountSettings400ResponseHeaders
+}
+
+func (response UpdateAccountSettings400JSONResponse) VisitUpdateAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAccountSettings401ResponseHeaders struct {
+	CacheControl string
+}
+
+type UpdateAccountSettings401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers UpdateAccountSettings401ResponseHeaders
+}
+
+func (response UpdateAccountSettings401JSONResponse) VisitUpdateAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAccountSettings403ResponseHeaders struct {
+	CacheControl string
+}
+
+type UpdateAccountSettings403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers UpdateAccountSettings403ResponseHeaders
+}
+
+func (response UpdateAccountSettings403JSONResponse) VisitUpdateAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAccountSettings503ResponseHeaders struct {
+	CacheControl string
+}
+
+type UpdateAccountSettings503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers UpdateAccountSettings503ResponseHeaders
+}
+
+func (response UpdateAccountSettings503JSONResponse) VisitUpdateAccountSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type LogoutRequestObject struct {
@@ -2453,6 +2704,12 @@ func (response GetStatus200JSONResponse) VisitGetStatusResponse(w http.ResponseW
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Gets the current account settings
+	// (GET /api/v1/account/settings)
+	GetAccountSettings(ctx context.Context, request GetAccountSettingsRequestObject) (GetAccountSettingsResponseObject, error)
+	// Updates the current account settings
+	// (PATCH /api/v1/account/settings)
+	UpdateAccountSettings(ctx context.Context, request UpdateAccountSettingsRequestObject) (UpdateAccountSettingsResponseObject, error)
 	// Revokes the current bearer session
 	// (POST /api/v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
@@ -2522,6 +2779,64 @@ func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareF
 type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
+}
+
+// GetAccountSettings operation middleware
+func (sh *strictHandler) GetAccountSettings(ctx *gin.Context) {
+	var request GetAccountSettingsRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAccountSettings(ctx, request.(GetAccountSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAccountSettings")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetAccountSettingsResponseObject); ok {
+		if err := validResponse.VisitGetAccountSettingsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAccountSettings operation middleware
+func (sh *strictHandler) UpdateAccountSettings(ctx *gin.Context) {
+	var request UpdateAccountSettingsRequestObject
+
+	var body UpdateAccountSettingsJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAccountSettings(ctx, request.(UpdateAccountSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAccountSettings")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(UpdateAccountSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateAccountSettingsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // Logout operation middleware

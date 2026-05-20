@@ -1,0 +1,5 @@
+{
+  "subject": "{{.ProductName}} Passkey Recovery",
+  "body_html": "<p>Use the link below to recover your passkey.</p><p><a href=\"{{.URL}}\">{{.URL}}</a></p>",
+  "body_text": "Use the link below to recover your passkey.\n{{.URL}}"
+}

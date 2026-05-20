@@ -13,13 +13,11 @@
 </script>
 
 {#snippet Fallback()}
-	<span>Next</span>
 	<ChevronRightIcon class="size-4" />
 {/snippet}
 
 <PaginationPrimitive.NextButton
 	bind:ref
-	aria-label="Go to next page"
 	class={cn(buttonVariants({ variant: "ghost" }), "pr-2!", className)}
 	{...restProps}
 >

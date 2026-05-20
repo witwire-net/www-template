@@ -4,6 +4,7 @@ import {
   createInitialAdminOperator,
   createOperator,
   listOperators,
+  updateOperatorLocale,
   updateLoginTimestamp,
 } from './operators.js';
 
@@ -20,6 +21,7 @@ function createOperatorRow(overrides: Partial<OperatorRow> = {}): OperatorRow {
     display_name: 'Admin Operator',
     role: 'admin',
     is_active: true,
+    locale: 'ja',
     setup_token_hash: null,
     setup_token_expires_at: null,
     last_login_at: null,
@@ -46,6 +48,7 @@ interface OperatorRow {
   display_name: string;
   role: string;
   is_active: boolean;
+  locale: string;
   setup_token_hash: string | null;
   setup_token_expires_at: Date | null;
   last_login_at: Date | null;
@@ -73,6 +76,7 @@ describe('models/operators', () => {
         id: 'operator-1',
         email: 'admin@example.com',
         role: 'admin',
+        locale: 'ja',
       }),
     ]);
   });
@@ -121,6 +125,34 @@ describe('models/operators', () => {
         role: 'owner',
       })
     ).rejects.toThrow('operators_role_check');
+  });
+
+  it('updateOperatorLocale は Admin operator の保存済み locale を返す', async () => {
+    // Admin operator locale は Product AccountSetting を使わず、Admin DB の operator row だけを更新・復元する。
+    const update = vi.fn().mockResolvedValue(createOperatorRow({ locale: 'en' }));
+    const adminPrisma = createAdminPrismaMock({ update });
+
+    const operator = await updateOperatorLocale(
+      adminPrisma as Parameters<typeof updateOperatorLocale>[0],
+      'operator-1',
+      'en'
+    );
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'operator-1' },
+      data: { locale: 'en' },
+    });
+    expect(operator.locale).toBe('en');
+  });
+
+  it('未知の永続 operator locale は既定値へ丸めず拒否する', async () => {
+    // DB から未知 locale が返った場合に ja へ黙って丸めると破損を隠すため、mapper で fail-closed にする。
+    const findMany = vi.fn().mockResolvedValue([createOperatorRow({ locale: 'fr' })]);
+    const adminPrisma = createAdminPrismaMock({ findMany });
+
+    await expect(listOperators(adminPrisma as Parameters<typeof listOperators>[0])).rejects.toThrow(
+      'unsupported admin operator locale'
+    );
   });
 
   it('13.4 operators 削除時の passkey cascade は Admin DB migration で定義されている', async () => {

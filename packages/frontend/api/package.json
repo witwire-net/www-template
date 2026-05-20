@@ -10,8 +10,7 @@
     "./generated": "./src/generated/client.ts"
   },
   "scripts": {
-    "gen": "orval --config ./orval.config.ts",
-    "types": "openapi-typescript ../../typespec/openapi/openapi.json -o src/types/openapi.ts"
+    "gen": "orval --config ./orval.config.ts"
   },
   "devDependencies": {
     "openapi-typescript": "^7.10.1",

@@ -3,6 +3,8 @@
 
 	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Spinner } from '@www-template/ui/components';
 
+	import { createAdminI18n } from '$lib/i18n';
+
 	interface RegistrationStartResponse {
 		challengeId: string;
 		options: Parameters<typeof startRegistration>[0];
@@ -11,6 +13,8 @@
 	let setupToken = $state('');
 	let isSubmitting = $state(false);
 	let message = $state<string | null>(null);
+	const { data } = $props<{ data: { locale: 'ja' | 'en' } }>();
+	const i18n = $derived(createAdminI18n(data.locale));
 
 	async function handleOperatorSetup(): Promise<void> {
 		// one-time token の多重消費を避けるため、登録処理中は再送信を止める。
@@ -41,7 +45,7 @@
 			globalThis.location.assign('/');
 		} catch {
 			// token の存在や期限切れ理由を細かく出さず、攻撃者に状態差分を渡さない。
-			message = 'セットアップを完了できませんでした。トークンの期限とパスキー登録操作を確認してください。';
+			message = i18n.t('operatorSetup.error');
 		} finally {
 			// 失敗後も安全に再試行できるよう loading を解除する。
 			isSubmitting = false;
@@ -50,25 +54,25 @@
 </script>
 
 <svelte:head>
-	<title>Operator Setup</title>
+	<title>{i18n.t('operatorSetup.title')}</title>
 </svelte:head>
 
 <main class="min-h-screen bg-background px-6 py-12 text-foreground">
 	<section class="mx-auto grid min-h-screen max-w-5xl items-center gap-8 lg:grid-cols-[1fr_28rem]">
 		<div class="space-y-6">
-			<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">One-time operator setup</p>
-			<h1 class="max-w-2xl text-4xl font-black tracking-tight text-foreground md:text-6xl">招待された運用者を、安全に有効化。</h1>
-			<p class="max-w-xl text-base leading-7 text-muted-foreground">管理者から受け取ったセットアップトークンを使い、この端末のパスキーを登録します。</p>
+			<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{i18n.t('operatorSetup.eyebrow')}</p>
+			<h1 class="max-w-2xl text-4xl font-black tracking-tight text-foreground md:text-6xl">{i18n.t('operatorSetup.heading')}</h1>
+			<p class="max-w-xl text-base leading-7 text-muted-foreground">{i18n.t('operatorSetup.description')}</p>
 		</div>
 
 		<Card class="border-border bg-card text-card-foreground">
 			<CardHeader>
-				<CardTitle>オペレーターセットアップ</CardTitle>
-				<CardDescription>one-time token は登録完了時に消費されます。</CardDescription>
+				<CardTitle>{i18n.t('operatorSetup.cardTitle')}</CardTitle>
+				<CardDescription>{i18n.t('operatorSetup.cardDescription')}</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
 				<div class="space-y-2">
-					<Label for="operator-setup-token">セットアップトークン</Label>
+					<Label for="operator-setup-token">{i18n.t('operatorSetup.token')}</Label>
 					<Input id="operator-setup-token" type="password" autocomplete="one-time-code" bind:value={setupToken} disabled={isSubmitting} />
 				</div>
 				{#if message !== null}
@@ -77,14 +81,14 @@
 			</CardContent>
 			<CardFooter class="flex flex-col gap-3">
 				<Button class="w-full" size="lg" disabled={isSubmitting || setupToken.trim() === ''} onclick={handleOperatorSetup}>
-					{#if isSubmitting}
-						<Spinner />
-						登録中…
-					{:else}
-						パスキーを登録して開始
+						{#if isSubmitting}
+							<Spinner aria-hidden="true" />
+							{i18n.t('operatorSetup.submitting')}
+						{:else}
+						{i18n.t('operatorSetup.submit')}
 					{/if}
 				</Button>
-				<Button class="w-full" variant="ghost" href="/login">ログインへ戻る</Button>
+				<Button class="w-full" variant="ghost" href="/login">{i18n.t('operatorSetup.backToLogin')}</Button>
 			</CardFooter>
 		</Card>
 	</section>

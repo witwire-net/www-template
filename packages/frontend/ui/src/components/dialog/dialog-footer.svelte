@@ -3,15 +3,18 @@
 	import type { HTMLAttributes } from "svelte/elements";
 	import { Dialog as DialogPrimitive } from "bits-ui";
 	import { Button } from "@www-template/ui/components/button";
+	import XIcon from '@lucide/svelte/icons/x';
 
 	let {
 		ref = $bindable(null),
 		class: className,
 		children,
 		showCloseButton = false,
+		closeLabel,
 		...restProps
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		showCloseButton?: boolean;
+		closeLabel: string;
 	} = $props();
 </script>
 
@@ -25,7 +28,9 @@
 	{#if showCloseButton}
 		<DialogPrimitive.Close>
 			{#snippet child({ props })}
-				<Button variant="outline" {...props}>Close</Button>
+				<Button variant="outline" aria-label={closeLabel} {...props}>
+					<XIcon />
+				</Button>
 			{/snippet}
 		</DialogPrimitive.Close>
 	{/if}
