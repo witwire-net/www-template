@@ -13,6 +13,10 @@ export default defineConfig({
     },
   },
   plugins: [tailwindcss(), sveltekit()],
-  server: { port: 5176 },
+  server: {
+    // Devcontainer 外のブラウザから Admin Console に到達できるよう、Vite を全インターフェースで待ち受ける。
+    host: '0.0.0.0',
+    port: 5176,
+  },
   test: { include: ['src/**/*.{test,spec}.{ts,js}'] },
 });

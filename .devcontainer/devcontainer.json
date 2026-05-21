@@ -85,7 +85,7 @@
       }
     }
   },
-  "forwardPorts": [24282, 3000, 3001, 4848, 5173, 8025, 8080, 8081, 9001, 9200],
+  "forwardPorts": [24282, 3000, 3001, 4848, 5173, 5176, 8025, 8080, 8081, 9001, 9200],
   "portsAttributes": {
     "24282": {
       "label": "Serena Dashboard",
@@ -105,6 +105,10 @@
     },
     "5173": {
       "label": "Frontend Dev Server",
+      "onAutoForward": "silent"
+    },
+    "5176": {
+      "label": "Admin Dev Server",
       "onAutoForward": "silent"
     },
     "8025": {

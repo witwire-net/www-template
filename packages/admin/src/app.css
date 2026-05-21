@@ -1,2 +1,12 @@
-/* TailwindCSS v4 のグローバルインポート */
-@import 'tailwindcss';
+/**
+ * Admin Console のグローバルスタイルシート。
+ * UI パッケージのテーマ層を先に読み込み、Admin package 内で使う Tailwind ユーティリティを生成する。
+ */
+
+/* UI パッケージが提供するベース・トークン・テーマ層をインポート */
+@import '@www-template/ui/styles.css';
+
+/* Tailwind v4: admin パッケージ内のソースコードをスキャンしてユーティリティを生成 */
+@import 'tailwindcss' source(none);
+@source './routes';
+@source './lib';
