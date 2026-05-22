@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-import { getEnvConfig } from '../config/env.js';
+import { getAdminAuthConfig } from '../config/env.js';
 
 let adminValkey: Redis | null = null;
 
@@ -12,7 +12,7 @@ let adminValkey: Redis | null = null;
 export function getAdminValkey(): Redis {
   // 遅延初期化により、テストやビルド時に不要な外部接続を作らない。
   if (adminValkey === null) {
-    const { adminValkeyUrl } = getEnvConfig();
+    const { adminValkeyUrl } = getAdminAuthConfig();
     adminValkey = new Redis(adminValkeyUrl, {
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,

@@ -12,8 +12,6 @@
     "test:watch": "vitest",
     "lint": "pnpm --dir ../.. lint:eslint:admin",
     "prisma:admin:generate": "prisma generate --schema prisma/admin/schema.prisma",
-    "prisma:admin:migrate:deploy": "prisma migrate deploy --schema prisma/admin/schema.prisma",
-    "prisma:admin:migrate:dev": "prisma migrate dev --schema prisma/admin/schema.prisma",
     "prisma:product:generate": "prisma generate --schema prisma/product/schema.prisma"
   },
   "dependencies": {

@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import { error as skError } from '@sveltejs/kit';
 
-import { getEnvConfig } from '../config/env.js';
+import { getAdminAuthConfig } from '../config/env.js';
 import { getPlatformConfig } from '../config/platform.js';
 
 import type { RequestEvent } from '@sveltejs/kit';
@@ -21,7 +21,7 @@ export function issueCsrfToken(
   sessionId: string,
   jti: string
 ): { token: string; cookieValue: string } {
-  const { jwtSecret } = getEnvConfig();
+  const { jwtSecret } = getAdminAuthConfig();
   const { isProduction } = getPlatformConfig();
   const message = `${sessionId}:${jti}`;
   const token = createHmac('sha256', jwtSecret).update(message).digest('hex');
@@ -46,7 +46,7 @@ export function issueCsrfToken(
  * @throws 403 いずれかの検証に失敗した場合
  */
 export async function validateCsrf(event: RequestEvent): Promise<void> {
-  const { adminOrigin } = getEnvConfig();
+  const { adminOrigin } = getAdminAuthConfig();
 
   // Origin 検証
   const origin = event.request.headers.get('origin');
@@ -100,7 +100,7 @@ async function readRequestCsrfToken(request: Request): Promise<string | null> {
  * @throws 403 Origin が一致しない場合
  */
 export function requireSameOrigin(event: RequestEvent): void {
-  const { adminOrigin } = getEnvConfig();
+  const { adminOrigin } = getAdminAuthConfig();
   const origin = event.request.headers.get('origin');
   if (origin === null || origin === '' || origin !== adminOrigin) {
     return skError(403, 'Origin mismatch');

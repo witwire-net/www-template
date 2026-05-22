@@ -10,7 +10,7 @@ import {
   signOperatorJwt,
 } from '$lib/server/infrastructure/auth/operator.js';
 import { getAdminValkey } from '$lib/server/infrastructure/auth/valkey.js';
-import { getEnvConfig } from '$lib/server/infrastructure/config/env.js';
+import { getAdminBootstrapConfig } from '$lib/server/infrastructure/config/env.js';
 import { getAdminPrisma } from '$lib/server/infrastructure/db/prisma.js';
 import * as operatorModel from '$lib/server/models/operators.js';
 import * as passkeyModel from '$lib/server/models/passkeys.js';
@@ -156,7 +156,7 @@ export function sha256(value: string): string {
  */
 export function verifyBootstrapSecret(raw: string): boolean {
   // bcrypt hash はサービス層と同じ環境値を使い、平文 secret を永続化・ログ出力しない。
-  const { adminBootstrapSecretHash } = getEnvConfig();
+  const { adminBootstrapSecretHash } = getAdminBootstrapConfig();
   return compareSync(raw, adminBootstrapSecretHash);
 }
 

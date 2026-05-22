@@ -1,19 +1,17 @@
+import { getAdminPlatformConfig } from './env.js';
+
 /**
- * ランタイムプラットフォーム環境変数の検証。
- * WebAuthn RP 設定と Node 環境を検証する。
+ * ランタイムプラットフォーム設定の検証。
+ * WebAuthn RP 設定は Admin TOML から、Node 環境は process env から検証する。
  *
  * @returns 型付きプラットフォーム設定オブジェクト
- * @throws Error 必須環境変数が欠落している場合
+ * @throws Error 必須設定値が欠落している場合、または NODE_ENV が不正な場合
  */
 export function getPlatformConfig() {
-  const adminRpId = process.env.ADMIN_RP_ID;
-  const adminRpName = process.env.ADMIN_RP_NAME;
-  if (adminRpId === undefined || adminRpId === '') {
-    throw new Error('Missing required platform environment variable: ADMIN_RP_ID');
-  }
-  if (adminRpName === undefined || adminRpName === '') {
-    throw new Error('Missing required platform environment variable: ADMIN_RP_NAME');
-  }
+  // WebAuthn RP は Admin surface の固定契約なので、個別 env ではなく Admin TOML から取得する。
+  const { adminRpId, adminRpName } = getAdminPlatformConfig();
+
+  // NODE_ENV は Node/SvelteKit runtime が提供する実行モードなので、ここだけ process env を直接検証する。
   const rawNodeEnv = process.env.NODE_ENV ?? 'development';
   const allowedNodeEnvs = ['development', 'production', 'test'] as const;
   if (!allowedNodeEnvs.includes(rawNodeEnv as (typeof allowedNodeEnvs)[number])) {

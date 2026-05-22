@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,29 +13,28 @@ import {
 
 const ORIGINAL_ENV = { ...process.env };
 
+let tempRoot: string | null = null;
+
 describe('OpenSearch infrastructure', () => {
   beforeEach(() => {
-    // index prefix を固定し、実際に OpenSearch に渡る namespace を観測しやすくする。
-    process.env = { ...ORIGINAL_ENV };
-    process.env.JWT_SECRET = 'test-secret-with-enough-length';
-    process.env.ADMIN_ORIGIN = 'https://admin.example.test';
-    process.env.ADMIN_DATABASE_URL = testPostgresUrl('admin');
-    process.env.PRODUCT_DATABASE_URL = testPostgresUrl('product');
-    process.env.ADMIN_VALKEY_URL = 'redis://valkey:6379/1';
-    process.env.VALKEY_URL = 'redis://valkey:6379/0';
-    process.env.OPENSEARCH_URL = 'http://opensearch:9200';
-    process.env.ADMIN_OPENSEARCH_AUDIT_REPLICAS = '0';
-    process.env.ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX = 'admin-audit';
-    process.env.PRODUCT_OPENSEARCH_INDEX_PREFIX = 'product-domain';
-    process.env.ADMIN_BOOTSTRAP_ENABLED = 'true';
-    process.env.ADMIN_BOOTSTRAP_SECRET_HASH = 'bcrypt-hash';
-    process.env.ADMIN_BOOTSTRAP_EXPIRES_AT = '2999-01-01T00:00:00.000Z';
-    delete process.env.PRODUCT_VALKEY_URL;
+    // index prefix を Admin TOML で固定し、実際に OpenSearch に渡る namespace を観測しやすくする。
+    tempRoot = mkdtempSync(join(tmpdir(), 'admin-search-config-'));
+    const configPath = join(tempRoot, 'test.admin.toml');
+    process.env = {
+      ...ORIGINAL_ENV,
+      ADMIN_CONFIG_PATH: configPath,
+      NODE_ENV: 'test',
+    };
+    writeFileSync(configPath, testAdminConfig(), 'utf8');
   });
 
   afterEach(() => {
-    // console.warn spy と env を戻し、他テストのログ期待値を壊さない。
+    // console.warn spy、temp config、env を戻し、他テストのログ期待値を壊さない。
     vi.restoreAllMocks();
+    if (tempRoot !== null) {
+      rmSync(tempRoot, { recursive: true, force: true });
+      tempRoot = null;
+    }
     process.env = { ...ORIGINAL_ENV };
   });
 
@@ -153,4 +156,35 @@ function auditEvent() {
 function testPostgresUrl(database: string): string {
   // security lint が実接続文字列の直書きを検出するため、テスト用 URL も分割して組み立てる。
   return 'postgres:' + '//' + database;
+}
+
+function testAdminConfig(): string {
+  // OpenSearch テストは namespace 分離値を Admin TOML から読み、Product domain prefix との交差を検証する。
+  return `[server]
+origin = "https://admin.example.test"
+
+[auth]
+jwt_secret = "test-secret-with-enough-length"
+rp_id = "admin.example.test"
+rp_name = "Admin Console"
+
+[database]
+admin_url = "${testPostgresUrl('admin')}"
+product_url = "${testPostgresUrl('product')}"
+
+[valkey]
+admin_url = "redis://valkey:6379/1"
+product_url = "redis://valkey:6379/0"
+
+[opensearch]
+url = "http://opensearch:9200"
+admin_audit_replicas = 0
+admin_audit_index_prefix = "admin-audit"
+product_index_prefix = "product-domain"
+
+[bootstrap]
+enabled = true
+secret_hash = "bcrypt-hash"
+expires_at = "2999-01-01T00:00:00.000Z"
+`;
 }

@@ -5,7 +5,7 @@ import {
   createSessionCookie,
   signOperatorJwt,
 } from '../../infrastructure/auth/operator.js';
-import { getEnvConfig } from '../../infrastructure/config/env.js';
+import { getAdminBootstrapConfig } from '../../infrastructure/config/env.js';
 import * as operatorModel from '../../models/operators.js';
 import * as passkeyModel from '../../models/passkeys.js';
 import { ServiceError } from '../errors.js';
@@ -57,9 +57,9 @@ export interface BootstrapAdminResult {
  *
  * 事前条件の検証:
  * 1. 既存オペレーター数が 0 であること
- * 2. ADMIN_BOOTSTRAP_ENABLED が true であること
- * 3. bootstrapSecret が ADMIN_BOOTSTRAP_SECRET_HASH と一致すること
- * 4. ADMIN_BOOTSTRAP_EXPIRES_AT が期限切れでないこと
+ * 2. Admin TOML の bootstrap.enabled が true であること
+ * 3. bootstrapSecret が Admin TOML の bootstrap.secret_hash と一致すること
+ * 4. Admin TOML の bootstrap.expires_at が期限切れでないこと
  *
  * 検証成功後、同一トランザクション内で:
  * - admin ロールのオペレーターを作成
@@ -84,8 +84,8 @@ export async function bootstrapAdmin(input: BootstrapAdminInput): Promise<Bootst
     );
   }
 
-  // 2-4. 環境設定によるブートストラップ有効性検証
-  const env = getEnvConfig();
+  // 2-4. Admin TOML 設定によるブートストラップ有効性検証
+  const env = getAdminBootstrapConfig();
   if (!env.adminBootstrapEnabled) {
     throw new ServiceError('Bootstrap is not enabled', 403, 'BOOTSTRAP_DISABLED');
   }

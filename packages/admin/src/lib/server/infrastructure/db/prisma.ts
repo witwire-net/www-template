@@ -1,5 +1,7 @@
 import { createRequire } from 'node:module';
 
+import { getAdminDatabaseConfig, getProductDatabaseConfig } from '../config/env.js';
+
 import type { PrismaClient as AdminPrismaClient } from '.prisma/admin-client';
 import type { PrismaClient as ProductPrismaClient } from '.prisma/product-client';
 
@@ -55,8 +57,9 @@ function getProductPrismaClientFactory(): ProductPrismaClientFactory {
  */
 export function getAdminPrisma(): AdminPrismaClient {
   const AdminPrismaClient = getAdminPrismaClientFactory();
+  const { adminDatabaseUrl } = getAdminDatabaseConfig();
   adminPrisma ??= new AdminPrismaClient({
-    datasources: { admin_db: { url: process.env.ADMIN_DATABASE_URL } },
+    datasources: { admin_db: { url: adminDatabaseUrl } },
   });
   return adminPrisma;
 }
@@ -71,8 +74,9 @@ export function getAdminPrisma(): AdminPrismaClient {
  */
 export async function getProductPrisma(): Promise<ProductPrismaClient> {
   const ProductPrismaClient = getProductPrismaClientFactory();
+  const { productDatabaseUrl } = getProductDatabaseConfig();
   productPrisma ??= new ProductPrismaClient({
-    datasources: { product_db: { url: process.env.PRODUCT_DATABASE_URL } },
+    datasources: { product_db: { url: productDatabaseUrl } },
   });
 
   if (!productPrismaValidated) {

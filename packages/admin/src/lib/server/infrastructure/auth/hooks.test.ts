@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const hookMocks = vi.hoisted(() => ({
   redisConstructor: vi.fn(),
   verifyOperatorSession: vi.fn(),
-  getEnvConfig: vi.fn(),
+  getAdminAuthConfig: vi.fn(),
   validateCsrf: vi.fn(),
   requireSameOrigin: vi.fn(),
   issueCsrfToken: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock('$lib/server/infrastructure/auth/operator', () => ({
 }));
 
 vi.mock('$lib/server/infrastructure/config/env', () => ({
-  getEnvConfig: hookMocks.getEnvConfig,
+  getAdminAuthConfig: hookMocks.getAdminAuthConfig,
 }));
 
 vi.mock('$lib/server/infrastructure/csrf/guard', () => ({
@@ -50,7 +50,7 @@ describe('Admin hooks infrastructure contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hookMocks.redisConstructor.mockImplementation(() => ({ ping: vi.fn() }));
-    hookMocks.getEnvConfig.mockReturnValue({ adminValkeyUrl: 'redis://valkey:6379/1' });
+    hookMocks.getAdminAuthConfig.mockReturnValue({ adminValkeyUrl: 'redis://valkey:6379/1' });
     hookMocks.getAdminPrisma.mockReturnValue({});
     hookMocks.issueCsrfToken.mockReturnValue({
       token: 'csrf-token',

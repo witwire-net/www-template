@@ -49,7 +49,7 @@ vi.mock('$lib/server/infrastructure/auth/registration.js', () => ({
 }));
 
 vi.mock('$lib/server/infrastructure/config/env.js', () => ({
-  getEnvConfig: vi.fn(() => ({ adminBootstrapSecretHash: 'unused' })),
+  getAdminBootstrapConfig: vi.fn(() => ({ adminBootstrapSecretHash: 'unused' })),
 }));
 
 vi.mock('$lib/server/models/schemas.js', async () => {

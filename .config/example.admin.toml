@@ -1,0 +1,44 @@
+# Admin Console configuration example.
+# Copy this file to .config/production.admin.toml (or any *.admin.toml name) and fill in real values.
+# Point Admin Console to it via ADMIN_CONFIG_PATH.
+
+[server]
+# Public origin used for Origin/CSRF allowlisting.
+origin = "https://admin.your-domain.com"
+
+[auth]
+# Admin-only JWT signing secret. Do not reuse the Product API JWT secret.
+jwt_secret = "change-this-to-a-long-random-admin-jwt-secret-in-production"
+
+# WebAuthn Relying Party settings for the Admin Console origin.
+rp_id = "admin.your-domain.com"
+rp_name = "Your Admin Console"
+
+[database]
+# Admin DB stores operators, operator passkeys, and audit events.
+admin_url = "postgres://admin-user:password@admin-db:5432/admin-db?schema=admin&sslmode=require"
+
+# Product DB uses the minimum-privilege login role granted admin_console_write.
+product_url = "postgres://product-admin-role:password@product-db:5432/product-db?sslmode=require"
+
+[valkey]
+# Admin and Product must use the same Valkey endpoint with different logical DB numbers.
+admin_url = "redis://valkey:6379/1"
+product_url = "redis://valkey:6379/0"
+
+[opensearch]
+# Admin audit and Product domain indexes may share a cluster but must not share prefixes.
+url = "https://opensearch-host:9200"
+admin_audit_replicas = 1
+admin_audit_index_prefix = "admin-audit"
+product_index_prefix = "product-domain"
+
+[bootstrap]
+# Disable after the first operator is created.
+enabled = false
+
+# bcrypt hash of the one-time bootstrap secret. Never store plaintext here.
+secret_hash = "$2a$10$replace-with-real-bcrypt-hash"
+
+# ISO-8601 timestamp after which bootstrap is rejected.
+expires_at = "2026-01-01T00:00:00Z"

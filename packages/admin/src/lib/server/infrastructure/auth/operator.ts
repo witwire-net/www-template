@@ -6,7 +6,7 @@ import {
 } from '@simplewebauthn/server';
 import { SignJWT, jwtVerify } from 'jose';
 
-import { getEnvConfig } from '../config/env.js';
+import { getAdminAuthConfig } from '../config/env.js';
 import { getPlatformConfig } from '../config/platform.js';
 
 import type { VerifyAuthenticationResponseOpts } from '@simplewebauthn/server';
@@ -210,7 +210,7 @@ export async function verifyOperatorSession(
   sessionId: string;
   jti: string;
 } | null> {
-  const { jwtSecret } = getEnvConfig();
+  const { jwtSecret } = getAdminAuthConfig();
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret), {
       clockTolerance: 60,
@@ -304,7 +304,7 @@ export async function signOperatorJwt(
   operator: { id: string; email: string; role: string },
   session: { sessionId: string; jti: string }
 ): Promise<string> {
-  const { jwtSecret } = getEnvConfig();
+  const { jwtSecret } = getAdminAuthConfig();
   const secret = new TextEncoder().encode(jwtSecret);
   return new SignJWT({
     sub: operator.id,
@@ -326,7 +326,7 @@ export async function signOperatorJwt(
  * @returns デコード済みペイロード、または null
  */
 export async function verifyOperatorJwt(token: string): Promise<Record<string, unknown> | null> {
-  const { jwtSecret } = getEnvConfig();
+  const { jwtSecret } = getAdminAuthConfig();
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret), {
       clockTolerance: 60,

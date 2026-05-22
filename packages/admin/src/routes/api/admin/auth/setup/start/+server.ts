@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 
 import { generateRegistrationChallenge } from '$lib/server/infrastructure/auth/registration.js';
-import { getEnvConfig } from '$lib/server/infrastructure/config/env.js';
+import { getAdminBootstrapConfig } from '$lib/server/infrastructure/config/env.js';
 import { getAdminPrisma } from '$lib/server/infrastructure/db/prisma.js';
 import * as operatorModel from '$lib/server/models/operators.js';
 import {
@@ -31,7 +31,7 @@ export const POST: RequestHandler = async (event) => {
   // 既存 operator がある環境では初回セットアップ route を使用できない。
   if ((await operatorModel.countOperators(getAdminPrisma())) !== 0)
     fail(409, 'Bootstrap is not allowed');
-  const env = getEnvConfig();
+  const env = getAdminBootstrapConfig();
   if (!env.adminBootstrapEnabled) fail(403, 'Bootstrap is disabled');
   if (env.adminBootstrapExpiresAt < new Date()) fail(403, 'Bootstrap has expired');
   if (!verifyBootstrapSecret(input.bootstrapSecret)) fail(403, 'Invalid bootstrap secret');

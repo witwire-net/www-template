@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
 
 import { verifyOperatorSession } from '$lib/server/infrastructure/auth/operator';
-import { getEnvConfig } from '$lib/server/infrastructure/config/env';
+import { getAdminAuthConfig } from '$lib/server/infrastructure/config/env';
 import {
   validateCsrf,
   requireSameOrigin,
@@ -26,7 +26,7 @@ let adminValkey: RedisClient | null = null;
 
 function getAdminValkey(): RedisClient {
   // 共有 Valkey infrastructure の Admin 用 DB 番号を指す URL だけを使い、Product DB 番号への誤接続は env 検証で防ぐ。
-  const { adminValkeyUrl } = getEnvConfig();
+  const { adminValkeyUrl } = getAdminAuthConfig();
   // request ごとの接続生成を避け、同一プロセス内では Admin Valkey client を再利用する。
   adminValkey ??= new Redis(adminValkeyUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
   return adminValkey;

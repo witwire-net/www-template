@@ -158,10 +158,7 @@ describe('models/operators', () => {
   it('13.4 operators 削除時の passkey cascade は Admin DB migration で定義されている', async () => {
     // Prisma mock では FK 動作を再現しないため、migration SQL に ON DELETE CASCADE が固定されていることを検証する。
     const migration = await import('node:fs/promises').then((fs) =>
-      fs.readFile(
-        'prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql',
-        'utf8'
-      )
+      fs.readFile('db/migrations/000001_create_operators_and_passkeys.up.sql', 'utf8')
     );
 
     expect(migration).toMatch(/REFERENCES admin\.operators\(id\)\s+ON DELETE CASCADE/);

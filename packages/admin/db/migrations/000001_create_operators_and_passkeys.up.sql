@@ -1,11 +1,8 @@
--- Admin DB Prisma Migrate 用初期マイグレーション
--- operators / operator_passkeys / audit_events テーブルを admin スキーマに作成する
--- 初期オペレーターは作成しない（初回起動セットアップで作成）
-
--- admin スキーマを作成（存在しない場合）
+-- Admin DB の operator / passkey / audit 永続化 schema を作成する。
+-- 初期 operator は migration では作らず、/setup の bootstrap flow だけで作成する。
 CREATE SCHEMA IF NOT EXISTS admin;
 
--- operators テーブル: 管理画面オペレーター
+-- 管理画面 operator を保存し、role / active state / setup token / locale を DB 境界で保持する。
 CREATE TABLE IF NOT EXISTS admin.operators (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     email TEXT NOT NULL UNIQUE,
@@ -19,7 +16,7 @@ CREATE TABLE IF NOT EXISTS admin.operators (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- operator_passkeys テーブル: オペレーターが登録した WebAuthn passkey credential
+-- operator に紐づく WebAuthn credential を保存し、credential handle の一意性で所有者検証を安定させる。
 CREATE TABLE IF NOT EXISTS admin.operator_passkeys (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     operator_id TEXT NOT NULL,
@@ -37,7 +34,7 @@ CREATE TABLE IF NOT EXISTS admin.operator_passkeys (
         ON DELETE CASCADE
 );
 
--- audit_events テーブル: 監査イベント（全操作の追跡・証跡）
+-- Admin 操作の監査イベントを DB に永続化し、OpenSearch 失敗時の fallback source にする。
 CREATE TABLE IF NOT EXISTS admin.audit_events (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     operator_id TEXT NOT NULL,
@@ -55,7 +52,7 @@ CREATE TABLE IF NOT EXISTS admin.audit_events (
         REFERENCES admin.operators(id)
 );
 
--- インデックス作成
+-- 一覧・認証・監査検索で使う主要 lookup path を明示 index にする。
 CREATE INDEX IF NOT EXISTS idx_operators_email ON admin.operators(email);
 CREATE INDEX IF NOT EXISTS idx_operators_role ON admin.operators(role);
 CREATE INDEX IF NOT EXISTS idx_operators_is_active ON admin.operators(is_active);
@@ -66,6 +63,3 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_action ON admin.audit_events(action)
 CREATE INDEX IF NOT EXISTS idx_audit_events_target_type ON admin.audit_events(target_type);
 CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON admin.audit_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_events_outcome ON admin.audit_events(outcome);
-
--- 初期オペレーターは作成しない（Task 1.11 / 1.12 の要求）
--- 初回 admin は /setup の bootstrap フローで作成される

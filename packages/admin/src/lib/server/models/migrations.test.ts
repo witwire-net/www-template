@@ -28,7 +28,7 @@ function normalizeSql(sql: string): string {
   return sql.replace(/\s+/g, ' ').trim();
 }
 
-describe('Prisma and product DB migrations', () => {
+describe('Product and Admin DB migrations', () => {
   it('17.1 Product DB migration は accounts.status を default active にする', async () => {
     // 既存顧客の状態を安全に保つため、追加列は NOT NULL かつ DEFAULT active に固定されていることを確認する。
     const sql = normalizeSql(
@@ -96,12 +96,16 @@ describe('Prisma and product DB migrations', () => {
     expect(sql).toContain('p.transports');
   });
 
-  it('17.10 Admin migration deploy script は未適用 migration を適用できる', async () => {
-    // Admin DB は Prisma Migrate 管理なので deploy script が admin schema を対象にすることを確認する。
-    const packageJson = JSON.parse(await readSql('package.json')) as PackageJsonWithScripts;
-    expect(packageJson.scripts['prisma:admin:migrate:deploy']).toBe(
-      'prisma migrate deploy --schema prisma/admin/schema.prisma'
-    );
+  it('17.10 Admin migration は root の migrate:up で Product と同時に適用される', async () => {
+    // Admin DB も Product DB と同じ root migration entrypoint で進むことを確認し、Prisma Migrate の二重運用を防ぐ。
+    const rootPackageJson = JSON.parse(
+      await readSql('../../package.json')
+    ) as PackageJsonWithScripts;
+    const adminPackageJson = JSON.parse(await readSql('package.json')) as PackageJsonWithScripts;
+    expect(rootPackageJson.scripts['migrate:up']).toBe('bash scripts/go/migrate.sh up');
+    expect(rootPackageJson.scripts['migrate:down']).toBe('bash scripts/go/migrate.sh down 1');
+    expect(adminPackageJson.scripts['prisma:admin:migrate:deploy']).toBeUndefined();
+    expect(adminPackageJson.scripts['prisma:admin:migrate:dev']).toBeUndefined();
   });
 
   it('17.10a Product DB 拡張 migration は golang-migrate 管理で Prisma Migrate ではない', async () => {
@@ -110,25 +114,27 @@ describe('Prisma and product DB migrations', () => {
       await readSql('../../package.json')
     ) as PackageJsonWithScripts;
     const productSchema = await readSql('prisma/product/schema.prisma');
-    expect(rootPackageJson.scripts['db:migrate:product']).toBe('bash scripts/go/migrate.sh up');
+    expect(rootPackageJson.scripts['migrate:up']).toBe('bash scripts/go/migrate.sh up');
+    expect(rootPackageJson.scripts['migrate:product']).toBeUndefined();
     expect(productSchema).toContain('Prisma Migrate は適用せず');
   });
 
-  it('17.11 Admin migration deploy は適用済み migration を Prisma migration table で skip する運用である', async () => {
-    // Prisma Migrate deploy は _prisma_migrations を使うため、schema と script が deploy に限定されることを固定する。
+  it('17.11 Admin migration は golang-migrate の SQL pair で skip 管理される', async () => {
+    // Admin DB は packages/admin/db/migrations の up/down pair と schema_migrations で適用済み判定される。
     const packageJson = JSON.parse(await readSql('package.json')) as PackageJsonWithScripts;
-    expect(packageJson.scripts['prisma:admin:migrate:deploy']).toContain('migrate deploy');
-    expect(packageJson.scripts['prisma:admin:migrate:dev']).toContain('migrate dev');
-    expect(
-      await readSql('prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql')
-    ).toContain('CREATE SCHEMA IF NOT EXISTS admin');
+    expect(packageJson.scripts['prisma:admin:migrate:deploy']).toBeUndefined();
+    expect(packageJson.scripts['prisma:admin:migrate:dev']).toBeUndefined();
+    expect(await readSql('db/migrations/000001_create_operators_and_passkeys.up.sql')).toContain(
+      'CREATE SCHEMA IF NOT EXISTS admin'
+    );
+    expect(await readSql('db/migrations/000001_create_operators_and_passkeys.down.sql')).toContain(
+      'DROP TABLE IF EXISTS admin.operators'
+    );
   });
 
-  it('13.12 Admin Prisma migration は必要な全テーブルを作成する', async () => {
+  it('13.12 Admin SQL migration は必要な全テーブルを作成する', async () => {
     // Admin 認証と監査の永続化に必要な 3 テーブルが初期 migration に含まれることを確認する。
-    const sql = await readSql(
-      'prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql'
-    );
+    const sql = await readSql('db/migrations/000001_create_operators_and_passkeys.up.sql');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin.operators');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin.operator_passkeys');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin.audit_events');
@@ -137,22 +143,18 @@ describe('Prisma and product DB migrations', () => {
   it('Admin operator locale migration は既定値と制約を持つ', async () => {
     // Admin operator locale は Admin DB 内だけで保持し、未対応値を DB 制約で fail-closed に拒否する。
     const schema = await readSql('prisma/admin/schema.prisma');
-    const sql = normalizeSql(
-      await readSql('prisma/admin/migrations/000002_add_operator_locale/migration.sql')
-    );
+    const sql = normalizeSql(await readSql('db/migrations/000002_add_operator_locale.up.sql'));
     expect(schema).toContain('locale               String   @default("ja") @map("locale")');
     expect(sql).toContain("ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'ja'");
     expect(sql).toContain("ADD CONSTRAINT operators_locale_check CHECK (locale IN ('ja', 'en'))");
     expect(`${schema} ${sql}`).not.toMatch(/AccountSetting|AccountLocale|Product AccountSetting/);
   });
 
-  it('13.13 Admin Prisma migration は初期オペレーターを seed しない', async () => {
+  it('13.13 Admin SQL migration は初期オペレーターを seed しない', async () => {
     // 初期 admin は bootstrap flow だけで作成されるべきなので、migration に INSERT を含めない。
-    const sql = await readSql(
-      'prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql'
-    );
+    const sql = await readSql('db/migrations/000001_create_operators_and_passkeys.up.sql');
     expect(sql.toLowerCase()).not.toMatch(/insert\s+into\s+admin\.operators/);
-    expect(sql).toContain('初期オペレーターは作成しない');
+    expect(sql).toContain('/setup の bootstrap flow だけで作成する');
   });
 
   it('13.14 SECURITY DEFINER 関数は固定 search_path を設定する', async () => {

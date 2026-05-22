@@ -24,7 +24,8 @@ const routeMocks = vi.hoisted(() => ({
   enforcePreAuthRateLimit: vi.fn(),
   verifyBootstrapSecret: vi.fn(),
   findOperatorBySetupToken: vi.fn(),
-  getEnvConfig: vi.fn(),
+  getAdminAuthConfig: vi.fn(),
+  getAdminBootstrapConfig: vi.fn(),
 }));
 
 vi.mock('$lib/server/infrastructure/db/prisma.js', () => ({
@@ -57,7 +58,8 @@ vi.mock('$lib/server/infrastructure/auth/registration.js', () => ({
   verifyAttestation: routeMocks.verifyAttestation,
 }));
 vi.mock('$lib/server/infrastructure/config/env.js', () => ({
-  getEnvConfig: routeMocks.getEnvConfig,
+  getAdminAuthConfig: routeMocks.getAdminAuthConfig,
+  getAdminBootstrapConfig: routeMocks.getAdminBootstrapConfig,
 }));
 vi.mock('$lib/server/infrastructure/config/platform.js', () => ({
   getPlatformConfig: vi.fn(() => ({ adminRpId: 'admin.example.test' })),
@@ -131,8 +133,10 @@ describe('admin auth route phase 15 coverage', () => {
     routeMocks.getAdminPrisma.mockReturnValue({
       $transaction: async (callback: (tx: unknown) => unknown) => callback({}),
     });
-    routeMocks.getEnvConfig.mockReturnValue({
+    routeMocks.getAdminAuthConfig.mockReturnValue({
       adminOrigin: 'https://admin.example.test',
+    });
+    routeMocks.getAdminBootstrapConfig.mockReturnValue({
       adminBootstrapEnabled: true,
       adminBootstrapExpiresAt: futureDate(),
     });
@@ -253,14 +257,14 @@ describe('admin auth route phase 15 coverage', () => {
     await expect(setupStart(jsonEvent(setupBody()) as never)).rejects.toMatchObject({
       status: 409,
     });
-    routeMocks.getEnvConfig.mockReturnValueOnce({
+    routeMocks.getAdminBootstrapConfig.mockReturnValueOnce({
       adminBootstrapEnabled: false,
       adminBootstrapExpiresAt: futureDate(),
     });
     await expect(setupStart(jsonEvent(setupBody()) as never)).rejects.toMatchObject({
       status: 403,
     });
-    routeMocks.getEnvConfig.mockReturnValueOnce({
+    routeMocks.getAdminBootstrapConfig.mockReturnValueOnce({
       adminBootstrapEnabled: true,
       adminBootstrapExpiresAt: new Date(0),
     });

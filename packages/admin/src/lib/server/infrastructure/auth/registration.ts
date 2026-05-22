@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { generateRegistrationOptions, verifyRegistrationResponse } from '@simplewebauthn/server';
 
-import { getEnvConfig } from '../config/env.js';
+import { getAdminAuthConfig } from '../config/env.js';
 import { getPlatformConfig } from '../config/platform.js';
 
 import { generateUlid, type AdminChallengeType } from './operator.js';
@@ -96,7 +96,7 @@ export async function verifyAttestation(
   transports: unknown;
 }> {
   // Origin / RP ID は設定値だけを信頼し、リクエスト由来の Host からは組み立てない。
-  const { adminOrigin } = getEnvConfig();
+  const { adminOrigin } = getAdminAuthConfig();
   const { adminRpId } = getPlatformConfig();
   // SimpleWebAuthn の検証で challenge・origin・RP ID・User Verification をまとめて確認する。
   const result = await verifyRegistrationResponse({

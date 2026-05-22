@@ -1,4 +1,4 @@
-import { getEnvConfig } from '../config/env.js';
+import { getAdminSearchConfig } from '../config/env.js';
 
 import type { Client as OpenSearchClient } from '@opensearch-project/opensearch';
 
@@ -9,7 +9,7 @@ import type { Client as OpenSearchClient } from '@opensearch-project/opensearch'
  * @returns `${prefix}-YYYY.MM` 形式のインデックス名
  */
 export function buildAdminAuditIndexName(date: Date): string {
-  const { adminOpensearchAuditIndexPrefix } = getEnvConfig();
+  const { adminOpensearchAuditIndexPrefix } = getAdminSearchConfig();
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   return `${adminOpensearchAuditIndexPrefix}-${String(year)}.${month}`;
@@ -21,7 +21,7 @@ export function buildAdminAuditIndexName(date: Date): string {
  * @returns `${prefix}-*` 形式のパターン
  */
 export function buildAdminAuditIndexPattern(): string {
-  const { adminOpensearchAuditIndexPrefix } = getEnvConfig();
+  const { adminOpensearchAuditIndexPrefix } = getAdminSearchConfig();
   return `${adminOpensearchAuditIndexPrefix}-*`;
 }
 
@@ -31,7 +31,7 @@ export function buildAdminAuditIndexPattern(): string {
  * @returns `${prefix}-*` 形式のパターン
  */
 export function buildProductDomainIndexPattern(): string {
-  const { productOpensearchIndexPrefix } = getEnvConfig();
+  const { productOpensearchIndexPrefix } = getAdminSearchConfig();
   return `${productOpensearchIndexPrefix}-*`;
 }
 

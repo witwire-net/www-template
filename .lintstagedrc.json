@@ -6,5 +6,7 @@
   "*.css": ["stylelint --fix --max-warnings 0", "prettier --write"],
   "*.{json,md,yml,yaml}": ["prettier --write"],
   "*.go": ["bash scripts/hooks/format-staged-go.sh"],
-  "packages/backend/db/migrations/*.sql": ["bash scripts/hooks/verify-staged-migrations.sh"]
+  "{packages/backend/db/migrations,packages/admin/db/migrations}/*.sql": [
+    "bash scripts/hooks/verify-staged-migrations.sh"
+  ]
 }

@@ -48,10 +48,13 @@ devcontainer-lock.json
 coverage/
 .nyc_output/
 
-# Config files (only local.toml and example.toml are committed)
+# Config files (only local/product examples and local/admin examples are committed)
 .config/*.toml
 !.config/local.toml
 !.config/example.toml
+!.config/local.admin.toml
+!.config/local.container.admin.toml
+!.config/example.admin.toml
 
 # Misc
 .turbo/

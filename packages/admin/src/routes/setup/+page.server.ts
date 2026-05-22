@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 
-import { getEnvConfig } from '$lib/server/infrastructure/config/env.js';
+import { getAdminBootstrapConfig } from '$lib/server/infrastructure/config/env.js';
 import { getPlatformConfig } from '$lib/server/infrastructure/config/platform.js';
 import { getAdminPrisma } from '$lib/server/infrastructure/db/prisma.js';
 import * as operatorModel from '$lib/server/models/operators.js';
@@ -49,7 +49,7 @@ function copySessionCookie(response: Response, event: Parameters<Actions['finish
  */
 export const load: ServerLoad = async () => {
   // bootstrap gate が無効または期限切れの場合は、DB 状態に依存せず secret 入力フォーム自体を表示しない。
-  const { adminBootstrapEnabled, adminBootstrapExpiresAt } = getEnvConfig();
+  const { adminBootstrapEnabled, adminBootstrapExpiresAt } = getAdminBootstrapConfig();
   if (!adminBootstrapEnabled || adminBootstrapExpiresAt.getTime() <= Date.now()) {
     error(403, 'Admin bootstrap is not available');
   }

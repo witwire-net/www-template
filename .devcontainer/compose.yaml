@@ -21,6 +21,8 @@ services:
       GOMODCACHE: /go/pkg/mod
       GOCACHE: /home/node/.cache/go-build
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      ADMIN_CONFIG_PATH: /workspaces/www-template/.config/local.admin.toml
+      NODE_ENV: development
       TOOLCHAIN_GO_VERSION: 1.26.3
       TOOLCHAIN_PNPM_VERSION: 11.1.2
       TOOLCHAIN_GORM_VERSION: 1.31.0
@@ -52,25 +54,13 @@ services:
       opensearch:
         condition: service_started
     environment:
-      ADMIN_DATABASE_URL: postgres://www-template:www-template@postgres:5432/www_template_admin?schema=admin
-      PRODUCT_DATABASE_URL: postgres://admin_console:admin_console@postgres:5432/www-template
-      VALKEY_URL: redis://valkey:6379/0
-      ADMIN_VALKEY_URL: redis://valkey:6379/1
-      OPENSEARCH_URL: http://opensearch:9200
-      ADMIN_OPENSEARCH_AUDIT_REPLICAS: '0'
-      ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX: admin-audit
-      PRODUCT_OPENSEARCH_INDEX_PREFIX: www-template
-      ADMIN_ORIGIN: http://localhost:3001
-      ADMIN_JWT_SECRET: dev-admin-jwt-secret-change-in-production
-      ADMIN_BOOTSTRAP_ENABLED: 'true'
-      ADMIN_BOOTSTRAP_SECRET_HASH: '$$2a$$10$$devbootstraphashchangeinprod'
-      ADMIN_BOOTSTRAP_EXPIRES_AT: '2099-12-31T23:59:59Z'
-      ADMIN_RP_ID: localhost
-      ADMIN_RP_NAME: Admin Console Dev
+      ADMIN_CONFIG_PATH: /app/.config/local.container.admin.toml
       NODE_ENV: development
     ports:
       - '3001:3000'
     restart: unless-stopped
+    volumes:
+      - ../.config:/app/.config:ro
 
   postgres:
     image: postgres:18.3

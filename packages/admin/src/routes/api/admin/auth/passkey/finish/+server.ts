@@ -1,5 +1,5 @@
 import { consumeChallenge, verifyAssertion } from '$lib/server/infrastructure/auth/operator.js';
-import { getEnvConfig } from '$lib/server/infrastructure/config/env.js';
+import { getAdminAuthConfig } from '$lib/server/infrastructure/config/env.js';
 import { getPlatformConfig } from '$lib/server/infrastructure/config/platform.js';
 import { getAdminPrisma } from '$lib/server/infrastructure/db/prisma.js';
 import * as operatorModel from '$lib/server/models/operators.js';
@@ -46,7 +46,7 @@ export const POST: RequestHandler = async (event) => {
       assertion.id
     );
     if (passkey?.operatorId !== operator.id) fail(401, AUTHENTICATION_FAILED_MESSAGE);
-    const { adminOrigin } = getEnvConfig();
+    const { adminOrigin } = getAdminAuthConfig();
     const { adminRpId } = getPlatformConfig();
     // Assertion 検証成功後だけ sign_count と last_login_at を更新する。
     const verified = await verifyAssertion(

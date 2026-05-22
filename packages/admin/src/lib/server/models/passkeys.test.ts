@@ -90,10 +90,7 @@ describe('models/passkeys', () => {
     const fs = await import('node:fs/promises');
     const [schema, migration] = await Promise.all([
       fs.readFile('prisma/admin/schema.prisma', 'utf8'),
-      fs.readFile(
-        'prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql',
-        'utf8'
-      ),
+      fs.readFile('db/migrations/000001_create_operators_and_passkeys.up.sql', 'utf8'),
     ]);
 
     expect(schema).toMatch(/sign_count\s+BigInt\s+@default\(0\)/);
