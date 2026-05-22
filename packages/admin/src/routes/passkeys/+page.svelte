@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { startRegistration } from '@simplewebauthn/browser';
 
-	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, ConfirmDialog, EmptyState, Spinner } from '@www-template/ui/components';
+	import { Button, CardNS, EmptyState, Spinner, ConfirmDialog } from '@www-template/ui/components';
 
 	import { createAdminI18n } from '$lib/i18n';
 
@@ -22,7 +22,7 @@
 		passkeys: PasskeyItem[];
 	}
 
-	const { data }: { data: { locale: 'ja' | 'en'; operator: { email: string }; passkeys: PasskeyItem[] } } = $props();
+	const { data }: { data: { locale: 'ja' | 'en'; operator: { email: string }; passkeys: PasskeyItem[]; csrfToken: string } } = $props();
 	const i18n = $derived(createAdminI18n(data.locale));
 
 	let passkeys = $state(initialPasskeys());
@@ -32,11 +32,8 @@
 	let message = $state<string | null>(null);
 	let deleteDialogOpen = $state(false);
 
-	function readCsrfToken(): string {
-		// hooks.server.ts が GET 応答で配布する admin_csrf cookie を、状態変更 BFF の header に載せる。
-		const match = /(?:^|; )admin_csrf=([^;]+)/.exec(globalThis.document.cookie);
-		return match === null ? '' : decodeURIComponent(match[1] ?? '');
-	}
+	const csrfToken: string | undefined = $derived(data.csrfToken !== '' ? data.csrfToken : undefined);
+
 
 	function initialPasskeys(): PasskeyItem[] {
 		// server load 由来の初期一覧を、後続の追加・削除で置き換え可能な local state に移す。
@@ -66,7 +63,7 @@
 			// 認証済み BFF は session-bound CSRF header を要求するため、cookie 値を同一 origin のみへ送る。
 			const startResponse = await globalThis.fetch('/api/admin/auth/passkeys/start', {
 				method: 'POST',
-				headers: { 'x-csrf-token': readCsrfToken() },
+				headers: csrfToken !== undefined ? { 'x-csrf-token': csrfToken } : {},
 			});
 			if (!startResponse.ok) throw new Error('passkey-add-start-failed');
 			const startPayload = (await startResponse.json()) as RegistrationStartResponse;
@@ -77,7 +74,7 @@
 			// 追加完了時は BFF が credential を検証し、公開 metadata のみを返す。
 			const finishResponse = await globalThis.fetch('/api/admin/auth/passkeys/finish', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', 'x-csrf-token': readCsrfToken() },
+				headers: { 'Content-Type': 'application/json', ...(csrfToken !== undefined ? { 'x-csrf-token': csrfToken } : {}) },
 				body: JSON.stringify({ challengeId: startPayload.challengeId, attestation }),
 			});
 			if (!finishResponse.ok) throw new Error('passkey-add-finish-failed');
@@ -109,7 +106,7 @@
 			// DELETE は本人所有 passkey だけを BFF が削除し、最後の passkey は server 側で拒否する。
 			const response = await globalThis.fetch(`/api/admin/auth/passkeys/${encodeURIComponent(targetId)}`, {
 				method: 'DELETE',
-				headers: { 'x-csrf-token': readCsrfToken() },
+				headers: csrfToken !== undefined ? { 'x-csrf-token': csrfToken } : {},
 			});
 			if (!response.ok) throw new Error('passkey-delete-failed');
 			await refreshPasskeys();
@@ -151,12 +148,12 @@
 			<p class="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-card-foreground" role="status">{message}</p>
 		{/if}
 
-		<Card>
-			<CardHeader>
-				<CardTitle>{i18n.t('passkeys.registeredTitle')}</CardTitle>
-				<CardDescription>{i18n.t('passkeys.registeredDescription')}</CardDescription>
-			</CardHeader>
-			<CardContent>
+		<CardNS.Card>
+			<CardNS.CardHeader>
+				<CardNS.CardTitle>{i18n.t('passkeys.registeredTitle')}</CardNS.CardTitle>
+				<CardNS.CardDescription>{i18n.t('passkeys.registeredDescription')}</CardNS.CardDescription>
+			</CardNS.CardHeader>
+			<CardNS.CardContent>
 				{#if passkeys.length === 0}
 					<EmptyState title={i18n.t('passkeys.emptyTitle')} description={i18n.t('passkeys.emptyDescription')} />
 				{:else}
@@ -181,11 +178,11 @@
 						{/each}
 					</div>
 				{/if}
-			</CardContent>
-			<CardFooter>
+			</CardNS.CardContent>
+			<CardNS.CardFooter>
 				<Button variant="outline" href="/">{i18n.t('passkeys.back')}</Button>
-			</CardFooter>
-		</Card>
+			</CardNS.CardFooter>
+		</CardNS.Card>
 	</section>
 </main>
 

@@ -21,6 +21,10 @@
 	const { data, form } = $props<{ data: { locale: 'ja' | 'en'; localeUpdated: boolean; canManageOperators: boolean; operatorCount: number; activeOperatorCount: number; labels: SettingsLabels; csrfToken: string }; form?: { localeError?: boolean } }>();
 </script>
 
+<svelte:head>
+	<title>{data.labels.title} - Admin Console</title>
+</svelte:head>
+
 <main class="space-y-6 p-8">
 	<section class="space-y-2">
 		<h1 class="text-3xl font-bold tracking-tight">{data.labels.title}</h1>

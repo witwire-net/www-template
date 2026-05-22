@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { startRegistration } from '@simplewebauthn/browser';
 
-	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Spinner } from '@www-template/ui/components';
+	import { Button, CardNS, Input, Label, Spinner } from '@www-template/ui/components';
 
 	import { createAdminI18n } from '$lib/i18n';
 
@@ -65,12 +65,12 @@
 			<p class="max-w-xl text-base leading-7 text-muted-foreground">{i18n.t('operatorSetup.description')}</p>
 		</div>
 
-		<Card class="border-border bg-card text-card-foreground">
-			<CardHeader>
-				<CardTitle>{i18n.t('operatorSetup.cardTitle')}</CardTitle>
-				<CardDescription>{i18n.t('operatorSetup.cardDescription')}</CardDescription>
-			</CardHeader>
-			<CardContent class="space-y-4">
+		<CardNS.Card class="border-border bg-card text-card-foreground">
+			<CardNS.CardHeader>
+				<CardNS.CardTitle>{i18n.t('operatorSetup.cardTitle')}</CardNS.CardTitle>
+				<CardNS.CardDescription>{i18n.t('operatorSetup.cardDescription')}</CardNS.CardDescription>
+			</CardNS.CardHeader>
+			<CardNS.CardContent class="space-y-4">
 				<div class="space-y-2">
 					<Label for="operator-setup-token">{i18n.t('operatorSetup.token')}</Label>
 					<Input id="operator-setup-token" type="password" autocomplete="one-time-code" bind:value={setupToken} disabled={isSubmitting} />
@@ -78,8 +78,8 @@
 				{#if message !== null}
 					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{message}</p>
 				{/if}
-			</CardContent>
-			<CardFooter class="flex flex-col gap-3">
+			</CardNS.CardContent>
+			<CardNS.CardFooter class="flex flex-col gap-3">
 				<Button class="w-full" size="lg" disabled={isSubmitting || setupToken.trim() === ''} onclick={handleOperatorSetup}>
 						{#if isSubmitting}
 							<Spinner aria-hidden="true" />
@@ -89,7 +89,7 @@
 					{/if}
 				</Button>
 				<Button class="w-full" variant="ghost" href="/login">{i18n.t('operatorSetup.backToLogin')}</Button>
-			</CardFooter>
-		</Card>
+			</CardNS.CardFooter>
+		</CardNS.Card>
 	</section>
 </main>

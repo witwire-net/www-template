@@ -51,10 +51,14 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{data.account.email} - {i18n.t('accountDetail.eyebrow')} - Admin Console</title>
+</svelte:head>
+
 <main class="space-y-6 p-8">
 	<section class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
 		<div class="space-y-2">
-			<p class="text-sm font-semibold uppercase tracking-wide text-slate-500">{i18n.t('accountDetail.eyebrow')}</p>
+			<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{i18n.t('accountDetail.eyebrow')}</p>
 			<h1 class="text-3xl font-bold tracking-tight">{data.account.email}</h1>
 			<Badge variant={data.account.status === 'active' ? 'success' : 'danger'}>{data.account.status}</Badge>
 		</div>

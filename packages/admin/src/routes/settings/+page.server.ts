@@ -7,14 +7,9 @@ import { requireAuthenticatedOperator } from '$lib/server/services/auth/routes';
 import { ServiceError } from '$lib/server/services/errors';
 import { listOperators } from '$lib/server/services/operators/list';
 import { updateOwnOperatorLocale } from '$lib/server/services/operators/locale';
+import { getFormString } from '$lib/server/shared/form-fields.js';
 
 import type { Actions, ServerLoad } from '@sveltejs/kit';
-
-function getFormString(form: FormData, name: string): string {
-  // FormData の unknown 値を安全に string へ絞り込み、ファイル入力などを無視する。
-  const value = form.get(name);
-  return typeof value === 'string' ? value : '';
-}
 
 /**
  * 設定ページの読み込み処理。

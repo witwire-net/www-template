@@ -32,9 +32,9 @@
   },
   "login": {
     "title": "Admin Login",
-    "eyebrow": "Admin secure entry",
-    "heading": "Open operational access with passkeys only.",
-    "description": "Enter your email address and sign in to Admin Console with a passkey registered on this device.",
+    "eyebrow": "Admin authentication",
+    "heading": "Log in with passkey",
+    "description": "Sign in to Admin Console with a registered passkey.",
     "cardTitle": "Log in",
     "cardDescription": "Start safe passkey authentication without exposing account existence.",
     "emailLabel": "Email address",
@@ -44,7 +44,7 @@
     "setupToken": "I have a setup token"
   },
   "dashboard": {
-    "eyebrow": "Command overview",
+    "eyebrow": "Overview",
     "title": "Admin Console",
     "description": "Review customer account status and the latest audit events.",
     "totalAccounts": "Total accounts",
@@ -161,7 +161,7 @@
   },
   "passkeys": {
     "title": "Admin Passkeys",
-    "eyebrow": "Credential control",
+    "eyebrow": "Passkey management",
     "heading": "Passkey management",
     "description": "Manage login passkeys for {email}.",
     "adding": "Adding…",
@@ -191,22 +191,22 @@
   },
   "setup": {
     "title": "Admin Bootstrap",
-    "eyebrow": "First operator bootstrap",
-    "heading": "Only the first admin creates the management boundary.",
+    "eyebrow": "Initial setup",
+    "heading": "Register the first administrator",
     "description": "Use this only in environments without any Admin operators. Register the bootstrap secret and first passkey.",
     "cardTitle": "Initial setup",
     "cardDescription": "Create the first admin operator and login passkey.",
     "email": "Email address",
     "displayName": "Display name",
-    "secret": "Bootstrap secret",
+    "secret": "Setup key",
     "submitting": "Registering…",
     "submit": "Register the first passkey",
     "error": "Initial setup could not be completed. Check the input and passkey registration operation."
   },
   "operatorSetup": {
     "title": "Operator Setup",
-    "eyebrow": "One-time operator setup",
-    "heading": "Securely activate an invited operator.",
+    "eyebrow": "Operator setup",
+    "heading": "Set up your operator account",
     "description": "Use the setup token from an admin to register a passkey on this device.",
     "cardTitle": "Operator setup",
     "cardDescription": "The one-time token is consumed when registration completes.",

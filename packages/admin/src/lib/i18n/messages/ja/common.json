@@ -32,9 +32,9 @@
   },
   "login": {
     "title": "Admin Login",
-    "eyebrow": "Admin secure entry",
-    "heading": "運用権限を、パスキーだけで開く。",
-    "description": "メールアドレスを入力し、この端末に登録済みのパスキーで Admin Console へログインしてください。",
+    "eyebrow": "管理者認証",
+    "heading": "パスキーでログイン",
+    "description": "登録済みのパスキーを使って Admin Console にログインします。",
     "cardTitle": "ログイン",
     "cardDescription": "存在確認を返さない安全なパスキー認証を開始します。",
     "emailLabel": "メールアドレス",
@@ -44,7 +44,7 @@
     "setupToken": "セットアップトークンを持っている"
   },
   "dashboard": {
-    "eyebrow": "Command overview",
+    "eyebrow": "概要",
     "title": "Admin Console",
     "description": "顧客アカウントの状態と直近の監査イベントを確認します。",
     "totalAccounts": "総アカウント数",
@@ -74,7 +74,7 @@
     "view": "表示"
   },
   "accountDetail": {
-    "eyebrow": "Account detail",
+    "eyebrow": "アカウント詳細",
     "suspendTitle": "アカウントを停止",
     "suspendDescription": "この顧客アカウントを停止します。",
     "suspend": "停止",
@@ -161,7 +161,7 @@
   },
   "passkeys": {
     "title": "Admin Passkeys",
-    "eyebrow": "Credential control",
+    "eyebrow": "パスキー管理",
     "heading": "パスキー管理",
     "description": "{email} のログイン用パスキーを管理します。",
     "adding": "追加中…",
@@ -191,22 +191,22 @@
   },
   "setup": {
     "title": "Admin Bootstrap",
-    "eyebrow": "First operator bootstrap",
-    "heading": "最初の管理者だけが、管理境界を作る。",
+    "eyebrow": "初回セットアップ",
+    "heading": "最初の管理者を登録",
     "description": "まだ Admin operator が存在しない環境でのみ使用できます。bootstrap secret と最初のパスキーを登録してください。",
     "cardTitle": "初回セットアップ",
     "cardDescription": "最初の admin operator とログイン用パスキーを作成します。",
     "email": "メールアドレス",
     "displayName": "表示名",
-    "secret": "Bootstrap secret",
+    "secret": "セットアップキー",
     "submitting": "登録中…",
     "submit": "最初のパスキーを登録",
     "error": "初回セットアップを完了できませんでした。入力内容とパスキー登録操作を確認してください。"
   },
   "operatorSetup": {
     "title": "Operator Setup",
-    "eyebrow": "One-time operator setup",
-    "heading": "招待された運用者を、安全に有効化。",
+    "eyebrow": "オペレーター初期設定",
+    "heading": "オペレーターをセットアップ",
     "description": "管理者から受け取ったセットアップトークンを使い、この端末のパスキーを登録します。",
     "cardTitle": "オペレーターセットアップ",
     "cardDescription": "one-time token は登録完了時に消費されます。",

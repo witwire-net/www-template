@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Badge, DropdownMenu, Pagination, Table } from '@www-template/ui/components';
+	import { Badge, DropdownMenu, Table } from '@www-template/ui/components';
 
-	import { createAdminI18n } from '$lib/i18n';
+	import PaginationFooter from '$lib/components/shared/PaginationFooter.svelte';
 
 	import OperatorRoleBadge from './OperatorRoleBadge.svelte';
 
@@ -23,7 +23,7 @@
 		page = 1,
 		totalPages = 1,
 		onPageChange,
-		labels = createOperatorTableLabels(),
+		labels,
 	}: {
 		operators: Operator[];
 		currentOperatorId?: string;
@@ -33,31 +33,8 @@
 		page?: number;
 		totalPages?: number;
 		onPageChange?: (page: number) => void;
-		labels?: ReturnType<typeof createOperatorTableLabels>;
+		labels: Record<string, string>;
 	} = $props();
-
-	function createOperatorTableLabels() {
-		// オペレーター table component 単体利用時も fallback 辞書に閉じる。
-		const { t } = createAdminI18n();
-		return {
-			caption: t('operators.tableCaption'),
-			email: t('operators.email'),
-			displayName: t('operators.displayName'),
-			role: t('operators.role'),
-			status: t('operators.status'),
-			lastLogin: t('operators.lastLogin'),
-			actions: t('operators.actions'),
-			active: t('operators.active'),
-			inactive: t('operators.inactive'),
-			manage: t('operators.manage'),
-			editRole: t('operators.editRole'),
-			deactivate: t('operators.deactivate'),
-			rotate: t('operators.rotate'),
-			pagination: t('shared.pagination'),
-			previousPage: t('shared.previousPage'),
-			nextPage: t('shared.nextPage'),
-		};
-	}
 </script>
 
 <Table.Table>
@@ -86,7 +63,7 @@
 				<Table.TableCell>{op.last_login_at ?? '-'}</Table.TableCell>
 				<Table.TableCell>
 					<DropdownMenu.DropdownMenu>
-						<DropdownMenu.DropdownMenuTriggerButton variant="ghost" size="xs">{labels.actions}</DropdownMenu.DropdownMenuTriggerButton>
+						<DropdownMenu.DropdownMenuTriggerButton variant="ghost" size="xs" aria-label={labels.manage + ' ' + op.email}>{labels.actions}</DropdownMenu.DropdownMenuTriggerButton>
 						<DropdownMenu.DropdownMenuContent align="end">
 							<DropdownMenu.DropdownMenuLabel>{labels.manage}</DropdownMenu.DropdownMenuLabel>
 							<DropdownMenu.DropdownMenuSeparator />
@@ -113,20 +90,4 @@
 	</Table.TableBody>
 </Table.Table>
 
-{#if totalPages > 1}
-	<Pagination.Pagination aria-label={labels.pagination} count={totalPages * 10} perPage={10} {page} onPageChange={(p: number) => { onPageChange?.(p); }}>
-		<Pagination.PaginationContent>
-			<Pagination.PaginationItem>
-				<Pagination.PaginationPrevButton aria-label={labels.previousPage} />
-			</Pagination.PaginationItem>
-			<Pagination.PaginationItem>
-				<Pagination.PaginationLink page={{ type: 'page', value: page }} isActive>
-					{page}
-				</Pagination.PaginationLink>
-			</Pagination.PaginationItem>
-			<Pagination.PaginationItem>
-				<Pagination.PaginationNextButton aria-label={labels.nextPage} />
-			</Pagination.PaginationItem>
-		</Pagination.PaginationContent>
-	</Pagination.Pagination>
-{/if}
+<PaginationFooter {page} {totalPages} perPage={10} {onPageChange} labels={labels} />

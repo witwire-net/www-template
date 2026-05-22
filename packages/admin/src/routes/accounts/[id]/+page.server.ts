@@ -11,21 +11,9 @@ import { suspendReasonSchema } from '$lib/server/models/schemas';
 import { getAccountDetail } from '$lib/server/services/accounts/detail';
 import { restoreAccount } from '$lib/server/services/accounts/restore';
 import { suspendAccount } from '$lib/server/services/accounts/suspend';
+import { getFormString } from '$lib/server/shared/form-fields.js';
 
 import type { Actions, ServerLoad } from '@sveltejs/kit';
-
-/**
- * フォームから文字列値を安全に取り出す。
- *
- * @param form 取得対象の FormData
- * @param name フィールド名
- * @param fallback 文字列以外だった場合の既定値
- * @returns 安全な文字列
- */
-function getFormString(form: FormData, name: string, fallback = ''): string {
-  const value = form.get(name);
-  return typeof value === 'string' ? value : fallback;
-}
 
 function getClientIp(request: Request): string {
   // reverse proxy が付与する代表的なヘッダーを読み、存在しない場合は空文字で監査に渡す。

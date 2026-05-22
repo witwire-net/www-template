@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Badge, Button, CodeBlock, Pagination, Table } from '@www-template/ui/components';
+	import { Badge, Button, CodeBlock, Table } from '@www-template/ui/components';
 
-	import { createAdminI18n } from '$lib/i18n';
+	import PaginationFooter from '$lib/components/shared/PaginationFooter.svelte';
 
 	interface AuditEvent {
 		id: string;
@@ -19,33 +19,14 @@
 		page = 1,
 		totalPages = 1,
 		onPageChange,
-		labels = createAuditTableLabels(),
+		labels,
 	}: {
 		events: AuditEvent[];
 		page?: number;
 		totalPages?: number;
 		onPageChange?: (page: number) => void;
-		labels?: ReturnType<typeof createAuditTableLabels>;
+		labels: Record<string, string>;
 	} = $props();
-
-	function createAuditTableLabels() {
-		// 監査 table component 単体利用時も Admin-owned fallback 辞書で文言を取得する。
-		const { t } = createAdminI18n();
-		return {
-			caption: t('audit.tableCaption'),
-			timestamp: t('audit.timestamp'),
-			operator: t('audit.operator'),
-			action: t('audit.action'),
-			target: t('audit.target'),
-			outcome: t('audit.outcome'),
-			details: t('audit.details'),
-			show: t('audit.show'),
-			hide: t('audit.hide'),
-			pagination: t('shared.pagination'),
-			previousPage: t('shared.previousPage'),
-			nextPage: t('shared.nextPage'),
-		};
-	}
 
 	let expandedId = $state<string | null>(null);
 
@@ -101,20 +82,4 @@
 	</Table.TableBody>
 </Table.Table>
 
-{#if totalPages > 1}
-	<Pagination.Pagination aria-label={labels.pagination} count={totalPages * 10} perPage={10} {page} onPageChange={(p: number) => { onPageChange?.(p); }}>
-		<Pagination.PaginationContent>
-			<Pagination.PaginationItem>
-				<Pagination.PaginationPrevButton aria-label={labels.previousPage} />
-			</Pagination.PaginationItem>
-			<Pagination.PaginationItem>
-				<Pagination.PaginationLink page={{ type: 'page', value: page }} isActive>
-					{page}
-				</Pagination.PaginationLink>
-			</Pagination.PaginationItem>
-			<Pagination.PaginationItem>
-				<Pagination.PaginationNextButton aria-label={labels.nextPage} />
-			</Pagination.PaginationItem>
-		</Pagination.PaginationContent>
-	</Pagination.Pagination>
-{/if}
+<PaginationFooter {page} {totalPages} perPage={25} {onPageChange} labels={labels} />

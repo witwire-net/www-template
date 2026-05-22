@@ -41,6 +41,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{i18n.t('audit.title')} - Admin Console</title>
+</svelte:head>
+
 <main class="space-y-6 p-8">
 	<section class="space-y-2">
 		<h1 class="text-3xl font-bold tracking-tight">{i18n.t('audit.title')}</h1>

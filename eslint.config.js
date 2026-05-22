@@ -1320,6 +1320,11 @@ export default tseslint.config(
           mode: 'full',
         },
         {
+          type: 'admin-shared',
+          pattern: 'packages/admin/src/lib/server/shared/**/*.ts',
+          mode: 'full',
+        },
+        {
           type: 'admin-infrastructure',
           pattern: 'packages/admin/src/lib/server/infrastructure/**/*.ts',
           mode: 'full',
@@ -1534,6 +1539,7 @@ export default tseslint.config(
                 'admin-service',
                 'admin-model',
                 'admin-infrastructure',
+                'admin-shared',
                 'frontend-i18n',
                 'admin-i18n',
               ],
@@ -1544,6 +1550,7 @@ export default tseslint.config(
                 'admin-service',
                 'admin-model',
                 'admin-infrastructure',
+                'admin-shared',
                 'prisma-client',
                 'frontend-i18n',
                 'admin-i18n',
@@ -1554,6 +1561,7 @@ export default tseslint.config(
               allow: [
                 'admin-model',
                 'admin-infrastructure',
+                'admin-shared',
                 'prisma-client',
                 'frontend-i18n',
                 'admin-i18n',
@@ -1564,10 +1572,15 @@ export default tseslint.config(
               allow: [
                 'admin-infrastructure',
                 'admin-model',
+                'admin-shared',
                 'prisma-client',
                 'frontend-i18n',
                 'admin-i18n',
               ],
+            },
+            {
+              from: ['admin-shared'],
+              allow: ['admin-shared', 'admin-infrastructure', 'admin-i18n'],
             },
             {
               from: ['admin-hooks'],

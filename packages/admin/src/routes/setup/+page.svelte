@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { startRegistration } from '@simplewebauthn/browser';
 
-	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Spinner } from '@www-template/ui/components';
+	import { Button, CardNS, Input, Label, Spinner } from '@www-template/ui/components';
 
 	import { createAdminI18n } from '$lib/i18n';
 
@@ -60,19 +60,19 @@
 </svelte:head>
 
 <main class="min-h-screen bg-background px-6 py-12 text-foreground">
-	<section class="mx-auto grid min-h-screen max-w-6xl items-center gap-10 lg:grid-cols-[1.1fr_30rem]">
+	<section class="mx-auto grid min-h-screen max-w-5xl items-center gap-10 lg:grid-cols-[1.1fr_30rem]">
 		<div class="space-y-6">
 			<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{i18n.t('setup.eyebrow')}</p>
 			<h1 class="max-w-2xl text-4xl font-black tracking-tight text-foreground md:text-6xl">{i18n.t('setup.heading')}</h1>
 			<p class="max-w-xl text-base leading-7 text-muted-foreground">{i18n.t('setup.description')}</p>
 		</div>
 
-		<Card class="border-border bg-card text-card-foreground">
-			<CardHeader>
-				<CardTitle>{i18n.t('setup.cardTitle')}</CardTitle>
-				<CardDescription>{i18n.t('setup.cardDescription')}</CardDescription>
-			</CardHeader>
-			<CardContent class="space-y-4">
+		<CardNS.Card class="border-border bg-card text-card-foreground">
+			<CardNS.CardHeader>
+				<CardNS.CardTitle>{i18n.t('setup.cardTitle')}</CardNS.CardTitle>
+				<CardNS.CardDescription>{i18n.t('setup.cardDescription')}</CardNS.CardDescription>
+			</CardNS.CardHeader>
+			<CardNS.CardContent class="space-y-4">
 				<div class="space-y-2">
 					<Label for="setup-email">{i18n.t('setup.email')}</Label>
 					<Input id="setup-email" type="email" autocomplete="email" bind:value={email} disabled={isSubmitting} placeholder="admin@example.com" />
@@ -88,8 +88,8 @@
 				{#if message !== null}
 					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{message}</p>
 				{/if}
-			</CardContent>
-			<CardFooter>
+			</CardNS.CardContent>
+			<CardNS.CardFooter>
 				<Button class="w-full" size="lg" disabled={isSubmitting || email.trim() === '' || displayName.trim() === '' || bootstrapSecret.trim() === ''} onclick={handleInitialSetup}>
 						{#if isSubmitting}
 							<Spinner aria-hidden="true" />
@@ -98,7 +98,7 @@
 						{i18n.t('setup.submit')}
 					{/if}
 				</Button>
-			</CardFooter>
-		</Card>
+			</CardNS.CardFooter>
+		</CardNS.Card>
 	</section>
 </main>

@@ -53,6 +53,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{i18n.t('operators.title')} - Admin Console</title>
+</svelte:head>
+
 <main class="space-y-6 p-8">
 	<section class="flex items-end justify-between gap-4">
 		<div class="space-y-2">

@@ -19,14 +19,17 @@
 	]);
 
 	function formatDate(value: Date): string {
-		// DB 由来の Date を管理者が監査しやすい ISO 形式へ固定する。
 		return new Date(value).toISOString();
 	}
 </script>
 
+<svelte:head>
+	<title>{i18n.t('dashboard.title')} - Admin Console</title>
+</svelte:head>
+
 <main class="space-y-8 p-8">
 	<section class="space-y-2">
-		<p class="text-sm font-semibold uppercase tracking-wide text-slate-500">{i18n.t('dashboard.eyebrow')}</p>
+		<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{i18n.t('dashboard.eyebrow')}</p>
 		<h1 class="text-3xl font-bold tracking-tight">{i18n.t('dashboard.title')}</h1>
 		<p class="max-w-2xl text-slate-600">{i18n.t('dashboard.description')}</p>
 	</section>

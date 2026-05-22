@@ -1,18 +1,16 @@
 <script lang="ts">
 	import { Button, Field, Input, Label, Select } from '@www-template/ui/components';
 
-	import { createAdminI18n } from '$lib/i18n';
-
 	interface Operator { id: string; email: string; }
 
 	const {
 		onFilter,
 		operators = [],
-		labels = createAuditFilterLabels(),
+		labels,
 	}: {
 		onFilter?: (filters: Record<string, string | undefined>) => void;
 		operators?: Operator[];
-		labels?: ReturnType<typeof createAuditFilterLabels>;
+		labels: Record<string, string>;
 	} = $props();
 
 	let operatorId = $state('');
@@ -23,21 +21,6 @@
 	const selectedOperatorLabel = $derived(
 		operators.find((operator) => operator.id === operatorId)?.email ?? labels.all
 	);
-
-	function createAuditFilterLabels() {
-		// 監査 filter component 単体利用時も Admin-owned fallback 辞書に閉じる。
-		const { t } = createAdminI18n();
-		return {
-			operator: t('audit.operator'),
-			all: t('audit.all'),
-			action: t('audit.action'),
-			actionPlaceholder: t('audit.actionPlaceholder'),
-			from: t('audit.from'),
-			to: t('audit.to'),
-			filter: t('audit.filter'),
-			clear: t('audit.clear'),
-		};
-	}
 
 	function handleFilter(): void {
 		onFilter?.({

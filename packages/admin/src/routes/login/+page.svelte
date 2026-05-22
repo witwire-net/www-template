@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { startAuthentication } from '@simplewebauthn/browser';
 
-	import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Spinner } from '@www-template/ui/components';
+	import { Button, CardNS, Input, Label, Spinner } from '@www-template/ui/components';
 
 	interface LoginLabels {
 		title: string;
@@ -76,12 +76,12 @@
 			<p class="max-w-xl text-base leading-7 text-muted-foreground">{data.labels.description}</p>
 		</div>
 
-		<Card class="border-border bg-card text-card-foreground">
-			<CardHeader>
-				<CardTitle>{data.labels.cardTitle}</CardTitle>
-				<CardDescription>{data.labels.cardDescription}</CardDescription>
-			</CardHeader>
-			<CardContent class="space-y-4">
+		<CardNS.Card class="border-border bg-card text-card-foreground">
+			<CardNS.CardHeader>
+				<CardNS.CardTitle>{data.labels.cardTitle}</CardNS.CardTitle>
+				<CardNS.CardDescription>{data.labels.cardDescription}</CardNS.CardDescription>
+			</CardNS.CardHeader>
+			<CardNS.CardContent class="space-y-4">
 				<div class="space-y-2">
 					<Label for="admin-login-email">{data.labels.emailLabel}</Label>
 					<Input id="admin-login-email" type="email" autocomplete="email" bind:value={email} disabled={isSubmitting} placeholder="operator@example.com" />
@@ -89,8 +89,8 @@
 				{#if message !== null}
 					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{message}</p>
 				{/if}
-			</CardContent>
-			<CardFooter class="flex flex-col gap-3">
+			</CardNS.CardContent>
+			<CardNS.CardFooter class="flex flex-col gap-3">
 				<Button class="w-full" size="lg" disabled={isSubmitting || email.trim() === ''} onclick={handlePasskeyLogin}>
 					{#if isSubmitting}
 						<Spinner aria-hidden="true" />
@@ -100,7 +100,7 @@
 					{/if}
 				</Button>
 				<Button class="w-full" variant="ghost" href="/operator-setup">{data.labels.setupToken}</Button>
-			</CardFooter>
-		</Card>
+			</CardNS.CardFooter>
+		</CardNS.Card>
 	</section>
 </main>

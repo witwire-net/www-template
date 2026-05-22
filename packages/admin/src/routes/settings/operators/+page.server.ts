@@ -10,13 +10,9 @@ import {
   rotateSetupToken,
   updateOperatorRole,
 } from '$lib/server/services/operators/manage';
+import { getFormString } from '$lib/server/shared/form-fields.js';
 
 import type { Actions, ServerLoad } from '@sveltejs/kit';
-
-function getFormString(form: FormData, name: string): string {
-  const value = form.get(name);
-  return typeof value === 'string' ? value : '';
-}
 
 /**
  * オペレーター管理ページの読み込み処理。
