@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authValkeyMocks = vi.hoisted(() => ({
+  connect: vi.fn(),
   ping: vi.fn(),
   incr: vi.fn(),
   expire: vi.fn(),
@@ -112,10 +113,12 @@ function sha256ForMock(value: string): string {
 describe('auth route security helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authValkeyMocks.connect.mockResolvedValue(undefined);
     authValkeyMocks.ping.mockResolvedValue('PONG');
     authValkeyMocks.incr.mockResolvedValue(1);
     authValkeyMocks.expire.mockResolvedValue(1);
     authValkeyMocks.getAdminValkey.mockReturnValue({
+      connect: authValkeyMocks.connect,
       ping: authValkeyMocks.ping,
       incr: authValkeyMocks.incr,
       expire: authValkeyMocks.expire,
@@ -149,7 +152,7 @@ describe('auth route security helpers', () => {
   });
 
   it('Admin Valkey unavailable は認証境界で 503 fail-close する', async () => {
-    authValkeyMocks.ping.mockRejectedValueOnce(new Error('valkey down'));
+    authValkeyMocks.connect.mockRejectedValueOnce(new Error('valkey down'));
 
     await expect(requireValkey()).rejects.toMatchObject({ status: 503 });
   });

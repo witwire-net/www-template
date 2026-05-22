@@ -15,7 +15,7 @@ export function getAdminValkey(): Redis {
     const { adminValkeyUrl } = getAdminAuthConfig();
     adminValkey = new Redis(adminValkeyUrl, {
       maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
+      lazyConnect: true,
     });
   }
   return adminValkey;

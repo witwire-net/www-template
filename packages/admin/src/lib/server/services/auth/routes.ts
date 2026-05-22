@@ -99,9 +99,8 @@ export function fail(status: number, message: string): never {
  * @returns 利用可能な Valkey 接続
  */
 export async function requireValkey(): Promise<Redis> {
-  // rate-limit / challenge / session の信頼境界なので、接続不能時は安全側で拒否する。
   const valkey = getAdminValkey();
-  await valkey.ping().catch(() => {
+  await valkey.connect().catch(() => {
     fail(503, 'Authentication temporarily unavailable');
   });
   return valkey;
