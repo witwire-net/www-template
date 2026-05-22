@@ -52,7 +52,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.account.email} - {i18n.t('accountDetail.eyebrow')} - Admin Console</title>
+	<title>{data.account.email}</title>
 </svelte:head>
 
 <main class="space-y-6 p-8">

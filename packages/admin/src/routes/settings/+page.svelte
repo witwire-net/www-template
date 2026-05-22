@@ -22,7 +22,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.labels.title} - Admin Console</title>
+	<title>{data.labels.title}</title>
 </svelte:head>
 
 <main class="space-y-6 p-8">

@@ -25,11 +25,7 @@ describe('Admin Console route/component scenarios', () => {
       "i18n.t('accounts.applyFilters')",
       "i18n.t('accounts.emptyDescription')",
     ]);
-    expectContains(table, [
-      "t('accounts.tableCaption')",
-      'Pagination.Pagination',
-      'onPageChange?.(p)',
-    ]);
+    expectContains(table, ['{labels.caption}', 'PaginationFooter', '{onPageChange}']);
     expectContains(server, [
       'const PAGE_SIZE = 20',
       'searchAccounts(await getProductPrisma()',
@@ -80,12 +76,12 @@ describe('Admin Console route/component scenarios', () => {
       'AuditFilterBar',
     ]);
     expectContains(filter, [
-      "t('audit.actionPlaceholder')",
+      'labels.actionPlaceholder',
       "action: action !== '' ? action : undefined",
       'onFilter?.({});',
     ]);
     expectContains(table, [
-      "t('audit.tableCaption')",
+      '{labels.caption}',
       'operator_email',
       'toggleExpand(event.id)',
       'JSON.stringify(details, null, 2)',
@@ -110,11 +106,11 @@ describe('Admin Console route/component scenarios', () => {
       'i18n.t(form.messageKey)',
     ]);
     expectContains(table, [
-      "t('operators.tableCaption')",
+      '{labels.caption}',
       'op.id !== currentOperatorId',
-      "t('operators.editRole')",
-      "t('operators.deactivate')",
-      "t('operators.rotate')",
+      'labels.editRole',
+      'labels.deactivate',
+      'labels.rotate',
     ]);
     expectContains(server, [
       "requirePermission(locals.operator, 'operators:read')",

@@ -42,7 +42,7 @@
 </script>
 
 <svelte:head>
-	<title>{i18n.t('audit.title')} - Admin Console</title>
+	<title>{i18n.t('audit.title')}</title>
 </svelte:head>
 
 <main class="space-y-6 p-8">

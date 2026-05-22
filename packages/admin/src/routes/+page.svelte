@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>{i18n.t('dashboard.title')} - Admin Console</title>
+	<title>{i18n.t('dashboard.title')}</title>
 </svelte:head>
 
 <main class="space-y-8 p-8">

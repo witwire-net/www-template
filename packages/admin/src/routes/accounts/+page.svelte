@@ -66,7 +66,7 @@
 </script>
 
 <svelte:head>
-	<title>{i18n.t('accounts.title')} - Admin Console</title>
+	<title>{i18n.t('accounts.title')}</title>
 </svelte:head>
 
 <main class="space-y-6 p-8">

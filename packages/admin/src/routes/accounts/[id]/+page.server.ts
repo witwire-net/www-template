@@ -6,12 +6,12 @@ import {
   markAuditSucceeded,
 } from '$lib/server/infrastructure/audit/logger';
 import { getAdminPrisma, getProductPrisma } from '$lib/server/infrastructure/db/prisma';
+import { getFormString } from '$lib/server/infrastructure/form-fields';
 import { requirePermission } from '$lib/server/infrastructure/rbac/guard';
 import { suspendReasonSchema } from '$lib/server/models/schemas';
 import { getAccountDetail } from '$lib/server/services/accounts/detail';
 import { restoreAccount } from '$lib/server/services/accounts/restore';
 import { suspendAccount } from '$lib/server/services/accounts/suspend';
-import { getFormString } from '$lib/server/shared/form-fields.js';
 
 import type { Actions, ServerLoad } from '@sveltejs/kit';
 

@@ -2,12 +2,12 @@ import { fail, redirect } from '@sveltejs/kit';
 
 import { createAdminI18n } from '$lib/i18n';
 import { getAdminPrisma } from '$lib/server/infrastructure/db/prisma';
+import { getFormString } from '$lib/server/infrastructure/form-fields';
 import { hasPermission } from '$lib/server/infrastructure/rbac/guard';
 import { requireAuthenticatedOperator } from '$lib/server/services/auth/routes';
 import { ServiceError } from '$lib/server/services/errors';
 import { listOperators } from '$lib/server/services/operators/list';
 import { updateOwnOperatorLocale } from '$lib/server/services/operators/locale';
-import { getFormString } from '$lib/server/shared/form-fields.js';
 
 import type { Actions, ServerLoad } from '@sveltejs/kit';
 

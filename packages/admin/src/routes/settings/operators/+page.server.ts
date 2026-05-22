@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 
 import { getAdminPrisma } from '$lib/server/infrastructure/db/prisma';
+import { getFormString } from '$lib/server/infrastructure/form-fields';
 import { requirePermission } from '$lib/server/infrastructure/rbac/guard';
 import { createOperatorSchema, updateRoleSchema } from '$lib/server/models/schemas';
 import { listOperators } from '$lib/server/services/operators/list';
@@ -10,7 +11,6 @@ import {
   rotateSetupToken,
   updateOperatorRole,
 } from '$lib/server/services/operators/manage';
-import { getFormString } from '$lib/server/shared/form-fields.js';
 
 import type { Actions, ServerLoad } from '@sveltejs/kit';
 
