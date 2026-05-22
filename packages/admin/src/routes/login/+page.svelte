@@ -19,7 +19,7 @@
 
 	interface LoginStartResponse {
 		challengeId: string;
-		options: Parameters<typeof startAuthentication>[0];
+		options: Parameters<typeof startAuthentication>[0]['optionsJSON'];
 	}
 
 	let email = $state('');
@@ -44,7 +44,7 @@
 			const startPayload = (await startResponse.json()) as LoginStartResponse;
 
 			// WebAuthn ceremony はブラウザ API に限定し、秘密鍵 material を JavaScript へ取り出さない。
-			const assertion = await startAuthentication(startPayload.options);
+			const assertion = await startAuthentication({ optionsJSON: startPayload.options });
 
 			// finish route が session cookie を発行するため、成功後は root へ遷移する。
 			const finishResponse = await globalThis.fetch('/api/admin/auth/passkey/finish', {

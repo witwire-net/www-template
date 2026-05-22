@@ -100,7 +100,8 @@ export function fail(status: number, message: string): never {
  */
 export async function requireValkey(): Promise<Redis> {
   const valkey = getAdminValkey();
-  await valkey.connect().catch(() => {
+  // ioredis の lazy client は ping で未接続時の接続開始と接続済み時の疎通確認を両立し、ready 後の再 connect 例外を避ける。
+  await valkey.ping().catch(() => {
     fail(503, 'Authentication temporarily unavailable');
   });
   return valkey;

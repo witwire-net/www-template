@@ -7,7 +7,7 @@
 
 	interface RegistrationStartResponse {
 		challengeId: string;
-		options: Parameters<typeof startRegistration>[0];
+		options: Parameters<typeof startRegistration>[0]['optionsJSON'];
 	}
 
 	let setupToken = $state('');
@@ -33,7 +33,7 @@
 			const startPayload = (await startResponse.json()) as RegistrationStartResponse;
 
 			// ブラウザの authenticator で新しい passkey を作成し、登録応答だけを送信する。
-			const attestation = await startRegistration(startPayload.options);
+			const attestation = await startRegistration({ optionsJSON: startPayload.options });
 
 			// finish route は token 消費と passkey 追加を同一 transaction で処理する。
 			const finishResponse = await globalThis.fetch('/api/admin/auth/operator-setup/finish', {

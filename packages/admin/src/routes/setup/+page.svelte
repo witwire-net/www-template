@@ -7,7 +7,7 @@
 
 	interface RegistrationStartResponse {
 		challengeId: string;
-		options: Parameters<typeof startRegistration>[0];
+		options: Parameters<typeof startRegistration>[0]['optionsJSON'];
 	}
 
 	let email = $state('');
@@ -35,7 +35,7 @@
 			const startPayload = (await startResponse.json()) as RegistrationStartResponse;
 
 			// Passkey credential はブラウザの WebAuthn ceremony で作成し、秘密鍵をサーバーへ送らない。
-			const attestation = await startRegistration(startPayload.options);
+			const attestation = await startRegistration({ optionsJSON: startPayload.options });
 
 			// finish route が初回 operator と passkey を同一 transaction で保存する。
 			const finishResponse = await globalThis.fetch('/api/admin/auth/setup/finish', {

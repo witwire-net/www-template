@@ -205,4 +205,20 @@ describe('Admin Console route/component scenarios', () => {
       'value="en"',
     ]);
   });
+
+  it('WebAuthn browser helpers は SimpleWebAuthn v11 の optionsJSON wrapper で呼び出す', () => {
+    // SimpleWebAuthn v11 は startRegistration/startAuthentication に optionsJSON wrapper を要求するため、実ブラウザ flow の即時失敗を防ぐ。
+    const setupPage = readRoute('setup/+page.svelte');
+    const operatorSetupPage = readRoute('operator-setup/+page.svelte');
+    const passkeysPage = readRoute('passkeys/+page.svelte');
+    const loginPage = readRoute('login/+page.svelte');
+    expectContains(setupPage, ['startRegistration({ optionsJSON: startPayload.options })']);
+    expectContains(operatorSetupPage, ['startRegistration({ optionsJSON: startPayload.options })']);
+    expectContains(passkeysPage, ['startRegistration({ optionsJSON: startPayload.options })']);
+    expectContains(loginPage, ['startAuthentication({ optionsJSON: startPayload.options })']);
+    expect(setupPage).not.toContain('startRegistration(startPayload.options)');
+    expect(operatorSetupPage).not.toContain('startRegistration(startPayload.options)');
+    expect(passkeysPage).not.toContain('startRegistration(startPayload.options)');
+    expect(loginPage).not.toContain('startAuthentication(startPayload.options)');
+  });
 });

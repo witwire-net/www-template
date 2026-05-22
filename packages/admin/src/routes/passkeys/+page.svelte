@@ -15,7 +15,7 @@
 
 	interface RegistrationStartResponse {
 		challengeId: string;
-		options: Parameters<typeof startRegistration>[0];
+		options: Parameters<typeof startRegistration>[0]['optionsJSON'];
 	}
 
 	interface PasskeyListResponse {
@@ -69,7 +69,7 @@
 			const startPayload = (await startResponse.json()) as RegistrationStartResponse;
 
 			// authenticator で新しい passkey を作成し、attestation だけを finish route に渡す。
-			const attestation = await startRegistration(startPayload.options);
+			const attestation = await startRegistration({ optionsJSON: startPayload.options });
 
 			// 追加完了時は BFF が credential を検証し、公開 metadata のみを返す。
 			const finishResponse = await globalThis.fetch('/api/admin/auth/passkeys/finish', {

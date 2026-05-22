@@ -37,7 +37,7 @@
 			<DropdownMenu.DropdownMenuSeparator />
 			<form method="POST" action="/api/admin/auth/logout">
 				<Input type="hidden" name="_csrf" value={csrfToken} />
-				<Button type="submit" variant="ghost" class="w-full justify-start">{logoutLabel}</Button>
+				<Button type="submit" variant="ghost" class="h-auto w-full justify-start rounded-[calc(var(--radius-2xl)-0.25rem)] px-3 py-2 text-sm">{logoutLabel}</Button>
 			</form>
 		</DropdownMenu.DropdownMenuContent>
 	</DropdownMenu.DropdownMenu>

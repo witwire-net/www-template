@@ -26,7 +26,7 @@ describe('passkey management page source contract', () => {
     // 追加 flow が start → browser WebAuthn → finish → refresh の順で一覧を更新することを確認する。
     expect(passkeysPageSource).toContain("globalThis.fetch('/api/admin/auth/passkeys/start'");
     expect(passkeysPageSource).toContain(
-      'const attestation = await startRegistration(startPayload.options);'
+      'const attestation = await startRegistration({ optionsJSON: startPayload.options });'
     );
     expect(passkeysPageSource).toContain("globalThis.fetch('/api/admin/auth/passkeys/finish'");
     expect(passkeysPageSource).toContain('await refreshPasskeys();');

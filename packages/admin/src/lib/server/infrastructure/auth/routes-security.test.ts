@@ -152,9 +152,20 @@ describe('auth route security helpers', () => {
   });
 
   it('Admin Valkey unavailable は認証境界で 503 fail-close する', async () => {
-    authValkeyMocks.connect.mockRejectedValueOnce(new Error('valkey down'));
+    authValkeyMocks.ping.mockRejectedValueOnce(new Error('valkey down'));
 
     await expect(requireValkey()).rejects.toMatchObject({ status: 503 });
+  });
+
+  it('Admin Valkey が接続済みの場合は再 connect せず ping で疎通確認する', async () => {
+    // ioredis は ready 後の connect() を例外にするため、認証境界では ping だけで可用性を確認する。
+    authValkeyMocks.connect.mockRejectedValueOnce(
+      new Error('Redis is already connecting/connected')
+    );
+
+    await expect(requireValkey()).resolves.toBe(authValkeyMocks.getAdminValkey());
+    expect(authValkeyMocks.connect).not.toHaveBeenCalled();
+    expect(authValkeyMocks.ping).toHaveBeenCalledTimes(1);
   });
 
   it('未登録 email と inactive operator の login start は decoy challenge で同一 response shape を返す', async () => {
