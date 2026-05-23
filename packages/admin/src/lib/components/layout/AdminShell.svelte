@@ -8,7 +8,6 @@
 
 	const {
 		children,
-		role = 'viewer',
 		currentPath = '/',
 		navItems = [],
 		labels,
@@ -17,7 +16,6 @@
 		csrfToken = '',
 	}: {
 		children: Snippet;
-		role?: string;
 		currentPath?: string;
 		navItems?: { label: string; href: string; activePrefix: string }[];
 		labels: { admin: string; operatorFallback: string; logout: string; close: string };
@@ -28,9 +26,9 @@
 </script>
 
 	<Sidebar.SidebarProvider>
-		<AdminSidebar {role} {currentPath} {navItems} {brandLabel} closeLabel={labels.close} />
-		<Sidebar.SidebarInset>
-			<AdminHeader {operatorName} {csrfToken} adminLabel={labels.admin} operatorFallback={labels.operatorFallback} logoutLabel={labels.logout} />
+		<AdminSidebar {currentPath} {navItems} {brandLabel} closeLabel={labels.close} {operatorName} operatorFallback={labels.operatorFallback} logoutLabel={labels.logout} {csrfToken} />
+		<Sidebar.SidebarInset class="gap-4 p-3">
+			<AdminHeader adminLabel={labels.admin} />
 			{@render children()}
 		</Sidebar.SidebarInset>
 </Sidebar.SidebarProvider>

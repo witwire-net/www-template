@@ -61,7 +61,7 @@
 	<section class="flex items-end justify-between gap-4">
 		<div class="space-y-2">
 			<h1 class="text-3xl font-bold tracking-tight">{i18n.t('operators.title')}</h1>
-			<p class="text-slate-600">{i18n.t('operators.description')}</p>
+			<p class="text-muted-foreground">{i18n.t('operators.description')}</p>
 		</div>
 		<Dialog.Dialog bind:open={addOpen}>
 			<Dialog.DialogTrigger><Button>{i18n.t('operators.add')}</Button></Dialog.DialogTrigger>
@@ -78,11 +78,11 @@
 		</Dialog.Dialog>
 	</section>
 
-	{#if form?.messageKey != null}<p class="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{i18n.t(form.messageKey)}</p>{/if}
+	{#if form?.messageKey != null}<p class="rounded-md border border-error/20 bg-error/10 p-3 text-sm text-error">{i18n.t(form.messageKey)}</p>{/if}
 	{#if form?.setupToken != null}
-		<CardNS.Card class="border-amber-200 bg-amber-50">
+		<CardNS.Card class="border-warning/20 bg-warning/10">
 			<CardNS.CardHeader><CardNS.CardTitle>{i18n.t('operators.setupTokenTitle')}</CardNS.CardTitle><CardNS.CardDescription>{i18n.t('operators.setupTokenDescription', { email: form.setupTokenEmail ?? '' })}</CardNS.CardDescription></CardNS.CardHeader>
-			<CardNS.CardContent><code class="break-all rounded bg-white p-3 text-sm">{form.setupToken}</code></CardNS.CardContent>
+			<CardNS.CardContent><code class="break-all rounded bg-surface p-3 text-sm">{form.setupToken}</code></CardNS.CardContent>
 		</CardNS.Card>
 	{/if}
 

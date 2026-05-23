@@ -19,6 +19,12 @@
 	}
 
 	const { data, form } = $props<{ data: { locale: 'ja' | 'en'; localeUpdated: boolean; canManageOperators: boolean; operatorCount: number; activeOperatorCount: number; labels: SettingsLabels; csrfToken: string }; form?: { localeError?: boolean } }>();
+
+	let selectedLocale = $state<'ja' | 'en'>('ja');
+
+	$effect.pre(() => {
+		selectedLocale = data.locale;
+	});
 </script>
 
 <svelte:head>
@@ -28,7 +34,7 @@
 <main class="space-y-6 p-8">
 	<section class="space-y-2">
 		<h1 class="text-3xl font-bold tracking-tight">{data.labels.title}</h1>
-		<p class="text-slate-600">{data.labels.description}</p>
+		<p class="text-muted-foreground">{data.labels.description}</p>
 	</section>
 	<CardNS.Card>
 		<CardNS.CardHeader>
@@ -37,17 +43,22 @@
 		</CardNS.CardHeader>
 		<CardNS.CardContent class="space-y-4">
 			{#if data.localeUpdated}
-				<p class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{data.labels.languageSuccess}</p>
+				<p class="rounded-md border border-success/20 bg-success/10 p-3 text-sm text-success">{data.labels.languageSuccess}</p>
 			{/if}
 			{#if form?.localeError === true}
-				<p class="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{data.labels.languageError}</p>
+				<p class="rounded-md border border-error/20 bg-error/10 p-3 text-sm text-error">{data.labels.languageError}</p>
 			{/if}
 			<form method="POST" action="?/locale" class="space-y-3">
 				<Input type="hidden" name="_csrf" value={data.csrfToken} />
+				<Input type="hidden" name="locale" value={selectedLocale} />
 				<div class="space-y-2">
 					<Label for="operator-locale">{data.labels.languageLabel}</Label>
-					<Select.Select name="locale" type="single" value={data.locale}>
-						<Select.SelectTrigger id="operator-locale"><Select.SelectValue>{data.locale === 'ja' ? data.labels.languageJapanese : data.labels.languageEnglish}</Select.SelectValue></Select.SelectTrigger>
+					<Select.Select type="single" bind:value={selectedLocale}>
+						<Select.SelectTrigger id="operator-locale">
+							<Select.SelectValue>
+								{selectedLocale === 'ja' ? data.labels.languageJapanese : data.labels.languageEnglish}
+							</Select.SelectValue>
+						</Select.SelectTrigger>
 						<Select.SelectContent>
 							<Select.SelectItem value="ja">{data.labels.languageJapanese}</Select.SelectItem>
 							<Select.SelectItem value="en">{data.labels.languageEnglish}</Select.SelectItem>
@@ -65,7 +76,7 @@
 			<CardNS.CardDescription>{data.labels.managementDescription}</CardNS.CardDescription>
 		</CardNS.CardHeader>
 		<CardNS.CardContent class="space-y-4">
-			<p class="text-sm text-slate-600">{data.labels.managementBody}</p>
+			<p class="text-sm text-muted-foreground">{data.labels.managementBody}</p>
 			<Separator />
 			<Button href="/settings/operators">{data.labels.managementButton}</Button>
 		</CardNS.CardContent>

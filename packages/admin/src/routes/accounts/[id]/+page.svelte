@@ -75,7 +75,7 @@
 		</div>
 	</section>
 
-	{#if form?.messageKey != null}<p class="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{i18n.t(form.messageKey)}</p>{/if}
+	{#if form?.messageKey != null}<p class="rounded-md border border-error/20 bg-error/10 p-3 text-sm text-error">{i18n.t(form.messageKey)}</p>{/if}
 
 	<form bind:this={suspendForm} method="POST" action="?/suspend" class="hidden">
 		<Input type="hidden" name="_csrf" value={data.csrfToken} />
@@ -107,7 +107,7 @@
 		<CardNS.CardHeader>
 			<CardNS.CardTitle>{i18n.t('accountDetail.metadataTitle')}</CardNS.CardTitle>
 		</CardNS.CardHeader>
-		<CardNS.CardContent class="space-y-3 text-sm text-slate-700">
+		<CardNS.CardContent class="space-y-3 text-sm text-foreground">
 			<p>ID: {data.account.id}</p>
 			<p>{i18n.t('accountDetail.statusReason')} {data.account.statusReason ?? '-'}</p>
 			<p>{i18n.t('accountDetail.statusUpdated')} {data.account.statusUpdatedAt === null ? '-' : new Date(data.account.statusUpdatedAt).toISOString()}</p>

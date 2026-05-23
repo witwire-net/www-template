@@ -11,10 +11,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1.2rem 1.3rem;
+    padding: 1.2rem 1.6rem;
     border-radius: var(--radius-xl);
-    background: var(--palette-neutral-900);
-    color: var(--palette-neutral-50);
+    border: 1px solid var(--color-border-subtle);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition: border-color var(--transition-fast);
   }
 
   .app-layout__banner-title {
@@ -43,6 +45,16 @@
     background: var(--color-surface-hover);
     color: inherit;
     font-weight: 600;
+    transition:
+      background var(--transition-fast),
+      transform var(--transition-fast),
+      color var(--transition-fast);
+  }
+
+  .app-layout__links a:hover {
+    background: color-mix(in srgb, var(--brand-500) 12%, transparent);
+    color: var(--brand-500);
+    transform: scale(1.02);
   }
 
   .app-layout__panel {
@@ -50,6 +62,11 @@
     border-radius: var(--radius-xl);
     background: var(--color-surface);
     border: 1px solid var(--color-border-subtle);
+    transition: border-color var(--transition-fast);
+  }
+
+  .app-layout__panel:hover {
+    border-color: var(--color-border-hover);
   }
 
   .app-layout__loading {
@@ -84,5 +101,13 @@
     background: color-mix(in srgb, var(--color-info) 10%, transparent);
     color: var(--color-info);
     font-weight: var(--font-weight-bold);
+    transition:
+      background var(--transition-fast),
+      transform var(--transition-fast);
+  }
+
+  .overview-section__link:hover {
+    background: color-mix(in srgb, var(--color-info) 18%, transparent);
+    transform: scale(1.02);
   }
 }

@@ -14,10 +14,9 @@
 </svelte:head>
 
 
-<div class="min-h-screen bg-slate-50 text-slate-950">
+<div class="min-h-screen bg-background text-foreground">
 	{#if data.operator !== null}
 		<AdminShell
-			role={data.operator.role}
 			currentPath={data.currentPath}
 			navItems={data.navItems}
 			labels={data.labels}

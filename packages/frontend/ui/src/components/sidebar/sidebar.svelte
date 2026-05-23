@@ -29,7 +29,7 @@
 {#if collapsible === "none"}
 	<div
 		class={cn(
-			"bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col",
+			"bg-sidebar text-sidebar-foreground rounded-xl border border-sidebar-border p-3 flex h-full w-(--sidebar-width) flex-col gap-2",
 			className
 		)}
 		bind:this={ref}
@@ -49,10 +49,10 @@
 				data-mobile="true"
 				aria-label={ariaLabel}
 				closeLabel={closeLabel}
-				class={cn(
-				"bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden",
-				className
-			)}
+class={cn(
+			"bg-sidebar text-sidebar-foreground w-(--sidebar-width) rounded-xl p-3 [&>button]:hidden",
+			className
+		)}
 			style="--sidebar-width: {SIDEBAR_WIDTH_MOBILE};"
 			{side}
 		>
@@ -75,7 +75,7 @@
 		<div
 			data-slot="sidebar-gap"
 			class={cn(
-				"transition-[width] duration-200 ease-linear relative w-(--sidebar-width) bg-transparent",
+				"transition-[width] duration-300 ease-out relative w-(--sidebar-width) bg-transparent",
 				"group-data-[collapsible=offcanvas]:w-0",
 				"group-data-[side=right]:rotate-180",
 				variant === "floating" || variant === "inset"
@@ -86,14 +86,13 @@
 		<div
 			data-slot="sidebar-container"
 			class={cn(
-				"fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+				"fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-300 ease-out md:flex",
 				side === "left"
 					? "start-0 group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]"
 					: "end-0 group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]",
-				// Adjust the padding for floating and inset variants.
 				variant === "floating" || variant === "inset"
-					? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-					: "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-e group-data-[side=right]:border-s",
+					? "p-3 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+					: "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
 				className
 			)}
 			{...restProps}
@@ -101,7 +100,12 @@
 			<div
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
-				class="bg-sidebar group-data-[variant=floating]:ring-sidebar-border group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 flex size-full flex-col"
+				class={cn(
+					"bg-sidebar flex size-full flex-col",
+					variant === "floating" || variant === "inset"
+						? "rounded-md border border-sidebar-border p-3 gap-3"
+						: "border-r border-sidebar-border"
+				)}
 			>
 				{@render children?.()}
 			</div>

@@ -13,9 +13,9 @@
 	const i18n = $derived(createAdminI18n(data.locale));
 
 	const kpis = $derived([
-		{ label: i18n.t('dashboard.totalAccounts'), value: data.stats.totalAccounts, tone: 'text-slate-950' },
-		{ label: i18n.t('dashboard.activeAccounts'), value: data.stats.activeAccounts, tone: 'text-emerald-700' },
-		{ label: i18n.t('dashboard.suspendedAccounts'), value: data.stats.suspendedAccounts, tone: 'text-rose-700' },
+		{ label: i18n.t('dashboard.totalAccounts'), value: data.stats.totalAccounts, tone: 'text-foreground' },
+		{ label: i18n.t('dashboard.activeAccounts'), value: data.stats.activeAccounts, tone: 'text-success' },
+		{ label: i18n.t('dashboard.suspendedAccounts'), value: data.stats.suspendedAccounts, tone: 'text-error' },
 	]);
 
 	function formatDate(value: Date): string {
@@ -31,7 +31,7 @@
 	<section class="space-y-2">
 		<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{i18n.t('dashboard.eyebrow')}</p>
 		<h1 class="text-3xl font-bold tracking-tight">{i18n.t('dashboard.title')}</h1>
-		<p class="max-w-2xl text-slate-600">{i18n.t('dashboard.description')}</p>
+		<p class="max-w-2xl text-muted-foreground">{i18n.t('dashboard.description')}</p>
 	</section>
 
 	<section class="grid gap-4 md:grid-cols-3">

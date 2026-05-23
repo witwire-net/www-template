@@ -2,18 +2,11 @@
   /* ===== Web Layout ===== */
   .web-layout {
     min-height: 100vh;
-    background:
-      radial-gradient(
-        circle at top,
-        color-mix(in srgb, var(--color-primary) 18%, transparent),
-        transparent 30%
-      ),
-      linear-gradient(
-        180deg,
-        var(--color-background) 0%,
-        var(--color-surface) 44%,
-        var(--color-background) 100%
-      );
+
+    /* 背景は単色ベース。テクスチャは .ww-bg-noise / .ww-bg-dot-grid を併用。
+     * ヒーロー等での Brand → transparent 片方向フェードは許可されているが、
+     * ニュートラル2色グラデーションは禁止のため linear-gradient を削除。 */
+    background: var(--color-background);
   }
 
   .web-layout__topbar {
@@ -25,10 +18,11 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-md);
-    padding: var(--spacing-md) clamp(1rem, 4vw, 2rem);
-    border-bottom: 1px solid var(--color-border-subtle);
-    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-    backdrop-filter: blur(16px);
+    margin: var(--spacing-md) clamp(1rem, 4vw, 2rem);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--color-border-subtle);
+    background: var(--color-surface);
   }
 
   .web-layout__brand {
@@ -54,16 +48,22 @@
     background: transparent;
     color: var(--color-text-secondary);
     font-weight: 600;
+    transition:
+      background var(--transition-fast),
+      color var(--transition-fast),
+      transform var(--transition-fast);
   }
 
   .web-layout__nav-link:hover {
     background: var(--color-surface-hover);
+    color: var(--color-text);
+    transform: scale(1.02);
   }
 
   .web-layout__content {
     width: min(1120px, calc(100vw - 2rem));
     margin: 0 auto;
-    padding: clamp(1.25rem, 4vw, 3rem) 0 4rem;
+    padding: clamp(0.5rem, 2vw, 1rem) 0 4rem;
   }
 
   /* ===== Hero Section ===== */
@@ -77,12 +77,16 @@
     gap: 1.2rem;
     padding: clamp(1.6rem, 4vw, 2.4rem);
     border-radius: var(--radius-lg);
-    background: linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--color-surface) 88%, transparent),
-      var(--color-surface)
-    );
+
+    /* ニュートラル2色グラデーションは禁止のため、ソリッドサーフェスに統一。
+     * 奥行きはノイズテクスチャ（.ww-bg-noise）で後付けする。 */
+    background: var(--color-surface);
     border: 1px solid var(--color-border-subtle);
+    transition: border-color var(--transition-fast);
+  }
+
+  .hero-section__copy:hover {
+    border-color: var(--brand-500);
   }
 
   .hero-section__eyebrow {
@@ -96,10 +100,20 @@
   .hero-section__cta {
     display: inline-block;
     padding: 0.6rem 1.2rem;
-    border-radius: var(--radius-md);
-    background: var(--color-primary-active);
-    color: var(--color-on-primary, #fff);
+    border-radius: var(--radius-sm); /* ボタンは sm */
+
+    /* CTA・ヒーロー要素のみ Brand 500 → Brand 600 のグラデーションは許可 */
+    background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+    color: var(--color-text-on-brand);
     font-weight: 600;
     text-decoration: none;
+    transition:
+      transform var(--transition-fast),
+      filter var(--transition-fast);
+  }
+
+  .hero-section__cta:hover {
+    transform: scale(1.02);
+    filter: brightness(1.05);
   }
 }

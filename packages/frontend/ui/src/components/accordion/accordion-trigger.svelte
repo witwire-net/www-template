@@ -20,7 +20,7 @@
 		data-slot="accordion-trigger"
 		bind:ref
 		class={cn(
-			"**:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-6 p-4 text-left text-sm font-medium hover:underline **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-start justify-between border border-transparent transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
+			"**:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-6 p-4 text-left text-sm font-medium **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-start justify-between border border-transparent transition-all outline-none disabled:pointer-events-none disabled:opacity-50 after:absolute after:bottom-2 after:left-4 after:h-[2px] after:w-[calc(100%-2rem)] after:origin-left after:scale-x-0 after:bg-brand-500 after:transition-transform after:duration-200 after:ease-out hover:after:scale-x-100",
 			className
 		)}
 		{...restProps}

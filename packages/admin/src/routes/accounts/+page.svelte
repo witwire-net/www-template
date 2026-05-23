@@ -72,7 +72,7 @@
 <main class="space-y-6 p-8">
 	<section class="space-y-2">
 		<h1 class="text-3xl font-bold tracking-tight">{i18n.t('accounts.title')}</h1>
-		<p class="text-slate-600">{i18n.t('accounts.description')}</p>
+		<p class="text-muted-foreground">{i18n.t('accounts.description')}</p>
 	</section>
 
 	<CardNS.Card>

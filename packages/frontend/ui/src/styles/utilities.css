@@ -1,2 +1,330 @@
+@layer components {
+  /**
+   * 浮遊パネルの標準外観。
+   * 入力: popover / select / dialog などが `ww-panel` を付ける。
+   * 出力: brand guideline に沿った単色 surface、淡い境界、影なしのパネルを適用する。
+   * 副作用: 明示された Tailwind utilities は utilities layer 側で上書きできる。
+   */
+  .ww-panel {
+    background: var(--color-surface-floating);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: none;
+  }
+
+  /**
+   * サイドバー項目の標準外観。
+   * 入力: sidebar menu item が `ww-sidebar-item` を付ける。
+   * 出力: 操作対象として十分な高さ、丸み、読みやすい間隔を付与する。
+   * 副作用: hover / active の色は各 component の状態 class が担当する。
+   */
+  .ww-sidebar-item {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+    border-radius: var(--radius-full);
+    padding: 0.5rem 1rem;
+  }
+}
+
 @layer utilities {
+  /* ========================================
+     Background Textures ( guideline §07 )
+     ======================================== */
+
+  /**
+   * ドットグリッド背景
+   * 1px ドット / 24px 間隔 / opacity 0.15
+   * 原則07「雰囲気を作れ」を実現する標準テクスチャ
+   */
+  .ww-bg-dot-grid {
+    background-image: radial-gradient(circle, var(--color-text) 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.15;
+  }
+
+  /**
+   * ノイズオーバーレイ背景
+   * SVG feTurbulence をインライン化してベタ塗り背景に奥行きを与える
+   * グラスモーフィズム禁止に代わる質感表現
+   */
+  .ww-bg-noise {
+    position: relative;
+  }
+
+  .ww-bg-noise::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+
+  /**
+   * ブランドフェード帯（上部）
+   * Brand 500 → transparent の水平グラデーション
+   */
+  .ww-brand-strip-top {
+    position: relative;
+  }
+
+  .ww-brand-strip-top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--brand-500), transparent);
+    opacity: 0.8;
+  }
+
+  /**
+   * ブランドフェード帯（下部）
+   */
+  .ww-brand-strip-bottom {
+    position: relative;
+  }
+
+  .ww-brand-strip-bottom::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--brand-500), transparent);
+    opacity: 0.8;
+  }
+
+  /* ========================================
+     Motion & Animation ( guideline §10 )
+     ======================================== */
+
+  /** フェードイン — ページロード・コンテンツ出現用 */
+  .ww-animate-fade-in {
+    animation: ww-fade-in var(--transition-smooth) both;
+  }
+
+  /** 下からスライドイン — Below the fold / リスト出現用 */
+  .ww-animate-slide-up {
+    animation: ww-slide-up var(--transition-smooth) both;
+  }
+
+  /** スケールイン — ダイアログ・ポップオーバー出現用 */
+  .ww-animate-scale-in {
+    animation: ww-scale-in var(--transition-smooth) both;
+  }
+
+  /** リスト・グリッド スタガードリビール */
+  .ww-stagger > * {
+    animation: ww-slide-up var(--transition-smooth) both;
+    animation-delay: calc(var(--stagger-index, 0) * 60ms);
+  }
+  .ww-stagger-1 {
+    --stagger-index: 1;
+  }
+  .ww-stagger-2 {
+    --stagger-index: 2;
+  }
+  .ww-stagger-3 {
+    --stagger-index: 3;
+  }
+  .ww-stagger-4 {
+    --stagger-index: 4;
+  }
+  .ww-stagger-5 {
+    --stagger-index: 5;
+  }
+  .ww-stagger-6 {
+    --stagger-index: 6;
+  }
+  .ww-stagger-7 {
+    --stagger-index: 7;
+  }
+  .ww-stagger-8 {
+    --stagger-index: 8;
+  }
+
+  /** ヒーロースタガード — 総演出時間 800ms 以内 */
+  .ww-hero-stagger > * {
+    animation: ww-fade-in var(--transition-normal) both;
+    animation-delay: calc(var(--stagger-index, 0) * 100ms);
+  }
+
+  /** テキストリンク — 下線スライドイン（scaleX 0→1） */
+  .ww-link-underline {
+    position: relative;
+    display: inline-block;
+  }
+
+  .ww-link-underline::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: var(--brand-500);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 200ms ease-out;
+  }
+
+  .ww-link-underline:hover::after {
+    transform: scaleX(1);
+  }
+
+  /** インタラクティブ要素 — scale(1.02) ホバー（ guideline §10 ） */
+  .ww-hover-scale {
+    transition: transform var(--transition-fast);
+  }
+
+  .ww-hover-scale:hover {
+    transform: scale(1.02);
+  }
+
+  /** カード — ボーダー色が Brand に変化（ guideline §10 ） */
+  .ww-hover-brand-border {
+    transition:
+      border-color var(--transition-fast),
+      background-color var(--transition-fast);
+  }
+
+  .ww-hover-brand-border:hover {
+    border-color: var(--brand-500);
+  }
+
+  /** アイコンボタン — 背景サークルフェードイン */
+  .ww-hover-circle {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-full);
+  }
+
+  .ww-hover-circle::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--brand-500) 10%, transparent);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+
+  .ww-hover-circle:hover::before {
+    opacity: 1;
+  }
+
+  /** スピナー用 ローテーション（ローディングは無限ループ許可） */
+  .ww-animate-spin {
+    animation: ww-spin 1s linear infinite;
+  }
+
+  /** スケルトン用 シマー（1回のみ or infinite は用途に応じて） */
+  .ww-animate-shimmer {
+    animation: ww-shimmer 2s ease-in-out infinite;
+    background: linear-gradient(
+      90deg,
+      var(--color-surface) 25%,
+      var(--n-100) 50%,
+      var(--color-surface) 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  /** 微細な浮遊 — 装飾要素用（ guideline: 無限ループはローディング以外禁止なので、
+   *  これはサブルなアクセント装飾として使う際は短時間 or スクロール連動で制御） */
+  .ww-animate-float {
+    animation: ww-float 3s ease-in-out infinite;
+  }
+
+  /** グラデーションボーダー — CTA要素の記憶に残る視覚要素 */
+  .ww-gradient-border {
+    position: relative;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .ww-gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+
+  .ww-gradient-border:hover::before {
+    opacity: 1;
+  }
+}
+
+/* ========================================
+   Keyframes
+   ======================================== */
+
+@keyframes ww-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ww-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ww-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ww-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ww-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ww-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
 }

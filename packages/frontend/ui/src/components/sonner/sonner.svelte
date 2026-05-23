@@ -17,7 +17,8 @@
 	{...restProps}
 >
 	{#snippet loadingIcon()}
-		<Loader2Icon class="size-4 animate-spin" />
+		<!-- ブランドカラーのスピナーで一貫性を担保 -->
+		<Loader2Icon class="size-4 animate-spin text-brand-500" />
 	{/snippet}
 	{#snippet successIcon()}
 		<CircleCheckIcon class="size-4" />
