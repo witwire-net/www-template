@@ -2,11 +2,11 @@
 
 ### Requirement: クライアントは JWT アクセストークンの有効期限を監視し自動更新する
 
-クライアントは JWT accessToken の有効期限を監視し、期限切れ前に自動更新しなければならない（MUST）。クライアントは refreshToken を JavaScript-readable memory、localStorage、sessionStorage、IndexedDB、URL、telemetry、log に保存してはならない（MUST NOT）。refreshToken は `HttpOnly; Secure; SameSite=Lax` Cookie として browser に保持され、refresh request は same-origin `/api/v1/auth/refresh` に credentials を含めて送信されなければならない（SHALL）。refresh 成功時、クライアントは response body の新しい accessToken をメモリ上の対象 session に反映し、refreshToken Cookie の rotation は server response に委ねなければならない（MUST）。
+クライアントは JWT accessToken の有効期限を監視し、期限切れ前に自動更新しなければならない（MUST）。クライアントは refreshToken を JavaScript から読める memory、localStorage、sessionStorage、IndexedDB、URL、telemetry、log に保存してはならない（MUST NOT）。refreshToken は `HttpOnly; Secure; SameSite=Lax` Cookie として browser に保持され、refresh request は same-origin `/api/v1/auth/refresh` に credentials を含めて送信されなければならない（SHALL）。refresh 成功時、クライアントは response body の新しい accessToken をメモリ上の対象 session に反映し、refreshToken Cookie の rotation は server response に委ねなければならない（MUST）。
 
 **Customer Context**
 
-利用者は操作中に認証が突然切れてデータを失う体験を避けたい。一方で refreshToken を JavaScript から読める場所に保持すると XSS 時の token 窃取リスクが高い。accessToken だけを browser-readable state とし、refreshToken は HttpOnly Cookie に閉じることで安全性と継続利用を両立する。
+利用者は操作中に認証が突然切れてデータを失う体験を避けたい。一方で refreshToken を JavaScript から読める場所に保持すると XSS 時の token 窃取リスクが高い。accessToken だけをブラウザーから読める state とし、refreshToken は HttpOnly Cookie に閉じることで安全性と継続利用を両立する。
 
 #### Scenario: 期限切れ間近の accessToken は Cookie refresh で更新される (AUTH-FE-S045)
 
@@ -15,11 +15,11 @@
 - **THEN** クライアントは先に credentials を含めて `POST /api/v1/auth/refresh` を実行する
 - **AND** response body の新しい accessToken で API を呼び出す
 
-#### Scenario: refreshToken は browser-readable storage に保存されない (AUTH-FE-S046)
+#### Scenario: refreshToken はブラウザーから読める storage に保存されない (AUTH-FE-S046)
 
 - **GIVEN** 利用者が login または refresh に成功する
 - **WHEN** client auth state、localStorage、sessionStorage、IndexedDB、URL state を確認する
-- **THEN** refreshToken 平文は存在せず、accessToken と session metadata だけが browser-readable state に存在する
+- **THEN** refreshToken 平文は存在せず、accessToken と session metadata だけがブラウザーから読める state に存在する
 
 #### Scenario: refresh 失敗時は対象 session だけを失効扱いにする (AUTH-FE-S047)
 
@@ -33,7 +33,7 @@
 
 **Customer Context**
 
-複数アカウントを運用する利用者にとって、都度ログインし直さずに account を切り替えられる体験は必須である。同時に refreshToken を browser-readable state に入れないことで、XSS 時の被害範囲を抑える。
+複数アカウントを運用する利用者にとって、都度ログインし直さずに account を切り替えられる体験は必須である。同時に refreshToken をブラウザーから読める state に入れないことで、XSS 時の被害範囲を抑える。
 
 #### Scenario: ログイン毎に accessToken session が追加される (AUTH-FE-S048)
 

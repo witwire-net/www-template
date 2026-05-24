@@ -1,122 +1,196 @@
-## 1. 契約と生成物の分離
+## 1. Backend domain object を先に実装する
 
-- [ ] 1.1 `packages/typespec` に Product service と Admin service を分離して定義し、両 surface が `/api/v1/*` path policy を維持する状態にする。
-- [ ] 1.2 Admin account / auth operation を `packages/typespec/src/routes/admin-v1/**` に追加し、Product route namespace から import されない状態にする。
-- [ ] 1.3 Product OpenAPI と Admin OpenAPI を別 artifact として生成する `packages/typespec` scripts / config を更新する。
-- [ ] 1.4 Product SDK は `packages/frontend/api`、Admin SDK は `packages/admin/api` に生成されるように Orval / package scripts を分離する。
-- [ ] 1.5 Product Go bindings と Admin Go bindings を別 package に生成するように `scripts/go/gen-backend.sh` と backend codegen config を更新する。
-- [ ] 1.6 `scripts/codegen/check.sh` に Product/Admin artifact の drift と operation/tag/export 混入検査を追加する。
-- [ ] 1.7 `AGENTS.md`、`CODING_STANDARDS.md`、`CONTRIBUTING.md` に Product/Admin とも `/api/v1/*` を使い、origin / binary / artifact で分離するルールを反映する。
-- [ ] 1.8 `pnpm gen` を実行し、Product/Admin OpenAPI、Product SDK、Admin package-local SDK、Product/Admin Go bindings を生成する。
-- [ ] 1.9 `[API-CONTRACT-BE-S001] Product OpenAPI excludes admin operations` を追加し、Product OpenAPI / Product SDK / Product Go bindings に Admin operation がないことを検証する。
-- [ ] 1.10 `[API-CONTRACT-BE-S002] Admin OpenAPI excludes product operations` を追加し、Admin OpenAPI / Admin SDK / Admin Go bindings に Product operation がないことを検証する。
-- [ ] 1.11 `[API-CONTRACT-BE-S003] Surface server URLs are separated` を追加し、Product/Admin OpenAPI の server domain が分かれていることを検証する。
-- [ ] 1.12 `[API-CONTRACT-BE-S004] Shared model import does not add routes` を追加し、shared model import が route を増やさないことを検証する。
-- [ ] 1.13 `[API-CONTRACT-BE-S005] Product surface cannot import admin namespace` を追加し、Product TypeSpec から Admin namespace import を拒否する。
-- [ ] 1.14 `[API-CONTRACT-BE-S006] Product artifact with admin operation fails check` を追加し、混入 fixture が codegen check で失敗することを検証する。
-- [ ] 1.15 `[API-CONTRACT-BE-S007] Product binary cannot import admin bindings` を追加し、Product binary から Admin bindings import を拒否する。
+- [ ] 1.1 `packages/backend/internal/domain/account_email.go` を追加し、`AccountEmail` の空白除去、canonical lowercase、形式検証、`String()`、domain error を既存 `account.go` / `account_id.go` の flat package 規約に合わせて実装する。
+- [ ] 1.2 `packages/backend/internal/domain/account_lifecycle.go` を追加し、`AccountStatusActive` / `AccountStatusSuspended`、`NewAdminCreatedAccount`、`Suspend(at)`、`Restore()`、`SessionRevokedAfter()`、停止中 token 拒否判定を実装する。
+- [ ] 1.3 既存 `packages/backend/internal/domain/account.go` を更新し、Account root が AccountEmail、AccountStatus、AccountSetting、session revocation 境界を保持できるようにする。
+- [ ] 1.4 `packages/backend/internal/domain/operator.go` を追加し、`OperatorID`、`OperatorEmail`、`OperatorRole`、active state、passkey registration state、`HasPermission("accounts:create")` を実装する。
+- [ ] 1.5 `packages/backend/internal/domain/admin_audit_event.go` を追加し、pending / succeeded / failed outcome、stable error code、completed timestamp、二重完了拒否を実装する。
+- [ ] 1.6 `packages/backend/internal/domain/account_auth_session.go` を追加し、Product AccountAuth の account accessToken claims、account refresh session state、account status / suspension / sessionRevokedAfter による token eligibility を実装する。
+- [ ] 1.7 `packages/backend/internal/domain/operator_auth.go` と `operator_auth_session.go` を追加し、Admin OperatorAuth の operator accessToken claims、operator refresh session state、role / active snapshot、CSRF binding、operator 固有 validation を実装する。
+- [ ] 1.8 `packages/backend/internal/domain/token_primitive.go` を追加し、HMAC/JWT 署名検証、opaque token hash、ULID/JTI validation、TTL value など中立 primitive だけを実装する。account / operator enum switch、issuer/audience pairing、RBAC、status 判定は置かない。
+- [ ] 1.9 `[ADMIN-CONSOLE-BE-S077] AccountEmail と Account lifecycle constructor は不変条件を検証する` の domain unit test を追加し、email 正規化、active 初期状態、suspend/restore、session revoke 境界を検証する。
+- [ ] 1.10 `[ADMIN-CONSOLE-BE-S078] Operator role と active state は permission を制御する` の domain unit test を追加し、admin/operator/viewer/inactive/passkey registration state の matrix を検証する。
+- [ ] 1.11 `[ADMIN-CONSOLE-BE-S079] AdminAuditEvent は不正な outcome transition を拒否する` の domain unit test を追加し、pending→succeeded/failed、二重完了拒否、failed 時 stable error code 必須、completed timestamp 必須を検証する。
+- [ ] 1.12 `[ADMIN-CONSOLE-BE-S080] internal/domain import graph は pure に保たれる` の lint / guardrail test を追加し、domain package が application / adapter / generated / platform を import しないことを検証する。
+- [ ] 1.13 `[AUTH-BE-S068] Neutral token primitive は account/operator domain switch を持たない` の unit test / static test を追加し、中立 primitive が `account` / `operator` domain enum switch を持たないことを検証する。
+- [ ] 1.14 `[AUTH-BE-S069] Product AccountAuth domain は account token eligibility を所有する` の unit test を追加し、suspended account、sessionRevokedAfter、account session ID mismatch を Product AccountAuth domain が拒否することを検証する。
+- [ ] 1.15 `[AUTH-BE-S070] Admin OperatorAuth domain は operator token eligibility と CSRF binding を所有する` の unit test を追加し、inactive operator、viewer 権限不足、CSRF mismatch、operator session ID mismatch を Admin OperatorAuth domain が拒否することを検証する。
 
-## 2. Backend Admin runtime と永続化
+## 2. Product account auth と Admin operator auth の application 境界を分離する
 
-- [ ] 2.1 `packages/backend/cmd/admin-api/main.go` と `internal/app/admin_runtime.go` を追加し、Admin GoServer binary を Product binary と分離して起動できる状態にする。
-- [ ] 2.2 Product runtime が Product operations だけを register することを維持し、Admin operations が混入しない router 構成にする。
-- [ ] 2.3 Admin runtime が Admin operations の `/api/v1/*` だけを register し、Product operations を register しない router 構成にする。
-- [ ] 2.4 Product DB 内 Admin schema、operator、operator passkey、audit event、権限を作成する `000000_admin_schema.up.sql/down.sql` 形式の migration を追加する。
-- [ ] 2.5 Admin runtime config に Admin domain、Product domain、Admin cookie、Admin DB role、Admin Valkey URL を追加し、起動時に fail-close validation する。
-- [ ] 2.6 Admin Valkey store を追加し、Product と同じ infrastructure かつ別 logical DB、`admin:*` prefix 限定を検証する。
-- [ ] 2.7 Admin auth middleware を追加し、same-origin Origin、operator session、CSRF binding、no-store、security headers を検証する。
-- [ ] 2.8 `accounts:create` を含む Admin RBAC permission map を追加し、handler 境界で検証する。
-- [ ] 2.9 Admin audit service を追加し、mutation 前の intent と success / failed outcome 更新を一元化する。
-- [ ] 2.10 Admin account repository を追加し、Product DB 内 Admin schema と Account root を同一 transaction 境界で扱う。
-- [ ] 2.11 Admin account service を追加し、Product Account domain rule を共有して email 正規化、重複検査、作成、監査を実行する。
-- [ ] 2.12 Admin account handlers を generated Admin bindings に接続し、validation / duplicate / permission / session / CSRF / infrastructure errors を stable response に map する。
-- [ ] 2.13 Admin auth handlers を generated Admin bindings に接続し、passkey start/finish、operator setup、current operator、CSRF issuance、logout を実装する。
-- [ ] 2.14 `[ADMIN-CONSOLE-BE-S056] Product binary does not register admin operations` を追加する。
-- [ ] 2.15 `[ADMIN-CONSOLE-BE-S057] Admin binary does not register product operations` を追加する。
-- [ ] 2.16 `[ADMIN-CONSOLE-BE-S058] Product bearer token is rejected by Admin API` を追加する。
-- [ ] 2.17 `[ADMIN-CONSOLE-BE-S059] Admin schema exists in Product DB` を追加する。
-- [ ] 2.18 `[ADMIN-CONSOLE-BE-S060] Product runtime role cannot read Admin schema` を追加する。
-- [ ] 2.19 `[ADMIN-CONSOLE-BE-S061] Admin package ORM migration is not used for Product DB` を追加する。
-- [ ] 2.20 `[ADMIN-CONSOLE-BE-S062] Admin API creates customer account` を追加する。
-- [ ] 2.21 `[ADMIN-CONSOLE-BE-S063] Duplicate email returns 409 and failed audit` を追加する。
-- [ ] 2.22 `[ADMIN-CONSOLE-BE-S064] Operator without account create permission receives 403` を追加する。
-- [ ] 2.23 `[ADMIN-CONSOLE-BE-S065] Audit intent failure prevents account mutation` を追加する。
-- [ ] 2.24 `[ADMIN-CONSOLE-BE-S066] Account creation failure records failed audit outcome` を追加する。
-- [ ] 2.25 `[ADMIN-CONSOLE-BE-S067] Admin account creation shares Account domain rule` を追加する。
-- [ ] 2.26 `[ADMIN-CONSOLE-BE-S068] Admin and operator have accounts:create` を追加する。
-- [ ] 2.27 `[ADMIN-CONSOLE-BE-S069] Viewer lacks accounts:create` を追加する。
-- [ ] 2.28 `[ADMIN-CONSOLE-BE-S070] Product binary importing admin bindings fails` を追加する。
-- [ ] 2.29 `[ADMIN-AUTH-BE-S056] Product host does not serve Admin login API` を追加する。
-- [ ] 2.30 `[ADMIN-AUTH-BE-S057] Admin middleware validates operator accessToken` を追加する。
-- [ ] 2.31 `[ADMIN-AUTH-BE-S058] Product bearer token is not an Admin auth session` を追加する。
-- [ ] 2.32 `[ADMIN-AUTH-BE-S059] Disallowed Origin is rejected for Admin mutation` を追加する。
-- [ ] 2.33 `[ADMIN-AUTH-BE-S060] Session-mismatched CSRF token is rejected` を追加する。
-- [ ] 2.34 `[ADMIN-AUTH-BE-S061] Passkey start validates Origin without session CSRF` を追加する。
-- [ ] 2.35 `[ADMIN-AUTH-BE-S062] Admin and Product Valkey same logical DB fails startup` を追加する。
-- [ ] 2.36 `[ADMIN-AUTH-BE-S063] Admin backend only writes admin-prefixed keys` を追加する。
-- [ ] 2.37 `[ADMIN-AUTH-BE-S064] Admin refreshToken Cookie uses SameSite=Lax` を追加する。
-- [ ] 2.38 `[ADMIN-AUTH-BE-S065] Insecure production cookie is rejected` を追加する。
-- [ ] 2.39 `[ADMIN-AUTH-BE-S066] Admin API response has security headers` を追加する。
+- [ ] 2.1 `packages/backend/internal/application/product/auth/**` を追加し、Product account login / refresh / revoke / session validation が Product AccountAuth domain object だけを使うようにする。
+- [ ] 2.2 `packages/backend/internal/application/admin/auth/**` を追加し、Admin operator login / refresh / revoke / current operator / CSRF validation が Admin OperatorAuth domain object だけを使うようにする。
+- [ ] 2.3 `packages/backend/internal/application/shared/tokenprimitive/**` を追加し、TTL validation、Cookie lifetime validation、signer/verifier wrapper など中立 helper だけを提供する。account/operator claim や RBAC を置かない。
+- [ ] 2.4 Product application は Admin auth domain/application を import せず、Admin application は Product auth domain/application を import しない import-boundary rule を guardrail に追加する。
+- [ ] 2.5 refreshToken rotation を Product account auth と Admin operator auth で別 use case として実装し、どちらも旧 token 原子消費、新 token Cookie 設定、response body への refreshToken 非露出を満たす。
+- [ ] 2.6 Product frontend auth domain を accessToken-only のブラウザー可読 state に変更し、refresh request は credentials 付き same-origin Cookie refresh とする。
+- [ ] 2.7 `[AUTH-BE-S060] Product passkey login は accessToken body と refreshToken Cookie を返す` の test を追加する。
+- [ ] 2.8 `[AUTH-BE-S061] Admin operator login は Admin operator auth domain を使う` の test を追加し、operator accessToken / operator refresh state が account auth state と混在しないことを検証する。
+- [ ] 2.9 `[AUTH-BE-S062] refresh は Cookie refreshToken を rotation する` の Product/Admin 両 use case test を追加する。
+- [ ] 2.10 `[AUTH-BE-S063] ブラウザーから読める refreshToken は発行されない` の test を追加し、body/log/trace/error とブラウザーから読める storage に refreshToken 平文が出ないことを検証する。
+- [ ] 2.11 `[AUTH-BE-S064] refreshToken Cookie lifetime は server TTL を超えない` の test を追加する。
+- [ ] 2.12 `[AUTH-BE-S065] Product と Admin は同じ中立 TTL validation を使う` の test を追加し、Product/Admin が同じ中立 TTL helper を使うことを検証する。
+- [ ] 2.13 `[AUTH-BE-S066] multi-session refresh は対象 session だけを rotation する` の Product account auth test を追加する。
+- [ ] 2.14 `[AUTH-BE-S067] Product と Admin の auth domain は分離される` の boundary test を追加し、単一共有 token service の切替引数で発行・refresh・revoke が実装されていないことを検証する。
+- [ ] 2.15 `[AUTH-BE-S071] Product auth application は Admin auth application を import しない` の lint / import graph test を追加する。
+- [ ] 2.16 `[AUTH-BE-S072] Admin auth application は Product auth application を import しない` の lint / import graph test を追加する。
+- [ ] 2.17 `[AUTH-FE-S045] 期限切れ間近の accessToken は Cookie refresh で更新される` を追加する。
+- [ ] 2.18 `[AUTH-FE-S046] refreshToken はブラウザーから読める storage に保存されない` を追加し、ブラウザーから読める storage に保存されないことを検証する。
+- [ ] 2.19 `[AUTH-FE-S047] refresh 失敗時は対象 session だけを失効扱いにする` を追加する。
+- [ ] 2.20 `[AUTH-FE-S048] login は refreshToken なしで accessToken session を追加する` を追加する。
+- [ ] 2.21 `[AUTH-FE-S049] account switch は bearer accessToken を変更する` を追加する。
+- [ ] 2.22 `[AUTH-FE-S050] logout は対象 session の Cookie revoke を依頼する` を追加する。
 
-## 3. Admin 静的 frontend 層
+## 3. 契約と生成物を surface ごとに分離する
 
-- [ ] 3.1 `packages/admin` を `app`、`domain`、`api` の layer に整理し、`app -> domain -> api` 以外の依存を lint で拒否する。
-- [ ] 3.2 `packages/admin` の Node adapter、server routes、server load/actions、`$lib/server`、Prisma、Valkey、OpenSearch、WebAuthn server dependency、Prisma generation scripts を削除する。
-- [ ] 3.3 `packages/admin/api` に Admin SDK 生成設定と same-origin `/api/v1/*` wrapper を追加し、Product domain への request を拒否する。
-- [ ] 3.4 `packages/admin/domain` に auth、current operator、protected route state、account search/detail/create domain functions を追加する。
-- [ ] 3.5 `packages/admin/app` の login / operator setup を browser WebAuthn と domain functions 経由に変更する。
-- [ ] 3.6 `packages/admin/app` の protected routes を current operator verification 後に表示する構成に変更する。
-- [ ] 3.7 Account 作成 component を追加し、Accounts page から validation、submit、duplicate/error 表示、detail navigation を扱う。
-- [ ] 3.8 `[ADMIN-CONSOLE-FE-S038] Admin app layer direct API client import fails` を追加する。
-- [ ] 3.9 `[ADMIN-CONSOLE-FE-S039] Admin package server-only module fails` を追加する。
-- [ ] 3.10 `[ADMIN-CONSOLE-FE-S040] Admin domain uses Admin api layer for account data` を追加する。
-- [ ] 3.11 `[ADMIN-CONSOLE-FE-S041] Admin API uses same-origin api/v1` を追加する。
-- [ ] 3.12 `[ADMIN-CONSOLE-FE-S042] Admin API wrapper rejects Product domain` を追加する。
-- [ ] 3.13 `[ADMIN-CONSOLE-FE-S043] Operator creates customer account` を component / E2E で追加する。
-- [ ] 3.14 `[ADMIN-CONSOLE-FE-S044] Invalid email is not submitted` を追加する。
-- [ ] 3.15 `[ADMIN-CONSOLE-FE-S045] Duplicate email error preserves form input` を追加する。
-- [ ] 3.16 `[ADMIN-CONSOLE-FE-S046] Admin frontend domain differs from Product frontend domain` を追加する。
-- [ ] 3.17 `[ADMIN-AUTH-FE-S027] Login UI calls Admin backend auth API` を追加する。
-- [ ] 3.18 `[ADMIN-AUTH-FE-S028] Product auth SDK is not used for operator session creation` を追加する。
-- [ ] 3.19 `[ADMIN-AUTH-FE-S029] Setup token errors map to non-revealing presentation` を追加する。
-- [ ] 3.20 `[ADMIN-AUTH-FE-S030] Protected content is hidden without session` を追加する。
-- [ ] 3.21 `[ADMIN-AUTH-FE-S031] UI role controls do not replace backend authorization` を追加する。
-- [ ] 3.22 `[ADMIN-AUTH-FE-S032] Admin HTML is no-store` を追加する。
-- [ ] 3.23 `[ADMIN-AUTH-FE-S033] Operator login stores only accessToken in browser-readable state` を追加する。
-- [ ] 3.24 `[ADMIN-AUTH-FE-S034] Protected route uses operator accessToken for verification` を追加する。
-- [ ] 3.25 `[ADMIN-AUTH-FE-S035] Admin refresh uses HttpOnly Cookie` を追加する。
+- [ ] 3.1 `packages/typespec` に Product service と Admin service を分離して定義し、両 surface が `/api/v1/*` path policy を維持する状態にする。
+- [ ] 3.2 Admin account / auth operation を `packages/typespec/src/routes/admin-v1/**` に追加し、Product route namespace から import されない状態にする。
+- [ ] 3.3 Product OpenAPI と Admin OpenAPI を別 artifact として生成する `packages/typespec` scripts / config を更新する。
+- [ ] 3.4 Product SDK は `packages/frontend/api`、Admin SDK は `packages/admin/api` に生成されるように Orval / package scripts を分離する。
+- [ ] 3.5 Product Go bindings と Admin Go bindings を別 package に生成するように `scripts/go/gen-backend.sh` と backend codegen config を更新する。
+- [ ] 3.6 `scripts/codegen/check.sh` に Product/Admin artifact の drift と operation/tag/export 混入検査を追加する。
+- [ ] 3.7 `AGENTS.md`、`CODING_STANDARDS.md`、`CONTRIBUTING.md` に Product/Admin とも `/api/v1/*` を使い、origin / binary / artifact で分離するルールを反映する。
+- [ ] 3.8 `pnpm gen` を実行し、Product/Admin OpenAPI、Product SDK、Admin package-local SDK、Product/Admin Go bindings を生成する。
+- [ ] 3.9 `[API-CONTRACT-BE-S001] Product OpenAPI は admin operations を含まない` を追加し、Product OpenAPI / Product SDK / Product Go bindings に Admin operation がないことを検証する。
+- [ ] 3.10 `[API-CONTRACT-BE-S002] Admin OpenAPI は product operations を含まない` を追加し、Admin OpenAPI / Admin SDK / Admin Go bindings に Product operation がないことを検証する。
+- [ ] 3.11 `[API-CONTRACT-BE-S003] Surface server URLs は分離される` を追加し、Product/Admin OpenAPI の server domain が分かれていることを検証する。
+- [ ] 3.12 `[API-CONTRACT-BE-S004] Shared model import は routes を増やさない` を追加し、shared model import が route を増やさないことを検証する。
+- [ ] 3.13 `[API-CONTRACT-BE-S005] Product surface は admin namespace を import できない` を追加し、Product TypeSpec から Admin namespace import を拒否する。
+- [ ] 3.14 `[API-CONTRACT-BE-S006] admin operation を含む Product artifact は check に失敗する` を追加し、混入 fixture が codegen check で失敗することを検証する。
+- [ ] 3.15 `[API-CONTRACT-BE-S007] Product binary は admin bindings を import できない` を追加し、Product binary から Admin bindings import を拒否する。
+- [ ] 3.16 `[API-CONTRACT-BE-S008] Admin bindings は Admin HTTP adapter だけが import する` を追加し、Admin bindings の import graph を検証する。
+- [ ] 3.17 `[API-CONTRACT-BE-S009] Product と Admin の SDK packages は物理分離される` を追加し、`packages/frontend/**` と `packages/admin/**` の SDK import 境界を検証する。
 
-## 4. Product/Admin 共通 token 認証基盤
+## 4. Backend runtime、application、adapter、永続化を実装する
 
-- [ ] 4.1 Product account と Admin operator が再利用する accessToken / refreshToken service を追加し、identity domain、session state、Valkey namespace を引数で明示する。
-- [ ] 4.2 Product auth handlers を accessToken response body + refreshToken `HttpOnly; Secure; SameSite=Lax; Path=/` Cookie model に変更し、response body から refreshToken を削除する。
-- [ ] 4.3 Admin auth handlers を共通 token service に接続し、operator accessToken と operator refreshToken Cookie を発行・refresh・revoke する。
-- [ ] 4.4 refreshToken rotation を旧 token 原子消費、新 token Cookie 設定、body への refreshToken 非露出として実装する。
-- [ ] 4.5 Product/Admin 共通 TTL validation を追加し、Cookie lifetime が server-side refreshToken state TTL を超えないことを保証する。
-- [ ] 4.6 Product frontend auth domain を accessToken-only browser-readable state に変更し、refresh request は credentials 付き same-origin Cookie refresh とする。
-- [ ] 4.7 複数 account session の refresh/logout で対象 session だけが rotation/revoke されるよう session selector と Cookie binding を検証する。
-- [ ] 4.8 `[AUTH-BE-S060] Product passkey login returns accessToken body and refreshToken Cookie` を追加する。
-- [ ] 4.9 `[AUTH-BE-S061] Admin operator login uses shared token service in operator domain` を追加する。
-- [ ] 4.10 `[AUTH-BE-S062] refresh rotates Cookie refreshToken` を追加する。
-- [ ] 4.11 `[AUTH-BE-S063] browser-readable refreshToken is not issued` を追加する。
-- [ ] 4.12 `[AUTH-BE-S064] refreshToken Cookie lifetime does not exceed server TTL` を追加する。
-- [ ] 4.13 `[AUTH-BE-S065] Product and Admin use same TTL validation` を追加する。
-- [ ] 4.14 `[AUTH-BE-S066] multi-session refresh rotates only target session` を追加する。
-- [ ] 4.15 `[AUTH-FE-S045] Expiring accessToken refreshes via Cookie` を追加する。
-- [ ] 4.16 `[AUTH-FE-S046] refreshToken is not stored in browser-readable storage` を追加する。
-- [ ] 4.17 `[AUTH-FE-S047] refresh failure expires only target session` を追加する。
-- [ ] 4.18 `[AUTH-FE-S048] login adds accessToken session without refreshToken` を追加する。
-- [ ] 4.19 `[AUTH-FE-S049] account switch changes bearer accessToken` を追加する。
-- [ ] 4.20 `[AUTH-FE-S050] logout requests Cookie revoke for target session` を追加する。
+- [ ] 4.1 `packages/backend/cmd/admin-api/main.go` と `internal/app/admin_runtime.go` を追加し、Admin GoServer binary を Product binary と分離して起動できる状態にする。
+- [ ] 4.2 `packages/backend/tools/analyzers/cmd/guardrails/main.go` と backend lint policy を更新し、`cmd/admin-api`、`internal/generated/adminopenapi`、`internal/adapter/http/{product,admin,shared}`、`internal/application/{product,admin}`、`internal/application/shared/tokenprimitive`、`internal/adapter/{postgres,valkey}/{product,admin}` の配置と import 境界を許可・強制する。
+- [ ] 4.3 Product runtime が Product operations だけを register することを維持し、Admin operations が混入しない router 構成にする。
+- [ ] 4.4 Admin runtime が Admin operations の `/api/v1/*` だけを register し、Product operations を register しない router 構成にする。
+- [ ] 4.5 Product DB 内 Admin schema、operator、operator passkey、audit event、権限を作成する `packages/backend/db/migrations/000007_create_admin_schema.up.sql` と `000007_create_admin_schema.down.sql` の migration pair を追加する。
+- [ ] 4.6 migration pair check を更新・実行し、`000007_create_admin_schema` が 6 桁連番、lowercase snake suffix、up/down pair、nested directory なしであることを検証する。
+- [ ] 4.7 `internal/adapter/http/product` と `internal/adapter/http/admin` を分離し、Product HTTP adapter は Product generated bindings だけ、Admin HTTP adapter は Admin generated bindings だけを import する。
+- [ ] 4.8 `internal/adapter/postgres/product`、`internal/adapter/postgres/admin`、`internal/adapter/valkey/product`、`internal/adapter/valkey/admin` を分離し、application ports の実装だけを提供する。
+- [ ] 4.9 Admin runtime config に Admin domain、Product domain、Admin cookie、Admin DB role、Admin Valkey URL を追加し、起動時に fail-close validation する。
+- [ ] 4.10 Admin Valkey store を追加し、Product と同じ infrastructure かつ別 logical DB、`admin:*` prefix 限定を検証する。
+- [ ] 4.11 Admin auth middleware を追加し、same-origin Origin、operator session、CSRF binding、no-store、security headers を検証する。
+- [ ] 4.12 `accounts:create` を含む Admin RBAC authorization use case を追加し、handler は application decision を呼ぶだけにする。
+- [ ] 4.13 Admin audit use case を `internal/application/admin` に追加し、mutation 前の intent と success / failed outcome 更新を concrete `AdminAuditEvent` domain method に委譲する。
+- [ ] 4.14 Admin account repository を `internal/adapter/postgres/admin` に追加し、Product DB 内 Admin schema と Account root を application port 経由で同一 transaction 境界に扱う。
+- [ ] 4.15 Admin account creation use case を `internal/application/admin` に追加し、`AccountEmail`、Account lifecycle、Operator、AuditEvent domain object を通して email 正規化、重複検査、作成、監査を実行する。
+- [ ] 4.16 Admin account handlers を generated Admin bindings に接続し、transport DTO を application DTO に変換し、domain rule を handler に置かない。
+- [ ] 4.17 Admin auth handlers を generated Admin bindings に接続し、passkey start/finish、operator setup、current operator、CSRF issuance、logout を実装する。
+- [ ] 4.18 `[ADMIN-CONSOLE-BE-S056] Product binary は admin operations を register しない` を追加する。
+- [ ] 4.19 `[ADMIN-CONSOLE-BE-S057] Admin binary は product operations を register しない` を追加する。
+- [ ] 4.20 `[ADMIN-CONSOLE-BE-S058] Product bearer token は Admin API で拒否される` を追加する。
+- [ ] 4.21 `[ADMIN-CONSOLE-BE-S059] Admin schema は Product DB 内に存在する` を追加する。
+- [ ] 4.22 `[ADMIN-CONSOLE-BE-S060] Product runtime role は Admin schema を参照できない` を追加する。
+- [ ] 4.23 `[ADMIN-CONSOLE-BE-S061] Admin package ORM migration は Product DB に使われない` を追加する。
+- [ ] 4.24 `[ADMIN-CONSOLE-BE-S062] Admin API は customer account を作成する` を追加する。
+- [ ] 4.25 `[ADMIN-CONSOLE-BE-S063] Duplicate email は 409 と failed audit を返す` を追加する。
+- [ ] 4.26 `[ADMIN-CONSOLE-BE-S064] account create permission を持たない Operator は 403 を受ける` を追加する。
+- [ ] 4.27 `[ADMIN-CONSOLE-BE-S065] Audit intent failure は account mutation を防ぐ` を追加する。
+- [ ] 4.28 `[ADMIN-CONSOLE-BE-S066] Account creation failure は failed audit outcome を記録する` を追加する。
+- [ ] 4.29 `[ADMIN-CONSOLE-BE-S067] Admin account creation は Account domain rule を共有する` を追加する。
+- [ ] 4.30 `[ADMIN-CONSOLE-BE-S068] Admin と operator は accounts:create を持つ` を追加する。
+- [ ] 4.31 `[ADMIN-CONSOLE-BE-S069] Viewer は accounts:create を持たない` を追加する。
+- [ ] 4.32 `[ADMIN-CONSOLE-BE-S070] Product binary の admin bindings import は失敗する` を追加する。
+- [ ] 4.33 `[ADMIN-CONSOLE-BE-S071] Admin schema migration は次の単調増加 backend version を使う` を追加し、`000007_create_admin_schema.up.sql/down.sql` の pair と zero-only version prefix 不在を検証する。
+- [ ] 4.34 `[ADMIN-CONSOLE-BE-S072] Admin HTTP adapter は persistence adapters を import できない` を追加する。
+- [ ] 4.35 `[ADMIN-CONSOLE-BE-S073] Application ports は adapter 型や generated 型を公開しない` を追加する。
+- [ ] 4.36 `[ADMIN-CONSOLE-BE-S074] Account invariants は concrete domain objects に留まる` を追加する。
+- [ ] 4.37 `[ADMIN-CONSOLE-BE-S075] Product と Admin の application packages は相互 import しない` を追加する。
+- [ ] 4.38 `[ADMIN-CONSOLE-BE-S076] Admin persistence と Product persistence は別 namespace を使う` を追加する。
+- [ ] 4.39 `[ADMIN-AUTH-BE-S056] Product host は Admin login API を提供しない` を追加する。
+- [ ] 4.40 `[ADMIN-AUTH-BE-S057] Admin middleware は operator accessToken を検証する` を追加する。
+- [ ] 4.41 `[ADMIN-AUTH-BE-S058] Product bearer token は Admin auth session ではない` を追加する。
+- [ ] 4.42 `[ADMIN-AUTH-BE-S059] 許可されない Origin は Admin mutation で拒否される` を追加する。
+- [ ] 4.43 `[ADMIN-AUTH-BE-S060] session と一致しない CSRF token は拒否される` を追加する。
+- [ ] 4.44 `[ADMIN-AUTH-BE-S061] Passkey start は session CSRF なしで Origin を検証する` を追加する。
+- [ ] 4.45 `[ADMIN-AUTH-BE-S062] Admin と Product の Valkey logical DB が同じ場合は起動に失敗する` を追加する。
+- [ ] 4.46 `[ADMIN-AUTH-BE-S063] Admin backend は admin-prefixed keys だけを書き込む` を追加する。
+- [ ] 4.47 `[ADMIN-AUTH-BE-S064] Admin refreshToken Cookie は SameSite=Lax を使う` を追加する。
+- [ ] 4.48 `[ADMIN-AUTH-BE-S065] insecure production cookie は拒否される` を追加する。
+- [ ] 4.49 `[ADMIN-AUTH-BE-S066] Admin API response は security headers を持つ` を追加する。
+- [ ] 4.50 `[ADMIN-CONSOLE-BE-S081] Admin schema migration は backend migration system だけで実行される` を追加し、Admin schema migration が `packages/backend/db/migrations/000007_create_admin_schema.*.sql` だけで管理され、`packages/admin/prisma/**` migration が使用されないことを検証する。
+- [ ] 4.51 `[ADMIN-CONSOLE-BE-S082] Admin schema migration rollback は pair policy を満たす` を追加し、down migration が Admin schema と grants を戻し、Product `public.accounts` を保持することを検証する。
+- [ ] 4.52 `[ADMIN-CONSOLE-BE-S083] 範囲外の limit は Admin backend で拒否される` を追加し、Admin account search use case が invalid pagination を 400 にし repository query を実行しないことを検証する。
+- [ ] 4.53 `[ADMIN-CONSOLE-BE-S084] unsafe raw query は lint または integration test で拒否される` を追加し、Admin account search repository の unsafe SQL construction を拒否することを検証する。
+- [ ] 4.54 `[ADMIN-CONSOLE-BE-S085] Admin audit event は Go backend から OpenSearch に projection される` を追加し、Admin audit prefix のみへ indexing され、`packages/admin` が OpenSearch client を import しないことを検証する。
+- [ ] 4.55 `[ADMIN-CONSOLE-BE-S086] OpenSearch namespace collision は起動時に拒否される` を追加し、Admin audit prefix と Product domain prefix の同一・包含関係で fail-close することを検証する。
+- [ ] 4.56 `[ADMIN-CONSOLE-BE-S087] OpenSearch indexing failure は mutation 成功を取り消さず観測される` を追加し、warning log、metric、retry queue または retry marker を検証する。
+- [ ] 4.57 `[ADMIN-CONSOLE-BE-S088] Admin source の secret literal は lint エラーになる` を追加し、DB connection string や token/key/password literal を検出することを検証する。
+- [ ] 4.58 `[ADMIN-CONSOLE-BE-S089] Admin Svelte source の unsafe HTML injection は lint エラーになる` を追加する。
+- [ ] 4.59 `[ADMIN-CONSOLE-BE-S090] Admin backend unsafe SQL construction は lint エラーになる` を追加する。
+- [ ] 4.60 `[ADMIN-AUTH-BE-S067] 登録済み passkey 一覧を Admin backend から取得できる` を追加し、Admin operator session / CSRF / Admin Valkey namespace を使い Product auth と BFF route を使わないことを検証する。
+- [ ] 4.61 `[ADMIN-AUTH-BE-S068] 最後の passkey 削除は Admin operator auth domain で拒否される` を追加し、最後の credential が保持されることを検証する。
+- [ ] 4.62 `[ADMIN-AUTH-BE-S069] オペレーター 0 件時に Admin backend が最初の admin を作成する` を追加し、setup start/finish が Admin domain/application と Admin schema transaction を使うことを検証する。
+- [ ] 4.63 `[ADMIN-AUTH-BE-S070] bootstrap secret 平文は観測可能な出力に残らない` を追加し、DB、audit、log、trace、response body、error message に secret 平文が出ないことを検証する。
+- [ ] 4.64 `[ADMIN-AUTH-BE-S071] 追加 operator は setup token で初回 passkey を登録できる` を追加し、setup token hash/expiry consumption と Admin refreshToken Cookie 発行を検証する。
+- [ ] 4.65 `[ADMIN-AUTH-BE-S072] setup token error は non-revealing error になる` を追加し、invalid/expired/consumed/registered 状態を区別できない error と challenge 未発行を検証する。
+- [ ] 4.66 `[ADMIN-AUTH-BE-S073] user verification なしの Admin assertion は拒否される` を追加し、Admin OperatorAuth domain/application が session 発行を拒否することを検証する。
+- [ ] 4.67 `[ADMIN-AUTH-BE-S074] user verification ありの Admin assertion は operator session を発行する` を追加し、operator accessToken body と Admin refreshToken Cookie が発行されることを検証する。
+- [ ] 4.68 `[ADMIN-AUTH-BE-S075] Admin operator credential が保存され検証に使われる` を追加し、public_key と sign_count が assertion 検証に使われることを検証する。
+- [ ] 4.69 `[ADMIN-AUTH-BE-S076] sign_count 減少は replay attack として拒否される` を追加し、session が発行されないことを検証する。
+- [ ] 4.70 `[ADMIN-AUTH-BE-S077] 重複 credential_handle の Admin operator 登録は拒否される` を追加し、409 と credential 未追加を検証する。
+- [ ] 4.71 `[ADMIN-CONSOLE-BE-S091] operator creation は setup token 平文を response に含めない` を追加し、operator summary、delivery status、audit correlation ID だけが返ることを検証する。
+- [ ] 4.72 `[ADMIN-CONSOLE-BE-S092] setup token delivery failure は failed audit outcome を記録する` を追加し、secure delivery port failure と secret 非露出を検証する。
+- [ ] 4.73 `[ADMIN-CONSOLE-BE-S093] passkey 登録済み operator の setup token 再発行は拒否される` を追加する。
+- [ ] 4.74 Admin operator creation use case を `internal/application/admin/operator_service.go` に追加し、Operator domain object、setup token hash/expiry、secure delivery port、audit outcome、token reissue guard を実装する。
+- [ ] 4.75 setup token secure delivery adapter を `internal/adapter/mailer/admin_setup_token_delivery.go` に追加し、平文 setup token を response body、DB、audit、log、trace、error message に出さない done condition を満たす。
 
-## 5. Cloudflare routing と検証
+## 5. Admin 静的 frontend 層を実装する
 
-- [ ] 5.1 Admin domain の Cloudflare route 設定を文書化し、static frontend と `/api/v1/*` GoServer routing を明示する。
-- [ ] 5.2 Product domain と Admin domain が一致しないこと、かつ両 domain がそれぞれ same-origin `/api/v1/*` を持つことを deployment docs に反映する。
-- [ ] 5.3 `pnpm gen` を実行し、Product/Admin 生成物の分離を確認する。
-- [ ] 5.4 `pnpm check:codegen` を実行し、drift と surface contamination を修正する。
-- [ ] 5.5 `pnpm check` を実行して TypeSpec、Svelte、TypeScript、Go build 問題を修正する。
-- [ ] 5.6 `pnpm lint` を実行して layer、security、codegen policy 問題を修正する。
-- [ ] 5.7 `pnpm test:run` を実行し、Scenario ID 付き automated tests が通ることを確認する。
-- [ ] 5.8 `pnpm build` を実行し、Product API、Admin API、Product frontend、Admin static frontend を検証する。
-- [ ] 5.9 環境が用意できる場合は `pnpm test:e2e` を実行し、Product/Admin domain separation と Account 作成 flow を検証する。
+- [ ] 5.1 `packages/admin` を `app`、`domain`、`api` の layer に整理し、`app -> domain -> api` 以外の依存を lint で拒否する。
+- [ ] 5.2 `packages/admin` の Node adapter、server routes、server load/actions、`$lib/server`、Prisma、Valkey、OpenSearch、WebAuthn server dependency、Prisma generation scripts を削除する。
+- [ ] 5.3 `packages/admin/api` に Admin SDK 生成設定と same-origin `/api/v1/*` wrapper を追加し、Product domain への request を拒否する。
+- [ ] 5.4 `packages/admin/domain` に auth、current operator、protected route state、account search/detail/create domain functions を追加する。
+- [ ] 5.5 `packages/admin/app` の login / operator setup を browser WebAuthn と domain functions 経由に変更する。
+- [ ] 5.6 `packages/admin/app` の protected routes を current operator verification 後に表示する構成に変更する。
+- [ ] 5.7 Account 作成 component を追加し、Accounts page から validation、submit、duplicate/error 表示、detail navigation を扱う。
+- [ ] 5.8 `[ADMIN-CONSOLE-FE-S038] Admin app layer の direct API client import は失敗する` を追加する。
+- [ ] 5.9 `[ADMIN-CONSOLE-FE-S039] Admin package の server-only module は失敗する` を追加する。
+- [ ] 5.10 `[ADMIN-CONSOLE-FE-S040] Admin domain は account data に Admin api layer を使う` を追加する。
+- [ ] 5.11 `[ADMIN-CONSOLE-FE-S041] Admin API は same-origin api/v1 を使う` を追加する。
+- [ ] 5.12 `[ADMIN-CONSOLE-FE-S042] Admin API wrapper は Product domain を拒否する` を追加する。
+- [ ] 5.13 `[ADMIN-CONSOLE-FE-S043] Operator は customer account を作成する` を component / E2E で追加する。
+- [ ] 5.14 `[ADMIN-CONSOLE-FE-S044] Invalid email は送信されない` を追加する。
+- [ ] 5.15 `[ADMIN-CONSOLE-FE-S045] Duplicate email error は form input を保持する` を追加する。
+- [ ] 5.16 `[ADMIN-CONSOLE-FE-S046] Admin frontend domain は Product frontend domain と異なる` を追加する。
+- [ ] 5.17 `[ADMIN-AUTH-FE-S027] Login UI は Admin backend auth API を呼び出す` を追加する。
+- [ ] 5.18 `[ADMIN-AUTH-FE-S028] Product auth SDK は operator session 作成に使われない` を追加する。
+- [ ] 5.19 `[ADMIN-AUTH-FE-S029] setup token error は秘匿的な表示へ変換される` を追加し、秘匿的な表示へ変換されることを検証する。
+- [ ] 5.20 `[ADMIN-AUTH-FE-S030] Protected content は session なしでは表示されない` を追加する。
+- [ ] 5.21 `[ADMIN-AUTH-FE-S031] UI role controls は backend authorization を代替しない` を追加する。
+- [ ] 5.22 `[ADMIN-AUTH-FE-S032] Admin HTML は no-store で配信される` を追加する。
+- [ ] 5.23 `[ADMIN-AUTH-FE-S033] Operator login は accessToken だけをブラウザーから読める state に保持する` を追加し、refreshToken がブラウザーから読める state に入らないことを検証する。
+- [ ] 5.24 `[ADMIN-AUTH-FE-S034] Protected route は operator accessToken を検証に使う` を追加する。
+- [ ] 5.25 `[ADMIN-AUTH-FE-S035] Admin refresh は HttpOnly Cookie を使う` を追加する。
+- [ ] 5.26 `[ADMIN-AUTH-FE-S036] Admin refresh 失敗時は protected content を表示しない` を追加し、memory state cleanup と login 誘導を検証する。
+- [ ] 5.27 `[ADMIN-AUTH-FE-S037] session expiry reason は UI に露出しない` を追加し、expired/revoked/inactive の詳細を区別しない generic guidance を検証する。
+- [ ] 5.28 `[ADMIN-AUTH-FE-S038] 静的 setup UI は Admin backend で最初の admin を作成する` を追加し、`/api/v1/auth/setup/*`、memory accessToken state、refreshToken 平文不在を検証する。
+- [ ] 5.29 `[ADMIN-AUTH-FE-S039] operator が存在する場合は setup form を表示しない` を追加する。
+- [ ] 5.30 `[ADMIN-AUTH-FE-S040] bootstrap gate 無効時は setup secret 入力欄を表示しない` を追加する。
+
+## 6. ルーティングと全体検証
+
+- [ ] 6.1 Admin domain の Cloudflare route 設定を文書化し、static frontend と `/api/v1/*` GoServer routing を明示する。
+- [ ] 6.2 Product domain と Admin domain が一致しないこと、かつ両 domain がそれぞれ same-origin `/api/v1/*` を持つことを deployment docs に反映する。
+- [ ] 6.3 `pnpm gen` を実行し、Product/Admin 生成物の分離を確認する。
+- [ ] 6.4 `pnpm check:codegen` を実行し、drift と surface contamination を修正する。
+- [ ] 6.5 `pnpm check` を実行して TypeSpec、Svelte、TypeScript、Go build 問題を修正する。
+- [ ] 6.6 `pnpm lint` を実行して layer、security、codegen policy 問題を修正する。
+- [ ] 6.7 `pnpm test:run` を実行し、Scenario ID 付き automated tests が通ることを確認する。
+- [ ] 6.8 `pnpm build` を実行し、Product API、Admin API、Product frontend、Admin static frontend を検証する。
+- [ ] 6.9 環境が用意できる場合は `pnpm test:e2e` を実行し、Product/Admin domain separation と Account 作成 flow を検証する。
+
+## 7. 受入、移行、release verification
+
+- [ ] 7.1 design.md の User Acceptance Test に従い、Admin account 作成 happy path、invalid/duplicate email、未認証 protected route、Product/Admin host separation、refreshToken Cookie only、migration up/down を staging または同等環境で確認する。
+- [ ] 7.2 `packages/backend/db/migrations/000007_create_admin_schema.up.sql` を適用し、Admin schema / operator / passkey / audit tables、least-privilege grants、Product runtime role の Admin schema denial を確認する。
+- [ ] 7.3 `packages/backend/db/migrations/000007_create_admin_schema.down.sql` を rollback 検証し、Admin schema と grants が戻り、Product `public.accounts` が保持されることを確認する。
+- [ ] 7.4 Product/OpenAPI/SDK/Go bindings と Admin/OpenAPI/SDK/Go bindings を比較し、Product artifact に Admin operation/tag/export がなく、Admin artifact に Product operation/tag/export がないことを release checklist に記録する。
+- [ ] 7.5 Product/Admin login、refresh、logout、operator setup、account creation の response body、browser-readable storage、URL、log、trace、error message を確認し、refreshToken 平文が存在しないことを記録する。
+- [ ] 7.6 Admin static frontend の HTML/runtime config response が no-store semantics を持ち、hashed static assets だけが長期 cache 可能であることを確認する。
+- [ ] 7.7 Product host で Admin API が到達不能、Admin host で Product API が到達不能であることを smoke test し、Cloudflare routing 設定と Go runtime route table の両方で確認する。
+- [ ] 7.8 `pnpm gen`、`pnpm check:codegen`、`pnpm check`、`pnpm lint`、`pnpm test:run`、`pnpm build`、環境がある場合は `pnpm test:e2e` の実行結果を release note に記録する。

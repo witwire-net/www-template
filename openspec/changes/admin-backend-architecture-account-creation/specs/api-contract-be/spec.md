@@ -49,7 +49,7 @@ Product と Admin は Account など同じ domain concept を扱うが、公開 
 
 ### Requirement: Codegen drift check は surface isolation を検証する
 
-codegen drift check は Product / Admin の OpenAPI、TypeScript SDK、Go bindings をそれぞれ検証しなければならない（SHALL）。Product artifact に Admin operationId、Admin tag、Admin schema-only response、または Admin generated export が含まれる場合、check は失敗しなければならない（MUST）。Admin artifact に Product operationId、Product tag、Product schema-only response、または Product generated export が含まれる場合、check は失敗しなければならない（MUST）。Backend build は Product binary が Product bindings のみを参照し、Admin binary が Admin bindings のみを参照することを検証しなければならない（SHALL）。
+codegen drift check は Product / Admin の OpenAPI、TypeScript SDK、Go bindings をそれぞれ検証しなければならない（SHALL）。Product artifact に Admin operationId、Admin tag、Admin schema-only response、または Admin generated export が含まれる場合、check は失敗しなければならない（MUST）。Admin artifact に Product operationId、Product tag、Product schema-only response、または Product generated export が含まれる場合、check は失敗しなければならない（MUST）。Backend build と lint は Product binary / Product HTTP adapter が Product bindings のみを参照し、Admin binary / Admin HTTP adapter が Admin bindings のみを参照することを検証しなければならない（SHALL）。Frontend lint は Product SDK が `packages/frontend/api` に閉じ、Admin SDK が `packages/admin/api` に閉じることを検証しなければならない（SHALL）。
 
 **Customer Context**
 
@@ -66,3 +66,13 @@ codegen drift check は Product / Admin の OpenAPI、TypeScript SDK、Go bindin
 - **GIVEN** Product binary の source が Admin generated bindings を import している
 - **WHEN** backend lint または build boundary check を実行する
 - **THEN** Product binary の Admin bindings import は拒否される
+
+#### Scenario: Admin bindings は Admin HTTP adapter だけが import できる (API-CONTRACT-BE-S008)
+
+- **WHEN** `internal/app`、`internal/application/**`、`internal/domain/**`、Product HTTP adapter、または Product binary が Admin generated bindings を import している
+- **THEN** backend lint は generated binding boundary violation として失敗する
+
+#### Scenario: Product SDK と Admin SDK は frontend package 境界を越えない (API-CONTRACT-BE-S009)
+
+- **WHEN** `packages/frontend/**` が Admin SDK を import する、または `packages/admin/**` が Product SDK を import する
+- **THEN** frontend lint は SDK package boundary violation として失敗する
