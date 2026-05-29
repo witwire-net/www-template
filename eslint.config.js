@@ -101,6 +101,13 @@ const frontendDomainHookSvelteFiles = [
   'packages/frontend/domain/src/**/*.svelte.js',
 ];
 
+const adminDomainHookSvelteFiles = [
+  'packages/admin/domain/src/**/*.svelte.ts',
+  'packages/admin/domain/src/**/*.svelte.js',
+];
+
+const domainHookSvelteFiles = [...frontendDomainHookSvelteFiles, ...adminDomainHookSvelteFiles];
+
 const frontendDomainPlainTsFiles = ['packages/frontend/domain/src/**/*.ts'];
 
 const adminDomainPlainTsFiles = ['packages/admin/domain/src/**/*.ts'];
@@ -216,9 +223,9 @@ const adminDomainSourceFiles = [
 ];
 
 const adminSvelteFiles = [
-  'packages/admin/app/**/*.svelte',
-  'packages/admin/app/**/*.svelte.ts',
-  'packages/admin/app/**/*.svelte.js',
+  'packages/admin/**/*.svelte',
+  'packages/admin/**/*.svelte.ts',
+  'packages/admin/**/*.svelte.js',
 ];
 
 const adminNonReactSourceFiles = [
@@ -1654,6 +1661,27 @@ export default tseslint.config(
           pattern: 'packages/frontend/domain/src/observability/**/*',
           mode: 'full',
         },
+        {
+          type: 'admin-domain-auth',
+          pattern:
+            'packages/admin/domain/src/{auth.ts,hooks/useAdminSession.svelte.ts,hooks/useAdminLogin.svelte.ts,hooks/useAdminInitialSetup.svelte.ts,hooks/useAdminOperatorSetup.svelte.ts}',
+          mode: 'full',
+        },
+        {
+          type: 'admin-domain-accounts',
+          pattern: 'packages/admin/domain/src/{accounts.ts,hooks/useAdminAccounts.svelte.ts}',
+          mode: 'full',
+        },
+        {
+          type: 'admin-domain-operators',
+          pattern: 'packages/admin/domain/src/{operators.ts,hooks/useAdminOperators.svelte.ts}',
+          mode: 'full',
+        },
+        {
+          type: 'admin-domain-settings',
+          pattern: 'packages/admin/domain/src/hooks/useAdminSettings.svelte.ts',
+          mode: 'full',
+        },
       ],
     },
     rules: {
@@ -1777,8 +1805,21 @@ export default tseslint.config(
               allow: ['admin-api'],
             },
             {
-              from: ['admin-domain'],
-              allow: ['admin-domain', 'admin-api'],
+              from: [
+                'admin-domain',
+                'admin-domain-auth',
+                'admin-domain-accounts',
+                'admin-domain-operators',
+                'admin-domain-settings',
+              ],
+              allow: [
+                'admin-domain',
+                'admin-api',
+                'admin-domain-auth',
+                'admin-domain-accounts',
+                'admin-domain-operators',
+                'admin-domain-settings',
+              ],
             },
             {
               from: ['admin-app'],
@@ -2131,8 +2172,8 @@ export default tseslint.config(
   },
 
   {
-    files: frontendDomainSourceFiles,
-    ignores: [...frontendDomainHookFiles, ...frontendDomainHookSvelteFiles],
+    files: [...frontendDomainSourceFiles, ...adminDomainSourceFiles],
+    ignores: [...frontendDomainHookFiles, ...domainHookSvelteFiles],
     plugins: {
       'frontend-domain-purity': frontendDomainPurityPlugin,
     },
@@ -2142,8 +2183,8 @@ export default tseslint.config(
   },
 
   {
-    files: frontendDomainSourceFiles,
-    ignores: [...frontendDomainHookFiles, ...frontendDomainHookSvelteFiles],
+    files: [...frontendDomainSourceFiles, ...adminDomainSourceFiles],
+    ignores: [...frontendDomainHookFiles, ...domainHookSvelteFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -2154,12 +2195,22 @@ export default tseslint.config(
               message:
                 'frontend domain の API import は hooks/adapters に限定してください。純粋な domain module から SDK を参照しないでください。',
             },
+            {
+              name: '@www-template/admin-api',
+              message:
+                'domain の API import は hooks/adapters に限定してください。純粋な domain module から SDK を参照しないでください。',
+            },
           ],
           patterns: [
             {
               group: ['@www-template/api/**'],
               message:
                 'frontend domain の API import は hooks/adapters に限定してください。純粋な domain module から SDK を参照しないでください。',
+            },
+            {
+              group: ['@www-template/admin-api/**'],
+              message:
+                'domain の API import は hooks/adapters に限定してください。純粋な domain module から SDK を参照しないでください。',
             },
           ],
         },
@@ -2169,7 +2220,7 @@ export default tseslint.config(
 
   // Domain 内 Feature 境界と相対パス制限
   {
-    files: frontendDomainSourceFiles,
+    files: [...frontendDomainSourceFiles, ...adminDomainSourceFiles],
     rules: {
       'boundaries/element-types': [
         'error',
@@ -2185,6 +2236,18 @@ export default tseslint.config(
             {
               from: ['domain-observability'],
               disallow: ['domain-auth', 'domain-status'],
+            },
+            {
+              from: ['admin-domain-accounts'],
+              disallow: ['admin-domain-auth', 'admin-domain-operators', 'admin-domain-settings'],
+            },
+            {
+              from: ['admin-domain-operators'],
+              disallow: ['admin-domain-accounts', 'admin-domain-settings'],
+            },
+            {
+              from: ['admin-domain-settings'],
+              disallow: ['admin-domain-auth', 'admin-domain-accounts', 'admin-domain-operators'],
             },
           ],
         },
@@ -2206,7 +2269,7 @@ export default tseslint.config(
 
   // Domain composable/hook の命名規約
   {
-    files: frontendDomainHookSvelteFiles,
+    files: domainHookSvelteFiles,
     plugins: {
       'hooks-domain': {
         rules: {
@@ -2523,6 +2586,23 @@ export default tseslint.config(
               from: ['frontend-domain'],
               allow: ['frontend-domain', 'frontend-api'],
             },
+            {
+              from: [
+                'admin-domain',
+                'admin-domain-auth',
+                'admin-domain-accounts',
+                'admin-domain-operators',
+                'admin-domain-settings',
+              ],
+              allow: [
+                'admin-domain',
+                'admin-api',
+                'admin-domain-auth',
+                'admin-domain-accounts',
+                'admin-domain-operators',
+                'admin-domain-settings',
+              ],
+            },
           ],
         },
       ],
@@ -2530,7 +2610,7 @@ export default tseslint.config(
   },
 
   {
-    files: frontendDomainHookSvelteFiles,
+    files: domainHookSvelteFiles,
     rules: {
       'hooks-domain/require-domain-structure': 'error',
       'no-restricted-globals': ['error', 'window', 'document', 'localStorage'],
@@ -2688,6 +2768,23 @@ export default tseslint.config(
               from: ['frontend-domain'],
               allow: ['frontend-domain', 'frontend-api'],
             },
+            {
+              from: [
+                'admin-domain',
+                'admin-domain-auth',
+                'admin-domain-accounts',
+                'admin-domain-operators',
+                'admin-domain-settings',
+              ],
+              allow: [
+                'admin-domain',
+                'admin-api',
+                'admin-domain-auth',
+                'admin-domain-accounts',
+                'admin-domain-operators',
+                'admin-domain-settings',
+              ],
+            },
           ],
         },
       ],
@@ -2695,10 +2792,12 @@ export default tseslint.config(
   },
 
   {
-    files: frontendDomainPlainTsFiles,
+    files: [...frontendDomainPlainTsFiles, ...adminDomainPlainTsFiles],
     ignores: [
       'packages/frontend/domain/src/**/*.svelte.ts',
       'packages/frontend/domain/src/hooks/**/*.ts',
+      'packages/admin/domain/src/**/*.svelte.ts',
+      'packages/admin/domain/src/hooks/**/*.ts',
     ],
     rules: {
       'no-restricted-syntax': [
@@ -3081,22 +3180,13 @@ export default tseslint.config(
         {
           selector: 'Program',
           message:
-            'packages/frontend/app と packages/frontend/domain では React/TSX ファイルを作らないでください。Svelte または TypeScript へ統一してください。',
+            'packages/frontend/app・packages/frontend/domain・packages/admin/app・packages/admin/domain では React/TSX ファイルを作らないでください。Svelte または TypeScript へ統一してください。',
         },
       ],
     },
   },
   {
     files: [...frontendAppRoutePageFiles, ...adminAppRoutePageFiles],
-    ignores: [
-      // Admin static SPA は SvelteKit load を持たないため、既存 route-param / setup-token bootstrap だけを narrow exception にする。
-      'packages/admin/app/src/routes/+layout.svelte',
-      'packages/admin/app/src/routes/accounts/+page.svelte',
-      'packages/admin/app/src/routes/accounts/*/+page.svelte',
-      'packages/admin/app/src/routes/operator-setup/+page.svelte',
-      'packages/admin/app/src/routes/setup/+page.svelte',
-      'packages/admin/app/src/routes/settings/+page.svelte',
-    ],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -3546,40 +3636,6 @@ export default tseslint.config(
               message: 'import は各ディレクトリの index.ts に統一してください。',
             },
           ],
-        },
-      ],
-    },
-  },
-  {
-    files: adminDomainSourceFiles,
-    plugins: {
-      'frontend-domain-purity': frontendDomainPurityPlugin,
-    },
-    rules: {
-      'frontend-domain-purity/no-runtime-env': 'error',
-      'no-restricted-globals': ['error', 'window', 'document', 'localStorage', 'sessionStorage'],
-    },
-  },
-  {
-    files: adminDomainPlainTsFiles,
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "CallExpression[callee.name='$state']",
-          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
-        },
-        {
-          selector: "CallExpression[callee.name='$derived']",
-          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
-        },
-        {
-          selector: "CallExpression[callee.name='$effect']",
-          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
-        },
-        {
-          selector: "CallExpression[callee.object.name='$effect'][callee.property.name='pre']",
-          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
         },
       ],
     },

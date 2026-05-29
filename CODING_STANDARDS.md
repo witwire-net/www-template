@@ -19,7 +19,7 @@
 
 ### codegen drift を残さない
 
-- required: Product 生成物 (`packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go`) と、Admin 生成物のうち `scripts/codegen/check.sh` が追跡する `packages/typespec/openapi/admin.openapi.json` / `packages/admin/api/src/generated/client.ts` は `pnpm gen` 後に差分ゼロであること
+- required: Product 生成物 (`packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go`) と、Admin 生成物 (`packages/typespec/openapi/admin.openapi.json`、`packages/admin/api/src/generated/client.ts`、`packages/backend/internal/generated/adminopenapi/openapi.gen.go`) は `pnpm gen` 後に差分ゼロであること
 - Enforcement point: `pnpm check:codegen` -> `scripts/codegen/check.sh`; `pnpm lint` -> `package.json` -> `pnpm check:codegen`; CI `.github/workflows/ci.yml`
 - NG例: TypeSpec を変えたのに generated file を commit しない
 - OK例: `pnpm gen` 後の generated file をそのまま commit する
@@ -40,7 +40,7 @@
 
 ## 2. TypeSpec / OpenAPI
 
-`pnpm --filter @www-template/typespec lint:openapi` の実体は `spectral lint openapi/openapi.json openapi/admin.openapi.json --ruleset .spectral.yaml --fail-severity error` です。warning は表示されても失敗せず、error だけが失敗します。
+`pnpm --filter @www-template/typespec lint:openapi` の実体は `node scripts/check-surface-boundaries.mjs && spectral lint openapi/openapi.json openapi/admin.openapi.json --ruleset .spectral.yaml --fail-severity error` です。Spectral warning は表示されても失敗せず、error だけが失敗します。
 
 ### TypeSpec は format / compile を通す
 
@@ -56,12 +56,19 @@
 - NG例: `/profiles` / `/health` / `/admin/users` / `/api/admin/accounts`
 - OK例: Product OpenAPI の `/api/v1/passkeys` / Admin OpenAPI の `/api/v1/accounts`
 
+### `/api/admin/*` path を使わない
+
+- forbidden: TypeSpec、生成 OpenAPI、生成 SDK、生成 Go bindings、frontend/admin source で `/api/admin/*` を参照しない。Admin も Admin origin の `/api/v1/*` だけを使う
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:api-admin-policy`, `lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`admin-bff-policy/no-api-admin-reference`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/spectral/path-policy.js`
+- NG例: `/api/admin/accounts` を TypeSpec に追加する / frontend から `/api/admin/operators` を fetch する
+- OK例: Admin origin 上で `/api/v1/accounts` を呼ぶ
+
 ### app endpoint は BearerAuth を宣言する
 
-- required: `/api/v1/auth/*` と `/api/v1/status` 以外の `/api/v1/*` 各 operation は `security: [{ BearerAuth: [] }]` を持つ
+- required: Spectral 対象では `/api/v1/auth/*` と `/api/v1/status` 以外の `/api/v1/*` 各 operation が `security: [{ BearerAuth: [] }]` を持つ。Product の `/api/v1/auth/logout` は backend contract test でも `BearerAuth` 宣言を必須にする
 - Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/app-security.js`; `pnpm test:run` -> `packages/backend/internal/adapter/http/openapi_contract_test.go`
 - NG例: `/api/v1/passkeys` の `security` を消す
-- OK例: app endpoint ごとに `BearerAuth` を宣言する
+- OK例: `/api/v1/passkeys` と `/api/v1/auth/logout` に `BearerAuth` を宣言する
 
 ### BearerAuth security scheme は `type=http` + `scheme=bearer` にする
 
@@ -74,16 +81,16 @@
 
 ### 依存方向は `app -> domain -> api` と `web -> ui` に固定する
 
-- required: `packages/frontend/app` は `packages/frontend/domain` と `packages/frontend/ui` だけを参照し、`packages/frontend/domain` は `packages/frontend/api` を経由して API を使う。`packages/web` は `packages/frontend/ui` のみを参照する
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`boundaries/element-types`)
-- NG例: `packages/frontend/app/src/routes/+page.svelte` から `@www-template/api` を直接 import する
-- OK例: page / component は domain hook と shared UI component を import し、hook 側が `@www-template/api` を使う
+- required: `packages/frontend/app` は `packages/frontend/domain` と `packages/frontend/ui` だけを参照し、`packages/frontend/domain` は `packages/frontend/api` を経由して API を使う。`packages/web` は `packages/frontend/ui` のみを参照する。`packages/admin/app` は `packages/admin/domain` を経由し、`packages/admin/domain` は `packages/admin/api` を API 境界にする
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`boundaries/element-types`, `admin-layer-boundary/no-app-forbidden-imports`, `admin-layer-boundary/no-domain-forbidden-surface`)
+- NG例: `packages/frontend/app/src/routes/+page.svelte` から `@www-template/api` を直接 import する / `packages/admin/app/src/routes/accounts/+page.svelte` から `@www-template/admin-api` を直接 import する
+- OK例: Product page / component は Product domain hook と shared UI component を import し、hook 側が `@www-template/api` を使う。Admin page / component は Admin domain hook を import し、hook 側が `@www-template/admin-api` を使う
 
 ### frontend layer 定義外の file / import を作らない
 
-- required: `packages/frontend/app/src/**`、`packages/frontend/domain/src/**`、`packages/frontend/ui/src/**`、`packages/web/src/**` は boundaries 定義に入る場所に置く
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`boundaries/no-unknown-files`, `boundaries/no-unknown`, `boundaries/no-ignored`)
-- NG例: `packages/frontend/domain/scripts/tmp.ts` のような層定義外ファイルを作る
+- required: `packages/frontend/app/src/**`、`packages/frontend/domain/src/**`、`packages/frontend/ui/src/**`、`packages/web/src/**`、`packages/admin/app/src/**`、`packages/admin/domain/src/**`、`packages/admin/api/src/**` は boundaries 定義に入る場所に置く
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`, `lint:eslint:admin`) -> `eslint.config.js` (`boundaries/no-unknown-files`, `boundaries/no-unknown`, `boundaries/no-ignored`)
+- NG例: `packages/frontend/domain/scripts/tmp.ts` や `packages/admin/domain/tmp.ts` のような層定義外ファイルを作る
 - OK例: source file は各 package の `src/**` 配下に置く
 
 ### frontend i18n runtime は表示面の所有境界を守る
@@ -92,6 +99,13 @@
 - Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`、`lint:eslint:i18n`) -> `eslint.config.js` (`boundaries/element-types`, `no-restricted-imports`, i18n literal guard)
 - NG例: `packages/frontend/ui/src/components/...` から `@www-template/i18n` を直接 import する
 - OK例: `packages/frontend/app` / `packages/web` / `packages/admin` が shared i18n runtime を使い、locale JSON files は自分の surface だけが所有する
+
+### 表示面のユーザー向け文言は辞書経由にする
+
+- required: `packages/frontend/**`、`packages/web/**`、`packages/admin/**` の active Svelte 表示面では、ユーザー向けテキストと `alt` / `aria-label` / `placeholder` / `title` などの表示属性を locale 辞書から取得する
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`frontend-i18n-literal-guard/no-user-facing-literals`)
+- NG例: `.svelte` に `ログインしてください` や `aria-label="閉じる"` を直書きする
+- OK例: translator から取得した文言を `{t('auth.login.title')}` のように表示する
 
 ### App 層は API package を直接 import しない
 
@@ -107,12 +121,33 @@
 - NG例: web route で `import { useStatus } from '@www-template/domain'`
 - OK例: web は `@www-template/ui` のみ利用可
 
+### Admin app は Admin domain だけを API 境界にする
+
+- forbidden: `packages/admin/app/src/**` から `@www-template/admin-api`、`@www-template/api`、`@www-template/domain`、`@www-template/app`、`@www-template/web`、および対応する `packages/**` path を直接 import しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:admin`) -> `eslint.config.js` (`admin-layer-boundary/no-app-forbidden-imports`, `no-restricted-imports`)
+- NG例: Admin route で `import { listAdminAccounts } from '@www-template/admin-api'` を使う / `@www-template/api` を import する
+- OK例: Admin route は `@www-template/admin-domain` の hook / facade を使う
+
+### Admin domain は Admin API package だけを API 境界にする
+
+- required: `packages/admin/domain/src/**` は API 呼び出しに `@www-template/admin-api` を使い、Admin app / Product frontend / React / raw HTTP client / DOM global に依存しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:admin`) -> `eslint.config.js` (`admin-layer-boundary/no-domain-forbidden-surface`, `no-restricted-imports`, `no-restricted-syntax`)
+- NG例: Admin domain hook で `fetch('/api/v1/accounts')` を呼ぶ / `@www-template/api` や `packages/admin/app/src/**` を import する
+- OK例: Admin domain hook は `@www-template/admin-api` wrapper を呼び、`{ data, actions }` を返す
+
+### Product/Admin SDK package 境界を越えない
+
+- forbidden: `packages/frontend/**` から `@www-template/admin-api` / `packages/admin/api` を import しない。`packages/admin/**` から `@www-template/api` / `packages/frontend/api` を import しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`sdk-package-boundary/no-cross-sdk-imports`)
+- NG例: Product frontend hook から `@www-template/admin-api` を import する / Admin domain から `@www-template/api` を import する
+- OK例: Product は `@www-template/api`、Admin は `@www-template/admin-api` だけを使う
+
 ### app / domain は `fetch` / `axios` / `cross-fetch` を直接使わない
 
-- forbidden: `packages/frontend/app/src/**` と `packages/frontend/domain/src/**` で `fetch`、`globalThis.fetch`、`axios`、`cross-fetch` を直接使わない（テストファイルは除外）
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-syntax`, `no-restricted-imports`)
-- NG例: app component で `await fetch('/api/v1/status')` を呼ぶ
-- OK例: app は shared API client か domain hook を経由して通信する
+- forbidden: `packages/frontend/app/src/**`、`packages/frontend/domain/src/**`、`packages/admin/app/src/**`、`packages/admin/domain/src/**` で `fetch`、`globalThis.fetch`、`axios`、`cross-fetch` を直接使わない（テストファイルは除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`no-restricted-syntax`, `no-restricted-imports`, `admin-layer-boundary/no-domain-forbidden-surface`)
+- NG例: app component で `await fetch('/api/v1/status')` を呼ぶ / Admin domain で `axios.get('/api/v1/accounts')` を呼ぶ
+- OK例: app は shared API client か domain hook を経由して通信し、Admin は Admin domain hook と Admin API wrapper を経由する
 
 ### Web は native fetch と軽い route / component logic を持てる
 
@@ -122,60 +157,60 @@
 - NG例: web route で `import { statusApi } from '@www-template/api'` / `import axios from 'axios'`
 - OK例: web page で `await fetch('/api/v1/status')` を呼び、その結果をその page / local helper で完結させる
 
-### pure な frontend domain module は runtime env と API SDK に依存しない
+### pure な frontend / Admin domain module は runtime env と API SDK に依存しない
 
-- forbidden: `packages/frontend/domain/src/**` の hook 以外では `import.meta.env` と `@www-template/api` を直接使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`frontend-domain-purity/no-runtime-env`, `no-restricted-imports`)
-- NG例: `packages/frontend/domain/src/status/statusState.ts` で `import.meta.env.DEV` を見る
+- forbidden: `packages/frontend/domain/src/**` と `packages/admin/domain/src/**` の hook 以外では `import.meta.env` と API SDK を直接使わない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`frontend-domain-purity/no-runtime-env`, `no-restricted-imports`)
+- NG例: `packages/frontend/domain/src/status/statusState.ts` で `import.meta.env.DEV` を見る / `packages/admin/domain/src/accounts.ts` で `@www-template/admin-api` を直接 import する
 - OK例: runtime 条件分岐や API 呼び出しは hook / adapter に寄せる
 
 ### domain hooks は `use*` export と `{ data, actions }` にそろえる
 
-- required: `packages/frontend/domain/src/hooks/**` の値 export は `use*` だけにし、hook は `{ data, actions }` を返し、型注釈は `*Data` / `*Actions` を使う
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`hooks-domain/require-domain-structure`, `no-restricted-syntax`)
+- required: `packages/frontend/domain/src/hooks/**` と `packages/admin/domain/src/hooks/**` の値 export は `use*` だけにし、hook は `{ data, actions }` を返し、型注釈は `*Data` / `*Actions` を使う
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`hooks-domain/require-domain-structure`, `no-restricted-syntax`)
 - NG例: `export const profiles = apiClient` / `return apiClient`
 - OK例: `export function useProfiles(): { data: ProfilesData; actions: ProfilesActions } { return { data, actions }; }`
 
 ### domain hooks/composable は UI・DOM・manual fetch・React に依存しない
 
-- forbidden: `packages/frontend/domain/src/hooks/**` で app/ui import、DOM globals (`window`, `document`, `localStorage`, `sessionStorage`)、Svelte component import、React、`svelte/store`、Svelte lifecycle/context API (`onMount`, `beforeUpdate`, `afterUpdate`, `tick`, `setContext`, `getContext`) を使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-globals`, `no-restricted-syntax`)
+- forbidden: `packages/frontend/domain/src/hooks/**` と `packages/admin/domain/src/hooks/**` で app/ui import、DOM globals (`window`, `document`, `localStorage`, `sessionStorage`)、Svelte component import、React、`svelte/store`、Svelte lifecycle/context API (`onMount`, `beforeUpdate`, `afterUpdate`, `tick`, `setContext`, `getContext`) を使わない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-globals`, `no-restricted-syntax`, `admin-layer-boundary/no-domain-forbidden-surface`)
 - NG例: hook で `window.localStorage` を読む / `import { onMount } from 'svelte'` を使う
 - OK例: hook は Svelte 5 の state API と shared API client だけで状態と操作をまとめる
 
 ### stateful domain composable は `.svelte.ts` に置く
 
-- required: `packages/frontend/domain/src/**/*.ts` で `$state`, `$derived`, `$effect`, `$effect.pre` を使わない（hooks ファイルおよび `.svelte.ts` を除く）
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-syntax`)
+- required: `packages/frontend/domain/src/**/*.ts` と `packages/admin/domain/src/**/*.ts` で `$state`, `$derived`, `$effect`, `$effect.pre` を使わない（hooks ファイルおよび `.svelte.ts` を除く）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`no-restricted-syntax`)
 - NG例: `useProfiles.ts` で `$state([])` を使う
 - OK例: stateful hook は `useProfiles.svelte.ts` に置く
 
 ### hooks の型 import は `types` alias 経由にする
 
-- required: `packages/frontend/domain/src/hooks/**` の型 import は `types` / `types/*` だけを使う
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-syntax`)
+- required: `packages/frontend/domain/src/hooks/**` と `packages/admin/domain/src/hooks/**` の型 import は `types` / `types/*` だけを使う
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`no-restricted-syntax`)
 - NG例: `import type { StatusState } from '../../types/status'`
 - OK例: `import type { StatusState } from 'types'`
 
 ### Pages / Components は domain composable に副作用を寄せる
 
-- forbidden: `packages/frontend/app/src/routes/**/*.svelte`、`packages/frontend/app/src/components/**`、`packages/frontend/app/src/lib/**` では `onMount` / `beforeUpdate` / `afterUpdate` / `tick` と `$effect` / `$effect.pre` による I/O を書かない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-syntax`)
+- forbidden: `packages/frontend/app/src/routes/**/*.svelte`、`packages/frontend/app/src/components/**`、`packages/frontend/app/src/lib/**`、`packages/admin/app/src/routes/**/*.svelte`、`packages/admin/app/src/components/**`、`packages/admin/app/src/lib/**` では `onMount` / `beforeUpdate` / `afterUpdate` / `tick` と `$effect` / `$effect.pre` による I/O を書かない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-syntax`)
 - NG例: page で `onMount(async () => ...)` を書く
 - OK例: page / component は hook の `actions` を呼ぶだけにする
 
 ### app では primitive UI tag を直書きしない
 
-- forbidden: `packages/frontend/app/src/**/*.svelte` で `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>` を直接書かない（`<script>` / `<style>` / コメント内は除外）
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`frontend-app-primitive-ui/no-primitive-tags`)
+- forbidden: `packages/frontend/app/src/**/*.svelte` と `packages/admin/app/src/**/*.svelte` で `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>` を直接書かない（`<script>` / `<style>` / コメント内は除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`frontend-app-primitive-ui/no-primitive-tags`)
 - NG例: page で `<button class="primary">保存</button>` を書く
 - OK例: `@www-template/ui/components` の既存 component を使う
 
 ### active frontend source に React / TSX を持ち込まない
 
-- forbidden: `packages/frontend/app/src/**` と `packages/frontend/domain/src/**` に `*.tsx` / `*.jsx` を置かず、active source で `react`, `react-dom`, `@tanstack/react-query` を import しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-syntax`)
-- NG例: `packages/frontend/app/src/routes/app/dashboard.tsx` を追加する
+- forbidden: `packages/frontend/app/src/**`、`packages/frontend/domain/src/**`、`packages/admin/app/src/**`、`packages/admin/domain/src/**` に `*.tsx` / `*.jsx` を置かず、active source で `react`, `react-dom`, `@tanstack/react-query` を import しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`no-restricted-imports`, `no-restricted-syntax`)
+- NG例: `packages/frontend/app/src/routes/app/dashboard.tsx` や `packages/admin/app/src/routes/accounts/+page.tsx` を追加する
 - OK例: `packages/frontend/app/src/routes/app/dashboard.svelte` を追加する
 
 ### export には TSDoc を付ける
@@ -220,31 +255,31 @@
 - NG例: 700 行の util file や 150 行の関数を 1 つの file に置く
 - OK例: 責務ごとに file / function を分割する
 
-### frontend app / web に SvelteKit の server 面を作らない
+### frontend app / web / admin に SvelteKit の server 面を作らない
 
-- forbidden: `packages/frontend/app` と `packages/web` で `$app/server` / private env / `$lib/server` / `*.server.*` を import せず、`+server.ts`, `+page.server.ts`, `+layout.server.ts`, `hooks.server.ts`, `src/lib/server/**` も作らない。`packages/web/src/routes/+page.server.ts` だけは root `/` の SSR redirect / load 用例外として許可し、actions は許可しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`sveltekit-app-policy/no-forbidden-imports`, `no-restricted-syntax`)
-- NG例: `packages/frontend/app/src/routes/profile/+server.ts` を追加する
+- forbidden: `packages/frontend/app`、`packages/web`、`packages/admin/app` で `$app/server` / private env / `$lib/server` / `*.server.*` を import せず、`+server.ts`, `+page.server.ts`, `+layout.server.ts`, `hooks.server.ts`, `src/lib/server/**` も作らない。`packages/web/src/routes/+page.server.ts` だけは root `/` の SSR redirect / load 用例外として許可し、actions は許可しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`sveltekit-app-policy/no-forbidden-imports`, `no-restricted-syntax`)
+- NG例: `packages/frontend/app/src/routes/profile/+server.ts` や `packages/admin/app/src/routes/accounts/+server.ts` を追加する
 - OK例: API は `packages/backend` に実装し、frontend は client-facing route に保つ
 
-### frontend app / web では SvelteKit form action / hook export を使わない
+### frontend app / web / admin では SvelteKit form action / hook export を使わない
 
-- forbidden: `packages/frontend/app` と `packages/web` で `actions`, `handle`, `handleFetch` を export しない。`packages/web/src/routes/+page.server.ts` の例外でも `actions` は export しない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`sveltekit-app-policy/no-export-names`)
+- forbidden: `packages/frontend/app`、`packages/web`、`packages/admin/app` で `actions`, `handle`, `handleFetch` を export しない。`packages/web/src/routes/+page.server.ts` の例外でも `actions` は export しない
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`sveltekit-app-policy/no-export-names`)
 - NG例: `+page.server.ts` で `export const actions = { ... }`
 - OK例: form submit や認証処理は backend API と CSR route 境界へ寄せる
 
 ### route mode は公開面と認証面で固定する
 
-- required: `packages/frontend/app/src/routes/+layout.ts` では `export const ssr = false` と `export const csr = true` を必須にし、それ以外の app route module では `ssr` / `csr` / `prerender` を再定義しない; 公開面 (`packages/web`) の route module では `ssr` export を禁止する
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`) -> `eslint.config.js` (`sveltekit-app-policy/require-auth-layout-mode`, `sveltekit-app-policy/no-export-names`)
-- NG例: `packages/frontend/app/src/routes/login/+layout.ts` で `export const ssr = false` を足す / `packages/web/src/routes/about/+page.ts` で `export const ssr = true` を足す
-- OK例: app route mode は `packages/frontend/app/src/routes/+layout.ts` だけで管理する
+- required: `packages/frontend/app/src/routes/+layout.ts` と `packages/admin/app/src/routes/+layout.ts` では `export const ssr = false` と `export const csr = true` を必須にし、それ以外の app/admin route module では `ssr` / `csr` / `prerender` を再定義しない; 公開面 (`packages/web`) の route module では `ssr` export を禁止する
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:admin`) -> `eslint.config.js` (`sveltekit-app-policy/require-auth-layout-mode`, `sveltekit-app-policy/no-export-names`)
+- NG例: `packages/frontend/app/src/routes/login/+layout.ts` で `export const ssr = false` を足す / `packages/admin/app/src/routes/accounts/+page.ts` で `export const prerender = true` を足す / `packages/web/src/routes/about/+page.ts` で `export const ssr = true` を足す
+- OK例: app route mode は `packages/frontend/app/src/routes/+layout.ts`、Admin route mode は `packages/admin/app/src/routes/+layout.ts` だけで管理する
 
 ### Svelte 5 の書き方を使う
 
 - forbidden: `on:click`, `<slot>`, `$$slots`, `$$restProps`, `export let`, `$:`, `createEventDispatcher` を使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`frontend-svelte5/no-legacy-syntax`)
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`, `lint:eslint:admin`) -> `eslint.config.js` (`frontend-svelte5/no-legacy-syntax`)
 - NG例: `<button on:click={save}>`
 - OK例: `<button onclick={save}>`
 
@@ -258,14 +293,14 @@
 ### Svelte ファイル内で `<style>` タグを書かない
 
 - forbidden: `.svelte` ファイルに `<style>` タグを書かない。スタイルは Tailwind ユーティリティクラスまたは `@layer components` で定義する
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`frontend-css-policy/no-svelte-style-tag`)
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`, `lint:eslint:admin`) -> `eslint.config.js` (`frontend-css-policy/no-svelte-style-tag`)
 - NG例: `+page.svelte` で `<style>.auth-shell { ... }</style>` を書く
 - OK例: `class="auth-layout"` のように Tailwind クラスまたは CSS Components を使う
 
 ### Tailwind CSS の任意値記法を使わない
 
 - forbidden: `bg-[...]` / `text-[...]` / `w-[...]` 等の Tailwind 任意値記法を使わない
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`) -> `eslint.config.js` (`frontend-css-policy/no-tailwind-arbitrary-values`)
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:frontend`, `lint:eslint:ui`, `lint:eslint:admin`) -> `eslint.config.js` (`frontend-css-policy/no-tailwind-arbitrary-values`)
 - NG例: `class="bg-[linear-gradient(...)]"` / `class="text-[0.9375rem]"`
 - OK例: `class="bg-background text-sm"`（Design Tokens または標準ユーティリティを使う）
 
@@ -276,25 +311,25 @@
 - NG例: `base-styles.css` で `@apply border-border;` を書く
 - OK例: `border-color: var(--color-border);` のように通常の CSS プロパティで書く
 
-### CSS Components は `ui/src/styles/components/` に集約する
+### Admin source に DB 接続文字列・secret・raw SQL を直書きしない
 
-- required: 複雑なレイアウト・UIパターンは `packages/frontend/ui/src/styles/components/*.css` の `@layer components` に定義し、Svelte ファイルではクラス名だけを参照する
-- Enforcement point: `pnpm lint` -> `package.json` (`lint:stylelint`) -> `stylelint.config.js`; コードレビュー
-- NG例: 7つの認証画面で同じ `.auth-shell { ... }` を個別の `<style>` タグにコピペする
-- OK例: `components/auth.css` に `.auth-layout` を1回定義し、各ページで `class="auth-layout"` を使う
+- forbidden: `packages/admin/app/src/**`、`packages/admin/domain/src/**`、`packages/admin/api/src/**` に `postgres://` / `postgresql://` literal、secret/token/key/password の高リスク literal、SQL template literal、`$queryRawUnsafe` / `$executeRawUnsafe` を書かない（生成コード・テストは除外）
+- Enforcement point: `pnpm lint` -> `package.json` (`lint:eslint:admin`) -> `eslint.config.js` (`admin-security/no-hardcoded-db-strings`, `admin-security/no-secret-literals`, `admin-security/no-sql-template-literals`, `admin-security/no-raw-unsafe`)
+- NG例: `const databaseUrl = 'postgres://user:pass@example/db'` / `const apiToken = 'admin-token-1234567890'` / ``prisma.$queryRawUnsafe(`select * from accounts`)``
+- OK例: DB 接続情報や secret は環境変数・安全な secret provider から読み、query は型付き API または安全な binding を使う
 
 ## 4. バックエンド構造と依存
 
 ### Go file は許可された backend layer にだけ置く
 
-- must live under ...: `packages/backend/**/*.go` は `cmd/api`、`internal/app`、`internal/platform/**`、`internal/domain`、`internal/application`、`internal/adapter/**`、`internal/generated`、`tools/analyzers` のいずれかに置く
+- must live under ...: `packages/backend/**/*.go` は `cmd/api`、`cmd/admin-api`、`internal/app`、`internal/platform/**`、`internal/domain`、`internal/application`、`internal/adapter/**`、`internal/generated`、`tools/analyzers` のいずれかに置く
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`verifyGoFilePlacement`)
 - NG例: `packages/backend/pkg/http/server.go`
-- OK例: `packages/backend/internal/adapter/http/router.go`
+- OK例: `packages/backend/cmd/admin-api/main.go` / `packages/backend/internal/adapter/http/product/router.go`
 
 ### package 名は配置パスと一致させる
 
-- required: 各ディレクトリに置く `.go` ファイルの `package` 名は、配置パスに対応する決められた名前にする（`internal/domain/` → `domain`、`internal/application/` → `application`、`internal/adapter/http/` → `http`、`internal/platform/config/` → `config` など）
+- required: 各ディレクトリに置く `.go` ファイルの `package` 名は、配置パスに対応する決められた名前にする（`cmd/api` / `cmd/admin-api` → `main`、`internal/domain/` → `domain`、`internal/application/` → `application`、`internal/adapter/http/product/` → `product`、`internal/adapter/http/admin/` → `admin`、`internal/platform/config/` → `config` など）
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkPackageName`)
 - NG例: `internal/adapter/postgres/repository.go` に `package http` を書く
 - OK例: `internal/adapter/postgres/repository.go` に `package postgres` を書く
@@ -305,6 +340,13 @@
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
 - NG例: `internal/domain` から `internal/application` を import する / `internal/platform/config` から `internal/domain` を import する
 - OK例: `cmd/api` は `internal/app` を起点にし、handler は application を呼ぶ
+
+### Product/Admin backend surface 境界を越えて import しない
+
+- forbidden: Product/Admin の HTTP adapter subtree は互いを import せず、`shared` への片方向依存だけにする。Product/Admin/shared の application subtree は同一 surface または shared だけを import し、adapter は自身の surface の application だけを参照する
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`, `isAllowedHTTPAdapterBoundaryImport`, `isAllowedApplicationBoundaryImport`)
+- NG例: `internal/adapter/http/product` から `internal/adapter/http/admin` を import する / `internal/application/admin` から `internal/application/product` を import する
+- OK例: `internal/adapter/http/product` と `internal/adapter/http/admin` が `internal/adapter/http/shared` の helper を参照する / Admin adapter が `internal/application/admin` を参照する
 
 ### domain 層は flat package 内に閉じる
 
@@ -367,30 +409,44 @@
 ### Product/Admin の non-generated Gin route は literal かつ `/health` か `/api/v1/*` だけにする
 
 - required: Product/Admin どちらの `internal/adapter/http` non-generated route も string literal で書き、`/health` または `/api/v1/*` だけにする; custom Gin group も `/api/v1/*` 配下だけにする
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/adapter/http/router_test.go` (`TestRoutePolicy`)
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/adapter/http/product/router_test.go` (`TestRoutePolicy`)
 - NG例: `router.GET(basePath + "/profiles", ...)` / `router.Group("/admin")` / `router.Group("/api/admin")`
 - OK例: `router.GET("/health", ...)` / Product の `router.Group("/api/v1/passkeys")` / Admin の `router.Group("/api/v1/accounts")`
 
-### runtime route policy をテストで守る
+### Product runtime route policy をテストで守る
 
-- required: router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register/start`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`, `/api/v1/auth/passkey/add/start`, `/api/v1/auth/passkey/add/finish` に限定し、whitelist 外の `/api/v1/*` は bearer を要求する
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/router_test.go` (`TestRoutePolicy`)
+- required: Product router に登録される public route は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register/start`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`, `/api/v1/auth/refresh` に限定し、whitelist 外の `/api/v1/*` は bearer を要求する
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/product/router_test.go` (`TestRoutePolicy`)
 - NG例: runtime route に `/api/v1/admin/users` を増やす
 - OK例: app surface の custom route は `/api/v1/passkeys/*` に置く
 
 ### app API は Bearer token 必須にする
 
 - required: whitelist 外の `/api/v1/*` は runtime で `Authorization: Bearer ...` を要求し、OpenAPI でも `BearerAuth` を宣言する（例: `/api/v1/passkeys/*`, `/api/v1/auth/logout`）
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/adapter/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/product/router_test.go` (`TestAppAuthEndpointRequiresAuthorization`), `packages/backend/internal/adapter/http/openapi_contract_test.go` (`TestAppOpenAPIDeclaresBearerSecurity`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/.spectral.yaml`
 - NG例: `/api/v1/passkeys` を認証なしで通す
 - OK例: bearer middleware で保護し、OpenAPI に `security: [{ BearerAuth: [] }]` を残す
 
+### Product/Admin runtime route surface を binary ごとに分離する
+
+- required: Product router は Admin 専用 operation を 404 にし、Admin router は Product 専用 operation を 404 にする。同じ `/api/v1/*` path 空間を使っても、origin / binary / router table を混ぜない
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/product/router_test.go` (`TestProductRuntimeDoesNotRegisterAdminOperations`), `packages/backend/internal/adapter/http/admin/router_test.go` (`TestAdminRuntimeDoesNotRegisterProductOperations`), `packages/backend/internal/app/runtime_test.go` (`TestAdminHTTPAdapterDoesNotRegisterProductOperations`)
+- NG例: Product router に `/api/v1/accounts` を登録する / Admin router に `/api/v1/status` を登録する
+- OK例: Product binary は Product router だけ、Admin binary は Admin router だけを compose する
+
+### Admin API は operator session / Origin / CSRF / security header を必須にする
+
+- required: Admin protected route は operator bearer session を要求し、Product bearer を Admin operator として扱わない。Admin mutation は許可済み `Origin` と session-bound CSRF を検証し、pre-auth passkey start でも許可済み `Origin` を要求する。Admin response は no-store と browser security header baseline を返す
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/admin/router_test.go` (`TestAdminProtectedRouteRequiresOperatorSession`, `TestAdminAPIRejectsProductBearerToken`, `TestAdminMutationRejectsDisallowedOriginBeforeSessionValidation`, `TestAdminMutationValidatesSessionAndCSRFBinding`, `TestAdminMutationRejectsCSRFMismatch`, `TestAdminPreAuthPasskeyStartRequiresOriginButNotSessionCSRF`, `TestAdminPreAuthPasskeyStartRejectsMissingOrigin`, `TestAdminAPISetsNoStoreAndSecurityHeaders`)
+- NG例: Admin mutation を `Origin` なしで通す / Product accessToken を Admin operator session として受理する / Admin response に cacheable header を残す
+- OK例: Admin mutation は `Authorization: Bearer ...`、許可済み `Origin`、CSRF token を検証してから application use case に進む
+
 ### `APP_ENV!=development` では fail-close にする
 
-- required: `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定の runtime 生成を許さない
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/app/runtime_test.go` (`TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment`)
-- NG例: `APP_ENV=production` なのに token 空で起動を許す
-- OK例: production / staging では `APP_BEARER_TOKEN` を必須にする
+- required: `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定の Product runtime 生成を許さず、Admin runtime は Admin surface 専用設定不足で起動させない
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/app/runtime_test.go` (`TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment`, `TestNewAdminRuntimeWithConfigFailsClosedWithoutAdminSurfaceConfig`)
+- NG例: `APP_ENV=production` なのに token 空で起動を許す / Admin domain や session 設定が空でも Admin runtime を起動する
+- OK例: production / staging では `APP_BEARER_TOKEN` と Admin surface runtime config を必須にする
 
 ### GORM は `adapter-postgres` に閉じ込める
 
@@ -398,6 +454,13 @@
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
 - NG例: `internal/application/service.go` で GORM を import する
 - OK例: DB 実装は `internal/adapter/postgres` に置く
+
+### Admin backend repository で unsafe SQL construction をしない
+
+- forbidden: `internal/adapter/postgres/admin/**` では `Raw` / `Exec` を使わず、`Where` / `Or` / `Not` / `Order` / `Joins` / `Having` / `Select` / `Table` / `Group` の SQL fragment 第1引数は static string literal だけにする
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkAdminBackendSQLConstruction`)
+- NG例: `db.Raw(query)` / `db.Where(whereClause, value)` / `db.Order(sortColumn)`
+- OK例: `db.Where("email = ?", email)` のように静的 fragment と bound parameter を使う
 
 ### `AutoMigrate` は禁止し、SQL migration を置く
 
@@ -498,8 +561,10 @@
 
 ### `pre-commit` は staged file を整形・検証する
 
-- required: `pre-commit` は `pnpm lint-staged` を実行する
+- required: `pre-commit` は `pnpm lint-staged` を実行し、成功後に `pnpm check:codegen` を実行する
 - Enforcement point: `.husky/pre-commit`
+- NG例: generated artifact の drift を残したまま commit する / hook を `pnpm lint-staged` だけで終わらせる
+- OK例: staged file の整形・軽量検証後に `pnpm check:codegen` で Product/Admin 生成物の drift と contamination を確認する
 
 `pnpm lint-staged` の実行内容は次のとおりです (`.lintstagedrc.json`)。
 
@@ -511,7 +576,7 @@
 | `*.go`                                 | `bash scripts/hooks/format-staged-go.sh` = `gofmt -w` + `goimports -local www-template -w`                            |
 | `packages/backend/db/migrations/*.sql` | `bash scripts/hooks/verify-staged-migrations.sh` = `bash scripts/go/guardrails.sh` (migration filename / pair policy) |
 
-Note: `.husky/pre-commit` の実体は `pnpm lint-staged` のみです。`pnpm check:codegen` は pre-commit hook には含まれていません（codegen drift check は `pnpm lint` と CI で実行されます）。
+Note: `.husky/pre-commit` の実体は `pnpm lint-staged` の後に `pnpm check:codegen` を実行します。`pnpm check:codegen` は `pnpm gen` を再実行し、Product/Admin の生成物差分と surface contamination を検査します。
 
 ### `commit-msg` は conventional commit を強制する
 
@@ -526,5 +591,5 @@ Note: `.husky/pre-commit` の実体は `pnpm lint-staged` のみです。`pnpm c
 - root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`, `stylelint.config.js`
 - TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
 - frontend CSS: `packages/frontend/ui/src/styles/base/global.css`, `packages/frontend/ui/src/styles/tokens.css`, `packages/frontend/ui/src/styles/theme.css`, `packages/frontend/ui/src/styles/base-styles.css`, `packages/frontend/ui/src/styles/components/*.css`, `packages/frontend/ui/src/styles/utilities.css`
-- backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
+- backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/product/router_test.go`, `packages/backend/internal/adapter/http/admin/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
 - helper scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`, `scripts/codegen/check.sh`, `scripts/hooks/format-staged-go.sh`, `scripts/hooks/verify-staged-migrations.sh`

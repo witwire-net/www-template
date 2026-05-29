@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { startRegistration } from '@simplewebauthn/browser';
-	import { finishOperatorSetup, startOperatorSetup } from '@www-template/admin-domain';
+	import { useAdminOperatorSetup } from '@www-template/admin-domain';
 	import type { AdminOperatorSetupStartResult } from '@www-template/admin-domain';
 
 	import { Button, CardNS, Input, Label, Spinner } from '@www-template/ui/components';
@@ -9,50 +9,21 @@
 
 	import { createCurrentAdminI18n } from '$lib/i18n';
 
-	let setupToken = $state('');
-	let isSubmitting = $state(false);
-	let message = $state<string | null>(null);
 	const i18n = $derived(createCurrentAdminI18n());
-	let consumedTokenFromUrl = $state(false);
-
-	$effect.pre(() => {
-		// 配送メールの `/operator-setup?token=...` から one-time token を一度だけ取り込み、手入力と同じ form state に移す。
-		const tokenFromUrl = page.url.searchParams.get('token')?.trim() ?? '';
-		if (consumedTokenFromUrl || tokenFromUrl === '') return;
-		setupToken = tokenFromUrl;
-		consumedTokenFromUrl = true;
-
-		// token 平文を browser history / address bar に残さないため、入力へ取り込んだ直後に query を削除する。
-		const sanitizedUrl = new URL(page.url);
-		sanitizedUrl.searchParams.delete('token');
-		globalThis.history.replaceState(globalThis.history.state, '', `${sanitizedUrl.pathname}${sanitizedUrl.search}${sanitizedUrl.hash}`);
+	const operatorSetup = useAdminOperatorSetup({
+		readUrl: () => page.url,
+		replaceUrl: (url) => {
+			// token 平文を browser history / address bar に残さないため、domain が作った sanitized URL だけを反映する。
+			globalThis.history.replaceState(globalThis.history.state, '', url);
+		},
 	});
 
 	async function handleOperatorSetup(): Promise<void> {
-		// one-time token の多重消費を避けるため、登録処理中は再送信を止める。
-		if (isSubmitting) return;
-		isSubmitting = true;
-		message = null;
-
-		try {
-			// token の妥当性検証と challenge 作成は Admin domain function 経由で Go Admin API へ委譲する。
-			const startPayload = await startOperatorSetup(setupToken);
-			if (startPayload === null) throw new Error('operator-setup-start-failed');
-
-			// ブラウザの authenticator で新しい passkey を作成し、登録応答だけを送信する。
-			const attestation = await startRegistration({ optionsJSON: toRegistrationOptions(startPayload.options) });
-
-			// finish route は token 消費と passkey 追加を backend transaction へ委譲し、session state だけを memory に保持する。
-			const session = await finishOperatorSetup(setupToken, startPayload.requestId, attestation);
-			if (session === null) throw new Error('operator-setup-finish-failed');
-			void goto('/');
-		} catch {
-			// token の存在や期限切れ理由を細かく出さず、攻撃者に状態差分を渡さない。
-			message = i18n.t('operatorSetup.error');
-		} finally {
-			// 失敗後も安全に再試行できるよう loading を解除する。
-			isSubmitting = false;
-		}
+		// WebAuthn 登録と navigation だけを app 層 callback として渡し、token I/O は domain action に委譲する。
+		await operatorSetup.actions.submit(
+			(options) => startRegistration({ optionsJSON: toRegistrationOptions(options) }),
+			() => { void goto('/'); }
+		);
 	}
 
 	function toRegistrationOptions(options: AdminOperatorSetupStartResult['options']): Parameters<typeof startRegistration>[0]['optionsJSON'] {
@@ -101,15 +72,15 @@
 			<CardNS.CardContent class="space-y-4">
 				<div class="space-y-2">
 					<Label for="operator-setup-token">{i18n.t('operatorSetup.token')}</Label>
-					<Input id="operator-setup-token" type="password" autocomplete="one-time-code" bind:value={setupToken} disabled={isSubmitting} />
+					<Input id="operator-setup-token" type="password" autocomplete="one-time-code" bind:value={operatorSetup.data.state.setupToken} disabled={operatorSetup.data.state.isSubmitting} />
 				</div>
-				{#if message !== null}
-					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{message}</p>
+				{#if operatorSetup.data.state.messageKey !== null}
+					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{i18n.t(operatorSetup.data.state.messageKey)}</p>
 				{/if}
 			</CardNS.CardContent>
 			<CardNS.CardFooter class="flex flex-col gap-3">
-				<Button class="w-full" size="lg" disabled={isSubmitting || setupToken.trim() === ''} onclick={handleOperatorSetup}>
-						{#if isSubmitting}
+				<Button class="w-full" size="lg" disabled={operatorSetup.data.state.isSubmitting || operatorSetup.data.state.setupToken.trim() === ''} onclick={handleOperatorSetup}>
+						{#if operatorSetup.data.state.isSubmitting}
 							<Spinner aria-hidden="true" />
 							{i18n.t('operatorSetup.submitting')}
 						{:else}

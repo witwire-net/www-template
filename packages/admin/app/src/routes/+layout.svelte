@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { verifyProtectedAdminRoute } from '@www-template/admin-domain';
+	import { useAdminSession } from '@www-template/admin-domain';
 
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -16,8 +16,18 @@
 	const { children, data }: { children: Snippet; data?: Partial<LayoutData> } = $props();
 	const currentPath = $derived(data?.currentPath ?? page.url.pathname);
 	const i18n = $derived(createCurrentAdminI18n());
-	let operator = $state<LayoutOperator | null>(null);
-	let routeState = $state<'public' | 'checking' | 'authenticated' | 'blocked'>('checking');
+	const session = useAdminSession({
+		readPath: () => page.url.pathname,
+		isPublicPath: (path) => path === '/login' || path === '/setup' || path === '/operator-setup',
+		redirectToLogin: () => { void goto('/login'); },
+	});
+	const operator = $derived<LayoutOperator | null>(session.data.state.session === null ? null : {
+		id: session.data.state.session.operator.operatorId,
+		email: session.data.state.session.operator.email,
+		role: session.data.state.session.operator.role,
+		locale: i18n.locale,
+	});
+	const routeState = $derived(session.data.state.routeState);
 	const labels = $derived<LayoutLabels>({
 		title: data?.labels?.title ?? i18n.t('layout.title'),
 		brand: data?.labels?.brand ?? i18n.t('layout.brand'),
@@ -26,7 +36,6 @@
 		logout: data?.labels?.logout ?? i18n.t('header.logout'),
 		close: data?.labels?.close ?? i18n.t('shared.close'),
 	});
-	const isPublicRoute = $derived(currentPath === '/login' || currentPath === '/setup' || currentPath === '/operator-setup');
 	const navItems = $derived(data?.navItems ?? [
 		{ label: i18n.t('nav.dashboard'), href: '/', activePrefix: '/' },
 		{ label: i18n.t('nav.accounts'), href: '/accounts', activePrefix: '/accounts' },
@@ -34,43 +43,6 @@
 		{ label: i18n.t('nav.settings'), href: '/settings', activePrefix: '/settings' },
 	]);
 
-	$effect(() => {
-		// public route は operator session を要求せず、login/setup 画面を即時表示する。
-		if (isPublicRoute) {
-			routeState = 'public';
-			operator = null;
-			return;
-		}
-
-		// protected route は表示前に Admin domain function で current operator を検証する。
-		const verifiedPath = currentPath;
-		void verifyCurrentOperator(verifiedPath);
-	});
-
-	async function verifyCurrentOperator(verifiedPath: string): Promise<void> {
-		// route 遷移ごとに checking に戻し、古い operator で protected content が一瞬表示されることを防ぐ。
-		routeState = 'checking';
-		const result = await verifyProtectedAdminRoute();
-
-		// 非同期検証中に route が変わった場合は、古い結果を現在画面へ反映しない。
-		if (verifiedPath !== currentPath) return;
-
-		if (result.status !== 'authenticated') {
-			operator = null;
-			routeState = 'blocked';
-			void goto('/login');
-			return;
-		}
-
-		// backend 検証済み operator だけを shell に渡し、UI role 表示を authorization の代替にしない。
-		operator = {
-			id: result.session.operator.operatorId,
-			email: result.session.operator.email,
-			role: result.session.operator.role,
-			locale: i18n.locale,
-		};
-		routeState = 'authenticated';
-	}
 </script>
 
 <svelte:head>

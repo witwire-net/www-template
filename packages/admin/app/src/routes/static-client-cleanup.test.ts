@@ -108,11 +108,9 @@ describe('Admin static client cleanup', () => {
     const accountsPage = readPackageFile('src/routes/accounts/+page.svelte');
     const accountForm = readPackageFile('src/lib/components/accounts/AccountCreateForm.svelte');
 
-    expect(accountsPage).toContain(
-      'createCustomerAccount({ email: createEmail, locale: createLocale })'
-    );
-    expect(accountsPage).toContain('createMessage = accountErrorMessage(result.error)');
-    expect(accountsPage).toContain('void goto(`/accounts/${result.data.id}`)');
+    expect(accountsPage).toContain('useAdminAccounts');
+    expect(accountsPage).toContain('await adminAccounts.actions.submitCreateAccount()');
+    expect(accountsPage).toContain('createMessage = $derived');
     expect(accountsPage).toContain("if (error === 'duplicate-email')");
     expect(accountForm).toContain('bind:value={email}');
     expect(accountForm).toContain("disabled={isSubmitting || email.trim() === ''}");
@@ -136,8 +134,8 @@ describe('Admin static client cleanup', () => {
     const eslintConfig = readRepoFile('eslint.config.js');
 
     expect(loginPage).toContain("from '@simplewebauthn/browser'");
-    expect(loginPage).toContain('startAdminLogin(email)');
-    expect(loginPage).toContain('finishAdminLogin(startPayload.requestId, assertion)');
+    expect(loginPage).toContain('useAdminLogin');
+    expect(loginPage).toContain('await login.actions.submit(');
     expect(authDomain).toContain('requestStartAdminLogin({ identifier: normalizedIdentifier })');
     expect(authDomain).not.toContain("from '@www-template/api'");
     expect(eslintConfig).toContain('Admin domain 層から Product SDK を import しないでください');
@@ -149,8 +147,8 @@ describe('Admin static client cleanup', () => {
     const operatorsDomain = readAdminFile('domain/src/operators.ts');
     const accountsDomain = readAdminFile('domain/src/accounts.ts');
 
-    expect(layout).toContain("routeState = 'checking'");
-    expect(layout).toContain('const result = await verifyProtectedAdminRoute()');
+    expect(layout).toContain('useAdminSession');
+    expect(layout).toContain('const routeState = $derived(session.data.state.routeState)');
     expect(layout).toContain("void goto('/login')");
     expect(layout).toContain('{:else if operator !== null}');
     expect(operatorsDomain).toContain('canCreateAccounts');
@@ -192,14 +190,12 @@ describe('Admin static client cleanup', () => {
     const authDomain = readAdminFile('domain/src/auth.ts');
     const apiClient = readAdminFile('api/src/client.ts');
 
-    expect(setupPage).toContain('startInitialAdminSetup({ email, displayName, bootstrapSecret })');
-    expect(setupPage).toContain('finishInitialAdminSetup(');
+    expect(setupPage).toContain('useAdminInitialSetup');
+    expect(setupPage).toContain('await initialSetup.actions.submit(');
     expect(setupPage).toContain("type SetupAvailability = 'available' | 'operator-exists'");
-    expect(setupPage).toContain('let setupAvailability = $state<SetupAvailability>');
-    expect(setupPage).toContain("if (startPayload.status === 'operator-exists')");
-    expect(setupPage).toContain("if (startPayload.status === 'bootstrap-disabled')");
+    expect(setupPage).toContain('initialSetup.data.state.setupAvailability');
     expect(setupPage).toContain('{#if showSetupForm}');
-    expect(setupPage).toContain("setupAvailability === 'operator-exists'");
+    expect(setupPage).toContain("initialSetup.data.state.setupAvailability === 'operator-exists'");
     expect(apiClient).toContain('getStartAdminInitialSetupUrl()');
     expect(apiClient).toContain('getFinishAdminInitialSetupUrl()');
     expect(authDomain).toContain(
@@ -237,7 +233,8 @@ describe('Admin static client cleanup', () => {
     const settingsPage = readPackageFile('src/routes/settings/+page.svelte');
 
     expect(settingsPage).toContain("i18n.t('settings.title')");
-    expect(settingsPage).toContain('setCurrentAdminLocale(selectedLocale)');
+    expect(settingsPage).toContain('useAdminSettings');
+    expect(settingsPage).toContain('settings.actions.saveLocale()');
     expect(settingsPage).not.toContain("?? 'Settings'");
     expect(settingsPage).not.toContain("?? 'Language'");
     expect(settingsPage).not.toContain("?? 'Save'");
@@ -250,7 +247,8 @@ describe('Admin static client cleanup', () => {
     const operatorsDomain = readAdminFile('domain/src/operators.ts');
     const apiClient = readAdminFile('api/src/client.ts');
 
-    expect(operatorsPage).toContain('createAdminOperator({ email: newOperatorEmail');
+    expect(operatorsPage).toContain('useAdminOperators');
+    expect(operatorsPage).toContain('await operators.actions.submitCreateOperator()');
     expect(operatorsPage).not.toContain('preventDefault()');
     expect(operatorsPage).not.toContain('form?.setupToken');
     expect(operatorsDomain).toContain(

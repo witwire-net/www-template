@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { startAuthentication } from '@simplewebauthn/browser';
-	import { finishAdminLogin, startAdminLogin } from '@www-template/admin-domain';
+	import { useAdminLogin } from '@www-template/admin-domain';
 	import type { AdminLoginStartResult } from '@www-template/admin-domain';
 
 	import { Button, CardNS, Input, Label, Spinner } from '@www-template/ui/components';
@@ -8,37 +8,15 @@
 
 	import { createCurrentAdminI18n } from '$lib/i18n';
 
-	let email = $state('');
-	let isSubmitting = $state(false);
-	let message = $state<string | null>(null);
+	const login = useAdminLogin();
 	const i18n = $derived(createCurrentAdminI18n());
 
 	async function handlePasskeyLogin(): Promise<void> {
-		// 連打による challenge の多重発行を避け、画面上も処理中であることを明示する。
-		if (isSubmitting) return;
-		isSubmitting = true;
-		message = null;
-
-		try {
-			// challenge 発行は Admin domain function に委譲し、app 層から API wrapper / generated SDK を直接呼ばない。
-			const startPayload = await startAdminLogin(email);
-			if (startPayload === null) throw new Error('login-start-failed');
-
-			// WebAuthn ceremony はブラウザ API に限定し、秘密鍵 material を JavaScript へ取り出さない。
-			const assertion = await startAuthentication({ optionsJSON: toAuthenticationOptions(startPayload.options) });
-
-			// finish は Admin domain function に委譲し、accessToken / CSRF token だけを memory session に保持する。
-			const session = await finishAdminLogin(startPayload.requestId, assertion);
-			if (session === null) throw new Error('login-finish-failed');
-			message = i18n.t('login.verified');
-			void goto('/');
-		} catch {
-			// unknown email / inactive / invalid passkey を同じ文言にし、operator enumeration を防ぐ。
-			message = i18n.t('login.error');
-		} finally {
-			// 処理終了時は必ず loading を解除し、再試行できる状態へ戻す。
-			isSubmitting = false;
-		}
+		// WebAuthn browser API と navigation だけを app 層 callback として渡し、認証 I/O は domain action に委譲する。
+		await login.actions.submit(
+			(options) => startAuthentication({ optionsJSON: toAuthenticationOptions(options) }),
+			() => { void goto('/'); }
+		);
 	}
 
 	function toAuthenticationOptions(options: AdminLoginStartResult['options']): Parameters<typeof startAuthentication>[0]['optionsJSON'] {
@@ -77,15 +55,15 @@
 			<CardNS.CardContent class="space-y-4">
 				<div class="space-y-2">
 					<Label for="admin-login-email">{i18n.t('login.emailLabel')}</Label>
-					<Input id="admin-login-email" type="email" autocomplete="email" bind:value={email} disabled={isSubmitting} placeholder="operator@example.com" />
+					<Input id="admin-login-email" type="email" autocomplete="email" bind:value={login.data.state.email} disabled={login.data.state.isSubmitting} placeholder="operator@example.com" />
 				</div>
-				{#if message !== null}
-					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{message}</p>
+				{#if login.data.state.messageKey !== null}
+					<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{i18n.t(login.data.state.messageKey)}</p>
 				{/if}
 			</CardNS.CardContent>
 			<CardNS.CardFooter class="flex flex-col gap-3">
-				<Button class="w-full" size="lg" disabled={isSubmitting || email.trim() === ''} onclick={handlePasskeyLogin}>
-					{#if isSubmitting}
+				<Button class="w-full" size="lg" disabled={login.data.state.isSubmitting || login.data.state.email.trim() === ''} onclick={handlePasskeyLogin}>
+					{#if login.data.state.isSubmitting}
 						<Spinner aria-hidden="true" />
 						{i18n.t('login.submitting')}
 					{:else}

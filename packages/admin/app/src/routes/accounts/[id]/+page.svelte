@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { getAdminAccountDetail } from '@www-template/admin-domain';
+	import { useAdminAccountDetail } from '@www-template/admin-domain';
+	import type { AdminAccountDomainError } from '@www-template/admin-domain';
 	import { Badge, Button, CardNS, ConfirmDialog, Input, Label, Separator } from '@www-template/ui/components';
 
 	import { page } from '$app/state';
@@ -27,10 +28,17 @@
 		data?: Partial<AccountDetailData>;
 		form?: { messageKey?: string };
 	}>();
-	let account = $state<AccountDetail | null>(null);
-	let detailMessage = $state<string | null>(null);
+	const accountDetail = useAdminAccountDetail({ readAccountId: () => page.params.id ?? '' });
+	const loadedAccount = $derived<AccountDetail | null>(accountDetail.data.state.account === null ? null : {
+		id: accountDetail.data.state.account.id,
+		email: accountDetail.data.state.account.email,
+		status: accountDetail.data.state.account.status,
+		passkeyCount: accountDetail.data.state.account.passkeyCount,
+		createdAt: accountDetail.data.state.account.createdAt,
+	});
+	const detailMessage = $derived(accountDetail.data.state.detailError === null ? null : accountErrorMessage(accountDetail.data.state.detailError));
 	const pageData = $derived<AccountDetailData>({
-		account: account ?? data?.account ?? {
+		account: loadedAccount ?? data?.account ?? {
 			id: page.params.id ?? 'unknown',
 			email: 'unknown@example.com',
 			status: 'active',
@@ -55,30 +63,6 @@
 		add: i18n.t('passkeyList.add'),
 	});
 
-	$effect(() => {
-		// detail route では server load を使わず、route param を domain function へ渡して Admin API detail を取得する。
-		void loadAccountDetail(page.params.id ?? '');
-	});
-
-	async function loadAccountDetail(accountId: string): Promise<void> {
-		// accountId が変わるたびに前回 error を消し、現在 route の結果だけを表示する。
-		detailMessage = null;
-		const result = await getAdminAccountDetail(accountId);
-		if (!result.success) {
-			detailMessage = accountErrorMessage(result.error);
-			return;
-		}
-
-		// Admin API read model を detail 表示用 state に反映し、passkey 数も metadata として表示する。
-		account = {
-			id: result.data.id,
-			email: result.data.email,
-			status: result.data.status,
-			passkeyCount: result.data.passkeyCount,
-			createdAt: result.data.createdAt,
-		};
-	}
-
 	function submitSuspend(): void {
 		// 停止 mutation は後続の Admin domain/API layer で Authorization と CSRF を付与して実装する。
 		lifecycleMessage = i18n.t('accountDetail.suspendDescription');
@@ -89,7 +73,7 @@
 		lifecycleMessage = i18n.t('accountDetail.restoreDescription');
 	}
 
-	function accountErrorMessage(error: string): string {
+	function accountErrorMessage(error: AdminAccountDomainError): string {
 		// domain error 分類だけを i18n 表示へ変換し、auth/session の詳細理由は隠す。
 		if (error === 'unauthenticated') return i18n.t('accounts.errorUnauthenticated');
 		if (error === 'forbidden') return i18n.t('accounts.errorForbidden');

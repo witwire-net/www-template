@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { startRegistration } from '@simplewebauthn/browser';
-	import { finishInitialAdminSetup, startInitialAdminSetup } from '@www-template/admin-domain';
+	import { useAdminInitialSetup } from '@www-template/admin-domain';
 	import type { AdminInitialSetupStartResult } from '@www-template/admin-domain';
 
 	import { Button, CardNS, Input, Label, Spinner } from '@www-template/ui/components';
@@ -11,64 +11,24 @@
 	type SetupAvailability = 'available' | 'operator-exists' | 'bootstrap-disabled';
 	type InitialSetupStartedResult = Extract<AdminInitialSetupStartResult, { status: 'started' }>;
 
-	let email = $state('');
-	let displayName = $state('');
-	let bootstrapSecret = $state('');
-	let isSubmitting = $state(false);
-	let message = $state<string | null>(null);
 	const { data } = $props<{
 		data?: { setupAvailability?: SetupAvailability };
 	}>();
 	const i18n = $derived(createCurrentAdminI18n());
-	let setupAvailability = $state<SetupAvailability>('available');
-	const showSetupForm = $derived(setupAvailability === 'available');
+	const initialSetup = useAdminInitialSetup({ readInitialAvailability: () => data?.setupAvailability });
+	const showSetupForm = $derived(initialSetup.data.state.setupAvailability === 'available');
 	const unavailableMessage = $derived(
-		setupAvailability === 'operator-exists'
+		initialSetup.data.state.setupAvailability === 'operator-exists'
 			? i18n.t('setup.operatorExists')
 			: i18n.t('setup.unavailable')
 	);
 
-	$effect.pre(() => {
-		// test fixture や将来の runtime state が availability を渡す場合だけ、form 表示可否へ反映する。
-		if (data?.setupAvailability !== undefined) setupAvailability = data.setupAvailability;
-	});
-
 	async function handleInitialSetup(): Promise<void> {
-		// 初回管理者作成は二重送信を防ぎ、transaction 側の競合検知に過度に頼らない。
-		if (isSubmitting) return;
-		isSubmitting = true;
-		message = null;
-
-		try {
-			// bootstrap secret 検証と challenge 発行は Admin domain 経由で Go Admin API へ委譲する。
-			const startPayload = await startInitialAdminSetup({ email, displayName, bootstrapSecret });
-			if (startPayload.status !== 'started') {
-				// operator 既存や bootstrap gate 無効を form 非表示 state へ反映し、secret 入力欄を残さない。
-				if (startPayload.status === 'operator-exists') setupAvailability = 'operator-exists';
-				if (startPayload.status === 'bootstrap-disabled') setupAvailability = 'bootstrap-disabled';
-				throw new Error('initial-setup-start-failed');
-			}
-
-			// browser WebAuthn API で最初の admin passkey を作成し、秘密鍵 material を JS へ露出しない。
-			const attestation = await startRegistration({
-				optionsJSON: toRegistrationOptions(startPayload.options),
-			});
-
-			// finish は Admin backend に operator/passkey/session 作成を委譲し、accessToken だけを memory state に残す。
-			const session = await finishInitialAdminSetup(
-				{ email, displayName, bootstrapSecret },
-				startPayload.requestId,
-				attestation
-			);
-			if (session === null) throw new Error('initial-setup-finish-failed');
-			void goto('/');
-		} catch {
-			// bootstrap secret や operator 件数の詳細を出さず、初回 setup の状態推測を防ぐ。
-			message = i18n.t('setup.error');
-		} finally {
-			// 成功・失敗にかかわらず loading を戻し、画面操作を復帰させる。
-			isSubmitting = false;
-		}
+		// WebAuthn 登録と navigation だけを app 層 callback として渡し、初回 setup I/O は domain action に委譲する。
+		await initialSetup.actions.submit(
+			(options) => startRegistration({ optionsJSON: toRegistrationOptions(options) }),
+			() => { void goto('/'); }
+		);
 	}
 
 	function toRegistrationOptions(
@@ -120,23 +80,23 @@
 				<CardNS.CardContent class="space-y-4">
 					<div class="space-y-2">
 						<Label for="setup-email">{i18n.t('setup.email')}</Label>
-						<Input id="setup-email" type="email" autocomplete="email" bind:value={email} disabled={isSubmitting} placeholder="admin@example.com" />
+						<Input id="setup-email" type="email" autocomplete="email" bind:value={initialSetup.data.state.email} disabled={initialSetup.data.state.isSubmitting} placeholder="admin@example.com" />
 					</div>
 					<div class="space-y-2">
 						<Label for="setup-display-name">{i18n.t('setup.displayName')}</Label>
-						<Input id="setup-display-name" autocomplete="name" bind:value={displayName} disabled={isSubmitting} />
+						<Input id="setup-display-name" autocomplete="name" bind:value={initialSetup.data.state.displayName} disabled={initialSetup.data.state.isSubmitting} />
 					</div>
 					<div class="space-y-2">
 						<Label for="setup-secret">{i18n.t('setup.secret')}</Label>
-						<Input id="setup-secret" type="password" autocomplete="one-time-code" bind:value={bootstrapSecret} disabled={isSubmitting} />
+						<Input id="setup-secret" type="password" autocomplete="one-time-code" bind:value={initialSetup.data.state.bootstrapSecret} disabled={initialSetup.data.state.isSubmitting} />
 					</div>
-					{#if message !== null}
-						<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{message}</p>
+					{#if initialSetup.data.state.messageKey !== null}
+						<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{i18n.t(initialSetup.data.state.messageKey)}</p>
 					{/if}
 				</CardNS.CardContent>
 				<CardNS.CardFooter>
-					<Button class="w-full" size="lg" disabled={isSubmitting || email.trim() === '' || displayName.trim() === '' || bootstrapSecret.trim() === ''} onclick={handleInitialSetup}>
-						{#if isSubmitting}
+					<Button class="w-full" size="lg" disabled={initialSetup.data.state.isSubmitting || initialSetup.data.state.email.trim() === '' || initialSetup.data.state.displayName.trim() === '' || initialSetup.data.state.bootstrapSecret.trim() === ''} onclick={handleInitialSetup}>
+						{#if initialSetup.data.state.isSubmitting}
 							<Spinner aria-hidden="true" />
 							{i18n.t('setup.submitting')}
 						{:else}

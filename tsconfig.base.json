@@ -28,7 +28,7 @@
       "@www-template/ui": ["packages/frontend/ui/src/index.ts"],
       "@www-template/i18n": ["packages/frontend/i18n/src/index.ts"],
       "@www-template/i18n/*": ["packages/frontend/i18n/src/*"],
-      "@www-template/admin/*": ["packages/admin/app/src/*"],
+      "@www-template/admin-app/*": ["packages/admin/app/src/*"],
       "@www-template/admin-domain": ["packages/admin/domain/src/index.ts"],
       "@www-template/admin-domain/*": ["packages/admin/domain/src/*"],
       "@www-template/admin-api": ["packages/admin/api/src/index.ts"],

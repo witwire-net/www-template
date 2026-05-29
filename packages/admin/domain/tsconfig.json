@@ -5,7 +5,7 @@
     "outDir": "./dist",
     "baseUrl": "./src",
     "paths": {},
-    "types": ["vitest/globals"]
+    "types": ["svelte", "vitest/globals"]
   },
   "include": ["src/**/*", "vitest.config.ts"]
 }

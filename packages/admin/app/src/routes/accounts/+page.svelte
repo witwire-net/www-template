@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createCustomerAccount, searchAdminAccounts } from '@www-template/admin-domain';
+	import { useAdminAccounts } from '@www-template/admin-domain';
+	import type { AdminAccountDomainError } from '@www-template/admin-domain';
 	import { Button, CardNS, EmptyState, Field, Input, Label, Select, Separator, Spinner } from '@www-template/ui/components';
 
 	import { goto } from '$app/navigation';
@@ -11,26 +12,15 @@
 
 	const i18n = $derived(createCurrentAdminI18n());
 
-	let query = $state('');
-	let status = $state('');
-	let cursor = $state<string | null>(null);
-	let nextCursor = $state<string | null>(null);
-	let currentPage = $state(1);
-	let accounts = $state<{ id: string; email: string; status: string; createdAt: string; passkeyCount: number }[]>([]);
-	let isLoading = $state(false);
-	let isCreating = $state(false);
-	let listMessage = $state<string | null>(null);
-	let createMessage = $state<string | null>(null);
-	let createEmail = $state('');
-	let createLocale = $state<'ja' | 'en'>('ja');
-
-	$effect(() => {
-		// URL search を唯一の検索状態 source とし、server load/action なしでも再読み込み時に条件を復元する。
-		void loadAccountsFromUrl(page.url.searchParams);
+	const adminAccounts = useAdminAccounts({
+		readSearchParams: () => page.url.searchParams,
+		navigateTo: (url) => { void goto(url); },
 	});
-	const statusLabel = $derived(status === '' ? i18n.t('accounts.allStatuses') : accountStatusLabel(status));
-	const tableAccounts = $derived(accounts.map((account) => ({ id: account.id, email: account.email, status: account.status, status_label: accountStatusLabel(account.status), created_at: i18n.formatDateTime(account.createdAt) })));
-	const totalPages = $derived(nextCursor === null ? currentPage : currentPage + 1);
+	const statusLabel = $derived(adminAccounts.data.state.status === '' ? i18n.t('accounts.allStatuses') : accountStatusLabel(adminAccounts.data.state.status));
+	const tableAccounts = $derived(adminAccounts.data.state.accounts.map((account) => ({ id: account.id, email: account.email, status: account.status, status_label: accountStatusLabel(account.status), created_at: i18n.formatDateTime(account.createdAt) })));
+	const totalPages = $derived(adminAccounts.data.state.nextCursor === null ? adminAccounts.data.state.currentPage : adminAccounts.data.state.currentPage + 1);
+	const listMessage = $derived(adminAccounts.data.state.listError === null ? null : accountErrorMessage(adminAccounts.data.state.listError));
+	const createMessage = $derived(adminAccounts.data.state.createError === null ? null : accountErrorMessage(adminAccounts.data.state.createError));
 	const tableLabels = $derived({
 		caption: i18n.t('accounts.tableCaption'),
 		email: i18n.t('accounts.email'),
@@ -53,86 +43,27 @@
 		submitting: i18n.t('accounts.createSubmitting'),
 	});
 
-	async function loadAccountsFromUrl(params: URLSearchParams): Promise<void> {
-		// SvelteKit server load を使わず、domain function 経由で Admin API の account list を取得する。
-		query = params.get('query') ?? '';
-		status = params.get('status') ?? '';
-		cursor = params.get('cursor');
-		currentPage = Number(params.get('page') ?? '1');
-		isLoading = true;
-		listMessage = null;
-
-		try {
-			// backend contract は email/cursor/limit を受けるため、status filter は backend 対応まで UI 側表示条件として残す。
-			const result = await searchAdminAccounts({ email: query, cursor: cursor ?? undefined, limit: 20 });
-			if (!result.success) {
-				accounts = [];
-				listMessage = accountErrorMessage(result.error);
-				return;
-			}
-
-			// status filter が URL にある場合だけ表示を絞り、Account lifecycle の source of truth は backend response に保つ。
-			accounts = status === '' ? result.data.accounts : result.data.accounts.filter((account) => account.status === status);
-			nextCursor = result.data.nextCursor;
-		} finally {
-			// 成功・失敗に関わらず loading を解除し、再検索できる状態へ戻す。
-			isLoading = false;
-		}
-	}
-
-	function buildUrl(pageNumber: number, nextPageCursor: string | null = null): string {
-		// 画面状態を URL に正規化し、再読み込みや共有でも同じ検索条件を復元できるようにする。
-		const params: string[] = [];
-		if (query !== '') params.push(`query=${encodeURIComponent(query)}`);
-		if (status !== '') params.push(`status=${encodeURIComponent(status)}`);
-		if (nextPageCursor !== null) params.push(`cursor=${encodeURIComponent(nextPageCursor)}`);
-		params.push(`page=${encodeURIComponent(String(pageNumber))}`);
-		return `/accounts?${params.join('&')}`;
-	}
-
 	function applyFilters(): void {
-		void goto(buildUrl(1));
+		// 検索条件の URL 正規化と移動は domain action に委譲する。
+		adminAccounts.actions.applyFilters();
 	}
 
 	function changePage(pageNumber: number): void {
-		// cursor pagination なので、次ページは backend が返した opaque cursor がある場合だけ進める。
-		if (pageNumber > currentPage && nextCursor !== null) {
-			void goto(buildUrl(pageNumber, nextCursor));
-			return;
-		}
-
-		// 前ページは cursor history を保持しないため、先頭ページへ戻して過去 cursor の誤用を避ける。
-		void goto(buildUrl(1));
+		// cursor pagination の URL 更新は domain action に委譲する。
+		adminAccounts.actions.changePage(pageNumber);
 	}
 
 	async function submitCreateAccount(): Promise<void> {
-		// Account 作成は page から domain function へ委譲し、app 層から Admin API wrapper を直接 import しない。
-		if (isCreating) return;
-		isCreating = true;
-		createMessage = null;
-
-		try {
-			const result = await createCustomerAccount({ email: createEmail, locale: createLocale });
-			if (!result.success) {
-				createMessage = accountErrorMessage(result.error);
-				return;
-			}
-
-			// 作成成功後は作成済み account の詳細へ遷移し、duplicate retry 時以外は入力を残さない。
-			createEmail = '';
-			createMessage = i18n.t('accounts.createdSuccess');
-			void goto(`/accounts/${result.data.id}`);
-		} finally {
-			// backend validation / network failure のどちらでも form を再操作可能にする。
-			isCreating = false;
-		}
+		// Account 作成 I/O と成功遷移は domain action に委譲する。
+		await adminAccounts.actions.submitCreateAccount();
 	}
 
 	function openAccount(id: string): void {
-		void goto(`/accounts/${id}`);
+		// 一覧行選択の遷移先構築は domain action に委譲する。
+		adminAccounts.actions.openAccount(id);
 	}
 
-	function accountErrorMessage(error: string): string {
+	function accountErrorMessage(error: AdminAccountDomainError): string {
 		// domain error 分類だけを i18n 文言へ変換し、backend の内部 reason は表示しない。
 		if (error === 'unauthenticated') return i18n.t('accounts.errorUnauthenticated');
 		if (error === 'forbidden') return i18n.t('accounts.errorForbidden');
@@ -161,22 +92,22 @@
 		<p class="text-muted-foreground">{i18n.t('accounts.description')}</p>
 	</section>
 
-	<AccountCreateForm bind:email={createEmail} bind:locale={createLocale} message={createMessage} isSubmitting={isCreating} labels={createLabels} onSubmit={() => { void submitCreateAccount(); }} />
+	<AccountCreateForm bind:email={adminAccounts.data.state.createEmail} bind:locale={adminAccounts.data.state.createLocale} message={createMessage} isSubmitting={adminAccounts.data.state.isCreating} labels={createLabels} onSubmit={() => { void submitCreateAccount(); }} />
 
 	<CardNS.Card>
 		<CardNS.CardHeader>
 			<CardNS.CardTitle>{i18n.t('accounts.filtersTitle')}</CardNS.CardTitle>
-			<CardNS.CardDescription>{i18n.t('accounts.found', { total: accounts.length })}</CardNS.CardDescription>
+			<CardNS.CardDescription>{i18n.t('accounts.found', { total: adminAccounts.data.state.accounts.length })}</CardNS.CardDescription>
 		</CardNS.CardHeader>
 		<CardNS.CardContent class="space-y-4">
 			<Field.FieldGroup class="grid gap-4 md:grid-cols-3">
 				<Field.Field>
 					<Label for="account-query">{i18n.t('accounts.email')}</Label>
-					<Input id="account-query" placeholder="customer@example.com" bind:value={query} />
+					<Input id="account-query" placeholder="customer@example.com" bind:value={adminAccounts.data.state.query} />
 				</Field.Field>
 				<Field.Field>
 					<Label for="account-status">{i18n.t('accounts.status')}</Label>
-					<Select.Select type="single" value={status} onValueChange={(next: string) => { status = next; }}>
+					<Select.Select type="single" value={adminAccounts.data.state.status} onValueChange={(next: string) => { adminAccounts.data.state.status = next; }}>
 						<Select.SelectTrigger id="account-status"><Select.SelectValue>{statusLabel}</Select.SelectValue></Select.SelectTrigger>
 						<Select.SelectContent>
 							<Select.SelectItem value="">{i18n.t('accounts.allStatuses')}</Select.SelectItem>
@@ -190,14 +121,14 @@
 				</Field.Field>
 			</Field.FieldGroup>
 			<Separator />
-			{#if isLoading}
+			{#if adminAccounts.data.state.isLoading}
 				<div class="flex items-center gap-2 text-sm text-muted-foreground"><Spinner aria-hidden="true" />{i18n.t('accounts.createSubmitting')}</div>
 			{:else if listMessage !== null}
 				<p class="rounded-2xl border border-destructive px-4 py-3 text-sm text-destructive" role="alert">{listMessage}</p>
 			{:else if tableAccounts.length === 0}
 				<EmptyState title={i18n.t('accounts.emptyTitle')} description={i18n.t('accounts.emptyDescription')} />
 			{:else}
-				<AccountTable accounts={tableAccounts} labels={tableLabels} page={currentPage} {totalPages} onSelect={openAccount} onPageChange={changePage} />
+				<AccountTable accounts={tableAccounts} labels={tableLabels} page={adminAccounts.data.state.currentPage} {totalPages} onSelect={openAccount} onPageChange={changePage} />
 			{/if}
 		</CardNS.CardContent>
 	</CardNS.Card>
