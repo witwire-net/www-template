@@ -403,7 +403,7 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 ### Requirement: パスキー認証は bearer 互換 application session を発行・失効する
 
-パスキー認証は、`Authorization: Bearer <access token>` で `/api/v1/*` を利用できる application session を SHALL 発行し、logout で MUST revoke しなければならない。Product DB の `accounts.status='suspended'` の account に対しては、新規 token pair 発行、refresh rotation、既存 bearer access token 認可を MUST 拒否する。拒否時は HTTP 403 と `AuthFailureResponse` body `{ requestId, error: "account-suspended" }` を MUST 返し、response は `Cache-Control: no-store` を SHALL 含む。`account-suspended` は `AuthFailureClassification` に追加し、`AuthOperationErrorResponse` では返してはならない（MUST NOT）。`POST /api/v1/auth/passkey/finish`、`POST /api/v1/auth/refresh`、bearer-protected `/api/v1/*` endpoint は suspended 判定用の 403 `AuthFailureResponse` を contract に含めなければならない（MUST）。Admin suspend が成功した場合、system は Product DB の `accounts.session_revoked_after` に suspend 時刻を SHALL 永続化し、`session_revoked_after` 以前に発行された access token / refresh token を MUST 拒否する。restore は `session_revoked_after` を消去してはならず（MUST NOT）、account は再ログインでのみ新規 token pair を取得できる。`account-suspended` error は valid passkey assertion 後、refresh token 検証後、または既存 bearer access token 認可時のみ返し、public passkey start では account existence を漏らしてはならない（MUST NOT）。
+パスキー認証は、`Authorization: Bearer <access token>` で `/api/v1/*` を利用できる application session を SHALL 発行し、logout で MUST revoke しなければならない。DB の `accounts.status='suspended'` の account に対しては、新規 token pair 発行、refresh rotation、既存 bearer access token 認可を MUST 拒否する。拒否時は HTTP 403 と `AuthFailureResponse` body `{ requestId, error: "account-suspended" }` を MUST 返し、response は `Cache-Control: no-store` を SHALL 含む。`account-suspended` は `AuthFailureClassification` に追加し、`AuthOperationErrorResponse` では返してはならない（MUST NOT）。`POST /api/v1/auth/passkey/finish`、`POST /api/v1/auth/refresh`、bearer-protected `/api/v1/*` endpoint は suspended 判定用の 403 `AuthFailureResponse` を contract に含めなければならない（MUST）。Admin suspend が成功した場合、system は DB の `accounts.session_revoked_after` に suspend 時刻を SHALL 永続化し、`session_revoked_after` 以前に発行された access token / refresh token を MUST 拒否する。restore は `session_revoked_after` を消去してはならず（MUST NOT）、account は再ログインでのみ新規 token pair を取得できる。`account-suspended` error は valid passkey assertion 後、refresh token 検証後、または既存 bearer access token 認可時のみ返し、public passkey start では account existence を漏らしてはならない（MUST NOT）。
 
 **Customer Context**
 
@@ -467,7 +467,7 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 #### Scenario: suspend は account-wide session revocation timestamp を書き込む (AUTH-BE-S056)
 
 - **GIVEN** Admin Console が account suspend を成功させる
-- **WHEN** Product DB の `accounts.session_revoked_after` を確認する
+- **WHEN** DB の `accounts.session_revoked_after` を確認する
 - **THEN** suspend 時刻以上の timestamp が保存され、その timestamp 以前に発行された access token / refresh token は拒否される
 
 #### Scenario: restored account は過去 session では復帰できない (AUTH-BE-S057)

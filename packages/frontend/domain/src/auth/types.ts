@@ -16,8 +16,8 @@ export interface AuthSessionSummary {
   sessionId: string;
   accessToken: string;
   expiresAt: string;
-  /** セッション継続に使用するリフレッシュトークン。 */
-  refreshToken?: string;
+  // refreshToken はブラウザー可読 state に保持しない。
+  // refresh flow は same-origin Cookie ベースで行う。
 }
 
 /** refresh response から取得した AccountSetting snapshot。 */

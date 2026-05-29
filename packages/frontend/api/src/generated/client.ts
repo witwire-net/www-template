@@ -68,7 +68,6 @@ export interface AuthSessionResponse {
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
   accessToken: string;
-  refreshToken: string;
   expiresAt: string;
 }
 
@@ -135,6 +134,17 @@ export interface PasskeyAddFinishRequest {
   credential: WebAuthnAttestationCredential;
 }
 
+/**
+ * 作成する credential が usernameless login で使える discoverable credential であることを要求する。
+ */
+export type PasskeyAddStartResponseResidentKey =
+  (typeof PasskeyAddStartResponseResidentKey)[keyof typeof PasskeyAddStartResponseResidentKey];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PasskeyAddStartResponseResidentKey = {
+  required: 'required',
+} as const;
+
 export type PasskeyAddStartResponseUserVerification =
   (typeof PasskeyAddStartResponseUserVerification)[keyof typeof PasskeyAddStartResponseUserVerification];
 
@@ -160,6 +170,10 @@ export interface PasskeyAddStartResponse {
   /** Timeout in milliseconds suggested by the server. */
   timeout?: number;
   excludeCredentials?: WebAuthnCredentialDescriptor[];
+  /** 作成する credential が usernameless login で使える discoverable credential であることを要求する。 */
+  residentKey: PasskeyAddStartResponseResidentKey;
+  /** residentKey required と同じ要求を boolean でも伝える WebAuthn 標準 field。 */
+  requireResidentKey: boolean;
   userVerification: PasskeyAddStartResponseUserVerification;
   attestation?: string;
 }
@@ -295,20 +309,11 @@ export interface RecoveryRequest {
 }
 
 /**
- * リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。
- */
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
-
-/**
- * リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
+ * Cookie refresh 成功時に返却される新しい accessToken と Product AccountSetting snapshot。refreshToken rotation は HttpOnly Set-Cookie だけで行い、response body には refreshToken 平文を含めない。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
  */
 export interface RefreshTokenResponse {
   /** ローテーション後に発行された短命の JWT アクセストークン。 */
   accessToken: string;
-  /** 次回以降の rotation に使用する新しいリフレッシュトークン。 */
-  refreshToken: string;
   /** refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。 */
   accountSetting?: AccountSettingSnapshot;
 }
@@ -1074,7 +1079,7 @@ export const consumeRecoveryToken = async (
 };
 
 /**
- * @summary Refreshes an access token using a valid refresh token
+ * @summary Refreshes an access token through the HttpOnly refresh cookie
  */
 export type refreshTokenResponse200 = {
   data: RefreshTokenResponse;
@@ -1120,14 +1125,14 @@ export const getRefreshTokenUrl = () => {
 };
 
 export const refreshToken = async (
-  refreshTokenRequest: RefreshTokenRequest,
+  refreshTokenBody?: unknown,
   options?: RequestInit
 ): Promise<refreshTokenResponse> => {
   const res = await fetch(getRefreshTokenUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(refreshTokenRequest),
+    body: JSON.stringify(refreshTokenBody),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();

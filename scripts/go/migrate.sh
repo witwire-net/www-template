@@ -4,8 +4,7 @@ set -euo pipefail
 
 source scripts/go/tool-versions.sh
 
-readonly PRODUCT_MIGRATIONS_DIR='packages/backend/db/migrations'
-readonly ADMIN_MIGRATIONS_DIR='packages/admin/db/migrations'
+readonly DATABASE_MIGRATIONS_DIR='packages/backend/db/migrations'
 
 main() {
   # 関数定義をすべて読み込んだ後で command dispatch し、shell の逐次実行順による未定義呼び出しを防ぐ。
@@ -13,7 +12,7 @@ main() {
   shift || true
 
   if [ -z "$command_name" ]; then
-    printf 'usage: %s <create|up|down> [args...]\n' "$0" >&2
+    printf 'usage: %s <create|up|down|force> [args...]\n' "$0" >&2
     exit 1
   fi
 
@@ -27,6 +26,9 @@ main() {
     down)
       migrate_down "$@"
       ;;
+    force)
+      migrate_force "$@"
+      ;;
     *)
       printf 'unsupported migrate command: %s\n' "$command_name" >&2
       exit 1
@@ -35,81 +37,63 @@ main() {
 }
 
 create_migration() {
-  # Product / Admin で migration directory が異なるため、作成先 target を必ず明示させる。
-  local target="${1:-}"
-  local migration_name="${2:-}"
-  local migration_dir
+  # DB schema は backend migration に集約し、作成先 target を利用者に選ばせない。
+  local migration_name="${1:-}"
 
-  if [ -z "$target" ] || [ -z "$migration_name" ]; then
-    printf 'usage: pnpm migrate:create <product|admin> <migration_name>\n' >&2
+  if [ -z "$migration_name" ]; then
+    printf 'usage: pnpm migrate:create <migration_name>\n' >&2
     exit 1
   fi
 
-  migration_dir="$(migration_dir_for_target "$target")"
-  go run "$MIGRATE_PKG" create -ext sql -dir "$migration_dir" -seq "$migration_name"
+  go run "$MIGRATE_PKG" create -ext sql -dir "$DATABASE_MIGRATIONS_DIR" -seq "$migration_name"
 }
 
 migrate_up() {
-  # Product DB を先に更新し、admin_view/admin_op と最小権限 role を Admin runtime より先に用意する。
-  local product_database_url
-  local admin_database_url
+  # DB schema は単一の backend migration として管理し、Admin 専用 DB migration は存在させない。
+  local database_url
 
-  product_database_url="$(resolve_product_database_url)"
-  run_migrate product "$product_database_url" up "$@"
-  ensure_product_admin_login_role "$product_database_url"
-
-  # Admin DB は Product DB と別 database なので、migration 実行前に database の存在だけを冪等に保証する。
-  admin_database_url="$(resolve_admin_database_url)"
-  ensure_admin_database_exists "$admin_database_url"
-  run_migrate admin "$(migration_database_url "$admin_database_url")" up "$@"
+  database_url="$(resolve_database_url)"
+  run_migrate "$database_url" up "$@"
+  ensure_admin_login_role "$database_url"
 }
 
 migrate_down() {
-  # down は up の逆順で実行し、Admin DB の依存を先に落としてから Product 側の admin_op/admin_view を戻す。
-  local product_database_url
-  local admin_database_url
+  # down は Admin runtime login role の継承を先に外してから、backend migration を戻す。
+  local database_url
 
-  admin_database_url="$(resolve_admin_database_url)"
-  run_migrate admin "$(migration_database_url "$admin_database_url")" down "$@"
-
-  product_database_url="$(resolve_product_database_url)"
-  revoke_product_admin_login_role "$product_database_url"
-  run_migrate product "$product_database_url" down "$@"
+  database_url="$(resolve_database_url)"
+  revoke_admin_login_role "$database_url"
+  run_migrate "$database_url" down "$@"
 }
 
-migration_dir_for_target() {
-  # target 名から migration directory を一意に決め、未知 target で誤った DB 用 SQL を作らない。
-  local target="$1"
+migrate_force() {
+  # 失敗した migration の dirty flag を、確認済みの直前 version へ戻すためだけに使う。
+  local target_version="${1:-}"
+  local database_url
 
-  case "$target" in
-    product)
-      printf '%s\n' "$PRODUCT_MIGRATIONS_DIR"
-      ;;
-    admin)
-      printf '%s\n' "$ADMIN_MIGRATIONS_DIR"
-      ;;
-    *)
-      printf 'unknown migration target: %s (expected product or admin)\n' "$target" >&2
-      exit 1
-      ;;
-  esac
+  if [ -z "$target_version" ]; then
+    printf 'usage: pnpm migrate:force <version>\n' >&2
+    exit 1
+  fi
+
+  database_url="$(resolve_database_url)"
+  run_migrate "$database_url" force "$target_version"
 }
 
 run_migrate() {
-  # golang-migrate に target ごとの directory と接続先を渡し、Product/Admin とも同じ実行器で管理する。
-  local target="$1"
-  local database_url="$2"
-  local direction="$3"
-  shift 3
+  # golang-migrate に backend migration directory と接続先を渡し、DB schema 変更を一箇所で管理する。
+  local database_url="$1"
+  local direction="$2"
+  shift 2
 
-  printf 'Running %s migrations %s\n' "$target" "$direction" >&2
+  printf 'Running database migrations %s\n' "$direction" >&2
   go run -tags 'postgres' "$MIGRATE_PKG" \
-    -path "$(migration_dir_for_target "$target")" \
+    -path "$DATABASE_MIGRATIONS_DIR" \
     -database "$database_url" \
     "$direction" "$@"
 }
 
-resolve_product_database_url() {
+resolve_database_url() {
   # DATABASE_URL が明示されている場合は release/CI の入力を優先し、未指定なら .config/local.toml を読む。
   if [ -n "${DATABASE_URL:-}" ]; then
     printf '%s\n' "$DATABASE_URL"
@@ -120,23 +104,8 @@ resolve_product_database_url() {
 }
 
 resolve_admin_database_url() {
-  # ADMIN_DATABASE_URL が明示されている場合は release/CI の入力を優先し、未指定なら *.admin.toml を読む。
-  if [ -n "${ADMIN_DATABASE_URL:-}" ]; then
-    printf '%s\n' "$ADMIN_DATABASE_URL"
-    return
-  fi
-
-  read_toml_value "$(resolve_admin_config_path)" database admin_url
-}
-
-resolve_admin_product_database_url() {
-  # Admin runtime の Product 接続 role を作るため、Admin TOML の database.product_url を読む。
-  if [ -n "${PRODUCT_DATABASE_URL:-}" ]; then
-    printf '%s\n' "$PRODUCT_DATABASE_URL"
-    return
-  fi
-
-  read_toml_value "$(resolve_admin_config_path)" database product_url
+  # Admin runtime の最小権限 login role を作るため、Admin TOML の database.url を読む。
+  read_toml_value "$(resolve_admin_config_path)" database url
 }
 
 resolve_product_config_path() {
@@ -173,41 +142,23 @@ require_file() {
   fi
 }
 
-ensure_admin_database_exists() {
-  # Admin DB 自体は database 外の操作なので、maintenance DB へ接続して存在しない場合だけ作成する。
-  local admin_database_url="$1"
-  local maintenance_url
-  local database_name
-
-  maintenance_url="${ADMIN_MAINTENANCE_DATABASE_URL:-$(maintenance_database_url "$admin_database_url")}"
-  database_name="$(database_name_from_url "$admin_database_url")"
-
-  psql "$maintenance_url" -X -v ON_ERROR_STOP=1 -v target_db="$database_name" <<'SQL'
-SELECT 'CREATE DATABASE ' || quote_ident(:'target_db')
-WHERE NOT EXISTS (
-  SELECT 1 FROM pg_database WHERE datname = :'target_db'
-)
-\gexec
-SQL
-}
-
-ensure_product_admin_login_role() {
-  # Admin runtime が Product DB の admin_view/admin_op を使えるよう、Admin TOML の product_url にある login role を整える。
-  local product_owner_url="$1"
-  local admin_product_url
+ensure_admin_login_role() {
+  # Admin runtime が最小権限 role で DB に接続できるよう、Admin TOML の database.url にある login role を整える。
+  local owner_url="$1"
+  local admin_database_url
   local role_name
   local role_password
 
-  admin_product_url="$(resolve_admin_product_database_url)"
-  role_name="$(url_component username "$admin_product_url")"
-  role_password="$(url_component password "$admin_product_url")"
+  admin_database_url="$(resolve_admin_database_url)"
+  role_name="$(url_component username "$admin_database_url")"
+  role_password="$(url_component password "$admin_database_url")"
 
   if [ -z "$role_name" ]; then
-    printf 'database.product_url must include a username for the Admin Product login role\n' >&2
+    printf 'database.url in Admin config must include a username for the Admin login role\n' >&2
     exit 1
   fi
 
-  psql "$product_owner_url" -X -v ON_ERROR_STOP=1 -v role_name="$role_name" -v role_password="$role_password" <<'SQL'
+  psql "$owner_url" -X -v ON_ERROR_STOP=1 -v role_name="$role_name" -v role_password="$role_password" <<'SQL'
 SELECT CASE
   WHEN :'role_password' = '' THEN format('CREATE ROLE %I LOGIN', :'role_name')
   ELSE format('CREATE ROLE %I LOGIN PASSWORD %L', :'role_name', :'role_password')
@@ -221,20 +172,20 @@ GRANT admin_console_write TO :"role_name";
 SQL
 }
 
-revoke_product_admin_login_role() {
-  # Product 側の admin role down migration が role drop で詰まらないよう、環境別 login role の継承だけ先に外す。
-  local product_owner_url="$1"
-  local admin_product_url
+revoke_admin_login_role() {
+  # admin role down migration が role drop で詰まらないよう、環境別 login role の継承だけ先に外す。
+  local owner_url="$1"
+  local admin_database_url
   local role_name
 
-  admin_product_url="$(resolve_admin_product_database_url)"
-  role_name="$(url_component username "$admin_product_url")"
+  admin_database_url="$(resolve_admin_database_url)"
+  role_name="$(url_component username "$admin_database_url")"
 
   if [ -z "$role_name" ]; then
     return
   fi
 
-  psql "$product_owner_url" -X -v ON_ERROR_STOP=1 -v role_name="$role_name" <<'SQL'
+  psql "$owner_url" -X -v ON_ERROR_STOP=1 -v role_name="$role_name" <<'SQL'
 SELECT format('REVOKE admin_console_write FROM %I', :'role_name')
 WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'admin_console_write')
   AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role_name')

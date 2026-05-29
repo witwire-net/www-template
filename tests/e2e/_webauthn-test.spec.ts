@@ -10,7 +10,7 @@ test.describe('webauthn js mock', () => {
 
   test('navigator.credentials.get returns a mock PublicKeyCredential', async ({ page }) => {
     await mockWebAuthn(page);
-    await page.goto('http://localhost:5174/login');
+    await page.goto('http://app.localhost:5174/login');
     await page.evaluate(async () => {
       try {
         const c = await navigator.credentials.get({

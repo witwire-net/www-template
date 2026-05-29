@@ -6,5 +6,5 @@ output-dir: '{project-root}/tsp-output'
 options:
   '@typespec/openapi3':
     emitter-output-dir: '{project-root}/openapi'
-    output-file: 'openapi.json'
+    output-file: '{service-name-if-multiple}.openapi.json'
     file-type: 'json'

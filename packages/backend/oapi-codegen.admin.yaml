@@ -1,0 +1,15 @@
+# Admin surface の Go bindings を Product surface とは別 package として生成する。
+package: adminopenapi
+
+# Admin 生成物は adminopenapi ディレクトリに隔離し、Product の openapi package へ Admin operation を混入させない。
+output: internal/generated/adminopenapi/openapi.gen.go
+
+# Admin runtime が型、Gin server glue、strict server interface を同じ生成物から利用できるようにする。
+generate:
+  models: true
+  gin-server: true
+  strict-server: true
+
+# 未接続 operation も surface contamination 検査や段階的実装で参照できるよう、OpenAPI 上の定義を pruning せず残す。
+output-options:
+  skip-prune: true

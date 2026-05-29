@@ -42,8 +42,16 @@ type DatabaseConfig struct {
 	URL string
 }
 
+// OpenSearchConfig は Product/Admin が共有する OpenSearch 接続先と namespace 境界を保持する。
+//
+// 役割:
+//   - URL は cluster への接続先として health check と Admin audit projection で利用する。
+//   - AdminAuditIndexPrefix は Admin audit event だけを書き込む月次 index の prefix である。
+//   - ProductIndexPrefix は Product domain document 用 index の prefix であり、Admin audit prefix との衝突検査に使う。
 type OpenSearchConfig struct {
-	URL string
+	URL                   string
+	AdminAuditIndexPrefix string
+	ProductIndexPrefix    string
 }
 
 type ObjectStorageConfig struct {
@@ -91,6 +99,7 @@ type AuthConfig struct {
 
 type Config struct {
 	AllowedOrigins     []string
+	Admin              AdminRuntimeConfig
 	AppBearerToken     string
 	Auth               AuthConfig
 	Environment        string

@@ -8,6 +8,7 @@ import (
 
 	"www-template/packages/backend/internal/adapter/mailer"
 	"www-template/packages/backend/internal/adapter/postgres"
+	productpostgres "www-template/packages/backend/internal/adapter/postgres/product"
 	"www-template/packages/backend/internal/adapter/valkey"
 	"www-template/packages/backend/internal/adapter/webauthn"
 	application "www-template/packages/backend/internal/application"
@@ -191,7 +192,7 @@ func newGormAccountAuthRepository(ctx context.Context, databaseURL string) (appl
 		return nil, nil, nil, err
 	}
 
-	return postgres.NewGormAccountAuthRepository(db), postgres.NewGormAccountSettingRepository(db), func(context.Context) error {
+	return productpostgres.NewGormAccountAuthRepository(db), productpostgres.NewGormAccountSettingRepository(db), func(context.Context) error {
 		return sqlDB.Close()
 	}, nil
 }

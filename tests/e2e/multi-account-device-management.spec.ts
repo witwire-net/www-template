@@ -53,7 +53,7 @@ const mockPasskeyLogin = async (
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
       challenge: 'dGVzdC1jaGFsbGVuZ2U',
-      rpId: 'localhost',
+      rpId: 'app.localhost',
       userVerification: 'required',
     });
   });
@@ -83,9 +83,9 @@ const loginSecondAccountViaPasskeyUi = async (
 ) => {
   await mockPasskeyLogin(page, accountId, sessionId, token);
   await page.getByRole('link', { name: '別アカウントを追加' }).click();
-  await expect(page).toHaveURL(/localhost:5174\/login$/);
+  await expect(page).toHaveURL(/app.localhost:5174\/login$/);
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
-  await expect(page).toHaveURL(/localhost:5174\/?$/);
+  await expect(page).toHaveURL(/app.localhost:5174\/?$/);
 };
 
 /** UI からパスキーログインを実行する。 */
@@ -97,9 +97,9 @@ const loginViaPasskeyUi = async (
 ) => {
   await mockWebAuthn(page);
   await mockPasskeyLogin(page, accountId, sessionId, token);
-  await page.goto('http://localhost:5174/login');
+  await page.goto('http://app.localhost:5174/login');
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
-  await expect(page).toHaveURL(/localhost:5174\/?$/);
+  await expect(page).toHaveURL(/app.localhost:5174\/?$/);
 };
 
 const accountIdB = '01ARZ3NDEKTSV4RRFFQ69G5FAZ';
@@ -175,7 +175,7 @@ test.describe('multi-account and device management', () => {
 
     // デバイス管理ページへ遷移（アクティブは B、Device-B が表示される）
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/sessions$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
     await expect(page.getByText('Device-B')).toBeVisible();
     await expect(page.getByText('Device-A')).not.toBeVisible();
 
@@ -242,7 +242,7 @@ test.describe('multi-account and device management', () => {
     await page.getByRole('link', { name: 'ログアウト' }).click();
 
     // 残りセッションがあるため `/` へ遷移し、ログイン画面には戻らない
-    await expect(page).toHaveURL(/localhost:5174\/?$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/?$/);
 
     // logout API が B のトークンで呼ばれたことを検証
     const logoutRequest = await logoutRequestPromise;
@@ -250,7 +250,7 @@ test.describe('multi-account and device management', () => {
 
     // A のセッションが有効なままであることを確認（デバイス管理ページへ遷移して検証）
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/sessions$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
     await expect(page.getByText('Chrome on macOS')).toBeVisible();
   });
 
@@ -305,10 +305,10 @@ test.describe('multi-account and device management', () => {
 
     // client-side ナビゲーションでデバイス管理ページへ遷移
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/sessions$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
 
     // session-expired へ遷移しないことを確認
-    await expect(page).not.toHaveURL(/localhost:5174\/session-expired$/);
+    await expect(page).not.toHaveURL(/app.localhost:5174\/session-expired$/);
     // デバイス一覧が表示されることを確認
     await expect(page.getByText('Chrome on macOS')).toBeVisible();
   });
@@ -340,7 +340,7 @@ test.describe('multi-account and device management', () => {
 
     // client-side ナビゲーションでデバイス管理ページへ遷移
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/session-expired$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/session-expired$/);
   });
 
   /**
@@ -384,7 +384,7 @@ test.describe('multi-account and device management', () => {
 
     // client-side ナビゲーションでデバイス管理ページへ遷移
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/sessions$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
 
     // デバイス名が表示される
     await expect(page.getByText('Chrome on macOS')).toBeVisible();
@@ -448,7 +448,7 @@ test.describe('multi-account and device management', () => {
 
     // client-side ナビゲーションでデバイス管理ページへ遷移
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/sessions$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
     await expect(page.getByText('Safari on iOS')).toBeVisible();
 
     // Safari on iOS のログアウトボタンをクリック
@@ -514,7 +514,7 @@ test.describe('multi-account and device management', () => {
 
     // client-side ナビゲーションでデバイス管理ページへ遷移
     await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/localhost:5174\/sessions$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
     await expect(page.getByText('Safari on iOS')).toBeVisible();
 
     // 「他のすべてのデバイスをログアウト」ボタンをクリック

@@ -230,6 +230,8 @@ describe('createWebAuthnAttestation', () => {
       { type: 'public-key', alg: -257 },
     ],
     timeout: 60000,
+    residentKey: 'required',
+    requireResidentKey: true,
     userVerification: 'required',
     attestation: 'none',
   };
@@ -319,6 +321,15 @@ describe('createWebAuthnAttestation', () => {
   it('attestation をサーバー値から渡す', async () => {
     await createWebAuthnAttestation(serverOptions);
     expect(capturedCreateOptions?.publicKey?.attestation).toBe('none');
+  });
+
+  it('discoverable credential 要求を authenticatorSelection に渡す', async () => {
+    await createWebAuthnAttestation(serverOptions);
+    expect(capturedCreateOptions?.publicKey?.authenticatorSelection).toMatchObject({
+      residentKey: 'required',
+      requireResidentKey: true,
+      userVerification: 'required',
+    });
   });
 
   it('navigator.credentials.create が null を返す場合 TypeError を投げる', async () => {

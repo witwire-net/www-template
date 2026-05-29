@@ -29,8 +29,32 @@ import type {
 
 import type { DeviceSession } from './session_api';
 
+import type { AccessTokenClaims } from './token_state';
+
 const SESSION_EXPIRED_ERROR = 'session-expired';
 const ACCOUNT_SUSPENDED_ERROR = 'account-suspended';
+
+/**
+ * Product frontend auth が Cookie を送信する際の共通 request init。
+ *
+ * same-origin の Product API だけに Cookie を添付し、cross-origin へ refresh Cookie が送られる
+ * 余地を作らない。logout も同じ Cookie 境界で revoke を依頼する。
+ */
+const COOKIE_AUTH_REQUEST_INIT = { credentials: 'same-origin' } as const satisfies RequestInit;
+
+/**
+ * refresh 応答の accessToken が、更新対象 session と同一 account/session を指すか検証する。
+ *
+ * Cookie refresh は JavaScript から refreshToken を読めないため、サーバー応答の bearer token が
+ * 期待した対象 session に属することを frontend domain でも確認し、不一致時は fail-close する。
+ *
+ * @param claims - refresh 応答 accessToken から decode した claim
+ * @param session - 更新対象の in-memory session
+ * @returns accountId と sessionId が一致する場合だけ `true`
+ */
+function isAccessTokenForSession(claims: AccessTokenClaims, session: AuthSessionSummary): boolean {
+  return claims.accountId === session.accountId && claims.sessionId === session.sessionId;
+}
 
 interface AuthSessionData {
   state: AuthSessionState;
@@ -82,11 +106,7 @@ async function ensureFreshAuthorizationHeaders(
     const sessionId = active.sessionId;
     let inflight = refreshInFlight.get(sessionId);
     if (inflight == null) {
-      inflight = executeRefreshActiveSession(
-        authState,
-        sessionId,
-        active.refreshToken ?? ''
-      ).finally(() => {
+      inflight = executeRefreshActiveSession(authState, sessionId).finally(() => {
         refreshInFlight.delete(sessionId);
       });
       refreshInFlight.set(sessionId, inflight);
@@ -106,7 +126,7 @@ async function ensureFreshAuthorizationHeaders(
  */
 async function attemptRefreshForLogout(authState: AuthSessionState): Promise<void> {
   const active = authState.session;
-  if (active?.refreshToken == null) {
+  if (active == null) {
     return;
   }
 
@@ -116,19 +136,20 @@ async function attemptRefreshForLogout(authState: AuthSessionState): Promise<voi
   }
 
   try {
-    const response = await refreshToken({ refreshToken: active.refreshToken });
+    // Cookie-only refresh は request body を持たないため、生成 SDK の body 引数には
+    // `undefined` を渡し、HttpOnly Cookie だけを same-origin 境界で送信する。
+    const response = await refreshToken(undefined, COOKIE_AUTH_REQUEST_INIT);
 
     if (response.status === 200 && 'accessToken' in response.data) {
-      const { accessToken, refreshToken: newRefreshToken } = response.data;
+      const { accessToken } = response.data;
       const newClaims = decodeAccessToken(accessToken);
-      if (newClaims == null) {
+      if (newClaims == null || !isAccessTokenForSession(newClaims, active)) {
         return;
       }
 
       const updatedSession: AuthSessionSummary = {
         ...active,
         accessToken,
-        refreshToken: newRefreshToken,
         expiresAt: expToIsoString(newClaims.exp),
       };
 
@@ -164,7 +185,7 @@ async function executeLogoutCurrentSession(
       return removeActiveSession(authState);
     }
 
-    const response = await authApi.logout({ headers });
+    const response = await authApi.logout({ ...COOKIE_AUTH_REQUEST_INIT, headers });
 
     if (response.status === 200) {
       return removeActiveSession(authState);
@@ -228,7 +249,7 @@ function handleAccountSuspendedForTarget(
 }
 
 /**
- * 指定されたセッションのリフレッシュトークンを消費し、新しいトークンペアを取得する。
+ * 指定されたセッションを HttpOnly Cookie でリフレッシュし、新しいアクセストークンを取得する。
  * 成功時は対象セッションのみを更新し、現在アクティブなセッションが同じ場合に限り
  * `state.session` を差し替える。
  * いかなる失敗（ネットワーク含む）でも対象セッションは失効扱いとし、
@@ -236,35 +257,34 @@ function handleAccountSuspendedForTarget(
  *
  * @param authState - 認証セッション state
  * @param targetSessionId - リフレッシュ対象のセッション ID
- * @param refreshTokenValue - 消費するリフレッシュトークン
  * @returns 成功時 `null`、失敗時は遷移先 route intent
  */
 async function executeRefreshActiveSession(
   authState: AuthSessionState,
-  targetSessionId: string,
-  refreshTokenValue: string
+  targetSessionId: string
 ): Promise<AuthRouteIntent | null> {
   const targetSession =
     authState.sessions?.find((s) => s.sessionId === targetSessionId) ?? authState.session;
 
-  if (targetSession == null || refreshTokenValue === '') {
+  if (targetSession == null) {
     return handleRefreshFailureForTarget(authState, targetSessionId);
   }
 
   try {
-    const response = await refreshToken({ refreshToken: refreshTokenValue });
+    // Cookie-only refresh は request body を持たないため、生成 SDK の body 引数には
+    // `undefined` を渡し、HttpOnly Cookie だけを same-origin 境界で送信する。
+    const response = await refreshToken(undefined, COOKIE_AUTH_REQUEST_INIT);
 
     if (response.status === 200 && 'accessToken' in response.data) {
-      const { accessToken, refreshToken: newRefreshToken, accountSetting } = response.data;
+      const { accessToken, accountSetting } = response.data;
       const claims = decodeAccessToken(accessToken);
-      if (claims == null) {
+      if (claims == null || !isAccessTokenForSession(claims, targetSession)) {
         return handleRefreshFailureForTarget(authState, targetSessionId);
       }
 
       const updatedSession: AuthSessionSummary = {
         ...targetSession,
         accessToken,
-        refreshToken: newRefreshToken,
         expiresAt: expToIsoString(claims.exp),
       };
 
@@ -396,7 +416,6 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
         sessionId: session.sessionId,
         accessToken: session.accessToken,
         expiresAt: session.expiresAt,
-        refreshToken: session.refreshToken,
       };
 
       if (!hasUlidAuthSessionShape(nextSession)) {
@@ -428,10 +447,10 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
     logoutCurrentSession: () => executeLogoutCurrentSession(state),
     refreshActiveSession: () => {
       const active = state.session;
-      if (active?.refreshToken == null) {
+      if (active == null) {
         return Promise.resolve(applyExpiredSession(state));
       }
-      return executeRefreshActiveSession(state, active.sessionId, active.refreshToken);
+      return executeRefreshActiveSession(state, active.sessionId);
     },
     switchSession: (sessionId) => switchActiveSession(state, sessionId),
     listDevices: () => executeListDevices(state),

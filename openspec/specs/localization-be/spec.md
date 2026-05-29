@@ -59,7 +59,7 @@ TBD - created by archiving change add-default-i18n. Update Purpose after archive
 
 ### Requirement: Product AccountSetting は永続化されメール言語に SHALL 利用される
 
-システムは、各 Account の AccountSetting を Account とともに SHALL 永続化する。Product DB は Account root の `accounts`、Account child の `account_settings`、Account.Auth child の `account_passkey_credentials` を正規 table として SHALL 持つ。AccountSetting は `account_settings` table として Account root の `accounts.id` に紐づかなければならない（MUST）。Account 作成時には `ja` の AccountSetting を同じ Account の child として作らなければならない（MUST）。AccountSetting.locale の永続値は、対応ロケールだけに制約しなければならない（MUST）。Product DB は `passkey_credentials`、`auth_accounts`、`accounts.locale` を持ってはならない（MUST NOT）。account recovery、device-link、recovery completion、device-link completion の各メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を SHALL 選択する。Auth domain/application は AccountSetting や locale 値オブジェクトを所有してはならない（MUST NOT）。Account が存在しないため AccountSetting を読めない場合でも、列挙耐性が必要な認証フローは非開示の応答挙動を維持しなければならない（MUST）。ローカライズ済み文面を選択する過程で、メール配送ログ、trace、error に recovery token や bearer token を含めてはならない（MUST NOT）。
+システムは、各 Account の AccountSetting を Account とともに SHALL 永続化する。DB は Account root の `accounts`、Account child の `account_settings`、Account.Auth child の `account_passkey_credentials` を正規 table として SHALL 持つ。AccountSetting は `account_settings` table として Account root の `accounts.id` に紐づかなければならない（MUST）。Account 作成時には `ja` の AccountSetting を同じ Account の child として作らなければならない（MUST）。AccountSetting.locale の永続値は、対応ロケールだけに制約しなければならない（MUST）。DB は `passkey_credentials`、`auth_accounts`、`accounts.locale` を持ってはならない（MUST NOT）。account recovery、device-link、recovery completion、device-link completion の各メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を SHALL 選択する。Auth domain/application は AccountSetting や locale 値オブジェクトを所有してはならない（MUST NOT）。Account が存在しないため AccountSetting を読めない場合でも、列挙耐性が必要な認証フローは非開示の応答挙動を維持しなければならない（MUST）。ローカライズ済み文面を選択する過程で、メール配送ログ、trace、error に recovery token や bearer token を含めてはならない（MUST NOT）。
 
 **Customer Context**
 
@@ -68,11 +68,11 @@ TBD - created by archiving change add-default-i18n. Update Purpose after archive
 **要求**
 
 - システムは、各 Account の AccountSetting を Account とともに SHALL 永続化する。
-- Product DB は Account root の `accounts`、Account child の `account_settings`、Account.Auth child の `account_passkey_credentials` を正規 table として SHALL 持つ。
+- DB は Account root の `accounts`、Account child の `account_settings`、Account.Auth child の `account_passkey_credentials` を正規 table として SHALL 持つ。
 - AccountSetting は `account_settings` table として Account root の `accounts.id` に紐づかなければならない（MUST）。
 - Account 作成時には `ja` の AccountSetting を同じ Account の child として作らなければならない（MUST）。
 - AccountSetting.locale の永続値は、対応ロケールだけに制約しなければならない（MUST）。
-- Product DB は `passkey_credentials`、`auth_accounts`、`accounts.locale` を持ってはならない（MUST NOT）。
+- DB は `passkey_credentials`、`auth_accounts`、`accounts.locale` を持ってはならない（MUST NOT）。
 - account recovery、device-link、recovery completion、device-link completion の各メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を SHALL 選択する。
 - Auth domain/application は AccountSetting や locale 値オブジェクトを所有してはならない（MUST NOT）。
 - Account が存在しないため AccountSetting を読めない場合でも、列挙耐性が必要な認証フローは非開示の応答挙動を維持しなければならない（MUST）。
@@ -129,11 +129,11 @@ TBD - created by archiving change add-default-i18n. Update Purpose after archive
 
 ### Requirement: Admin operator locale は認証済みオペレーター本人の設定として SHALL 永続化される
 
-システムは、各 Admin operator の locale をオペレーターレコードとともに SHALL 永続化する。対応する operator locale 値は `ja` と `en` でなければならない（MUST）。明示的な locale を持たない operator の locale 永続値は `ja` を既定値にしなければならない（MUST）。Admin operator locale は Product AccountSetting から独立して扱い、Product AccountSetting を読み書きしてはならない（MUST NOT）。認証済み Admin server context は、現在の role と active 状態とともに、Admin DB から operator の現在 locale を SHALL 読み込む。認証済みオペレーターは、Admin Console のプロフィールまたは設定操作を通じて、自分自身の locale だけを SHALL 更新できる。Admin operator locale 更新は、未対応 locale 値を永続値を変更せずに拒否しなければならない（MUST）。role、active state、setup token、passkey を編集する operator 管理操作は、operator locale を暗黙的に変更してはならない（MUST NOT）。DB から未知の operator locale が読み込まれた場合、システムは既定値へ黙って丸めてはならず（MUST NOT）、DB 制約違反または server error として fail-closed に扱わなければならない（MUST）。
+システムは、各 Admin operator の locale をオペレーターレコードとともに SHALL 永続化する。対応する operator locale 値は `ja` と `en` でなければならない（MUST）。明示的な locale を持たない operator の locale 永続値は `ja` を既定値にしなければならない（MUST）。Admin operator locale は Product AccountSetting から独立して扱い、Product AccountSetting を読み書きしてはならない（MUST NOT）。認証済み Admin server context は、現在の role と active 状態とともに、Admin-owned schema から operator の現在 locale を SHALL 読み込む。認証済みオペレーターは、Admin Console のプロフィールまたは設定操作を通じて、自分自身の locale だけを SHALL 更新できる。Admin operator locale 更新は、未対応 locale 値を永続値を変更せずに拒否しなければならない（MUST）。role、active state、setup token、passkey を編集する operator 管理操作は、operator locale を暗黙的に変更してはならない（MUST NOT）。DB から未知の operator locale が読み込まれた場合、システムは既定値へ黙って丸めてはならず（MUST NOT）、DB 制約違反または server error として fail-closed に扱わなければならない（MUST）。
 
 **Customer Context**
 
-Admin Console のオペレーターは端末やブラウザを変えても同じ言語で作業できる必要がある。本人の言語設定を Admin DB に保存することで、サポート対応や監査確認の操作文言が安定し、運用ミスを減らせる。
+Admin Console のオペレーターは端末やブラウザを変えても同じ言語で作業できる必要がある。本人の言語設定を Admin-owned schema に保存することで、サポート対応や監査確認の操作文言が安定し、運用ミスを減らせる。
 
 **要求**
 
@@ -141,7 +141,7 @@ Admin Console のオペレーターは端末やブラウザを変えても同じ
 - 対応する operator locale 値は `ja` と `en` でなければならない（MUST）。
 - 明示的な locale を持たない operator の locale 永続値は `ja` を既定値にしなければならない（MUST）。
 - Admin operator locale は Product AccountSetting から独立して扱い、Product AccountSetting を読み書きしてはならない（MUST NOT）。
-- 認証済み Admin server context は、現在の role と active 状態とともに、Admin DB から operator の現在 locale を SHALL 読み込む。
+- 認証済み Admin server context は、現在の role と active 状態とともに、Admin-owned schema から operator の現在 locale を SHALL 読み込む。
 - 認証済みオペレーターは、Admin Console のプロフィールまたは設定操作を通じて、自分自身の locale だけを SHALL 更新できる。
 - Admin operator locale 更新は、未対応 locale 値を永続値を変更せずに拒否しなければならない（MUST）。
 - role、active state、setup token、passkey を編集する operator 管理操作は、operator locale を暗黙的に変更してはならない（MUST NOT）。
@@ -157,7 +157,7 @@ Admin Console のオペレーターは端末やブラウザを変えても同じ
 
 - **前提** 認証済みオペレーターが保存済み言語 `ja` を持つ
 - **操作** オペレーターが自分の locale を `en` に更新する
-- **結果** Admin DB の該当 operator record は `en` を保持し、他オペレーターの locale は変化しない
+- **結果** Admin-owned schema の該当 operator record は `en` を保持し、他オペレーターの locale は変化しない
 
 #### Scenario: Admin の未対応 locale 更新は拒否される (LOCALIZATION-BE-S011)
 

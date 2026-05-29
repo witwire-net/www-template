@@ -172,6 +172,13 @@ model PasskeyAddStartResponse {
   timeout?: int64;
 
   excludeCredentials?: WebAuthnCredentialDescriptor[];
+
+  @doc("作成する credential が usernameless login で使える discoverable credential であることを要求する。")
+  residentKey: "required";
+
+  @doc("residentKey required と同じ要求を boolean でも伝える WebAuthn 標準 field。")
+  requireResidentKey: true;
+
   userVerification: "required";
   attestation?: string;
 }
@@ -186,7 +193,6 @@ model AuthSessionResponse {
   passkeyCredentialId: UlidId;
   sessionId: UlidId;
   accessToken: string;
-  refreshToken: string;
   expiresAt: utcDateTime;
 }
 
@@ -292,18 +298,10 @@ model LogoutResponse {
   revoked: true;
 }
 
-@doc("リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。")
-model RefreshTokenRequest {
-  refreshToken: string;
-}
-
-@doc("リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。")
+@doc("Cookie refresh 成功時に返却される新しい accessToken と Product AccountSetting snapshot。refreshToken rotation は HttpOnly Set-Cookie だけで行い、response body には refreshToken 平文を含めない。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。")
 model RefreshTokenResponse {
   @doc("ローテーション後に発行された短命の JWT アクセストークン。")
   accessToken: string;
-
-  @doc("次回以降の rotation に使用する新しいリフレッシュトークン。")
-  refreshToken: string;
 
   @doc("refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。")
   accountSetting?: AccountSettingSnapshot;

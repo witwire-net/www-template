@@ -6,6 +6,17 @@
 # Public origin used for Origin/CSRF allowlisting.
 origin = "https://admin.your-domain.com"
 
+# Product public origin. Must differ from Admin origin.
+product_origin = "https://app.your-domain.com"
+
+[cookie]
+# Admin refreshToken Cookie settings. Domain must match the Admin origin host.
+name = "www_template_admin_refresh"
+domain = "admin.your-domain.com"
+path = "/"
+secure = true
+same_site = "Lax"
+
 [auth]
 # Admin-only JWT signing secret. Do not reuse the Product API JWT secret.
 jwt_secret = "change-this-to-a-long-random-admin-jwt-secret-in-production"
@@ -15,11 +26,11 @@ rp_id = "admin.your-domain.com"
 rp_name = "Your Admin Console"
 
 [database]
-# Admin DB stores operators, operator passkeys, and audit events.
-admin_url = "postgres://admin-user:password@admin-db:5432/admin-db?schema=admin&sslmode=require"
+# Least-privilege DB role used by the Admin backend.
+admin_role = "admin_console_write"
 
-# Product DB uses the minimum-privilege login role granted admin_console_write.
-product_url = "postgres://product-admin-role:password@product-db:5432/product-db?sslmode=require"
+# Admin backend connects with a minimum-privilege login role granted admin_console_write.
+url = "postgres://admin-console-role:password@postgres:5432/app-db?sslmode=require"
 
 [valkey]
 # Admin and Product must use the same Valkey endpoint with different logical DB numbers.
@@ -32,6 +43,14 @@ url = "https://opensearch-host:9200"
 admin_audit_replicas = 1
 admin_audit_index_prefix = "admin-audit"
 product_index_prefix = "product-domain"
+
+[observability]
+# Admin API exports telemetry to the same collector infrastructure as Product, while using its own service name.
+otel_exporter_otlp_endpoint = "otel-collector:4317"
+otel_exporter_otlp_traces_endpoint = "otel-collector:4317"
+otel_exporter_otlp_logs_endpoint = "otel-collector:4317"
+otel_service_name = "www-template-admin-api"
+otel_resource_attributes = "service.namespace=www-template,deployment.environment=production"
 
 [bootstrap]
 # Disable after the first operator is created.

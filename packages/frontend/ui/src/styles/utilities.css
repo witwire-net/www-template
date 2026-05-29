@@ -123,27 +123,35 @@
     animation: ww-slide-up var(--transition-smooth) both;
     animation-delay: calc(var(--stagger-index, 0) * 60ms);
   }
+
   .ww-stagger-1 {
     --stagger-index: 1;
   }
+
   .ww-stagger-2 {
     --stagger-index: 2;
   }
+
   .ww-stagger-3 {
     --stagger-index: 3;
   }
+
   .ww-stagger-4 {
     --stagger-index: 4;
   }
+
   .ww-stagger-5 {
     --stagger-index: 5;
   }
+
   .ww-stagger-6 {
     --stagger-index: 6;
   }
+
   .ww-stagger-7 {
     --stagger-index: 7;
   }
+
   .ww-stagger-8 {
     --stagger-index: 8;
   }

@@ -6,8 +6,8 @@
   "scripts": {
     "format": "tsp format .",
     "format:check": "tsp format . --check",
-    "gen:openapi": "tsp compile .",
-    "lint:openapi": "spectral lint openapi/openapi.json --ruleset .spectral.yaml --fail-severity error",
+    "gen:openapi": "tsp compile . && node scripts/normalize-openapi-artifacts.mjs && prettier --write openapi/openapi.json openapi/admin.openapi.json",
+    "lint:openapi": "node scripts/check-surface-boundaries.mjs && spectral lint openapi/openapi.json openapi/admin.openapi.json --ruleset .spectral.yaml --fail-severity error",
     "check": "pnpm format:check && tsp compile . --no-emit"
   },
   "devDependencies": {

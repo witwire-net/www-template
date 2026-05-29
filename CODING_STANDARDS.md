@@ -12,17 +12,24 @@
 
 ### TypeSpec を API 契約の正にする
 
-- required: API 変更は `packages/typespec/main.tsp` を直し、生成物は `pnpm gen` でそろえる
+- required: Product/Admin API 変更は `packages/typespec/main.tsp` を直し、生成物は `pnpm gen` で surface ごとにそろえる
 - Enforcement point: `pnpm gen` -> `package.json`, `packages/typespec/package.json`; `pnpm check:codegen` -> `scripts/codegen/check.sh`; CI `.github/workflows/ci.yml`
 - NG例: `packages/frontend/api/src/generated/client.ts` だけを手で直す
-- OK例: `packages/typespec/main.tsp` を変更して `pnpm gen` を実行し、`packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go` をまとめて更新する
+- OK例: `packages/typespec/main.tsp` を変更して `pnpm gen` を実行し、Product の `packages/typespec/openapi/openapi.json` / `packages/frontend/api/src/generated/client.ts` / `packages/backend/internal/generated/openapi/openapi.gen.go` と、Admin の `packages/typespec/openapi/admin.openapi.json` / `packages/admin/api/src/generated/client.ts` / `packages/backend/internal/generated/adminopenapi/openapi.gen.go` を surface ごとに更新する
 
 ### codegen drift を残さない
 
-- required: `packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go` は `pnpm gen` 後に差分ゼロであること
+- required: Product 生成物 (`packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go`) と、Admin 生成物のうち `scripts/codegen/check.sh` が追跡する `packages/typespec/openapi/admin.openapi.json` / `packages/admin/api/src/generated/client.ts` は `pnpm gen` 後に差分ゼロであること
 - Enforcement point: `pnpm check:codegen` -> `scripts/codegen/check.sh`; `pnpm lint` -> `package.json` -> `pnpm check:codegen`; CI `.github/workflows/ci.yml`
 - NG例: TypeSpec を変えたのに generated file を commit しない
 - OK例: `pnpm gen` 後の generated file をそのまま commit する
+
+### Product/Admin artifact を物理分離する
+
+- required: Product と Admin はどちらも `/api/v1/*` を使うが、origin、Go binary、TypeSpec service、OpenAPI artifact、SDK package、Go bindings で分離する
+- Enforcement point: `pnpm gen` -> `package.json` (`gen:openapi`, `gen:api-sdk`, `gen:backend`), `packages/typespec/package.json`; `pnpm lint` -> `package.json` (`lint:api-admin-policy`); `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`
+- NG例: Admin API を `/api/admin/accounts` に置く / Admin operation を `packages/frontend/api` や `internal/generated/openapi` に混ぜる
+- OK例: Product は `packages/typespec/openapi/openapi.json`・`packages/frontend/api`・`internal/generated/openapi`、Admin は `packages/typespec/openapi/admin.openapi.json`・`packages/admin/api`・`internal/generated/adminopenapi` に分け、どちらも各 origin の `/api/v1/*` として公開する
 
 ### backend generated code は generated file の形を守る
 
@@ -33,7 +40,7 @@
 
 ## 2. TypeSpec / OpenAPI
 
-`pnpm --filter @www-template/typespec lint:openapi` の実体は `spectral lint openapi/openapi.json --ruleset .spectral.yaml --fail-severity error` です。warning は表示されても失敗せず、error だけが失敗します。
+`pnpm --filter @www-template/typespec lint:openapi` の実体は `spectral lint openapi/openapi.json openapi/admin.openapi.json --ruleset .spectral.yaml --fail-severity error` です。warning は表示されても失敗せず、error だけが失敗します。
 
 ### TypeSpec は format / compile を通す
 
@@ -42,12 +49,12 @@
 - NG例: `packages/typespec/main.tsp` に構文エラーを入れたまま push する
 - OK例: `pnpm --filter @www-template/typespec format` の後に `pnpm check` を通す
 
-### OpenAPI path は `/api/v1/*` だけ
+### Product/Admin OpenAPI path は `/api/v1/*` だけ
 
-- forbidden: OpenAPI path を `/api/v1/*` の外に置かない
+- forbidden: Product/Admin OpenAPI path を `/api/v1/*` の外に置かない。Admin も `/api/admin/*` ではなく Admin origin の `/api/v1/*` を使う
 - Enforcement point: `pnpm --filter @www-template/typespec lint:openapi` -> `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`; `pnpm lint` -> `package.json`
-- NG例: `/profiles` / `/health` / `/admin/users`
-- OK例: `/api/v1/profiles` / `/api/v1/passkeys`
+- NG例: `/profiles` / `/health` / `/admin/users` / `/api/admin/accounts`
+- OK例: Product OpenAPI の `/api/v1/passkeys` / Admin OpenAPI の `/api/v1/accounts`
 
 ### app endpoint は BearerAuth を宣言する
 
@@ -306,12 +313,12 @@
 - NG例: `internal/domain/account.go` から `internal/application` を import する
 - OK例: Account/Auth の連携語彙は同じ `internal/domain` package 内の型で表す
 
-### generated/openapi は adapter-http のみ import 可能
+### generated OpenAPI bindings は surface ごとの HTTP adapter のみ import 可能
 
-- forbidden: `internal/generated/openapi` を `internal/adapter/http` 以外から import しない
+- forbidden: Product bindings (`internal/generated/openapi`) と Admin bindings (`internal/generated/adminopenapi`) を surface 対応の HTTP adapter 以外から import しない。Product adapter が Admin bindings を、Admin adapter が Product bindings を cross import しない
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkImports`)
-- NG例: `internal/app` から `internal/generated/openapi` を import する
-- OK例: `internal/adapter/http/router.go` だけが `internal/generated/openapi` を import する
+- NG例: `internal/app` から `internal/generated/openapi` を import する / Product HTTP adapter から `internal/generated/adminopenapi` を import する
+- OK例: Product HTTP adapter は `internal/generated/openapi`、Admin HTTP adapter は `internal/generated/adminopenapi` だけを import する
 
 ### layer ごとの外部依存を守る
 
@@ -357,12 +364,12 @@
 
 ## 5. バックエンドの API / 認証 / 永続化
 
-### non-generated Gin route は literal かつ `/health` か `/api/v1/*` だけにする
+### Product/Admin の non-generated Gin route は literal かつ `/health` か `/api/v1/*` だけにする
 
-- required: `internal/adapter/http` の non-generated route は string literal で書き、`/health` または `/api/v1/*` だけにする; custom Gin group も `/api/v1/*` 配下だけにする
+- required: Product/Admin どちらの `internal/adapter/http` non-generated route も string literal で書き、`/health` または `/api/v1/*` だけにする; custom Gin group も `/api/v1/*` 配下だけにする
 - Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkRoutePolicy`); `pnpm test:run` -> `packages/backend/internal/adapter/http/router_test.go` (`TestRoutePolicy`)
-- NG例: `router.GET(basePath + "/profiles", ...)` / `router.Group("/admin")`
-- OK例: `router.GET("/health", ...)` / `router.Group("/api/v1/passkeys")`
+- NG例: `router.GET(basePath + "/profiles", ...)` / `router.Group("/admin")` / `router.Group("/api/admin")`
+- OK例: `router.GET("/health", ...)` / Product の `router.Group("/api/v1/passkeys")` / Admin の `router.Group("/api/v1/accounts")`
 
 ### runtime route policy をテストで守る
 

@@ -1,16 +1,16 @@
 ## 1. DB Migrations
 
-- [x] 1.1 `packages/admin/prisma/admin/schema.prisma` — Admin DB 用 Prisma schema。`admin.operators` (id, email UNIQUE, display_name, role CHECK, is_active, setup_token_hash, setup_token_expires_at, last_login_at, created_at, updated_at), `admin.operator_passkeys` (id, operator_id FK CASCADE, credential_handle UNIQUE, public_key, sign_count DEFAULT 0, aaguid, backup_eligible, backup_state, transports JSONB, created_at), `admin.audit_events` (id, operator_id FK, action, target_type, target_id, details JSONB, outcome, error_code, ip_address, created_at, completed_at) を定義
-- [x] 1.2 `packages/admin/prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql` — Prisma Migrate 用 SQL。初期オペレーター seed は作成しない
-- [x] 1.3 `packages/admin/prisma/product/schema.prisma` — Product DB 用 Prisma schema。`admin_view.account_summaries`, `admin_view.account_passkeys` 参照と `admin_op` 関数呼び出しに必要な型を定義。Product DB に Prisma Migrate は適用しない
+- [x] 1.1 `packages/admin/prisma/admin/schema.prisma` — Admin-owned schema 用 Prisma schema。`admin.operators` (id, email UNIQUE, display_name, role CHECK, is_active, setup_token_hash, setup_token_expires_at, last_login_at, created_at, updated_at), `admin.operator_passkeys` (id, operator_id FK CASCADE, credential_handle UNIQUE, public_key, sign_count DEFAULT 0, aaguid, backup_eligible, backup_state, transports JSONB, created_at), `admin.audit_events` (id, operator_id FK, action, target_type, target_id, details JSONB, outcome, error_code, ip_address, created_at, completed_at) を定義
+- [x] 1.2 `packages/admin/prisma/admin/migrations/000001_create_operators_and_passkeys/migration.sql` — SQL migrations 用 SQL。初期オペレーター seed は作成しない
+- [x] 1.3 `packages/admin/prisma/product/schema.prisma` — database 用 Prisma schema。`admin_view.account_summaries`, `admin_view.account_passkeys` 参照と `admin_op` 関数呼び出しに必要な型を定義。database に SQL migrations は適用しない
 - [x] 1.5 `packages/backend/db/migrations/000004_add_account_status.up.sql` — accounts に status (CHECK IN active,suspended, DEFAULT active), status_reason, status_updated_at, status_updated_by, session_revoked_after 追加
 - [x] 1.6 `packages/backend/db/migrations/000004_add_account_status.down.sql`
 - [x] 1.7 `packages/backend/db/migrations/000005_create_admin_views.up.sql` — admin_view.account_summaries, admin_view.account_passkeys
 - [x] 1.8 `packages/backend/db/migrations/000005_create_admin_views.down.sql`
-- [x] 1.9 `packages/backend/db/migrations/000006_create_admin_functions.up.sql` — admin_console_read / admin_console_write NOLOGIN role、admin_view SELECT grant、admin_op.suspend_account(p_account_id,p_operator_id,p_reason,p_audit_event_id) / admin_op.restore_account(p_account_id,p_operator_id,p_audit_event_id)（SECURITY DEFINER, SET search_path = pg_catalog, admin_op, Product base table は `public.accounts` のように schema-qualified 参照, REVOKE EXECUTE FROM PUBLIC, GRANT EXECUTE TO admin_console_write）。suspend は同一 Product DB transaction で session_revoked_after を更新し、restore は session_revoked_after を維持。環境別 login role は migration で固定名作成せず、release 手順で作成して `GRANT admin_console_write TO <product_admin_login_role>` を実行する
+- [x] 1.9 `packages/backend/db/migrations/000006_create_admin_functions.up.sql` — admin_console_read / admin_console_write NOLOGIN role、admin_view SELECT grant、admin_op.suspend_account(p_account_id,p_operator_id,p_reason,p_audit_event_id) / admin_op.restore_account(p_account_id,p_operator_id,p_audit_event_id)（SECURITY DEFINER, SET search_path = pg_catalog, admin_op, Product base table は `public.accounts` のように schema-qualified 参照, REVOKE EXECUTE FROM PUBLIC, GRANT EXECUTE TO admin_console_write）。suspend は同一 database transaction で session_revoked_after を更新し、restore は session_revoked_after を維持。環境別 login role は migration で固定名作成せず、release 手順で作成して `GRANT admin_console_write TO <product_admin_login_role>` を実行する
 - [x] 1.10 `packages/backend/db/migrations/000006_create_admin_functions.down.sql`
-- [x] 1.11 Admin DB migration は `prisma migrate deploy --schema packages/admin/prisma/admin/schema.prisma` で適用。Product 側は既存 golang-migrate で管理
-- [x] 1.12 Product DB の環境別 Admin login role 作成手順を release docs / compose init に追加。`GRANT admin_console_write TO <product_admin_login_role>` を実行し、login role は superuser / base table owner にしない [ADMIN-CONSOLE-BE-S044]
+- [x] 1.11 Admin-owned schema migration は `prisma migrate deploy --schema packages/admin/prisma/admin/schema.prisma` で適用。Product 側は既存 golang-migrate で管理
+- [x] 1.12 database の環境別 Admin login role 作成手順を release docs / compose init に追加。`GRANT admin_console_write TO <product_admin_login_role>` を実行し、login role は superuser / base table owner にしない [ADMIN-CONSOLE-BE-S044]
 
 ## 2. Project Scaffold & Workspace Integration
 
@@ -18,7 +18,7 @@
 - [x] 2.2 `packages/admin/svelte.config.js` — adapter-node
 - [x] 2.3 `packages/admin/vite.config.ts` — tailwindcss + sveltekit, port 5176
 - [x] 2.4 `packages/admin/Dockerfile` — multistage build（builder → Node.js runtime, port 3000）
-- [x] 2.4a `.devcontainer/compose.yaml` または deploy compose に `admin` service を追加し、`packages/admin/Dockerfile` build、port 3000、`ADMIN_DATABASE_URL`、`PRODUCT_DATABASE_URL`、`VALKEY_URL`、`ADMIN_VALKEY_URL`、`OPENSEARCH_URL`、index prefix、bootstrap env を注入できるようにする。`docker compose up -d admin` が release 手順どおり動くこと
+- [x] 2.4a `.devcontainer/compose.yaml` または deploy compose に `admin` service を追加し、`packages/admin/Dockerfile` build、port 3000、`DATABASE_URL`、`DATABASE_URL`、`VALKEY_URL`、`ADMIN_VALKEY_URL`、`OPENSEARCH_URL`、index prefix、bootstrap env を注入できるようにする。`docker compose up -d admin` が release 手順どおり動くこと
 - [x] 2.4b `.devcontainer/compose.yaml` は Product と Admin で同じ `valkey` service / volume を共有し、Product `VALKEY_URL` は DB 0、Admin `ADMIN_VALKEY_URL` は DB 1 のように logical DB 番号だけを分ける。Admin 専用 `admin-valkey` service / volume は作成しない [ADMIN-AUTH-BE-S048]
 - [x] 2.5 `packages/admin/tsconfig.json`, `packages/admin/vitest.config.ts`
 - [x] 2.5a `packages/admin/.env.example` — 必須環境変数のサンプルのみを置く。secret 実値を含む `packages/admin/.env` は作成・コミットしない
@@ -26,11 +26,11 @@
 - [x] 2.7 `packages/admin/src/app.css` — tailwind import
 - [x] 2.8 `pnpm-workspace.yaml` に `packages/admin` 追加
 - [x] 2.9 `tsconfig.base.json` に `@www-template/admin` パスエイリアス追加
-- [x] 2.10 `.devcontainer/compose.yaml` に `www-template_admin` DB 作成用 init SQL 追加
+- [x] 2.10 `.devcontainer/compose.yaml` に `www-template` DB 作成用 init SQL 追加
 
 ## 3. Infrastructure Layer
 
-- [x] 3.1 `packages/admin/src/lib/server/infrastructure/config/env.ts` — JWT secret, ADMIN_ORIGIN, ADMIN_DATABASE_URL, PRODUCT_DATABASE_URL, VALKEY_URL, ADMIN_VALKEY_URL, OPENSEARCH_URL, ADMIN_OPENSEARCH_AUDIT_REPLICAS, ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX, PRODUCT_OPENSEARCH_INDEX_PREFIX, ADMIN_BOOTSTRAP_ENABLED, ADMIN_BOOTSTRAP_SECRET_HASH, ADMIN_BOOTSTRAP_EXPIRES_AT の private env 検証。ADMIN_VALKEY_URL は Admin 用 logical DB として必須にし、Product `VALKEY_URL` が存在する場合は同一 Valkey infrastructure かつ異なる DB 番号であることを起動時に検証する。Admin 実装は `admin:*` key prefix のみ読み書きする。OpenSearch は単一接続情報を許容するが、Admin audit prefix と Production domain prefix が同一または包含関係になる設定を拒否する。初期オペレーター用 seed token 環境変数は作らない
+- [x] 3.1 `packages/admin/src/lib/server/infrastructure/config/env.ts` — JWT secret, ADMIN_ORIGIN, DATABASE_URL, DATABASE_URL, VALKEY_URL, ADMIN_VALKEY_URL, OPENSEARCH_URL, ADMIN_OPENSEARCH_AUDIT_REPLICAS, ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX, PRODUCT_OPENSEARCH_INDEX_PREFIX, ADMIN_BOOTSTRAP_ENABLED, ADMIN_BOOTSTRAP_SECRET_HASH, ADMIN_BOOTSTRAP_EXPIRES_AT の private env 検証。ADMIN_VALKEY_URL は Admin 用 logical DB として必須にし、Product `VALKEY_URL` が存在する場合は同一 Valkey infrastructure かつ異なる DB 番号であることを起動時に検証する。Admin 実装は `admin:*` key prefix のみ読み書きする。OpenSearch は単一接続情報を許容するが、Admin audit prefix と Production domain prefix が同一または包含関係になる設定を拒否する。初期オペレーター用 seed token 環境変数は作らない
 - [x] 3.2 `packages/admin/src/lib/server/infrastructure/config/platform.ts` — runtime platform env 検証
 - [x] 3.3 `packages/admin/src/lib/server/infrastructure/db/prisma.ts` — `getAdminPrisma()`, `getProductPrisma()`, `disconnectPrisma()`, `validateProductDbRuntimeRole()`。Admin/Product の generated Prisma Client を分離し、環境変数から接続文字列を取得。Product Prisma 初期化時に current role が `admin_console_write` member であり、superuser ではなく、base table owner でもないことを検証して fail-close する [ADMIN-CONSOLE-BE-S044]
 - [x] 3.4 `packages/admin/src/lib/server/infrastructure/auth/operator.ts` — `generateChallenge(input, valkey)`, `consumeChallenge(challengeId, expectedType, valkey)`, `createOperatorSession(operator, valkey)`, `revokeOperatorSession(sessionId, valkey)`, `verifyOperatorSession(token, valkey)`, `verifyAssertion(assertion, expectedChallenge, credential, origin, rpId)`, `signOperatorJwt()`, `verifyOperatorJwt()`, `createSessionCookie()`, `clearSessionCookie()`。challenge record は challengeId/type/operatorId/email を Valkey に SETEX/GETDEL で保存・消費し、login 成功時は `admin:session:<sessionId>` を SETEX して JWT claims に sessionId/jti を含める。logout と hook は Valkey active session を検証・失効する
@@ -53,8 +53,8 @@
 
 - [x] 5.1 `packages/admin/src/lib/server/services/accounts/search.ts`
 - [x] 5.2 `packages/admin/src/lib/server/services/accounts/detail.ts`
-- [x] 5.3 `packages/admin/src/lib/server/services/accounts/suspend.ts` — pending audit intent 作成 → Product DB `admin_op.suspend_account` で status + session_revoked_after 更新 → 成功時は audit outcome succeeded 更新。Product DB mutation 失敗時は audit outcome failed + stable error_code + completed_at 更新。intent 作成失敗は mutation 開始前に 503、outcome 更新失敗は pending event を reconciliation 対象に残す。OpenSearch 失敗のみ非ブロッキング。テスト: [ADMIN-CONSOLE-BE-S014] [ADMIN-CONSOLE-BE-S017] [ADMIN-CONSOLE-BE-S052] [ADMIN-CONSOLE-BE-S055] [AUTH-BE-S056]
-- [x] 5.4 `packages/admin/src/lib/server/services/accounts/restore.ts` — pending audit intent 作成 → Product DB `admin_op.restore_account` で復旧。session_revoked_after は維持し、過去 session を復活させない
+- [x] 5.3 `packages/admin/src/lib/server/services/accounts/suspend.ts` — pending audit intent 作成 → database `admin_op.suspend_account` で status + session_revoked_after 更新 → 成功時は audit outcome succeeded 更新。database mutation 失敗時は audit outcome failed + stable error_code + completed_at 更新。intent 作成失敗は mutation 開始前に 503、outcome 更新失敗は pending event を reconciliation 対象に残す。OpenSearch 失敗のみ非ブロッキング。テスト: [ADMIN-CONSOLE-BE-S014] [ADMIN-CONSOLE-BE-S017] [ADMIN-CONSOLE-BE-S052] [ADMIN-CONSOLE-BE-S055] [AUTH-BE-S056]
+- [x] 5.4 `packages/admin/src/lib/server/services/accounts/restore.ts` — pending audit intent 作成 → database `admin_op.restore_account` で復旧。session_revoked_after は維持し、過去 session を復活させない
 - [x] 5.5 `packages/admin/src/lib/server/services/accounts/stats.ts` — Dashboard 集計
 - [x] 5.6 `packages/admin/src/lib/server/services/audit/list.ts` — filter + sort + pagination
 - [x] 5.7 `packages/admin/src/lib/server/services/operators/list.ts`
@@ -169,7 +169,7 @@
 - [x] 12.21 UT: infrastructure/search — OpenSearch failure logs warn, no throw [ADMIN-CONSOLE-BE-S040]
 - [x] 12.22 UT: infrastructure/search/config — Admin audit prefix と Production domain prefix が同一または包含関係の場合は起動拒否 [ADMIN-CONSOLE-BE-S053]
 - [x] 12.23 UT: infrastructure/search — raw index name / `_all` / comma-separated multi index / cross namespace query を拒否 [ADMIN-CONSOLE-BE-S054]
-- [x] 12.24 UT: infrastructure/db — Product DB runtime role validation rejects non-member / superuser / base table owner before queries run [ADMIN-CONSOLE-BE-S044]
+- [x] 12.24 UT: infrastructure/db — database runtime role validation rejects non-member / superuser / base table owner before queries run [ADMIN-CONSOLE-BE-S044]
 
 ## 13. Tests — Models Layer
 
@@ -198,10 +198,10 @@
 - [x] 14.3 UT: services/accounts — 二重 suspend エラー、status 変化なし
 - [x] 14.4 UT: services/accounts — suspend→restore 正常サイクル
 - [x] 14.5 UT: services/operators — role 更新が audit 記録 [ADMIN-CONSOLE-BE-S016]
-- [x] 14.6 UT: services/\* — pending audit intent 作成失敗時は Product DB mutation を開始せず 503 [ADMIN-CONSOLE-BE-S017]
-- [x] 14.7 UT: services/accounts — suspend が Product DB session_revoked_after を書く [AUTH-BE-S056]
+- [x] 14.6 UT: services/\* — pending audit intent 作成失敗時は database mutation を開始せず 503 [ADMIN-CONSOLE-BE-S017]
+- [x] 14.7 UT: services/accounts — suspend が database session_revoked_after を書く [AUTH-BE-S056]
 - [x] 14.7a UT: services/accounts — outcome 更新失敗時は pending audit event を残して metric/log 出力 [ADMIN-CONSOLE-BE-S052]
-- [x] 14.7b UT: services/accounts — Product DB mutation 失敗時は audit outcome failed / error_code / completed_at を記録し、failed 更新失敗時は pending を reconciliation 対象に残す [ADMIN-CONSOLE-BE-S055]
+- [x] 14.7b UT: services/accounts — database mutation 失敗時は audit outcome failed / error_code / completed_at を記録し、failed 更新失敗時は pending を reconciliation 対象に残す [ADMIN-CONSOLE-BE-S055]
 - [x] 14.8 UT: services/operators — createOperator が one-time setup token を返し hash のみ保存 [ADMIN-CONSOLE-BE-S045]
 - [x] 14.9 UT: services/operators — setup token 再発行が旧 token を無効化して audit 記録 [ADMIN-CONSOLE-BE-S046]
 - [x] 14.10 UT: services/operators — passkey 登録済みオペレーターの token 再発行拒否 [ADMIN-CONSOLE-BE-S047]
@@ -326,7 +326,7 @@
 - [x] 17.8 IT: product DB query works [ADMIN-CONSOLE-BE-S019]
 - [x] 17.9 IT: DB connection failure throws [ADMIN-CONSOLE-BE-S020]
 - [x] 17.10 IT: migration applies unapplied [ADMIN-CONSOLE-BE-S021]
-- [x] 17.10a IT: Product DB extension migrations are applied by golang-migrate, not Prisma Migrate [ADMIN-CONSOLE-BE-S023]
+- [x] 17.10a IT: database extension migrations are applied by golang-migrate, not SQL migrations [ADMIN-CONSOLE-BE-S023]
 - [x] 17.11 IT: migration skips applied [ADMIN-CONSOLE-BE-S022]
 - [x] 17.12 IT: invalid limit 400 [ADMIN-CONSOLE-BE-S024]
 - [x] 17.13 IT: negative offset 400 [ADMIN-CONSOLE-BE-S025]
@@ -338,7 +338,7 @@
 - [x] 17.17 IT: PUBLIC execute revoked [ADMIN-CONSOLE-BE-S038]
 - [x] 17.18 IT: admin_console_read / admin_console_write grants [ADMIN-CONSOLE-BE-S042] [ADMIN-CONSOLE-BE-S043]
 - [x] 17.18a IT: getProductPrisma startup validation confirms current role membership and rejects superuser/base table owner [ADMIN-CONSOLE-BE-S044]
-- [x] 17.19 IT: Product DB に Prisma Migrate を適用する script が存在しない [ADMIN-CONSOLE-BE-S050]
+- [x] 17.19 IT: database に SQL migrations を適用する script が存在しない [ADMIN-CONSOLE-BE-S050]
 
 ## 18. Product Auth Integration
 

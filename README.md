@@ -219,11 +219,13 @@ pnpm dev:all
 
 起動後のアクセス先:
 
-| サービス          | URL                     |
-| ----------------- | ----------------------- |
-| Go API            | `http://localhost:8080` |
-| 公開面 LP（web）  | `http://localhost:5173` |
-| SPA アプリ（app） | `http://localhost:5174` |
+| サービス               | URL                           |
+| ---------------------- | ----------------------------- |
+| Product Go API         | `http://localhost:8080`       |
+| Admin Go API           | `http://localhost:8081`       |
+| 公開面 LP（web）       | `http://www.localhost:5173`   |
+| SPA アプリ（app）      | `http://app.localhost:5174`   |
+| Admin Console（admin） | `http://admin.localhost:5176` |
 
 ---
 
@@ -232,10 +234,12 @@ pnpm dev:all
 ### 開発
 
 ```bash
-pnpm dev:all          # Go API + web + app を並列起動
-pnpm dev:server       # Go API のみ（http://localhost:8080）
-pnpm dev:web          # 公開面 LP のみ（http://localhost:5173）
-pnpm dev:app          # SPA アプリのみ（http://localhost:5174）
+pnpm dev:all          # Product/Admin Go API + web + app + admin を並列起動
+pnpm dev:server       # Product Go API のみ（http://localhost:8080）
+pnpm dev:admin-server # Admin Go API のみ（http://localhost:8081）
+pnpm dev:web          # 公開面 LP のみ（http://www.localhost:5173）
+pnpm dev:app          # SPA アプリのみ（http://app.localhost:5174）
+pnpm dev:admin        # Admin Console のみ（http://admin.localhost:5176）
 pnpm dev:client       # dev:web のエイリアス
 ```
 
@@ -314,6 +318,13 @@ pnpm build            # 7. 本番ビルド
 2. `pnpm gen` を実行して生成物を更新
 3. `pnpm lint` と `pnpm check` を通す
 4. 生成物とソースをまとめてコミット
+
+### Product/Admin デプロイルーティング
+
+- Product domain と Admin domain は一致させません。どちらも同じ `/api/v1/*` path 空間を使いますが、別 domain / 別 Go binary / 別 TypeSpec service / 別 OpenAPI / 別 SDK / 別 Go bindings で分離します。
+- Product domain では、Cloudflare route が `/api/v1/*` を Product GoServer（`packages/backend/cmd/api`）へ送り、それ以外の公開面・アプリ shell は Product frontend 側で配信します。Product frontend からの API 呼び出しは同一 Product domain の `/api/v1/*` を使います。
+- Admin domain では、Cloudflare route が `/api/v1/*` を Admin GoServer（`packages/backend/cmd/admin-api`）へ送り、それ以外の path は Admin static frontend を配信します。Admin frontend からの API 呼び出しは同一 Admin domain の `/api/v1/*` だけを使い、Product domain や `/api/admin/*` BFF route は使いません。
+- `packages/web/wrangler.toml` と `packages/frontend/app/wrangler.toml` は配備設定であり、API contract の canonical source ではありません。API の正は常に `packages/typespec/main.tsp` です。
 
 ### Spectral lint ルール
 
@@ -434,19 +445,19 @@ cp .env.example .env
 
 ### オプション / デフォルトあり
 
-| 変数                        | デフォルト                                     | 説明                                             |
-| --------------------------- | ---------------------------------------------- | ------------------------------------------------ |
-| `APP_ENV`                   | `development`                                  | 実行環境（`development` 以外では厳格モード）     |
-| `APP_BEARER_TOKEN`          | `dev-app-auth`（dev のみ）                     | app API 用 Bearer token                          |
-| `PORT`                      | `8080`                                         | backend listen port                              |
-| `ALLOWED_ORIGINS`           | `http://localhost:5173,...`                    | CORS 許可オリジン（カンマ区切り）                |
-| `VALKEY_KEY_PREFIX`         | `www-template`                                 | Valkey key の共通プレフィックス                  |
-| `R2_USE_PATH_STYLE`         | `false`                                        | MinIO 等 path-style endpoint を使う場合は `true` |
-| `WEBAUTHN_RP_ID`            | `localhost`                                    | WebAuthn の Relying Party ID                     |
-| `ACCOUNT_RECOVERY_URL_BASE` | `http://localhost:5174/login/recovery/consume` | recovery リンクのベース URL                      |
-| `SMTP_PORT`                 | `587`                                          | SMTP ポート（Mailpit の場合は `1025`）           |
-| `SMTP_USERNAME`             | （空）                                         | SMTP ユーザー名                                  |
-| `SMTP_PASSWORD`             | （空）                                         | SMTP パスワード                                  |
+| 変数                        | デフォルト                                         | 説明                                             |
+| --------------------------- | -------------------------------------------------- | ------------------------------------------------ |
+| `APP_ENV`                   | `development`                                      | 実行環境（`development` 以外では厳格モード）     |
+| `APP_BEARER_TOKEN`          | `dev-app-auth`（dev のみ）                         | app API 用 Bearer token                          |
+| `PORT`                      | `8080`                                             | backend listen port                              |
+| `ALLOWED_ORIGINS`           | `http://www.localhost:5173,...`                    | CORS 許可オリジン（カンマ区切り）                |
+| `VALKEY_KEY_PREFIX`         | `www-template`                                     | Valkey key の共通プレフィックス                  |
+| `R2_USE_PATH_STYLE`         | `false`                                            | MinIO 等 path-style endpoint を使う場合は `true` |
+| `WEBAUTHN_RP_ID`            | `app.localhost`                                    | WebAuthn の Relying Party ID                     |
+| `ACCOUNT_RECOVERY_URL_BASE` | `http://app.localhost:5174/login/recovery/consume` | recovery リンクのベース URL                      |
+| `SMTP_PORT`                 | `587`                                              | SMTP ポート（Mailpit の場合は `1025`）           |
+| `SMTP_USERNAME`             | （空）                                             | SMTP ユーザー名                                  |
+| `SMTP_PASSWORD`             | （空）                                             | SMTP パスワード                                  |
 
 ### 重要な起動条件
 

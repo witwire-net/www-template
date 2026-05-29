@@ -106,6 +106,9 @@ const fetchJsonInBrowser = async (
 };
 
 test.describe('auth api contract', () => {
+  // APIRequestContext は Node 側で名前解決するため、ブラウザ専用の `www.localhost` ではなく loopback の待受 URL を使う。
+  test.use({ baseURL: 'http://localhost:5173' });
+
   test.skip(
     ({ browserName }) => browserName !== 'chromium',
     'backend auth contract is browser-agnostic'

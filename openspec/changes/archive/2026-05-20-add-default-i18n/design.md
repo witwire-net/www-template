@@ -25,9 +25,9 @@ Account
 - `packages/frontend/app` と `packages/frontend/domain/src/account` の AccountSetting.locale 取得、更新、認証前 fallback、設定 UI、認証済み画面文言の辞書化。
 - `packages/frontend/ui` の reusable component から固定言語文言と固定 locale formatter を排除し、呼び出し側から localized labels / formatters を注入する境界整備。i18n import が必要な concrete component は UI package に置かない。`DeviceManager` は app 固有の device/session 文言を表示するため `packages/frontend/app` へ移す。
 - `packages/admin` のオペレーター言語読み込み、設定 UI、Admin layout data、Admin 認証前代替言語、Admin 文言の辞書化。
-- Product API の AccountSetting 取得・更新、TypeSpec 契約、Product DB 永続化、Account と Auth の境界整理、生成物更新。
+- Product API の AccountSetting 取得・更新、TypeSpec 契約、database 永続化、Account と Auth の境界整理、生成物更新。
 - Product 認証メールの AccountSetting.locale による件名・本文選択。
-- Admin DB の operator locale 永続化と本人更新処理。
+- Admin-owned schema の operator locale 永続化と本人更新処理。
 - 対象パッケージに対する i18n lint 強制と辞書キー整合チェック。
 - `packages/frontend/i18n` への共有 i18n 実装導入。外部 i18n dependency に頼らず、locale 定義、loader/config、typed translator、formatter、key coverage utility を集約する。locale JSON files は `packages/web`、`packages/frontend/app`、`packages/admin` がそれぞれ所有し、各 package は `@www-template/i18n` に自分の辞書を渡して使う。
 
@@ -45,9 +45,9 @@ Account
 - TypeSpec は Product API 契約だけを表し、Admin operator locale、Admin BFF `/api/admin/**`、Admin UI 用 locale symbols を含めない。
 - Product API model は `AccountSetting`、`AccountSettingSnapshot`、`AccountLocale` のように Account 所有を名前で明示する。
 - Product API の認証済みエンドポイントは `/api/v1/*` 配下かつ BearerAuth 必須である。
-- Product DB migration は `packages/backend/db/migrations/**` に置き、`AutoMigrate` は使用しない。
-- Product DB は Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials` を正規 table として扱う。`account_settings.account_id` と `account_passkey_credentials.account_id` は `accounts.id` に従属する。`passkey_credentials` と `accounts.locale` は作らない。
-- Admin DB migration は `packages/admin/prisma/admin/migrations/**` と Prisma Migrate で管理する。
+- database migration は `packages/backend/db/migrations/**` に置き、`AutoMigrate` は使用しない。
+- database は Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials` を正規 table として扱う。`account_settings.account_id` と `account_passkey_credentials.account_id` は `accounts.id` に従属する。`passkey_credentials` と `accounts.locale` は作らない。
+- Admin-owned schema migration は `packages/admin/prisma/admin/migrations/**` と SQL migrations で管理する。
 - Product BE は Clean Architecture を徹底し、`packages/backend/internal/domain` が Account root、AccountSetting、Account.Auth projection を flat package で所有する。
 - `packages/backend/internal/application` は AccountSetting use case と Auth use case を flat package 内で分離し、本人確認、session、token、passkey/recovery 認証フローだけを Auth 側責務として扱う。
 - Product BE は Account aggregate を代替する `AuthAccount` や `AuthSubject` を提供しない。認証用 projection は `AccountAuth` と呼ぶ。
@@ -64,7 +64,7 @@ Account
 ## Impacted Areas
 
 - Product API 契約: Product AccountSetting model、認証済み route、refresh response の AccountSetting snapshot。Admin operator locale は含めない。
-- Product DB: `accounts`、`account_settings`、`account_passkey_credentials` table、対応 locale 制約、Account child 外部キー、Account 中心 admin views/functions。
+- database: `accounts`、`account_settings`、`account_passkey_credentials` table、対応 locale 制約、Account child 外部キー、Account 中心 admin views/functions。
 - Admin Console BE spec: `admin-console-be` の Product Database 拡張 requirement を Account root / `account_passkey_credentials` 前提へ更新する。
 - Go backend: `internal/domain`、`internal/application`、`internal/adapter/*` の flat 構造で表す Account / AccountSetting / Account.Auth projection、HTTP strict handler、localized mailer composition。
 - Frontend API client: 生成 SDK と wrapper method。
@@ -73,7 +73,7 @@ Account
 - Frontend app: app-owned locale JSON files、`@www-template/i18n` 接続、settings 画面、layout 文言、auth/protected 文言、localStorage 優先 fallback、browser/OS locale resolver。
 - Frontend UI: i18n 非依存 reusable primitive の localized label props、aria label props、date/time formatter props。i18n import が必要な concrete component は app/admin/web 側へ移す。`DeviceManager` は `packages/frontend/app` 側へ移す。
 - Public web: web-owned locale JSON files、`@www-template/i18n` 接続、locale route、metadata、root 誘導。
-- Admin DB: `admin.operators.locale` column と Prisma model。
+- Admin-owned schema: `admin.operators.locale` column と Prisma model。
 - Admin server: operator model、locals、layout data、settings action。
 - lint/tooling: ハードコード文言検知、辞書網羅性チェック、Account/Auth 境界 guard。
 - tests: Go、Vitest、Playwright、lint guard。
@@ -247,7 +247,7 @@ www-template
 | 追加 | `packages/typespec/src/models/account_settings.tsp`                              | Product API 専用の `AccountLocale`、`AccountSetting`、`AccountSettingSnapshot`、AccountSetting request/response model を定義し、Admin operator locale を含めない。 |
 | 追加 | `packages/typespec/src/routes/v1/account_settings.tsp`                           | 認証済み AccountSetting 取得・更新操作と refresh response の AccountSetting snapshot を定義する。                                                                  |
 | 生成 | `packages/typespec/openapi/openapi.json`                                         | OpenAPI 契約を再生成する。                                                                                                                                         |
-| 更新 | `packages/backend/db/migrations/000001_create_accounts.*.sql`                    | Product DB を Account root から作り直し、`accounts` を作る。                                                                                                       |
+| 更新 | `packages/backend/db/migrations/000001_create_accounts.*.sql`                    | database を Account root から作り直し、`accounts` を作る。                                                                                                         |
 | 更新 | `packages/backend/db/migrations/000002_create_account_settings.*.sql`            | Account child として `account_settings` を作る。                                                                                                                   |
 | 更新 | `packages/backend/db/migrations/000003_create_account_passkey_credentials.*.sql` | Account.Auth child として `account_passkey_credentials` を作る。`passkey_credentials` は作らない。                                                                 |
 | 更新 | `packages/backend/db/migrations/000004_*`                                        | Account root の status/session revoked boundary を `accounts` に揃える。                                                                                           |
@@ -300,7 +300,7 @@ flowchart LR
   Admin[packages/admin] --> I18n
   App --> UI[packages/frontend/ui localized props]
   Operator[管理オペレーター] --> Admin
-  Admin --> AdminDB[(Admin DB operators.locale)]
+  Admin --> AdminDB[(Admin-owned schema operators.locale)]
 ```
 
 ## Package Diagram
@@ -334,7 +334,7 @@ sequenceDiagram
   participant API as Product API
   participant AUTH as Auth application
   participant ACC as Account application
-  participant DB as Product DB
+  participant DB as database
   U->>A: 設定画面を開く
   A->>D: AccountSetting を読み込む
   D->>API: GET /api/v1/account/settings with Bearer
@@ -459,7 +459,7 @@ erDiagram
 | `packages/backend/internal/adapter/http`     | Product API の transport と use case 合成                                    | generated strict handler                                                   | application、domain、platform、生成 OpenAPI                      |
 | `packages/backend/internal/adapter/postgres` | Product Account/Auth 永続化 adapter                                          | account setting repository、account auth repository                        | PostgreSQL、domain、application                                  |
 | `packages/backend/internal/adapter/mailer`   | AccountSetting.locale-aware 認証メール送信                                   | AccountRecoverySender                                                      | SMTP、application、domain                                        |
-| `packages/admin`                             | operator locale 永続化、admin-owned locale JSON files、共有 i18n 適用        | server load/action、Prisma model                                           | Admin DB、`@www-template/ui`、`@www-template/i18n`               |
+| `packages/admin`                             | operator locale 永続化、admin-owned locale JSON files、共有 i18n 適用        | server load/action、Prisma model                                           | Admin-owned schema、`@www-template/ui`、`@www-template/i18n`     |
 | `scripts/i18n`                               | 辞書網羅性検証                                                               | `check-locales.ts`                                                         | Node/tsx                                                         |
 
 `packages/frontend/i18n` は正式な共有 frontend package として扱う。実装時は `AGENTS.md`、`CODING_STANDARDS.md`、`eslint.config.js` の依存境界を同時に更新し、`packages/web`、`packages/frontend/app`、`packages/admin` からの `@www-template/i18n` import を許可する。一方で `packages/frontend/domain` と `packages/frontend/ui` からの `@www-template/i18n`、app/web/admin i18n module、surface-owned locale JSON files への依存は禁止のまま機械検証する。
@@ -548,7 +548,7 @@ erDiagram
 flowchart TD
   A[1. Account / AccountSetting / Account.Auth の語彙とDB境界を固定する] --> B[2. Product TypeSpec に AccountSetting API と snapshot を追加する]
   B --> C[3. API と Go bindings を生成する]
-  B --> D[4. Product DB を Account root から組み直す]
+  B --> D[4. database を Account root から組み直す]
   D --> E0[5. internal/domain と internal/application に Account と AccountSetting を実装する]
   E0 --> E2[6. AuthAccount/AuthSubject を AccountAuth へ置換する]
   C --> E1[7. HTTP handler で Auth と AccountSetting を合成する]
@@ -608,7 +608,7 @@ flowchart TD
 | `[ADMIN-CONSOLE-BE-S038] SECURITY DEFINER 関数は PUBLIC 実行権限を剥奪する`                                        | backend/migrations             | ADMIN-CONSOLE-BE-S038 | PUBLIC EXECUTE が REVOKE される。                                                                                                                             |
 | `[ADMIN-CONSOLE-BE-S042] admin_console_read は admin_view SELECT のみ許可される`                                   | backend/migrations             | ADMIN-CONSOLE-BE-S042 | read role は `admin_op` EXECUTE を持たない。                                                                                                                  |
 | `[ADMIN-CONSOLE-BE-S043] admin_console_write のみ admin_op 関数を実行できる`                                       | backend/migrations             | ADMIN-CONSOLE-BE-S043 | EXECUTE は write role のみに GRANT される。                                                                                                                   |
-| `[ADMIN-CONSOLE-BE-S044] PRODUCT_DATABASE_URL は最小権限 role を使う`                                              | backend/migrations             | ADMIN-CONSOLE-BE-S044 | login role は `admin_console_write` member であり owner/superuser ではない。                                                                                  |
+| `[ADMIN-CONSOLE-BE-S044] DATABASE_URL は最小権限 role を使う`                                                      | backend/migrations             | ADMIN-CONSOLE-BE-S044 | login role は `admin_console_write` member であり owner/superuser ではない。                                                                                  |
 | `[LOCALIZATION-FE-S001] 公開 root は対応ロケールへ到達する`                                                        | web                            | LOCALIZATION-FE-S001  | `/` が `ja` または `en` の URL/内容へ解決される。                                                                                                             |
 | `[LOCALIZATION-FE-S002] 公開ロケールページはロケール別文言を表示する`                                              | web                            | LOCALIZATION-FE-S002  | `/ja` と `/en` で文言と metadata が切り替わる。                                                                                                               |
 | `[LOCALIZATION-FE-S003] 未対応ロケールは翻訳済みページとして扱われない`                                            | web                            | LOCALIZATION-FE-S003  | 対応ロケールへの誘導または not found になる。                                                                                                                 |
@@ -625,8 +625,8 @@ flowchart TD
 
 ## Rollback / Migration
 
-- Product DB rollback は Account root schema の down migration で `account_passkey_credentials`、`account_settings`、`accounts`、Account 中心 admin views/functions を同じ責務単位で削除する。
-- Admin DB rollback は Prisma migration rollback、または `admin.operators.locale` を削除する rollback SQL で行う。
+- database rollback は Account root schema の down migration で `account_passkey_credentials`、`account_settings`、`accounts`、Account 中心 admin views/functions を同じ責務単位で削除する。
+- Admin-owned schema rollback は Prisma migration rollback、または `admin.operators.locale` を削除する rollback SQL で行う。
 - 契約 rollback は TypeSpec の AccountSetting route/model を戻し、`pnpm gen` で OpenAPI、frontend SDK、Go bindings を再生成する。
 - アプリケーション rollback は AccountSetting UI、API wrapper、メール文面選択、lint 強制をまとめて戻し、生成 symbol や lint rule の不整合を残さない。
 
@@ -634,8 +634,8 @@ flowchart TD
 
 - TypeSpec 変更後に `pnpm gen` を実行する。
 - `pnpm check:codegen` で生成物の整合を確認する。
-- 各環境で `pnpm db:migrate:product` により Product DB migration を適用する。
-- 各環境で `pnpm prisma:admin:migrate:deploy` により Admin DB migration を適用する。
+- 各環境で `pnpm db:migrate:product` により database migration を適用する。
+- 各環境で `pnpm prisma:admin:migrate:deploy` により Admin-owned schema migration を適用する。
 - `pnpm lint` を実行し、i18n lint と Account/Auth boundary guard を含めて検証する。
 - `pnpm check` を実行する。
 - `pnpm test:run` を実行する。
@@ -646,7 +646,7 @@ flowchart TD
 
 - Product BE で Account root、AccountSetting、Account.Auth projection の責務が分離される。
 - `AccountSetting.locale` は `account_settings` table に保存され、`accounts` root table と外部キーで紐づく。
-- Product DB は `accounts`、`account_settings`、`account_passkey_credentials` を正とし、`passkey_credentials`、`auth_accounts`、`accounts.locale` を持たない。
+- database は `accounts`、`account_settings`、`account_passkey_credentials` を正とし、`passkey_credentials`、`auth_accounts`、`accounts.locale` を持たない。
 - `AuthAccount`、`AuthSubject`、`AccountClientSettings` は残らず、Auth projection は `AccountAuth` として AccountSetting を所有しない。
 - Product API が AccountSetting 取得・更新を提供し、未対応 locale と未認証 AccountSetting request を拒否し、永続値を変更しない。
 - refresh response は Auth の token pair と AccountSetting snapshot を composition して返す。

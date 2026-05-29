@@ -128,11 +128,11 @@ namespace WWWTemplate.ApiV1 {
   };
 
   @tag("auth")
-  @summary("Refreshes an access token using a valid refresh token")
+  @summary("Refreshes an access token through the HttpOnly refresh cookie")
   @operationId("refreshToken")
   @post
   @route("/auth/refresh")
-  op refreshToken(@body body: WWWTemplate.RefreshTokenRequest):
+  op refreshToken(@body body?: unknown):
     | {
         @statusCode statusCode: 200;
         @header("Cache-Control") cacheControl: "no-store";

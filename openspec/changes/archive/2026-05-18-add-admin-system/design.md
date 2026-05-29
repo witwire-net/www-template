@@ -7,11 +7,11 @@
 - オペレーター passkey 管理（追加・一覧・削除、user verification required）
 - オペレーター 0 件時、明示 enable flag、有効期限付き bootstrap secret をすべて満たす場合のみ利用できる初回起動セットアップと、admin が追加したオペレーター向け setup token による初回 passkey 登録フロー
 - RBAC（admin / operator / viewer の 3 ロール、Controller 層で強制）
-- アカウント検索（部分一致・ページネーション・status フィルター）・閲覧・停止・復旧。停止は Product DB status を更新し、顧客向け `auth-be` の新規 access token / refresh token pair 発行・refresh rotation・既存 bearer access token 認可を拒否する
+- アカウント検索（部分一致・ページネーション・status フィルター）・閲覧・停止・復旧。停止は database status を更新し、顧客向け `auth-be` の新規 access token / refresh token pair 発行・refresh rotation・既存 bearer access token 認可を拒否する
 - 監査ログの自動記録（Service 層で保証）と閲覧（フィルター・ソート・details 展開）
 - Settings 配下のオペレーター管理（一覧・追加・ロール変更・無効化、setup token 発行・再発行、admin ロールのみ）
-- Admin DB（`www-template_admin`）: `admin.operators`, `admin.operator_passkeys`, `admin.audit_events`。migration metadata は Prisma Migrate が管理する
-- Product DB（`www-template`）拡張: `accounts.status`, `accounts.session_revoked_after`, `admin_view.*`, `admin_op.*`
+- Admin-owned schema（`www-template`）: `admin.operators`, `admin.operator_passkeys`, `admin.audit_events`。migration metadata は SQL migrations が管理する
+- database（`www-template`）拡張: `accounts.status`, `accounts.session_revoked_after`, `admin_view.*`, `admin_op.*`
 - 監査ログの OpenSearch インデックス — 監査イベントを OpenSearch に非同期でインデックスし、全文検索・集計を可能にする
 - ESLint による MVCS 層間依存強制、顧客向けパッケージ import 禁止、セキュリティ制約
 - Docker コンテナ + adapter-node でのデプロイ。DB（ADMIN_DB / PRODUCT_DB の 2 系統）へ直接接続
@@ -28,15 +28,15 @@
 
 ## Assumptions / Dependencies
 
-- PostgreSQL インスタンス上に `www-template_admin` データベースが作成済みであること
-- Docker コンテナから環境変数で `ADMIN_DATABASE_URL`（→ `www-template_admin`）と `PRODUCT_DATABASE_URL`（→ `www-template`）が注入され、Prisma Client がそれぞれの DB へ接続すること
+- PostgreSQL インスタンス上に `www-template` データベースが作成済みであること
+- Docker コンテナから環境変数で `DATABASE_URL`（→ `www-template`）と `DATABASE_URL`（→ `www-template`）が注入され、Prisma Client がそれぞれの DB へ接続すること
 - Product auth と Admin が同じ Valkey infrastructure を共有し、Product は `VALKEY_URL`（例: DB 0）、Admin は `ADMIN_VALKEY_URL`（例: DB 1）で logical DB 番号を分離すること。Admin runtime は `admin:*` key prefix のみを読み書きし、Product auth の `auth:*` / `session:*` / `recovery:*` key は読み書きしてはならない
 - OpenSearch cluster が `OPENSEARCH_URL` 環境変数で利用可能であること。物理 cluster / 接続情報は単一でもよいが、Admin audit namespace と Production domain namespace は index prefix で分離し、raw index name と cross namespace query を禁止すること
 - Admin 公開 Origin が `ADMIN_ORIGIN`、Admin OpenSearch audit replica 数が `ADMIN_OPENSEARCH_AUDIT_REPLICAS`、Admin audit index prefix が `ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX`、Production domain index prefix が `PRODUCT_OPENSEARCH_INDEX_PREFIX` で設定されていること
 - 初回 bootstrap 時のみ `ADMIN_BOOTSTRAP_ENABLED=true`、`ADMIN_BOOTSTRAP_SECRET_HASH`、`ADMIN_BOOTSTRAP_EXPIRES_AT` が短期間だけ設定され、初回完了後に無効化されること
 - `@sveltejs/adapter-node` を使用
-- Prisma を ORM Mapper として使用し、Admin DB 用 Prisma Client と Product DB 用 Prisma Client を分離して生成すること
-- Product DB の schema 変更は既存 golang-migrate を継続し、Prisma Migrate は Product DB に適用しないこと
+- Prisma を ORM Mapper として使用し、Admin-owned schema 用 Prisma Client と database 用 Prisma Client を分離して生成すること
+- database の schema 変更は既存 golang-migrate を継続し、SQL migrations は database に適用しないこと
 - `ioredis` 5.x を Valkey client として使用
 - `@opensearch-project/opensearch` 3.x を OpenSearch client として使用
 - `jose` 5.x を JWT 操作に使用
@@ -48,24 +48,24 @@
 
 ## Impacted Areas
 
-| 領域                                                      | 影響                                                                                                                                    |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/admin/`                                         | 新規作成                                                                                                                                |
-| `packages/admin/prisma/admin/`                            | Admin DB Prisma schema + Prisma Migrate migration。初期オペレーター seed は作成しない                                                   |
-| `packages/admin/prisma/product/`                          | Product DB 用 Prisma schema。migration は生成せず既存 golang-migrate の DB 構造を参照する                                               |
-| `packages/backend/db/migrations/`                         | Product DB 拡張 migration を追加（000004 status/session_revoked_after, 000005 views, 000006 functions）。既存 golang-migrate 管理と統合 |
-| `pnpm-workspace.yaml`                                     | `packages/admin` 追加                                                                                                                   |
-| `tsconfig.base.json`                                      | `@www-template/admin` パスエイリアス追加                                                                                                |
-| `eslint.config.js`                                        | Admin boundaries / MVCS / import 制限 / セキュリティルール追加                                                                          |
-| `AGENTS.md`                                               | API path policy に package-local Admin BFF 例外を明記                                                                                   |
-| `package.json` (root)                                     | dev:admin, build:admin, test:admin, Prisma generate / migrate deploy, db:migrate:product スクリプト追加                                 |
-| `vitest.config.ts` (root)                                 | `frontend-admin` project 追加                                                                                                           |
-| `packages/typespec/main.tsp`                              | 既存 auth response error classification に `account-suspended` を追加し、`pnpm gen` で生成物を更新                                      |
-| `packages/backend/internal/auth/**`                       | login finish / refresh / bearer 認可で account status と `session_revoked_after` を検証                                                 |
-| `packages/frontend/domain/**`, `packages/frontend/app/**` | `account-suspended` を session state に接続し、案内 UI を表示                                                                           |
-| `.devcontainer/compose.yaml`                              | `www-template_admin` DB 作成用 init SQL 追加                                                                                            |
-| `www-template_admin` DB                                   | 新規テーブル: operators, operator_passkeys, audit_events。migration metadata は Prisma Migrate が管理                                   |
-| `www-template` DB                                         | accounts.status / session_revoked_after カラム、admin_view / admin_op スキーマ、admin_console_read / admin_console_write role grant     |
+| 領域                                                      | 影響                                                                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/admin/`                                         | 新規作成                                                                                                                              |
+| `packages/admin/prisma/admin/`                            | Admin-owned schema Prisma schema + SQL migrations migration。初期オペレーター seed は作成しない                                       |
+| `packages/admin/prisma/product/`                          | database 用 Prisma schema。migration は生成せず既存 golang-migrate の DB 構造を参照する                                               |
+| `packages/backend/db/migrations/`                         | database 拡張 migration を追加（000004 status/session_revoked_after, 000005 views, 000006 functions）。既存 golang-migrate 管理と統合 |
+| `pnpm-workspace.yaml`                                     | `packages/admin` 追加                                                                                                                 |
+| `tsconfig.base.json`                                      | `@www-template/admin` パスエイリアス追加                                                                                              |
+| `eslint.config.js`                                        | Admin boundaries / MVCS / import 制限 / セキュリティルール追加                                                                        |
+| `AGENTS.md`                                               | API path policy に package-local Admin BFF 例外を明記                                                                                 |
+| `package.json` (root)                                     | dev:admin, build:admin, test:admin, Prisma generate / migrate deploy, db:migrate:product スクリプト追加                               |
+| `vitest.config.ts` (root)                                 | `frontend-admin` project 追加                                                                                                         |
+| `packages/typespec/main.tsp`                              | 既存 auth response error classification に `account-suspended` を追加し、`pnpm gen` で生成物を更新                                    |
+| `packages/backend/internal/auth/**`                       | login finish / refresh / bearer 認可で account status と `session_revoked_after` を検証                                               |
+| `packages/frontend/domain/**`, `packages/frontend/app/**` | `account-suspended` を session state に接続し、案内 UI を表示                                                                         |
+| `.devcontainer/compose.yaml`                              | `www-template` DB 作成用 init SQL 追加                                                                                                |
+| `www-template` DB                                         | 新規テーブル: operators, operator_passkeys, audit_events。migration metadata は SQL migrations が管理                                 |
+| `www-template` DB                                         | accounts.status / session_revoked_after カラム、admin_view / admin_op スキーマ、admin_console_read / admin_console_write role grant   |
 
 ## Directory Tree
 
@@ -217,18 +217,18 @@ packages/admin/
 | Add    | `packages/admin/` (tracked source files only)             | Admin Console アプリケーション新規作成。secret 実値を含む `.env` は作成・コミットせず、サンプルは `.env.example` に限定する |
 | Add    | `packages/admin/Dockerfile`                               | multistage build（builder → Node.js runtime）                                                                               |
 | Add    | `packages/admin/.env.example`                             | 必須環境変数名だけを記載する sample。secret 実値は含めない                                                                  |
-| Add    | `packages/admin/prisma/admin/schema.prisma`               | Admin DB 用 Prisma schema。初期オペレーター seed は含めない                                                                 |
-| Add    | `packages/admin/prisma/admin/migrations/**/migration.sql` | Admin DB schema を Prisma Migrate で管理                                                                                    |
-| Add    | `packages/admin/prisma/product/schema.prisma`             | Product DB の admin_view / admin_op 利用に必要な Prisma schema。Prisma Migrate は使わない                                   |
-| Add    | `packages/backend/db/migrations/000004_*.sql`             | Product DB 拡張 (status カラム)                                                                                             |
-| Add    | `packages/backend/db/migrations/000005_*.sql`             | Product DB 拡張 (admin_view)                                                                                                |
-| Add    | `packages/backend/db/migrations/000006_*.sql`             | Product DB 拡張 (admin_op functions, SECURITY DEFINER + search_path 固定)                                                   |
+| Add    | `packages/admin/prisma/admin/schema.prisma`               | Admin-owned schema 用 Prisma schema。初期オペレーター seed は含めない                                                       |
+| Add    | `packages/admin/prisma/admin/migrations/**/migration.sql` | Admin-owned schema schema を SQL migrations で管理                                                                          |
+| Add    | `packages/admin/prisma/product/schema.prisma`             | database の admin_view / admin_op 利用に必要な Prisma schema。SQL migrations は使わない                                     |
+| Add    | `packages/backend/db/migrations/000004_*.sql`             | database 拡張 (status カラム)                                                                                               |
+| Add    | `packages/backend/db/migrations/000005_*.sql`             | database 拡張 (admin_view)                                                                                                  |
+| Add    | `packages/backend/db/migrations/000006_*.sql`             | database 拡張 (admin_op functions, SECURITY DEFINER + search_path 固定)                                                     |
 | Update | `pnpm-workspace.yaml`                                     | `packages/admin` 追加                                                                                                       |
 | Update | `tsconfig.base.json`                                      | `@www-template/admin` パスエイリアス追加                                                                                    |
 | Update | `eslint.config.js`                                        | Admin boundaries / MVCS / import 制限 / セキュリティルール追加                                                              |
 | Update | `package.json` (root)                                     | dev/build/test/db スクリプトに Admin を追加                                                                                 |
 | Update | `vitest.config.ts` (root)                                 | `frontend-admin` project 追加                                                                                               |
-| Update | `.devcontainer/compose.yaml`                              | `www-template_admin` DB 作成用 init SQL                                                                                     |
+| Update | `.devcontainer/compose.yaml`                              | `www-template` DB 作成用 init SQL                                                                                           |
 
 ## System Diagram
 
@@ -236,7 +236,7 @@ packages/admin/
 flowchart LR
     Operator[Operator Browser] -->|HTTPS| Nginx[Reverse Proxy / TLS Term]
     Nginx -->|HTTP :3000| Container[Docker Container: admin-node]
-    Container -->|Prisma Client / SQL| AdminDB[("www-template_admin")]
+    Container -->|Prisma Client / SQL| AdminDB[("www-template")]
     Container -->|Prisma Client / SQL| ProductDB[("www-template")]
     Container -->|Redis ADMIN_VALKEY_URL db 1| SharedValkey[("Shared Valkey")]
     ProductBackend[Product Backend] -->|Redis VALKEY_URL db 0| SharedValkey
@@ -328,14 +328,14 @@ sequenceDiagram
 - Local/dev compose は Product auth と同じ `valkey` service / volume を使い、DB 番号だけを分ける。Admin 専用 `admin-valkey` service / volume は作成してはならない。
 - OpenSearch は `OPENSEARCH_URL` の単一接続情報を使用してよい。ただし Admin audit は `ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX`、Production domain search は `PRODUCT_OPENSEARCH_INDEX_PREFIX` を必ず使用し、prefix は一致してはならない。
 - OpenSearch index name は namespace builder だけで生成し、route / service / model で raw index name、wildcard index pattern、comma-separated multi index、`_all` を直接指定してはならない。Admin audit query は Admin audit prefix のみ、Production domain query は Production domain prefix のみを対象にし、cross namespace query を禁止する。
-- Admin Console は Product DB へ `PRODUCT_DATABASE_URL` で接続し、`admin_view.*` と `admin_op.*` を通じて Production account lifecycle を参照・操作できる。Production domain OpenSearch を使うユースケースは許可するが、Admin 監査ログ document は Admin audit prefix にのみ保存し、Production domain index へ書き込んではならない。
-- Admin audit の DB fallback は Admin DB の `admin.audit_events` のみを参照し、Production domain index fallback と混在してはならない。
+- Admin Console は database へ `DATABASE_URL` で接続し、`admin_view.*` と `admin_op.*` を通じて Production account lifecycle を参照・操作できる。Production domain OpenSearch を使うユースケースは許可するが、Admin 監査ログ document は Admin audit prefix にのみ保存し、Production domain index へ書き込んではならない。
+- Admin audit の DB fallback は Admin-owned schema の `admin.audit_events` のみを参照し、Production domain index fallback と混在してはならない。
 
 ## Customer Auth Integration
 
 - Admin の account suspend は表示フラグではなく顧客アクセス停止である。
-- Product DB の `accounts.status='suspended'` は顧客向け `auth-be` の passkey login finish、refresh、`/api/v1/*` bearer 認可で参照される。
-- Admin suspend は Product DB の status 更新と同じ transaction で `accounts.session_revoked_after` を現在時刻以上に更新する。
+- database の `accounts.status='suspended'` は顧客向け `auth-be` の passkey login finish、refresh、`/api/v1/*` bearer 認可で参照される。
+- Admin suspend は database の status 更新と同じ transaction で `accounts.session_revoked_after` を現在時刻以上に更新する。
 - 顧客向け auth middleware は bearer access token の `iat` claim と `session_revoked_after` を比較し、`session_revoked_after` 以前の access token を拒否する。refresh は refresh token に紐づく session metadata の `issuedAt` と `session_revoked_after` を比較し、古い refresh token を rotation してはならない。
 - restore は過去 token pair を復活させない。restore 後の顧客は再ログインで新規 token pair を取得する。
 - 公開 login start は account existence を漏らさない。`account-suspended` は HTTP 403 の `AuthFailureResponse` として、valid passkey assertion 後、refresh token 検証後、または既存 bearer access token 認可時のみ返す。
@@ -429,10 +429,10 @@ erDiagram
 
 ### Prisma Design
 
-- Admin DB: `packages/admin/prisma/admin/schema.prisma` を source of truth とし、`admin.operators` / `admin.operator_passkeys` / `admin.audit_events` を Prisma model として定義する。migration は Prisma Migrate の `migration.sql` で管理し、初期オペレーター seed は作成しない。
-- Product DB: `packages/admin/prisma/product/schema.prisma` は既存 Product DB の参照用 schema として扱う。Product DB の変更は `packages/backend/db/migrations/` の golang-migrate のみで行い、Prisma Migrate は Product DB に対して実行しない。
+- Admin-owned schema: `packages/admin/prisma/admin/schema.prisma` を source of truth とし、`admin.operators` / `admin.operator_passkeys` / `admin.audit_events` を Prisma model として定義する。migration は SQL migrations の `migration.sql` で管理し、初期オペレーター seed は作成しない。
+- database: `packages/admin/prisma/product/schema.prisma` は既存 database の参照用 schema として扱う。database の変更は `packages/backend/db/migrations/` の golang-migrate のみで行い、SQL migrations は database に対して実行しない。
 - Generated Clients: Admin Prisma Client と Product Prisma Client は別 output に生成し、誤接続を型レベルで避ける。Model 層は該当する Client を引数または infrastructure helper から受け取る。
-- Raw SQL Policy: Product DB の `admin_op.suspend_account` / `admin_op.restore_account` と view 検索は Prisma の parameterized `$queryRaw` / `$executeRaw` のみ許可する。`$queryRawUnsafe` / `$executeRawUnsafe` は lint で禁止する。
+- Raw SQL Policy: database の `admin_op.suspend_account` / `admin_op.restore_account` と view 検索は Prisma の parameterized `$queryRaw` / `$executeRaw` のみ許可する。`$queryRawUnsafe` / `$executeRawUnsafe` は lint で禁止する。
 
 ### Details
 
@@ -441,7 +441,7 @@ erDiagram
 - Purpose: WebAuthn passkey 認証 + Valkey-backed challenge / active session 管理。start → Valkey SETEX challenge 保存 → browser WebAuthn → finish → Valkey GETDEL challenge 消費 → Valkey SETEX active session 保存 → JWT httpOnly cookie
 - Public API: `generateChallenge(input, valkey)`, `consumeChallenge(challengeId, expectedType, valkey)`, `createOperatorSession(operator, valkey)`, `revokeOperatorSession(sessionId, valkey)`, `verifyOperatorSession(token, valkey)`, `verifyAssertion(assertion, expectedChallenge, credential, origin, rpId)`, `signOperatorJwt(operator, session)`, `verifyOperatorJwt(token)`, `createSessionCookie(token)`, `clearSessionCookie()`
 - Key Data Structures: `OperatorClaims { sub, email, role, sessionId, jti, exp }`, `AdminChallengeRecord { challengeId, challenge, type, operatorId, email, createdAt, expiresAt }`, `AdminSessionRecord { sessionId, jti, operatorId, email, createdAt, expiresAt, lastSeenAt }`
-- Key Flows: `POST /api/admin/auth/passkey/start` で ULID `challengeId` と challenge を生成し、`ADMIN_VALKEY_URL` が指す共有 Valkey infrastructure の Admin 用 logical DB に `SETEX admin:webauthn:challenge:<challengeId> 300 <record-json>` で保存 → response に `challengeId` と WebAuthn options を返す → browser で `getAssertion()` → `POST /api/admin/auth/passkey/finish` で `challengeId` を受け取り、Admin 用 logical DB から challenge record を `GETDEL` で取得・削除 → record の `type` / `operatorId` / `email` と credential owner を照合 → assertion 検証 → `sessionId` と `jti` を生成して `SETEX admin:session:<sessionId> 86400 <record-json>` → JWT 発行 → Set-Cookie。hook は JWT signature / exp と Valkey active session record の `sessionId` / `jti` を検証し、JWT role claim ではなく Admin DB の現在 role を毎 request で取得して認可に使う。logout は `admin:session:<sessionId>` を削除または revoked marker に置換し、盗難済み cookie を期限前に無効化する
+- Key Flows: `POST /api/admin/auth/passkey/start` で ULID `challengeId` と challenge を生成し、`ADMIN_VALKEY_URL` が指す共有 Valkey infrastructure の Admin 用 logical DB に `SETEX admin:webauthn:challenge:<challengeId> 300 <record-json>` で保存 → response に `challengeId` と WebAuthn options を返す → browser で `getAssertion()` → `POST /api/admin/auth/passkey/finish` で `challengeId` を受け取り、Admin 用 logical DB から challenge record を `GETDEL` で取得・削除 → record の `type` / `operatorId` / `email` と credential owner を照合 → assertion 検証 → `sessionId` と `jti` を生成して `SETEX admin:session:<sessionId> 86400 <record-json>` → JWT 発行 → Set-Cookie。hook は JWT signature / exp と Valkey active session record の `sessionId` / `jti` を検証し、JWT role claim ではなく Admin-owned schema の現在 role を毎 request で取得して認可に使う。logout は `admin:session:<sessionId>` を削除または revoked marker に置換し、盗難済み cookie を期限前に無効化する
 - Dependencies: `@simplewebauthn/server` (WebAuthn), `jose` (JWT sign/verify), Admin Prisma Client (credential 照会), `ioredis` (Valkey client)
 - Error Handling: 認証失敗時は non-revealing な 401。Valkey の challenge 不在/期限切れは 401。sign_count 減少は 401。Valkey unavailable 時は 503 fail-close。
 - Testing: UT で JWT sign/verify roundtrip、Valkey mock、mock assertion 検証。UT で [ADMIN-AUTH-BE-S003] [ADMIN-AUTH-BE-S004]
@@ -459,11 +459,11 @@ erDiagram
 
 #### packages/admin (infrastructure/db)
 
-- Purpose: Admin DB / Product DB への Prisma Client lifecycle 管理。環境変数から接続文字列を取得し、2 つの generated client を明示的に分離する。Product DB 接続は runtime role の最小権限も起動時に検証する
+- Purpose: Admin-owned schema / database への Prisma Client lifecycle 管理。環境変数から接続文字列を取得し、2 つの generated client を明示的に分離する。database 接続は runtime role の最小権限も起動時に検証する
 - Public API: `getAdminPrisma()`, `getProductPrisma()`, `validateProductDbRuntimeRole()`, `disconnectPrisma()`
-- Key Flows: `packages/admin/prisma/admin/schema.prisma` から Admin Prisma Client を生成し `ADMIN_DATABASE_URL` で接続する。`packages/admin/prisma/product/schema.prisma` から Product Prisma Client を生成し `PRODUCT_DATABASE_URL` で接続する。Product Prisma 初期化時に `current_user`、`pg_has_role(current_user, 'admin_console_write', 'member')`、`pg_roles.rolsuper`、対象 base table owner を検査し、login role が `admin_console_write` member ではない、superuser である、または base table owner である場合は fail-close する。SvelteKit server runtime では singleton として保持し、test では明示的に disconnect する
+- Key Flows: `packages/admin/prisma/admin/schema.prisma` から Admin Prisma Client を生成し `DATABASE_URL` で接続する。`packages/admin/prisma/product/schema.prisma` から Product Prisma Client を生成し `DATABASE_URL` で接続する。Product Prisma 初期化時に `current_user`、`pg_has_role(current_user, 'admin_console_write', 'member')`、`pg_roles.rolsuper`、対象 base table owner を検査し、login role が `admin_console_write` member ではない、superuser である、または base table owner である場合は fail-close する。SvelteKit server runtime では singleton として保持し、test では明示的に disconnect する
 - Dependencies: `@prisma/client` と generated Prisma clients
-- Error Handling: 接続失敗時と Product DB runtime role validation 失敗時は 503。Prisma の known request error は model 層で domain error に正規化する
+- Error Handling: 接続失敗時と database runtime role validation 失敗時は 503。Prisma の known request error は model 層で domain error に正規化する
 - Testing: UT で mock Prisma Client、IT で実 DB 接続確認と runtime role validation 確認 [ADMIN-CONSOLE-BE-S018] [ADMIN-CONSOLE-BE-S019] [ADMIN-CONSOLE-BE-S020] [ADMIN-CONSOLE-BE-S044]
 
 #### packages/admin (infrastructure/search)
@@ -490,9 +490,9 @@ erDiagram
 
 - Purpose: アカウント検索・詳細・停止・復旧。監査ログ必須
 - Public API: `searchAccounts(productPrisma, params)`, `getAccountDetail(productPrisma, id)`, `suspendAccount(input)`, `restoreAccount(input)`, `getDashboardStats(productPrisma)`
-- Key Flows: suspend → Admin Prisma Client で outcome=`pending` の audit intent を挿入 → Product Prisma Client の parameterized `$queryRaw` / `$executeRaw` で `admin_op.suspend_account(accountId, operatorId, reason, auditEventId)` を実行し、Product DB transaction 内で status と `session_revoked_after` を更新 → Admin audit outcome を `succeeded` に更新 → OpenSearch 非同期 index
+- Key Flows: suspend → Admin Prisma Client で outcome=`pending` の audit intent を挿入 → Product Prisma Client の parameterized `$queryRaw` / `$executeRaw` で `admin_op.suspend_account(accountId, operatorId, reason, auditEventId)` を実行し、database transaction 内で status と `session_revoked_after` を更新 → Admin audit outcome を `succeeded` に更新 → OpenSearch 非同期 index
 - Dependencies: models/accounts, models/audit-events, infrastructure/db, infrastructure/audit
-- Error Handling: 二重 suspend は DB 例外 `account_not_active`。pending audit intent 挿入に失敗した場合は Product DB mutation を開始せず 503。Product DB mutation が失敗した場合は audit outcome=`failed`、stable error_code、completed_at を記録してから domain error / 5xx を返す。Product DB mutation 成功後の audit outcome 更新失敗は分散 rollback せず、pending event を reconciliation 対象として残し、structured error log と metric を出力する。OpenSearch index 失敗だけは非ブロッキングで warn ログに留める
+- Error Handling: 二重 suspend は DB 例外 `account_not_active`。pending audit intent 挿入に失敗した場合は database mutation を開始せず 503。database mutation が失敗した場合は audit outcome=`failed`、stable error_code、completed_at を記録してから domain error / 5xx を返す。database mutation 成功後の audit outcome 更新失敗は分散 rollback せず、pending event を reconciliation 対象として残し、structured error log と metric を出力する。OpenSearch index 失敗だけは非ブロッキングで warn ログに留める
 - Testing: UT で mock Prisma Client。suspend/restore 後に audit 記録を検証 [ADMIN-CONSOLE-BE-S014-S015]
 
 ## Implementation Plan
@@ -588,8 +588,8 @@ flowchart TD
 | IT-ADMIN-CONSOLE-BE-ERR-029 | [ADMIN-CONSOLE-BE-S011] restore non-suspended throws          | be    | ERR      | 非 suspended 復旧で例外                             | restore_account on active                          | exception 'account_not_suspended'               |
 | IT-ADMIN-CONSOLE-BE-HAP-030 | [ADMIN-CONSOLE-BE-S012] view returns all accounts             | be    | HAP      | ビューが全 account 返す                             | SELECT \* FROM admin_view.account_summaries        | 5 rows                                          |
 | IT-ADMIN-CONSOLE-BE-HAP-031 | [ADMIN-CONSOLE-BE-S013] view returns passkey info             | be    | HAP      | passkey ビュー                                      | SELECT \* FROM admin_view.account_passkeys         | cred+email                                      |
-| IT-ADMIN-CONSOLE-BE-HAP-032 | [ADMIN-CONSOLE-BE-S018] admin DB query works                  | be    | HAP      | Admin DB に接続・クエリ                             | getAdminPrisma→query                               | valid result                                    |
-| IT-ADMIN-CONSOLE-BE-HAP-033 | [ADMIN-CONSOLE-BE-S019] product DB query works                | be    | HAP      | Product DB に接続・クエリ                           | getProductPrisma→query                             | valid result                                    |
+| IT-ADMIN-CONSOLE-BE-HAP-032 | [ADMIN-CONSOLE-BE-S018] admin DB query works                  | be    | HAP      | Admin-owned schema に接続・クエリ                   | getAdminPrisma→query                               | valid result                                    |
+| IT-ADMIN-CONSOLE-BE-HAP-033 | [ADMIN-CONSOLE-BE-S019] product DB query works                | be    | HAP      | database に接続・クエリ                             | getProductPrisma→query                             | valid result                                    |
 | IT-ADMIN-CONSOLE-BE-ERR-034 | [ADMIN-CONSOLE-BE-S020] DB connection failure throws          | be    | ERR      | 無効な connectionString                             | getAdminPrisma bad string→query                    | error thrown                                    |
 | IT-ADMIN-CONSOLE-BE-HAP-035 | [ADMIN-CONSOLE-BE-S021] migration applies unapplied           | be    | HAP      | 未適用 migration 実行                               | run migrator with 1 unapplied                      | 1 migration applied                             |
 | IT-ADMIN-CONSOLE-BE-HAP-036 | [ADMIN-CONSOLE-BE-S022] migration skips applied               | be    | HAP      | 適用済みはスキップ                                  | run migrator with all applied                      | no changes                                      |
@@ -680,19 +680,19 @@ OpenSpec config requires every Scenario ID to be covered by an automated test ta
 
 ## Rollback / Migration
 
-- Admin DB migration は Prisma Migrate の `migration.sql` で管理し、`down.sql` は持たない。Admin DB rollback は原則 forward fix migration を作成する。重大障害時は DB backup restore、または Prisma の migration metadata を確認したうえで `prisma migrate resolve` を用いる運用手順で復旧し、手書き down migration runner は追加しない
-- Product DB 拡張（`packages/backend/db/migrations/000004-000006`）は既存 golang-migrate で down 可能。status カラム削除前に backup 推奨
+- Admin-owned schema migration は SQL migrations の `migration.sql` で管理し、`down.sql` は持たない。Admin-owned schema rollback は原則 forward fix migration を作成する。重大障害時は DB backup restore、または Prisma の migration metadata を確認したうえで `prisma migrate resolve` を用いる運用手順で復旧し、手書き down migration runner は追加しない
+- database 拡張（`packages/backend/db/migrations/000004-000006`）は既存 golang-migrate で down 可能。status カラム削除前に backup 推奨
 - Admin コンテナのロールバック: `docker compose down && docker compose up -d` で前イメージに戻す
 
 ## Release Procedure
 
-1. Product DB 拡張 migration を製品環境に適用: `PRODUCT_DATABASE_URL="$PRODUCT_DATABASE_URL" pnpm db:migrate:product`
-2. Product DB の環境別 login role を作成し、`GRANT admin_console_write TO <product_admin_login_role>` を実行する。login role は superuser / table owner にしない
-3. Admin DB migration を適用: `ADMIN_DATABASE_URL="$ADMIN_DATABASE_URL" pnpm --filter @www-template/admin prisma:migrate:deploy`
-4. Admin DB の `admin.operators` が 0 件であることを確認し、短期 `ADMIN_BOOTSTRAP_ENABLED=true` / `ADMIN_BOOTSTRAP_SECRET_HASH` / `ADMIN_BOOTSTRAP_EXPIRES_AT` を設定して初回起動セットアップを有効化
+1. database 拡張 migration を製品環境に適用: `DATABASE_URL="$DATABASE_URL" pnpm db:migrate:product`
+2. database の環境別 login role を作成し、`GRANT admin_console_write TO <product_admin_login_role>` を実行する。login role は superuser / table owner にしない
+3. Admin-owned schema migration を適用: `DATABASE_URL="$DATABASE_URL" pnpm --filter @www-template/admin prisma:migrate:deploy`
+4. Admin-owned schema の `admin.operators` が 0 件であることを確認し、短期 `ADMIN_BOOTSTRAP_ENABLED=true` / `ADMIN_BOOTSTRAP_SECRET_HASH` / `ADMIN_BOOTSTRAP_EXPIRES_AT` を設定して初回起動セットアップを有効化
 5. Admin イメージをビルド: `docker build -t www-template-admin:latest -f packages/admin/Dockerfile .`
-6. docker-compose でデプロイ: `docker compose up -d admin`（compose file は `admin` service、共有 `valkey` service、Admin DB 接続、`VALKEY_URL`、`ADMIN_VALKEY_URL`、`OPENSEARCH_URL`、`PRODUCT_OPENSEARCH_INDEX_PREFIX`、`ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX` を含む）
-7. 起動時の `validateProductDbRuntimeRole()` が Product DB login role の membership / non-superuser / non-owner を通過することを確認する
+6. docker-compose でデプロイ: `docker compose up -d admin`（compose file は `admin` service、共有 `valkey` service、Admin-owned schema 接続、`VALKEY_URL`、`ADMIN_VALKEY_URL`、`OPENSEARCH_URL`、`PRODUCT_OPENSEARCH_INDEX_PREFIX`、`ADMIN_OPENSEARCH_AUDIT_INDEX_PREFIX` を含む）
+7. 起動時の `validateProductDbRuntimeRole()` が database login role の membership / non-superuser / non-owner を通過することを確認する
 8. `/setup` で bootstrap secret を提示し、最初の admin オペレーターを作成し passkey を登録
 9. 初回 setup 完了直後に `ADMIN_BOOTSTRAP_ENABLED=false` または bootstrap secret 環境変数削除で bootstrap を無効化
 10. admin ロールのオペレーターが `/settings/operators` で他オペレーターを追加し、one-time setup token を安全な別経路で渡す
@@ -701,7 +701,7 @@ OpenSpec config requires every Scenario ID to be covered by an automated test ta
 
 - オペレーター 0 件かつ bootstrap gate 有効時に限り `/setup` で最初の admin オペレーターを作成し、passkey 登録後に Admin Console にログインできること
 - 認証済み operator がアカウント検索・詳細表示・停止・復旧を実行できること
-- suspended account が顧客向け `/api/v1/*` bearer access token で拒否され、既存 access token / refresh token が Product DB の `session_revoked_after` により無効化されること
+- suspended account が顧客向け `/api/v1/*` bearer access token で拒否され、既存 access token / refresh token が database の `session_revoked_after` により無効化されること
 - 顧客 frontend が `account-suspended` を受け取ったとき bearer-authenticated state を消去し、サポート案内を表示すること
 - viewer ロールで account suspend が 403 になること
 - アカウント停止操作が audit_events に自動記録されること

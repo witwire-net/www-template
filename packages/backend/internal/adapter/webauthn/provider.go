@@ -13,6 +13,7 @@ import (
 	gowebauthn "github.com/go-webauthn/webauthn/webauthn"
 
 	application "www-template/packages/backend/internal/application"
+	adminauth "www-template/packages/backend/internal/application/admin/auth"
 	domain "www-template/packages/backend/internal/domain"
 )
 
@@ -65,12 +66,15 @@ func NewWebAuthnProvider(rpid string, origins []string, challengeTTL time.Durati
 type webAuthnUserAdapter struct {
 	id          string
 	name        string
+	displayName string
 	credentials []gowebauthn.Credential
 }
 
+var _ adminauth.OperatorPasskeyRegistrationProvider = (*webAuthnProvider)(nil)
+
 func (u *webAuthnUserAdapter) WebAuthnID() []byte                           { return []byte(u.id) }
 func (u *webAuthnUserAdapter) WebAuthnName() string                         { return u.name }
-func (u *webAuthnUserAdapter) WebAuthnDisplayName() string                  { return u.name }
+func (u *webAuthnUserAdapter) WebAuthnDisplayName() string                  { return u.displayName }
 func (u *webAuthnUserAdapter) WebAuthnCredentials() []gowebauthn.Credential { return u.credentials }
 
 // ─── BeginLogin ───────────────────────────────────────────────────────────────
@@ -94,6 +98,12 @@ func (p *webAuthnProvider) BeginLogin(ctx context.Context, _ string) (challengeK
 	}
 
 	return challengeKey, jsonBytes, nil
+}
+
+// BeginOperatorLogin は Admin operator passkey login challenge を開始する。
+func (p *webAuthnProvider) BeginOperatorLogin(ctx context.Context, identifier string) (challengeKey string, optionsJSON []byte, err error) {
+	// Step 1: Admin login も discoverable credential 前提なので、既存 BeginLogin の full WebAuthn challenge 発行を再利用する。
+	return p.BeginLogin(ctx, identifier)
 }
 
 // ─── FinishLogin ─────────────────────────────────────────────────────────────
@@ -229,12 +239,10 @@ func isDomainNotFound(err error) bool {
 // ─── BeginRegistration ────────────────────────────────────────────────────────
 
 func (p *webAuthnProvider) BeginRegistration(ctx context.Context, accountID domain.AccountID) (challengeKey string, challengeBytes []byte, err error) {
-	user := &webAuthnUserAdapter{id: accountID.String(), name: accountID.String()}
+	user := &webAuthnUserAdapter{id: accountID.String(), name: accountID.String(), displayName: accountID.String()}
 
-	// user verification を required に設定し、UV-less attestation を拒否できるようにする。
-	creation, sessionData, err := p.wa.BeginRegistration(user, gowebauthn.WithAuthenticatorSelection(goprotocol.AuthenticatorSelection{
-		UserVerification: goprotocol.VerificationRequired,
-	}))
+	// usernameless login と password manager 保存に必要な discoverable credential を必須化する。
+	creation, sessionData, err := p.wa.BeginRegistration(user, gowebauthn.WithAuthenticatorSelection(discoverableCredentialSelection()))
 	if err != nil {
 		return "", nil, fmt.Errorf("webauthn: BeginRegistration: %w", err)
 	}
@@ -250,6 +258,65 @@ func (p *webAuthnProvider) BeginRegistration(ctx context.Context, accountID doma
 	}
 
 	return challengeKey, jsonBytes, nil
+}
+
+// BeginOperatorRegistration は Admin operator setup 用の WebAuthn 登録 ceremony を開始する。
+func (p *webAuthnProvider) BeginOperatorRegistration(ctx context.Context, input adminauth.OperatorRegistrationChallengeInput) (adminauth.OperatorRegistrationChallenge, error) {
+	// Step 1: Admin operator の user handle として OperatorID を使い、Product AccountID へ意味変換しない。
+	user := &webAuthnUserAdapter{id: input.OperatorID, name: input.Email, displayName: input.DisplayName}
+	creation, sessionData, err := p.wa.BeginRegistration(user, gowebauthn.WithAuthenticatorSelection(discoverableCredentialSelection()))
+	if err != nil {
+		return adminauth.OperatorRegistrationChallenge{}, fmt.Errorf("webauthn: BeginOperatorRegistration: %w", err)
+	}
+
+	// Step 2: HTTP response の requestId と provider session lookup key を一致させ、finish request で同じ requestId を消費できるようにする。
+	if err := p.saveSessionData(ctx, input.RequestID, *sessionData); err != nil {
+		return adminauth.OperatorRegistrationChallenge{}, fmt.Errorf("webauthn: save operator registration session: %w", err)
+	}
+	jsonBytes, jsonErr := json.Marshal(creation)
+	if jsonErr != nil {
+		return adminauth.OperatorRegistrationChallenge{}, fmt.Errorf("webauthn: marshal operator creation: %w", jsonErr)
+	}
+	return adminauth.OperatorRegistrationChallenge{RequestID: input.RequestID, Challenge: sessionData.Challenge, OptionsJSON: jsonBytes}, nil
+}
+
+// discoverableCredentialSelection は登録時に作成する credential の条件を一箇所で定義する。
+func discoverableCredentialSelection() goprotocol.AuthenticatorSelection {
+	// Step 1: WebAuthn Level 1 由来の requireResidentKey と Level 2 の residentKey を同時に指定し、client 側で discoverable credential 作成要求が欠落しないようにする。
+	requireResidentKey := true
+
+	// Step 2: user verification も required にし、登録完了後の検証で UV-less attestation を拒否する方針と一致させる。
+	return goprotocol.AuthenticatorSelection{RequireResidentKey: &requireResidentKey, ResidentKey: goprotocol.ResidentKeyRequirementRequired, UserVerification: goprotocol.VerificationRequired}
+}
+
+// FinishOperatorRegistration は Admin operator setup 用 attestation を検証し、保存用 credential data を返す。
+func (p *webAuthnProvider) FinishOperatorRegistration(ctx context.Context, requestID string, operatorID string, credential adminauth.OperatorWebAuthnAttestationCredential) (adminauth.OperatorPasskeyRegistration, error) {
+	// Step 1: requestId で保存済み session を一度だけ消費し、replay による二重 passkey 作成を防ぐ。
+	sessionData, sessionErr := p.consumeSessionData(ctx, requestID)
+	if sessionErr != nil {
+		return adminauth.OperatorPasskeyRegistration{}, sessionErr
+	}
+	user := &webAuthnUserAdapter{id: operatorID, name: operatorID}
+
+	// Step 2: Admin 専用 DTO を protocol parser が受け付ける JSON へ変換し、go-webauthn に full attestation verification を委譲する。
+	parsed, parseErr := dtoToAdminAttestationParsed(credential)
+	if parseErr != nil {
+		return adminauth.OperatorPasskeyRegistration{}, fmt.Errorf("webauthn: parse operator attestation: %w", parseErr)
+	}
+	if parsed.Response.AttestationObject.AuthData.Flags&goprotocol.FlagUserVerified == 0 {
+		return adminauth.OperatorPasskeyRegistration{}, fmt.Errorf("webauthn: user verification required")
+	}
+	webauthnCred, createErr := p.wa.CreateCredential(user, sessionData, parsed)
+	if createErr != nil {
+		return adminauth.OperatorPasskeyRegistration{}, fmt.Errorf("webauthn: CreateOperatorCredential: %w", createErr)
+	}
+
+	// Step 3: 保存層へ渡す credential data だけを DTO 化し、public key や sign count を HTTP response へは返さない。
+	transports := make([]string, 0, len(webauthnCred.Transport))
+	for _, t := range webauthnCred.Transport {
+		transports = append(transports, string(t))
+	}
+	return adminauth.OperatorPasskeyRegistration{CredentialHandle: base64.RawURLEncoding.EncodeToString(webauthnCred.ID), PublicKey: webauthnCred.PublicKey, SignCount: webauthnCred.Authenticator.SignCount, AAGUID: webauthnCred.Authenticator.AAGUID, BackupEligible: webauthnCred.Flags.BackupEligible, BackupState: webauthnCred.Flags.BackupState, Transports: transports}, nil
 }
 
 // ─── FinishRegistration ───────────────────────────────────────────────────────
@@ -395,6 +462,16 @@ func dtoToAttestationParsed(dto application.WebAuthnAttestationCredentialDTO) (*
 		},
 		AuthenticatorAttachment: dto.AuthenticatorAttachment,
 	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return goprotocol.ParseCredentialCreationResponseBody(bytes.NewReader(data))
+}
+
+func dtoToAdminAttestationParsed(dto adminauth.OperatorWebAuthnAttestationCredential) (*goprotocol.ParsedCredentialCreationData, error) {
+	// Step 1: Admin application DTO を existing JSON shim に詰め替え、parser の入力形式を Product registration と揃える。
+	raw := attestationCredentialJSON{ID: dto.ID, RawID: dto.RawID, Type: dto.Type, Response: attestationResponseJSON{ClientDataJSON: dto.Response.ClientDataJSON, AttestationObject: dto.Response.AttestationObject, Transports: dto.Response.Transports}, AuthenticatorAttachment: dto.AuthenticatorAttachment}
 	data, err := json.Marshal(raw)
 	if err != nil {
 		return nil, err

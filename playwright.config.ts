@@ -23,7 +23,9 @@ export default defineConfig({
   /* 共通設定 */
   use: {
     /* ベースURL */
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://www.localhost:5173',
+    /* ブラウザロケールを日本語に固定し、E2E で日本語表示を期待できるようにする */
+    locale: 'ja-JP',
     /* 失敗時のスクリーンショット */
     screenshot: 'only-on-failure',
     /* 失敗時のビデオ */

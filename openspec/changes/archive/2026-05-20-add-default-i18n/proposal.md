@@ -16,8 +16,8 @@
 - Product API 契約は Product Account と AccountSetting だけを表し、Admin operator locale を TypeSpec、OpenAPI、Product SDK、Go bindings に含めません。API model 名は `AccountSetting` / `AccountSettingSnapshot` / `AccountLocale` のように Account 所有を明示します。
 - Product BE は Clean Architecture を徹底し、`packages/backend/internal/domain` が Account root、AccountSetting、Account.Auth projection を flat package で所有します。`packages/backend/internal/application` は AccountSetting use case と Auth use case を分離し、Auth 側は本人確認、session、token、passkey/recovery 認証フローだけを扱います。Auth は AccountSetting を所有せず、Account を代替する `AuthAccount` / `AuthSubject` も作りません。
 - `AuthAccount` / `AuthAccountRepository` は許容せず、Account.Auth の認証用 projection である `AccountAuth` / `AccountAuthRepository` に置き換えます。`AccountAuth` は AccountSetting を持たず、Auth が必要とする AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱います。
-- Product DB は Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials` を正規 table とします。locale は `account_settings.locale` に永続化します。Auth repository は `account_settings` を読んではならず、旧 table 名 `passkey_credentials` も残しません。
-- 管理コンソールはオペレーター単位の言語設定を Admin DB に保存し、別端末でも同じ言語で表示されるようにします。Admin operator locale は `packages/admin` 内で package-local に定義し、Product AccountSetting を共有しません。
+- database は Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials` を正規 table とします。locale は `account_settings.locale` に永続化します。Auth repository は `account_settings` を読んではならず、旧 table 名 `passkey_credentials` も残しません。
+- 管理コンソールはオペレーター単位の言語設定を Admin-owned schema に保存し、別端末でも同じ言語で表示されるようにします。Admin operator locale は `packages/admin` 内で package-local に定義し、Product AccountSetting を共有しません。
 - `packages/frontend/ui` は表示言語も i18n 実装も所有しません。i18n import が必要なコンポーネントは UI package に置かず、利用面の app/web/admin 側に配置します。`DeviceManager` は認証済みアプリの device/session 文言を持つ concrete component として `packages/frontend/app` 側へ置きます。
 - Product BE の認証関連メールは、Auth が生成した配送 intent と AccountSetting.locale を composition して件名と本文を選択します。Auth domain/application は locale 値オブジェクトや AccountSetting mutation を所有しません。
 - lint で、対象パッケージの多言語対応を迂回するハードコード文言、未登録ロケールキー、AccountSetting と Auth の境界違反を検知できるようにします。
@@ -32,7 +32,7 @@
 
 ### Modified Spec Units
 
-- `admin-console-be`: Product DB の Account.Auth child table を `account_passkey_credentials` に揃え、Admin view が禁止 table 名 `passkey_credentials` を参照しないことを保証します。
+- `admin-console-be`: database の Account.Auth child table を `account_passkey_credentials` に揃え、Admin view が禁止 table 名 `passkey_credentials` を参照しないことを保証します。
 
 ## Naming
 
@@ -45,7 +45,7 @@
 
 - 影響パッケージ: `packages/web`、`packages/frontend/app`、`packages/frontend/domain`、`packages/frontend/ui`、`packages/frontend/i18n`、`packages/frontend/api`、`packages/admin`、`packages/backend`、`packages/typespec`。
 - API 影響: Product API に認証済み AccountSetting の取得・更新エンドポイントを追加します。refresh response は Auth の token pair に AccountSetting snapshot を composition して返します。Product API 契約は Admin operator locale を含めません。
-- DB 影響: Product DB の初期 schema を Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials`、Account 中心の admin views/functions を正とします。Admin DB の `admin.operators` には operator locale を永続化します。
+- DB 影響: database の初期 schema を Account root から組み直し、`accounts`、`account_settings`、`account_passkey_credentials`、Account 中心の admin views/functions を正とします。Admin-owned schema の `admin.operators` には operator locale を永続化します。
 - 生成物影響: TypeSpec 変更により OpenAPI、frontend API SDK、Go server bindings の再生成が必要です。
 - メール影響: 復旧、デバイスリンク、復旧完了、デバイス追加完了メールの言語選択が AccountSetting.locale に依存します。
 - lint 影響: 対象パッケージに i18n 強制ルールを追加し、対象外にする文字列や例外条件を明確化します。`packages/frontend/ui` と `packages/frontend/domain` では `packages/frontend/i18n` と app/web/admin の i18n module import を禁止します。`packages/web`、`packages/frontend/app`、`packages/admin` は各自の locale JSON files だけを import し、互いの辞書を参照しません。

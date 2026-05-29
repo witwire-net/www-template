@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createEmptyTokenPair, decodeAccessToken, isRefreshNeeded } from './token_state';
+import { createEmptyAccessTokenState, decodeAccessToken, isRefreshNeeded } from './token_state';
 
 describe('token_state', () => {
   it('[AUTH-FE-S023] isRefreshNeeded returns true when token expires within margin', () => {
@@ -15,16 +15,15 @@ describe('token_state', () => {
     expect(isRefreshNeeded(exp, now, 60_000)).toBe(true);
   });
 
-  it('[AUTH-FE-S025] createEmptyTokenPair holds tokens in memory only', () => {
-    const pair = createEmptyTokenPair();
-    expect(pair.accessToken).toBe('');
-    expect(pair.refreshToken).toBe('');
+  it('[AUTH-FE-S025] createEmptyAccessTokenState holds accessToken in memory only', () => {
+    const state = createEmptyAccessTokenState();
+    expect(state.accessToken).toBe('');
   });
 
   it('[AUTH-FE-S026] initial token state is empty and does not restore previous tokens', () => {
-    const pair = createEmptyTokenPair();
-    expect(pair.accessToken).toBe('');
-    expect(pair.refreshToken).toBe('');
+    const state = createEmptyAccessTokenState();
+    expect(state.accessToken).toBe('');
+    expect('refreshToken' in state).toBe(false);
   });
 
   it('decodeAccessToken extracts claims from a valid JWT', () => {

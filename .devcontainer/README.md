@@ -33,7 +33,7 @@
 
 - バージョン: `agent-browser@0.27.0`
 - 起動確認: `agent-browser doctor --offline --quick`
-- 基本操作: `agent-browser open http://localhost:5173` の後に `agent-browser snapshot`
+- 基本操作: `agent-browser open http://www.localhost:5173` の後に `agent-browser snapshot`
 - Dashboard: `agent-browser dashboard start` の後に `http://localhost:4848`
 - 認証 state や profile は Cookie やセッショントークンを含む可能性があるため、repo にはコミットしないでください
 

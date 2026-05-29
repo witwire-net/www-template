@@ -41,10 +41,11 @@ func NewStore(cfg config.ValkeyConfig) (*ValkeyStore, error) {
 }
 
 func (s *ValkeyStore) Key(parts ...string) string {
-	segments := make([]string, 0, len(parts)+1)
+	segments := make([]string, 0, len(parts)+2)
 	if s.keyPrefix != "" {
 		segments = append(segments, s.keyPrefix)
 	}
+	segments = append(segments, "product")
 	segments = append(segments, parts...)
 	return strings.Join(segments, ":")
 }

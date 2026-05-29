@@ -2,7 +2,7 @@ packages:
   - 'packages/typespec'
   - 'packages/frontend/*'
   - 'packages/web'
-  - 'packages/admin'
+  - 'packages/admin/*'
 
 # npmjs.org 以外へ意図せず解決されないように、既定 registry を明示する。
 registries:

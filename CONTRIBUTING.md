@@ -20,19 +20,24 @@
 
 - 正は `packages/typespec/main.tsp`
 - `packages/web/wrangler.toml` と `packages/frontend/app/wrangler.toml` は配備設定であり、API contract の canonical source ではない
-- OpenAPI path は `/api/v1/*` だけを許可する
+- Product API と Admin API はどちらも `/api/v1/*` だけを許可し、origin / Go binary / TypeSpec service / OpenAPI artifact / SDK package / Go bindings で分離する
+- `/api/admin/*` は Admin BFF 逃げ道として使わない
 - 生成物は手編集しない
-  - `packages/typespec/openapi/openapi.json`
-  - `packages/frontend/api/src/generated/client.ts`
-  - `packages/backend/internal/generated/openapi/openapi.gen.go`
+  - Product OpenAPI: `packages/typespec/openapi/openapi.json`
+  - Admin OpenAPI: `packages/typespec/openapi/admin.openapi.json`
+  - Product SDK: `packages/frontend/api/src/generated/client.ts`
+  - Admin SDK: `packages/admin/api/src/generated/client.ts`
+  - Product Go bindings: `packages/backend/internal/generated/openapi/openapi.gen.go`
+  - Admin Go bindings: `packages/backend/internal/generated/adminopenapi/openapi.gen.go`
 - 契約変更後は必ず `pnpm gen` と `pnpm check:codegen`
 
 ## Go backend ルール
 
-- public surface は `/api/v1/auth/*`（`/api/v1/auth/logout` を除く）および `/api/v1/status`
+- Product public surface は `/api/v1/auth/*`（`/api/v1/auth/logout` を除く）および `/api/v1/status`
 - runtime public surface baseline は `/api/v1/status`, `/api/v1/auth/passkey/start`, `/api/v1/auth/passkey/finish`, `/api/v1/auth/passkey/register/start`, `/api/v1/auth/passkey/register`, `/api/v1/auth/recovery`, `/api/v1/auth/recovery/consume`, `/api/v1/auth/passkey/add/start`, `/api/v1/auth/passkey/add/finish`
 - app surface（bearer 必須）は `/api/v1/passkeys/*` および `/api/v1/auth/logout`
 - app surface は `Authorization: Bearer <token>` 境界を必須にする
+- Admin surface も Admin origin の `/api/v1/*` として提供し、Product origin / Product binary / Product OpenAPI / Product SDK / Product Go bindings へ混入させない
 - `APP_ENV!=development` では `APP_BEARER_TOKEN` を必須にする
 - OpenAPI は Spectral lint で path policy と bearer security declaration を検証する
 - backend の依存方向は `cmd/api -> internal/app -> (internal/adapter/* | internal/application | internal/platform/*) -> internal/domain` を守る

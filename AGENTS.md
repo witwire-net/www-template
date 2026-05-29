@@ -31,10 +31,12 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 - Generate all contracts: `pnpm gen`
 - Typecheck: `pnpm check`
 - Dev (all): `pnpm dev:all`
-- Dev (server): `pnpm dev:server` (Go API on `http://localhost:8080`)
-- Dev (client entry): `pnpm dev:client` (alias of `pnpm dev:web`, Vite on `http://localhost:5173`)
-- Dev (web): `pnpm dev:web` (SvelteKit public site on `http://localhost:5173`)
-- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://localhost:5174`)
+- Dev (server): `pnpm dev:server` (Product Go API on `http://localhost:8080`)
+- Dev (admin server): `pnpm dev:admin-server` (Admin Go API on `http://localhost:8081`)
+- Dev (client entry): `pnpm dev:client` (alias of `pnpm dev:web`, Vite on `http://www.localhost:5173`)
+- Dev (web): `pnpm dev:web` (SvelteKit public site on `http://www.localhost:5173`)
+- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://app.localhost:5174`)
+- Dev (admin): `pnpm dev:admin` (Admin Console on `http://admin.localhost:5176`)
 
 ## Command Policy
 
@@ -46,8 +48,10 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 ## API Contract (TypeSpec)
 
 - Source of truth: `packages/typespec/main.tsp`
-- Generated OpenAPI: `packages/typespec/openapi/openapi.json`
-- Generated Go server bindings: `packages/backend/internal/generated/openapi/openapi.gen.go`
+- Generated Product OpenAPI: `packages/typespec/openapi/openapi.json`
+- Generated Admin OpenAPI: `packages/typespec/openapi/admin.openapi.json`
+- Generated Product Go server bindings: `packages/backend/internal/generated/openapi/openapi.gen.go`
+- Generated Admin Go server bindings: `packages/backend/internal/generated/adminopenapi/openapi.gen.go`
 - Regenerate OpenAPI + SDK + Go bindings: `pnpm gen`
 - Codegen drift check (CI-style): `pnpm check:codegen`
 
@@ -69,7 +73,7 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 - Backend-owned agent scope: `packages/backend`, `packages/typespec`, and `packages/admin`.
 - `packages/backend`: Go product API, migrations, generated Go bindings consumption, backend observability, and backend security boundaries.
 - `packages/typespec`: API contract source of truth and generated OpenAPI input; edit source contracts only and regenerate via `pnpm gen`.
-- `packages/admin`: Admin Console package, including package-local `/api/admin/**` BFF routes, Prisma schemas, admin-only server/runtime code, and admin UI coupled to those routes.
+- `packages/admin`: Admin Console static frontend/domain/API SDK package. Admin frontend calls the same-origin Admin Go backend under `/api/v1/*`; it MUST NOT own `/api/admin/**` BFF routes, Prisma-backed server/runtime logic, or generated Product SDK exposure.
 - Frontend-owned agent scope: `packages/web` and `packages/frontend/**`.
 - `packages/web`: public landing/public site surface; it may depend on `packages/frontend/ui` only.
 - `packages/frontend/i18n`: shared frontend i18n runtime (locale definitions, loader/config, typed translator, formatter, coverage utility). It may be imported by `packages/web`, `packages/frontend/app`, and `packages/admin`, but not by `packages/frontend/ui` or `packages/frontend/domain`.
@@ -80,7 +84,7 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 
 ## Backend Guardrails
 
-- API path policy: all product/backend API routes live under `api/v1/*`; public routes are `api/v1/auth/*` (excluding `api/v1/auth/logout`) and `api/v1/status`; bearer-protected routes are `api/v1/passkeys/*`, `api/v1/sessions*`, and `api/v1/auth/logout`. Admin Console package-local BFF routes are the only exception: `/api/admin/*` is allowed only under `packages/admin/src/routes/api/admin/**`, must not be exposed from Go backend, and must not be used by generated product SDKs.
+- API path policy: Product and Admin backend APIs both live under `/api/v1/*`, but MUST stay separated by origin, Go binary, TypeSpec service, OpenAPI artifact, SDK package, and Go bindings. Product public routes are `/api/v1/auth/*` (excluding `/api/v1/auth/logout`) and `/api/v1/status`; Product bearer-protected routes are `/api/v1/passkeys/*`, `/api/v1/sessions*`, and `/api/v1/auth/logout`. Admin routes belong only to the Admin origin/binary/artifacts; `/api/admin/*` is banned for Product/Admin contracts, generated artifacts, and BFF escape hatches.
 - GORM imports are allowed only under `packages/backend/internal/adapter/postgres/**`
 - `AutoMigrate` is banned; use `packages/backend/db/migrations/**` with `golang-migrate`
 - OpenSpec is archived for now and is not part of the default `pnpm lint` / CI flow

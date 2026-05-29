@@ -14,24 +14,26 @@ export interface AccessTokenClaims {
 }
 
 /**
- * メモリ上にのみ保持されるトークンペア。
- * localStorage / sessionStorage / cookie / IndexedDB / URL への永続化は禁止。
+ * メモリ上にのみ保持されるアクセストークン state。
+ *
+ * refreshToken は HttpOnly Cookie が保持するため、ブラウザー JavaScript から読める
+ * state・storage・URL・ログには置かない。この型は bearer accessToken だけを扱い、
+ * Cookie refresh flow の秘密値を表現しない。
  */
-export interface MemoryTokenPair {
+export interface MemoryAccessTokenState {
   /** JWT アクセストークン。 */
   accessToken: string;
-  /** リフレッシュトークン。 */
-  refreshToken: string;
 }
 
 /**
- * 空のトークンペアを生成する。
+ * 空のアクセストークン state を生成する。
+ *
  * セッションクリア時などに使用する。
  *
- * @returns accessToken と refreshToken が空文字の MemoryTokenPair
+ * @returns accessToken が空文字の MemoryAccessTokenState
  */
-export function createEmptyTokenPair(): MemoryTokenPair {
-  return { accessToken: '', refreshToken: '' };
+export function createEmptyAccessTokenState(): MemoryAccessTokenState {
+  return { accessToken: '' };
 }
 
 /**

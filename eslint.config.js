@@ -11,7 +11,7 @@ import unicorn from 'eslint-plugin-unicorn';
 import tseslint from 'typescript-eslint';
 
 import maxlinesConfig from './.eslintrc-maxlines.json' with { type: 'json' };
-import adminSvelteConfig from './packages/admin/svelte.config.js';
+import adminSvelteConfig from './packages/admin/app/svelte.config.js';
 import uiSvelteConfig from './packages/frontend/ui/svelte.config.js';
 
 const compat = new FlatCompat();
@@ -52,7 +52,7 @@ const frontendI18nSourceFiles = [
 const frontendWebLocaleJsonFiles = ['packages/web/src/**/*.json'];
 const frontendAppLocaleJsonFiles = ['packages/frontend/app/src/**/*.json'];
 const frontendUiLocaleJsonFiles = ['packages/frontend/ui/src/**/*.json'];
-const adminLocaleJsonFiles = ['packages/admin/src/**/*.json'];
+const adminLocaleJsonFiles = ['packages/admin/app/src/**/*.json'];
 
 const frontendSvelteFiles = [
   'packages/frontend/**/*.svelte',
@@ -65,6 +65,8 @@ const frontendSvelteFiles = [
 
 const frontendAppRoutePageFiles = ['packages/frontend/app/src/routes/**/*.svelte'];
 
+const adminAppRoutePageFiles = ['packages/admin/app/src/routes/**/*.svelte'];
+
 const frontendWebRoutePageFiles = ['packages/web/src/routes/**/*.svelte'];
 
 const frontendRoutePageFiles = [...frontendAppRoutePageFiles, ...frontendWebRoutePageFiles];
@@ -74,6 +76,13 @@ const frontendAppComponentFiles = [
   'packages/frontend/app/src/components/**/*.svelte',
   'packages/frontend/app/src/lib/**/*.{ts,js}',
   'packages/frontend/app/src/lib/**/*.svelte',
+];
+
+const adminAppComponentFiles = [
+  'packages/admin/app/src/components/**/*.{ts,js}',
+  'packages/admin/app/src/components/**/*.svelte',
+  'packages/admin/app/src/lib/**/*.{ts,js}',
+  'packages/admin/app/src/lib/**/*.svelte',
 ];
 
 const frontendWebComponentFiles = [
@@ -93,6 +102,8 @@ const frontendDomainHookSvelteFiles = [
 ];
 
 const frontendDomainPlainTsFiles = ['packages/frontend/domain/src/**/*.ts'];
+
+const adminDomainPlainTsFiles = ['packages/admin/domain/src/**/*.ts'];
 
 const frontendNonReactSourceFiles = [
   ...frontendAppSourceFiles,
@@ -114,6 +125,13 @@ const frontendAppSvelteKitImportFiles = [
   'packages/frontend/app/src/**/*.svelte.js',
 ];
 
+const adminAppSvelteKitImportFiles = [
+  'packages/admin/app/src/**/*.{ts,js}',
+  'packages/admin/app/src/**/*.svelte',
+  'packages/admin/app/src/**/*.svelte.ts',
+  'packages/admin/app/src/**/*.svelte.js',
+];
+
 const frontendWebSvelteKitRouteModuleFiles = [
   'packages/web/src/routes/**/+page.{ts,js}',
   'packages/web/src/routes/**/+layout.{ts,js}',
@@ -122,6 +140,11 @@ const frontendWebSvelteKitRouteModuleFiles = [
 const frontendAppSvelteKitRouteModuleFiles = [
   'packages/frontend/app/src/routes/**/+page.{ts,js}',
   'packages/frontend/app/src/routes/**/+layout.{ts,js}',
+];
+
+const adminAppSvelteKitRouteModuleFiles = [
+  'packages/admin/app/src/routes/**/+page.{ts,js}',
+  'packages/admin/app/src/routes/**/+layout.{ts,js}',
 ];
 
 const frontendWebSvelteKitHookModuleFiles = [
@@ -136,6 +159,12 @@ const frontendAppSvelteKitHookModuleFiles = [
   'packages/frontend/app/src/hooks.server.{ts,js}',
 ];
 
+const adminAppSvelteKitHookModuleFiles = [
+  'packages/admin/app/src/hooks.{ts,js}',
+  'packages/admin/app/src/hooks.client.{ts,js}',
+  'packages/admin/app/src/hooks.server.{ts,js}',
+];
+
 const frontendWebSvelteKitPageServerModuleFiles = [
   'packages/web/src/routes/+page.server.{ts,js}',
   'packages/web/src/routes/*/**/+page.server.{ts,js}',
@@ -143,6 +172,10 @@ const frontendWebSvelteKitPageServerModuleFiles = [
 
 const frontendAppSvelteKitPageServerModuleFiles = [
   'packages/frontend/app/src/routes/**/+page.server.{ts,js}',
+];
+
+const adminAppSvelteKitPageServerModuleFiles = [
+  'packages/admin/app/src/routes/**/+page.server.{ts,js}',
 ];
 
 const frontendAppSvelteKitServerOnlyFiles = [
@@ -154,17 +187,44 @@ const frontendAppSvelteKitServerOnlyFiles = [
   'packages/frontend/app/src/lib/server/**/*.svelte.{ts,js}',
 ];
 
+const adminAppSvelteKitServerOnlyFiles = [
+  'packages/admin/app/src/routes/**/+server.{ts,js}',
+  'packages/admin/app/src/routes/**/+page.server.{ts,js}',
+  'packages/admin/app/src/routes/**/+layout.server.{ts,js}',
+  'packages/admin/app/src/hooks.server.{ts,js}',
+  'packages/admin/app/src/lib/server/**/*.{ts,js,svelte}',
+  'packages/admin/app/src/lib/server/**/*.svelte.{ts,js}',
+];
+
 const adminSourceFiles = [
-  'packages/admin/src/**/*.{ts,js}',
-  'packages/admin/src/**/*.svelte',
-  'packages/admin/src/**/*.svelte.ts',
-  'packages/admin/src/**/*.svelte.js',
+  'packages/admin/app/src/**/*.{ts,js}',
+  'packages/admin/app/src/**/*.svelte',
+  'packages/admin/app/src/**/*.svelte.ts',
+  'packages/admin/app/src/**/*.svelte.js',
+];
+
+const adminApiSourceFiles = [
+  'packages/admin/api/src/**/*.ts',
+  'packages/admin/api/src/**/*.svelte.ts',
+  'packages/admin/api/src/**/*.svelte.js',
+];
+
+const adminDomainSourceFiles = [
+  'packages/admin/domain/src/**/*.ts',
+  'packages/admin/domain/src/**/*.svelte.ts',
+  'packages/admin/domain/src/**/*.svelte.js',
 ];
 
 const adminSvelteFiles = [
-  'packages/admin/**/*.svelte',
-  'packages/admin/**/*.svelte.ts',
-  'packages/admin/**/*.svelte.js',
+  'packages/admin/app/**/*.svelte',
+  'packages/admin/app/**/*.svelte.ts',
+  'packages/admin/app/**/*.svelte.js',
+];
+
+const adminNonReactSourceFiles = [
+  ...adminSourceFiles,
+  ...adminDomainSourceFiles,
+  ...adminApiSourceFiles,
 ];
 
 const exportTsdocPlugin = {
@@ -916,6 +976,147 @@ const adminSecurityPlugin = {
         };
       },
     },
+    'no-secret-literals': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Admin パッケージ内で token / key / password / secret の平文 literal を禁止する。',
+        },
+        schema: [],
+        messages: {
+          secretLiteral:
+            'Admin パッケージ内に secret/token/key/password literal `{{name}}` を含めないでください。環境変数または安全な secret provider を使用してください。',
+        },
+      },
+      create(context) {
+        const filename = context.filename.replaceAll('\\', '/');
+        if (/\.(?:test|spec)\.[cm]?[jt]s$/u.test(filename)) {
+          return {};
+        }
+
+        const sensitiveNamePattern =
+          /(?:secret|token|password|(?:api|access|private|jwt|signing|encryption)key)/iu;
+
+        const isSensitiveName = (name) => {
+          if (typeof name !== 'string') {
+            return false;
+          }
+
+          const normalizedName = name.replaceAll('-', '').replaceAll('_', '').toLowerCase();
+          if (normalizedName.includes('passkey')) {
+            return false;
+          }
+
+          return sensitiveNamePattern.test(normalizedName);
+        };
+
+        const isHighRiskSecretLiteral = (value) => {
+          if (typeof value !== 'string') {
+            return false;
+          }
+
+          const trimmedValue = value.trim();
+          if (trimmedValue.length < 12) {
+            return false;
+          }
+
+          return /[A-Za-z]/u.test(trimmedValue) && /(?:\d|[-_=.:/])/u.test(trimmedValue);
+        };
+
+        const propertyName = (node) => {
+          if (node.type === 'Identifier') {
+            return node.name;
+          }
+          if (node.type === 'Literal' && typeof node.value === 'string') {
+            return node.value;
+          }
+          return null;
+        };
+
+        const targetName = (node) => {
+          if (node.type === 'Identifier') {
+            return node.name;
+          }
+
+          if (node.type === 'MemberExpression') {
+            return propertyName(node.property);
+          }
+
+          return null;
+        };
+
+        const reportLiteral = (node, name, value) => {
+          if (!isSensitiveName(name) || !isHighRiskSecretLiteral(value)) {
+            return;
+          }
+
+          context.report({
+            node,
+            messageId: 'secretLiteral',
+            data: { name },
+          });
+        };
+
+        return {
+          Literal(node) {
+            const parent = node.parent;
+            if (typeof node.value !== 'string' || !parent) {
+              return;
+            }
+
+            if (parent.type === 'VariableDeclarator' && parent.id.type === 'Identifier') {
+              reportLiteral(node, parent.id.name, node.value);
+            }
+
+            if (parent.type === 'Property' && parent.value === node) {
+              reportLiteral(node, propertyName(parent.key), node.value);
+            }
+
+            if (parent.type === 'AssignmentExpression') {
+              reportLiteral(node, targetName(parent.left), node.value);
+            }
+
+            if (parent.type === 'PropertyDefinition' && parent.value === node) {
+              reportLiteral(node, propertyName(parent.key), node.value);
+            }
+
+            if (parent.type === 'AssignmentPattern' && parent.right === node) {
+              reportLiteral(node, targetName(parent.left), node.value);
+            }
+          },
+          TemplateLiteral(node) {
+            const parent = node.parent;
+            if (!parent || node.expressions.length > 0) {
+              return;
+            }
+
+            const value = node.quasis
+              .map((quasi) => quasi.value.cooked ?? quasi.value.raw)
+              .join('');
+            if (parent.type === 'VariableDeclarator' && parent.id.type === 'Identifier') {
+              reportLiteral(node, parent.id.name, value);
+            }
+
+            if (parent.type === 'Property' && parent.value === node) {
+              reportLiteral(node, propertyName(parent.key), value);
+            }
+
+            if (parent.type === 'AssignmentExpression') {
+              reportLiteral(node, targetName(parent.left), value);
+            }
+
+            if (parent.type === 'PropertyDefinition' && parent.value === node) {
+              reportLiteral(node, propertyName(parent.key), value);
+            }
+
+            if (parent.type === 'AssignmentPattern' && parent.right === node) {
+              reportLiteral(node, targetName(parent.left), value);
+            }
+          },
+        };
+      },
+    },
     'no-sql-template-literals': {
       meta: {
         type: 'problem',
@@ -1046,6 +1247,169 @@ const adminBffPolicyPlugin = {
   },
 };
 
+const sdkPackageBoundaryPlugin = {
+  rules: {
+    'no-cross-sdk-imports': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description: 'Product SDK と Admin SDK の package 境界を越えた import を禁止する。',
+        },
+        schema: [],
+        messages: {
+          frontendImportsAdmin:
+            'SDK package boundary violation: packages/frontend/** から Admin SDK (@www-template/admin-api / packages/admin/api) を import しないでください。',
+          adminImportsProduct:
+            'SDK package boundary violation: packages/admin/** から Product SDK (packages/frontend/api / @www-template/api) を import しないでください。',
+        },
+      },
+      create(context) {
+        // Windows と POSIX の差を吸収し、パッケージ所有者の判定を path 文字列だけで安定させる。
+        const filename = context.filename.replaceAll('\\', '/');
+        // Product frontend 側の source だけを対象にして、Admin SDK の混入を検出する。
+        const isFrontendPackage = filename.includes('/packages/frontend/');
+        // Admin 側の source だけを対象にして、Product SDK の混入を検出する。
+        const isAdminPackage = filename.includes('/packages/admin/');
+
+        // alias・monorepo path・相対 path のどれでも Admin SDK surface を同じ違反として扱う。
+        const isAdminSdkImport = (source) =>
+          source === '@www-template/admin-api' ||
+          source.startsWith('@www-template/admin-api/') ||
+          source.includes('packages/admin/api/') ||
+          /(?:^|\/)admin\/api(?:\/|$)/.test(source);
+
+        // alias・monorepo path・相対 path のどれでも Product SDK surface を同じ違反として扱う。
+        const isProductSdkImport = (source) =>
+          source === '@www-template/api' ||
+          source.startsWith('@www-template/api/') ||
+          source.includes('packages/frontend/api/') ||
+          /(?:^|\/)frontend\/api(?:\/|$)/.test(source);
+
+        return {
+          ImportDeclaration(node) {
+            // 静的 import だけを境界検査対象にし、非文字列 source は ESLint の他 rule に任せる。
+            if (typeof node.source.value !== 'string') {
+              return;
+            }
+
+            // Product frontend から Admin SDK を参照した時点で fail-closed にする。
+            const source = node.source.value;
+            if (isFrontendPackage && isAdminSdkImport(source)) {
+              context.report({ node: node.source, messageId: 'frontendImportsAdmin' });
+            }
+
+            // Admin から Product SDK を参照した時点で fail-closed にする。
+            if (isAdminPackage && isProductSdkImport(source)) {
+              context.report({ node: node.source, messageId: 'adminImportsProduct' });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
+const adminLayerBoundaryPlugin = {
+  rules: {
+    'no-app-forbidden-imports': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          forbidden:
+            'Admin app 層は Admin domain だけを経由し、Admin API / Product frontend package を直接 import しないでください。',
+        },
+      },
+      create(context) {
+        const isForbidden = (source) =>
+          /^(?:@www-template\/(?:admin-api|api|domain|app|web)(?:\/.*)?|packages\/(?:admin\/api|frontend\/api|frontend\/domain|frontend\/app|web)(?:\/.*)?)$/.test(
+            source
+          );
+
+        return {
+          ImportDeclaration(node) {
+            if (typeof node.source.value === 'string' && isForbidden(node.source.value)) {
+              context.report({ node: node.source, messageId: 'forbidden' });
+            }
+          },
+        };
+      },
+    },
+    'no-domain-forbidden-surface': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          forbiddenImport:
+            'Admin domain 層は app / Product frontend / React / raw HTTP client に依存せず、Admin API package だけを API 境界にしてください。',
+          forbiddenSvelte:
+            'Admin domain 層では Svelte lifecycle/context API を使わず、状態と orchestration を純粋に保ってください。',
+          forbiddenFetch:
+            'Admin domain 層では fetch を直接呼ばず、Admin API wrapper を経由してください。',
+          forbiddenGlobal:
+            'Admin domain 層では DOM / browser storage global に直接依存しないでください。',
+        },
+      },
+      create(context) {
+        const forbiddenImports =
+          /^(?:@www-template\/(?:admin|api|domain|app|web)(?:\/.*)?|packages\/(?:admin\/app|frontend\/api|frontend\/domain|frontend\/app|web)(?:\/.*)?|react|react-dom|@tanstack\/react-query|svelte\/store|axios|cross-fetch)$/;
+        const forbiddenSvelteNames = new Set([
+          'onMount',
+          'beforeUpdate',
+          'afterUpdate',
+          'tick',
+          'setContext',
+          'getContext',
+        ]);
+        const forbiddenGlobals = new Set(['window', 'document', 'localStorage', 'sessionStorage']);
+
+        return {
+          ImportDeclaration(node) {
+            const source = node.source.value;
+            if (typeof source !== 'string') return;
+            if (forbiddenImports.test(source)) {
+              context.report({ node: node.source, messageId: 'forbiddenImport' });
+            }
+            if (source !== 'svelte') return;
+            for (const specifier of node.specifiers) {
+              if (
+                specifier.type === 'ImportSpecifier' &&
+                forbiddenSvelteNames.has(specifier.imported.name)
+              ) {
+                context.report({ node: specifier, messageId: 'forbiddenSvelte' });
+              }
+            }
+          },
+          CallExpression(node) {
+            if (node.callee.type === 'Identifier' && node.callee.name === 'fetch') {
+              context.report({ node, messageId: 'forbiddenFetch' });
+            }
+            if (
+              node.callee.type === 'MemberExpression' &&
+              node.callee.object.type === 'Identifier' &&
+              node.callee.object.name === 'globalThis' &&
+              node.callee.property.type === 'Identifier' &&
+              node.callee.property.name === 'fetch'
+            ) {
+              context.report({ node, messageId: 'forbiddenFetch' });
+            }
+          },
+          MemberExpression(node) {
+            if (
+              node.object.type === 'Identifier' &&
+              node.object.name === 'globalThis' &&
+              node.property.type === 'Identifier' &&
+              forbiddenGlobals.has(node.property.name)
+            ) {
+              context.report({ node, messageId: 'forbiddenGlobal' });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 const isImportMetaEnvChain = (node) => {
   if (!node || node.type !== 'MemberExpression' || node.computed) {
     return false;
@@ -1163,6 +1527,9 @@ export default tseslint.config(
       'packages/frontend/app/src/routes/**/*.svelte',
       'packages/frontend/app/src/components/**/*.svelte',
       'packages/frontend/app/src/lib/**/*.svelte',
+      'packages/admin/app/src/routes/**/*.svelte',
+      'packages/admin/app/src/components/**/*.svelte',
+      'packages/admin/app/src/lib/**/*.svelte',
     ],
     plugins: {
       'frontend-app-primitive-ui': frontendAppPrimitiveUiPlugin,
@@ -1259,6 +1626,11 @@ export default tseslint.config(
           mode: 'full',
         },
         { type: 'frontend-api', pattern: 'packages/frontend/api/src/**/*', mode: 'full' },
+        { type: 'admin-api', pattern: 'packages/admin/api/src/**/*', mode: 'full' },
+        { type: 'admin-domain', pattern: 'packages/admin/domain/src/**/*', mode: 'full' },
+        { type: 'admin-i18n', pattern: 'packages/admin/app/src/lib/i18n/**/*', mode: 'full' },
+        { type: 'admin-i18n', pattern: 'packages/admin/app/src/**/*.json', mode: 'full' },
+        { type: 'admin-app', pattern: 'packages/admin/app/src/**/*', mode: 'full' },
         { type: 'frontend-domain', pattern: 'packages/frontend/domain/src/**/*', mode: 'full' },
         { type: 'frontend-app', pattern: 'packages/frontend/app/src/**/*', mode: 'full' },
         { type: 'frontend-web', pattern: 'packages/web/src/**/*', mode: 'full' },
@@ -1267,8 +1639,6 @@ export default tseslint.config(
         { type: 'frontend-app-i18n', pattern: 'packages/frontend/app/src/**/*.json', mode: 'full' },
         { type: 'frontend-web-i18n', pattern: 'packages/web/src/**/*.json', mode: 'full' },
         { type: 'frontend-ui-i18n', pattern: 'packages/frontend/ui/src/**/*.json', mode: 'full' },
-        { type: 'admin-i18n', pattern: 'packages/admin/src/lib/i18n/**/*', mode: 'full' },
-        { type: 'admin-i18n', pattern: 'packages/admin/src/**/*.json', mode: 'full' },
         {
           type: 'domain-auth',
           pattern: 'packages/frontend/domain/src/auth/**/*',
@@ -1282,86 +1652,6 @@ export default tseslint.config(
         {
           type: 'domain-observability',
           pattern: 'packages/frontend/domain/src/observability/**/*',
-          mode: 'full',
-        },
-        {
-          type: 'admin-controller',
-          pattern: 'packages/admin/src/routes/**/+page.server.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-controller',
-          pattern: 'packages/admin/src/routes/**/+layout.server.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-controller',
-          pattern: 'packages/admin/src/routes/**/+server.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-controller',
-          pattern: 'packages/admin/src/routes/**/*.test.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-controller',
-          pattern: 'packages/admin/src/lib/server/infrastructure/**/*.test.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-service',
-          pattern: 'packages/admin/src/lib/server/services/**/*.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-model',
-          pattern: 'packages/admin/src/lib/server/models/**/*.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-infrastructure',
-          pattern: 'packages/admin/src/lib/server/infrastructure/**/*.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-infrastructure',
-          pattern: 'packages/admin/src/hooks.server.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-infrastructure',
-          pattern: 'packages/admin/src/hooks.client.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-view',
-          pattern: 'packages/admin/src/lib/components/**/*.svelte',
-          mode: 'full',
-        },
-        {
-          type: 'admin-route-view',
-          pattern: 'packages/admin/src/routes/**/*.svelte',
-          mode: 'full',
-        },
-        {
-          type: 'admin-hooks',
-          pattern: 'packages/admin/src/hooks/**/*.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-hooks',
-          pattern: 'packages/admin/src/hooks/**/*.svelte.ts',
-          mode: 'full',
-        },
-        {
-          type: 'admin-hooks',
-          pattern: 'packages/admin/src/hooks/**/*.svelte.js',
-          mode: 'full',
-        },
-        {
-          type: 'prisma-client',
-          pattern: 'packages/admin/node_modules/.prisma/**/*',
           mode: 'full',
         },
       ],
@@ -1483,6 +1773,18 @@ export default tseslint.config(
               allow: ['frontend-api'],
             },
             {
+              from: ['admin-api'],
+              allow: ['admin-api'],
+            },
+            {
+              from: ['admin-domain'],
+              allow: ['admin-domain', 'admin-api'],
+            },
+            {
+              from: ['admin-app'],
+              allow: ['admin-app', 'admin-domain', 'ui', 'frontend-i18n', 'admin-i18n'],
+            },
+            {
               from: ['frontend-domain'],
               allow: ['frontend-domain', 'frontend-api'],
             },
@@ -1511,67 +1813,6 @@ export default tseslint.config(
             {
               from: ['admin-i18n'],
               allow: ['admin-i18n', 'frontend-i18n'],
-            },
-            {
-              from: ['admin-view'],
-              allow: ['admin-view', 'admin-route-view', 'ui', 'frontend-i18n', 'admin-i18n'],
-            },
-            {
-              from: ['admin-route-view'],
-              allow: [
-                'admin-route-view',
-                'admin-controller',
-                'admin-view',
-                'ui',
-                'frontend-i18n',
-                'admin-i18n',
-              ],
-            },
-            {
-              from: ['admin-controller'],
-              allow: [
-                'admin-controller',
-                'admin-service',
-                'admin-model',
-                'admin-infrastructure',
-                'frontend-i18n',
-                'admin-i18n',
-              ],
-            },
-            {
-              from: ['admin-service'],
-              allow: [
-                'admin-service',
-                'admin-model',
-                'admin-infrastructure',
-                'prisma-client',
-                'frontend-i18n',
-                'admin-i18n',
-              ],
-            },
-            {
-              from: ['admin-model'],
-              allow: [
-                'admin-model',
-                'admin-infrastructure',
-                'prisma-client',
-                'frontend-i18n',
-                'admin-i18n',
-              ],
-            },
-            {
-              from: ['admin-infrastructure'],
-              allow: [
-                'admin-infrastructure',
-                'admin-model',
-                'prisma-client',
-                'frontend-i18n',
-                'admin-i18n',
-              ],
-            },
-            {
-              from: ['admin-hooks'],
-              allow: ['admin-hooks', 'admin-infrastructure', 'frontend-i18n', 'admin-i18n'],
             },
           ],
         },
@@ -1660,6 +1901,8 @@ export default tseslint.config(
       ...frontendWebSourceFiles,
       ...frontendDomainSourceFiles,
       ...frontendUiSourceFiles,
+      ...adminApiSourceFiles,
+      ...adminDomainSourceFiles,
       ...adminSourceFiles,
       ...frontendAppLocaleJsonFiles,
       ...frontendWebLocaleJsonFiles,
@@ -1681,8 +1924,7 @@ export default tseslint.config(
       'packages/admin/**/*.svelte.ts',
       'packages/admin/**/*.svelte.js',
       'packages/admin/**/*.json',
-      'packages/admin/src/app.d.ts',
-      'packages/admin/src/lib/server/infrastructure/**/*.test.ts',
+      'packages/admin/app/src/app.d.ts',
     ],
     rules: {
       'boundaries/no-unknown-files': 'error',
@@ -1696,6 +1938,7 @@ export default tseslint.config(
     files: ['packages/**/src/**/*.{ts,tsx}'],
     ignores: [
       'packages/frontend/api/src/generated/**/*.{ts,tsx}',
+      'packages/admin/api/src/generated/**/*.{ts,tsx}',
       '**/*.test.ts',
       '**/*.test.tsx',
       '**/*.stories.ts',
@@ -1717,6 +1960,8 @@ export default tseslint.config(
     ignores: [
       'packages/frontend/api/src/generated/**/*.ts',
       'packages/frontend/api/src/generated/**/*.tsx',
+      'packages/admin/api/src/generated/**/*.ts',
+      'packages/admin/api/src/generated/**/*.tsx',
       'packages/**/*.svelte.ts',
       'packages/**/*.svelte.js',
     ],
@@ -1848,11 +2093,14 @@ export default tseslint.config(
 
   // API SDK (生成コード) は厳格ルールを緩和
   {
-    files: ['packages/frontend/api/src/generated/**/*.{ts,tsx}'],
+    files: [
+      'packages/frontend/api/src/generated/**/*.{ts,tsx}',
+      'packages/admin/api/src/generated/**/*.{ts,tsx}',
+    ],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: './packages/frontend/api/tsconfig.json',
+        project: ['./packages/frontend/api/tsconfig.json', './packages/admin/api/tsconfig.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -1872,9 +2120,11 @@ export default tseslint.config(
       '@typescript-eslint/no-invalid-void-type': 'off',
       'eslint-comments/no-use': 'off',
       'eslint-comments/require-description': 'off',
+      'export-tsdoc/require-export-tsdoc': 'off',
       'import/order': 'off',
       'max-lines': 'off',
       'max-lines-per-function': 'off',
+      'no-restricted-imports': 'off',
       'no-restricted-syntax': 'off',
       'unicorn/no-array-for-each': 'off',
     },
@@ -2479,7 +2729,12 @@ export default tseslint.config(
 
   // app / domain では直接 fetch しない（共通 API 経由）
   {
-    files: [...frontendAppSourceFiles, ...frontendDomainSourceFiles],
+    files: [
+      ...frontendAppSourceFiles,
+      ...frontendDomainSourceFiles,
+      ...adminSourceFiles,
+      ...adminDomainSourceFiles,
+    ],
     ignores: [
       'packages/frontend/app/src/**/*.test.ts',
       'packages/frontend/app/src/**/*.test.tsx',
@@ -2497,6 +2752,10 @@ export default tseslint.config(
       'packages/frontend/domain/src/**/*.spec.ts',
       'packages/frontend/domain/src/**/*.spec.tsx',
       'packages/frontend/domain/src/**/*.spec.svelte.ts',
+      'packages/admin/app/src/**/*.test.ts',
+      'packages/admin/app/src/**/*.spec.ts',
+      'packages/admin/domain/src/**/*.test.ts',
+      'packages/admin/domain/src/**/*.spec.ts',
     ],
     rules: {
       'no-restricted-syntax': [
@@ -2558,10 +2817,14 @@ export default tseslint.config(
     },
   },
 
-  // Admin Console は顧客向け SDK / domain / app / web を参照しない
+  // Admin Console app 層は Admin domain 経由に限定し、顧客向け SDK / domain / app / web を参照しない
   {
     files: adminSourceFiles,
+    plugins: {
+      'admin-layer-boundary': adminLayerBoundaryPlugin,
+    },
     rules: {
+      'admin-layer-boundary/no-app-forbidden-imports': 'error',
       'no-restricted-imports': [
         'error',
         {
@@ -2569,12 +2832,17 @@ export default tseslint.config(
             {
               name: '@www-template/api',
               message:
-                'Admin Console では生成された顧客向け SDK (@www-template/api) を import しないでください。Admin 専用の BFF route や Prisma クライアントを利用してください。',
+                'Admin Console app 層では顧客向け SDK (@www-template/api) を import しないでください。Admin domain layer を経由してください。',
+            },
+            {
+              name: '@www-template/admin-api',
+              message:
+                'Admin Console app 層では Admin API layer を直接 import せず、Admin domain layer を経由してください。',
             },
             {
               name: '@www-template/domain',
               message:
-                'Admin Console では顧客向け domain パッケージ (@www-template/domain) を import しないでください。Admin 専用の model/service を利用してください。',
+                'Admin Console app 層では顧客向け domain パッケージ (@www-template/domain) を import しないでください。Admin domain layer を経由してください。',
             },
             {
               name: '@www-template/app',
@@ -2589,14 +2857,19 @@ export default tseslint.config(
           ],
           patterns: [
             {
+              group: ['packages/admin/api/**', '@www-template/admin-api/**'],
+              message:
+                'Admin Console app 層では Admin API layer を直接参照せず、Admin domain layer を経由してください。',
+            },
+            {
               group: ['packages/frontend/api/**', '@www-template/api/**'],
               message:
-                'Admin Console では生成された顧客向け SDK を import しないでください。Admin 専用の BFF route や Prisma クライアントを利用してください。',
+                'Admin Console app 層では顧客向け SDK を import しないでください。Admin domain layer を経由してください。',
             },
             {
               group: ['packages/frontend/domain/**', '@www-template/domain/**'],
               message:
-                'Admin Console では顧客向け domain パッケージを import しないでください。Admin 専用の model/service を利用してください。',
+                'Admin Console app 層では顧客向け domain パッケージを import しないでください。Admin domain layer を経由してください。',
             },
             {
               group: ['packages/frontend/app/**', '@www-template/app/**'],
@@ -2612,30 +2885,110 @@ export default tseslint.config(
     },
   },
 
+  // Admin domain 層は Admin API layer だけを API 依存として許可し、app/server/runtime へ逆流しない
+  {
+    files: adminDomainSourceFiles,
+    plugins: {
+      'admin-layer-boundary': adminLayerBoundaryPlugin,
+    },
+    rules: {
+      'admin-layer-boundary/no-domain-forbidden-surface': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@www-template/app',
+              message: 'Admin domain 層から frontend app を import しないでください。',
+            },
+            {
+              name: '@www-template/web',
+              message: 'Admin domain 層から web package を import しないでください。',
+            },
+            {
+              name: '@www-template/api',
+              message:
+                'Admin domain 層から Product SDK を import しないでください。Admin API layer を使ってください。',
+            },
+          ],
+          patterns: [
+            {
+              group: ['packages/admin/app/src/**', '$lib/**', '$components/**'],
+              message: 'Admin domain 層から app/component 層へ依存しないでください。',
+            },
+            {
+              group: ['packages/admin/app/src/lib/server/**', '$server/**'],
+              message: 'Admin domain 層へ server-only module を持ち込まないでください。',
+            },
+            {
+              group: ['packages/frontend/api/**', '@www-template/api/**'],
+              message:
+                'Admin domain 層から Product SDK を import しないでください。Admin API layer を使ってください。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Product SDK と Admin SDK の物理 package 境界を source surface 全体で fail-closed にする
+  {
+    files: [
+      'packages/frontend/**/*.{ts,js}',
+      'packages/frontend/**/*.svelte',
+      'packages/frontend/**/*.svelte.ts',
+      'packages/frontend/**/*.svelte.js',
+      'packages/admin/**/*.{ts,js}',
+      'packages/admin/**/*.svelte',
+      'packages/admin/**/*.svelte.ts',
+      'packages/admin/**/*.svelte.js',
+    ],
+    plugins: {
+      'sdk-package-boundary': sdkPackageBoundaryPlugin,
+    },
+    rules: {
+      'sdk-package-boundary/no-cross-sdk-imports': 'error',
+    },
+  },
+
   // Admin Console セキュリティルール
   {
-    files: ['packages/admin/src/**/*.{ts,js}'],
+    files: [
+      'packages/admin/app/src/**/*.{ts,js}',
+      'packages/admin/domain/src/**/*.{ts,js}',
+      'packages/admin/api/src/**/*.{ts,js}',
+    ],
+    ignores: [
+      'packages/admin/api/src/generated/**/*.{ts,js}',
+      'packages/admin/**/*.{test,spec}.{ts,js}',
+    ],
     plugins: {
       'admin-security': adminSecurityPlugin,
     },
     rules: {
       'admin-security/no-hardcoded-db-strings': 'error',
+      'admin-security/no-secret-literals': 'error',
       'admin-security/no-sql-template-literals': 'error',
       'admin-security/no-raw-unsafe': 'error',
     },
   },
 
-  // Admin BFF route: +server.ts は api/admin/**  のみに限定
+  // Admin Console は静的 client なので SvelteKit server runtime を禁止
   {
-    files: ['packages/admin/src/routes/**/+server.ts'],
-    ignores: ['packages/admin/src/routes/api/admin/**/+server.ts'],
+    files: [
+      'packages/admin/app/src/routes/**/+server.ts',
+      'packages/admin/app/src/routes/**/+page.server.ts',
+      'packages/admin/app/src/routes/**/+layout.server.ts',
+      'packages/admin/app/src/hooks.server.ts',
+      'packages/admin/app/src/lib/server/**/*.{ts,js,svelte}',
+    ],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           selector: 'Program',
           message:
-            'Admin Console では `/api/admin/*` 以外の BFF route (`+server.ts`) を禁止します。package-local BFF route は `src/routes/api/admin/**` に限定してください。',
+            'Admin Console は静的 client です。SvelteKit server route/load/action/hooks や `$lib/server` を追加せず、Go Admin API `/api/v1/*` を使ってください。',
         },
       ],
     },
@@ -2649,6 +3002,13 @@ export default tseslint.config(
       ...frontendDomainSourceFiles,
       ...frontendUiSourceFiles,
       'packages/frontend/api/src/generated/**/*',
+      'packages/admin/app/src/**/*.{ts,js,svelte}',
+      'packages/admin/domain/src/**/*.{ts,js}',
+      'packages/admin/api/src/**/*.{ts,js}',
+    ],
+    ignores: [
+      'packages/admin/api/src/generated/**/*.{ts,js}',
+      'packages/admin/**/*.{test,spec}.{ts,js}',
     ],
     plugins: {
       'admin-bff-policy': adminBffPolicyPlugin,
@@ -2684,7 +3044,7 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendNonReactSourceFiles,
+    files: [...frontendNonReactSourceFiles, ...adminNonReactSourceFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -2712,6 +3072,8 @@ export default tseslint.config(
     files: [
       'packages/frontend/app/src/**/*.{tsx,jsx}',
       'packages/frontend/domain/src/**/*.{tsx,jsx}',
+      'packages/admin/app/src/**/*.{tsx,jsx}',
+      'packages/admin/domain/src/**/*.{tsx,jsx}',
     ],
     rules: {
       'no-restricted-syntax': [
@@ -2725,7 +3087,16 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendAppRoutePageFiles,
+    files: [...frontendAppRoutePageFiles, ...adminAppRoutePageFiles],
+    ignores: [
+      // Admin static SPA は SvelteKit load を持たないため、既存 route-param / setup-token bootstrap だけを narrow exception にする。
+      'packages/admin/app/src/routes/+layout.svelte',
+      'packages/admin/app/src/routes/accounts/+page.svelte',
+      'packages/admin/app/src/routes/accounts/*/+page.svelte',
+      'packages/admin/app/src/routes/operator-setup/+page.svelte',
+      'packages/admin/app/src/routes/setup/+page.svelte',
+      'packages/admin/app/src/routes/settings/+page.svelte',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -2756,7 +3127,7 @@ export default tseslint.config(
     },
   },
   {
-    files: frontendAppComponentFiles,
+    files: [...frontendAppComponentFiles, ...adminAppComponentFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -2870,6 +3241,94 @@ export default tseslint.config(
           selector: 'Program',
           message:
             'packages/frontend/app では SvelteKit の server route / server hook / server-only lib を禁止します。API は backend に集約してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: adminAppSvelteKitImportFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-forbidden-imports': 'error',
+    },
+  },
+  {
+    files: adminAppSvelteKitRouteModuleFiles,
+    ignores: ['packages/admin/app/src/routes/+layout.ts'],
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['ssr', 'csr', 'prerender'],
+          message:
+            'Admin Console の route mode は `app/src/routes/+layout.ts` だけで管理してください（`{{name}}` export 禁止）。',
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/admin/app/src/routes/+layout.ts'],
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['prerender'],
+          message:
+            'Admin Console root layout では `prerender` を export せず、`ssr = false` / `csr = true` だけで route mode を固定してください。',
+        },
+      ],
+      'sveltekit-app-policy/require-auth-layout-mode': 'error',
+    },
+  },
+  {
+    files: adminAppSvelteKitPageServerModuleFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['actions'],
+          message:
+            'Admin Console では SvelteKit の form action export（`{{name}}`）を禁止します。API は Go Admin API `/api/v1/*` に集約してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: adminAppSvelteKitHookModuleFiles,
+    plugins: {
+      'sveltekit-app-policy': sveltekitAppPolicyPlugin,
+    },
+    rules: {
+      'sveltekit-app-policy/no-export-names': [
+        'error',
+        {
+          names: ['handle', 'handleFetch'],
+          message:
+            'Admin Console では SvelteKit hook export（`{{name}}`）を禁止します。server 面は Go Admin API に集約してください。',
+        },
+      ],
+    },
+  },
+  {
+    files: adminAppSvelteKitServerOnlyFiles,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message:
+            'packages/admin/app では SvelteKit の server route / server hook / server-only lib を禁止します。API は Go Admin API `/api/v1/*` に集約してください。',
         },
       ],
     },
@@ -3022,6 +3481,7 @@ export default tseslint.config(
     ignores: [
       '**/index.ts',
       'packages/frontend/api/src/generated/**/*.{ts,tsx}',
+      'packages/admin/api/src/generated/**/*.{ts,tsx}',
       '**/*.test.ts',
       '**/*.test.tsx',
       '**/*.test.svelte.ts',
@@ -3090,6 +3550,40 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: adminDomainSourceFiles,
+    plugins: {
+      'frontend-domain-purity': frontendDomainPurityPlugin,
+    },
+    rules: {
+      'frontend-domain-purity/no-runtime-env': 'error',
+      'no-restricted-globals': ['error', 'window', 'document', 'localStorage', 'sessionStorage'],
+    },
+  },
+  {
+    files: adminDomainPlainTsFiles,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='$state']",
+          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
+        },
+        {
+          selector: "CallExpression[callee.name='$derived']",
+          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
+        },
+        {
+          selector: "CallExpression[callee.name='$effect']",
+          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
+        },
+        {
+          selector: "CallExpression[callee.object.name='$effect'][callee.property.name='pre']",
+          message: 'Admin domain の stateful Svelte rune は `.svelte.ts` に配置してください。',
+        },
+      ],
+    },
+  },
   // theme.ts は行数制約を緩和
   {
     files: ['**/theme.ts'],
@@ -3109,7 +3603,7 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ['packages/admin/vitest.config.ts', 'packages/admin/vite.config.ts'],
+    files: ['packages/admin/app/vitest.config.ts', 'packages/admin/app/vite.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
   // Storybook 関連は型情報なしで lint

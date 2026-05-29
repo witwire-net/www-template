@@ -25,6 +25,8 @@ type tomlConfig struct {
 	} `toml:"app"`
 	Server struct {
 		Port              int      `toml:"port"`
+		Origin            string   `toml:"origin"`
+		ProductOrigin     string   `toml:"product_origin"`
 		AllowedOrigins    []string `toml:"allowed_origins"`
 		TrustedProxyCIDRs []string `toml:"trusted_proxy_cidrs"`
 		ReadTimeout       string   `toml:"read_timeout"`
@@ -53,16 +55,30 @@ type tomlConfig struct {
 		AuthBodyLimitBytes     int    `toml:"auth_body_limit_bytes"`
 		SecretHashKey          string `toml:"secret_hash_key"`
 		JWTSecret              string `toml:"jwt_secret"`
+		RPID                   string `toml:"rp_id"`
+		RPName                 string `toml:"rp_name"`
 	} `toml:"auth"`
 	Database struct {
-		URL string `toml:"url"`
+		URL       string `toml:"url"`
+		AdminRole string `toml:"admin_role"`
 	} `toml:"database"`
 	Valkey struct {
-		URL       string `toml:"url"`
-		KeyPrefix string `toml:"key_prefix"`
+		URL        string `toml:"url"`
+		AdminURL   string `toml:"admin_url"`
+		ProductURL string `toml:"product_url"`
+		KeyPrefix  string `toml:"key_prefix"`
 	} `toml:"valkey"`
+	Cookie struct {
+		Name     string `toml:"name"`
+		Domain   string `toml:"domain"`
+		Path     string `toml:"path"`
+		Secure   bool   `toml:"secure"`
+		SameSite string `toml:"same_site"`
+	} `toml:"cookie"`
 	OpenSearch struct {
-		URL string `toml:"url"`
+		URL                   string `toml:"url"`
+		AdminAuditIndexPrefix string `toml:"admin_audit_index_prefix"`
+		ProductIndexPrefix    string `toml:"product_index_prefix"`
 	} `toml:"opensearch"`
 	ObjectStorage struct {
 		Endpoint        string `toml:"endpoint"`
@@ -83,6 +99,11 @@ type tomlConfig struct {
 		FromAddress string `toml:"from_address"`
 		ProductName string `toml:"product_name"`
 	} `toml:"mail"`
+	Bootstrap struct {
+		Enabled    bool   `toml:"enabled"`
+		SecretHash string `toml:"secret_hash"`
+		ExpiresAt  string `toml:"expires_at"`
+	} `toml:"bootstrap"`
 	Observability struct {
 		OTELExporterOTLPEndpoint       string `toml:"otel_exporter_otlp_endpoint"`
 		OTELExporterOTLPTracesEndpoint string `toml:"otel_exporter_otlp_traces_endpoint"`
@@ -112,22 +133,86 @@ func resolveConfigPath() string {
 	return ""
 }
 
-func LoadConfig() Config {
-	configPath := resolveConfigPath()
-	if configPath == "" {
-		panic("config file not found. Set CONFIG_PATH or place .config/local.toml at the project root")
+func resolveAdminConfigPath() string {
+	// Step 1: Admin binary 専用の環境変数を最優先し、Product CONFIG_PATH と明確に分離して運用できるようにする。
+	if envPath := os.Getenv("ADMIN_CONFIG_PATH"); envPath != "" {
+		return envPath
 	}
 
+	// Step 2: 既存の process manager が CONFIG_PATH だけを渡す場合にも Admin binary を明示 config で起動できるようにする。
+	if envPath := os.Getenv("CONFIG_PATH"); envPath != "" {
+		return envPath
+	}
+
+	// Step 3: repository root からの開発起動では Admin 専用 local config を探索する。
+	if _, err := os.Stat(".config/local.admin.toml"); err == nil {
+		abs, _ := filepath.Abs(".config/local.admin.toml")
+		return abs
+	}
+
+	// Step 4: backend package 配下からの開発起動でも同じ Admin config を見つけられるようにする。
+	if _, err := os.Stat("../../.config/local.admin.toml"); err == nil {
+		abs, _ := filepath.Abs("../../.config/local.admin.toml")
+		return abs
+	}
+
+	return ""
+}
+
+func LoadConfig() Config {
+	configPath := resolveConfigPath()
+	raw := loadRawConfigFromPath(configPath, "config file not found. Set CONFIG_PATH or place .config/local.toml at the project root")
+	return buildConfig(raw)
+}
+
+// LoadAdminConfig は Admin API binary 専用の TOML 設定を読み込む。
+//
+// 読み込み順:
+//   - ADMIN_CONFIG_PATH
+//   - CONFIG_PATH
+//   - .config/local.admin.toml
+//
+// 戻り値:
+//   - Config: 共通 runtime 設定に AdminRuntimeConfig を含めた値。
+//
+// エラーケース:
+//   - 設定ファイルが見つからない、読み込めない、TOML として parse できない場合は既存 LoadConfig と同じく panic する。
+//
+// 利用例:
+//
+//	cfg := config.LoadAdminConfig()
+func LoadAdminConfig() Config {
+	configPath := resolveAdminConfigPath()
+	raw := loadRawConfigFromPath(configPath, "admin config file not found. Set ADMIN_CONFIG_PATH or place .config/local.admin.toml at the project root")
+	cfg := buildConfig(raw)
+	applyAdminInfraAliases(&cfg, raw)
+	return cfg
+}
+
+func loadRawConfigFromPath(configPath string, missingMessage string) tomlConfig {
+	// Step 1: caller が解決した path が空なら、surface ごとの案内文で fail-close する。
+	if configPath == "" {
+		panic(missingMessage)
+	}
+
+	// Step 2: path traversal の意図せぬ解釈を避けるため filepath.Clean 後の path から TOML を読み込む。
 	data, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
 		panic(fmt.Sprintf("read config file %s: %v", configPath, err))
 	}
 
+	// Step 3: TOML を構造体へ decode し、未知 field は Go 側で無視して後方の section 追加に耐える。
 	var raw tomlConfig
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		panic(fmt.Sprintf("parse config file %s: %v", configPath, err))
 	}
 
+	// Step 4: decode 済みの raw config を返し、Product / Admin それぞれの loader が surface ごとの alias 適用を決める。
+	return raw
+}
+
+func buildConfig(raw tomlConfig) Config {
+	// Step 1: app environment と allowed origins に Product runtime 互換の default を適用する。
 	environment := defaultString(raw.App.Environment, "development")
 	allowedOrigins := raw.Server.AllowedOrigins
 	if len(allowedOrigins) == 0 {
@@ -147,8 +232,10 @@ func LoadConfig() Config {
 		panic(fmt.Sprintf("invalid auth config: %v", err))
 	}
 
+	// Step 3: 共通 Config と AdminRuntimeConfig を同じ値として返し、Product runtime は Admin field を無視できる状態に保つ。
 	return Config{
 		AllowedOrigins:     allowedOrigins,
+		Admin:              buildAdminRuntimeConfig(raw),
 		AppBearerToken:     appBearerToken,
 		Auth:               authCfg,
 		Environment:        environment,
@@ -173,7 +260,9 @@ func LoadConfig() Config {
 				UsePathStyle:    raw.ObjectStorage.UsePathStyle,
 			},
 			OpenSearch: OpenSearchConfig{
-				URL: strings.TrimSpace(raw.OpenSearch.URL),
+				URL:                   strings.TrimSpace(raw.OpenSearch.URL),
+				AdminAuditIndexPrefix: strings.TrimSpace(raw.OpenSearch.AdminAuditIndexPrefix),
+				ProductIndexPrefix:    strings.TrimSpace(raw.OpenSearch.ProductIndexPrefix),
 			},
 			Valkey: ValkeyConfig{
 				URL:       strings.TrimSpace(raw.Valkey.URL),
@@ -194,6 +283,61 @@ func LoadConfig() Config {
 			OTELExporterOTLPLogsEndpoint:   strings.TrimSpace(raw.Observability.OTELExporterOTLPLogsEndpoint),
 			OTELServiceName:                strings.TrimSpace(raw.Observability.OTELServiceName),
 			OTELResourceAttributes:         strings.TrimSpace(raw.Observability.OTELResourceAttributes),
+		},
+	}
+}
+
+func applyAdminInfraAliases(cfg *Config, raw tomlConfig) {
+	// Step 1: Admin TOML の database.url を Admin backend の最小権限 DB 接続先として使う。
+	cfg.Infra.Database.URL = strings.TrimSpace(raw.Database.URL)
+
+	// Step 2: Admin runtime の共通 Valkey slot には Admin URL を写し、Product runtime の valkey.url default には影響させない。
+	valkeyURL := defaultString(raw.Valkey.AdminURL, raw.Valkey.URL)
+	cfg.Infra.Valkey.URL = strings.TrimSpace(valkeyURL)
+}
+
+func buildAdminRuntimeConfig(raw tomlConfig) AdminRuntimeConfig {
+	// Step 1: Admin Valkey URL は Admin 専用 field を優先し、未設定の場合だけ共通 valkey.url を許可する。
+	adminValkeyURL := defaultString(raw.Valkey.AdminURL, raw.Valkey.URL)
+
+	// Step 2: Product Valkey URL は Admin 起動時の logical DB 衝突検証だけに使い、Admin runtime の接続先へは渡さない。
+	productValkeyURL := strings.TrimSpace(raw.Valkey.ProductURL)
+
+	// Step 3: bootstrap expires_at は RFC3339 のみ受け付け、parse 不能値は zero time として validation で fail-close させる。
+	var bootstrapExpiresAt time.Time
+	if trimmed := strings.TrimSpace(raw.Bootstrap.ExpiresAt); trimmed != "" {
+		parsed, err := time.Parse(time.RFC3339, trimmed)
+		if err == nil {
+			bootstrapExpiresAt = parsed.UTC()
+		}
+	}
+
+	// Step 4: Admin Cookie は [cookie] section からそのまま読み、必須性や production secure policy は ValidateAdminRuntime に集約する。
+	return AdminRuntimeConfig{
+		Domain:        strings.TrimSpace(raw.Server.Origin),
+		ProductDomain: strings.TrimSpace(raw.Server.ProductOrigin),
+		Cookie: AdminCookieConfig{
+			Name:     strings.TrimSpace(raw.Cookie.Name),
+			Domain:   strings.TrimSpace(raw.Cookie.Domain),
+			Path:     strings.TrimSpace(raw.Cookie.Path),
+			Secure:   raw.Cookie.Secure,
+			SameSite: strings.TrimSpace(raw.Cookie.SameSite),
+		},
+		Database: AdminDatabaseConfig{
+			Role: strings.TrimSpace(raw.Database.AdminRole),
+		},
+		Bootstrap: AdminBootstrapConfig{
+			Enabled:    raw.Bootstrap.Enabled,
+			SecretHash: strings.TrimSpace(raw.Bootstrap.SecretHash),
+			ExpiresAt:  bootstrapExpiresAt,
+		},
+		Valkey: ValkeyConfig{
+			URL:       strings.TrimSpace(adminValkeyURL),
+			KeyPrefix: defaultString(raw.Valkey.KeyPrefix, defaultValkeyPrefix),
+		},
+		ProductValkey: ValkeyConfig{
+			URL:       productValkeyURL,
+			KeyPrefix: defaultString(raw.Valkey.KeyPrefix, defaultValkeyPrefix),
 		},
 	}
 }
@@ -220,6 +364,8 @@ func buildAuthConfig(raw struct {
 	AuthBodyLimitBytes     int    `toml:"auth_body_limit_bytes"`
 	SecretHashKey          string `toml:"secret_hash_key"`
 	JWTSecret              string `toml:"jwt_secret"`
+	RPID                   string `toml:"rp_id"`
+	RPName                 string `toml:"rp_name"`
 }) (AuthConfig, error) {
 	defaults := defaultAuthConfig()
 
@@ -227,6 +373,9 @@ func buildAuthConfig(raw struct {
 	if err != nil {
 		return AuthConfig{}, err
 	}
+
+	// Step 2: Product TOML の webauthn_rp_id と Admin TOML の rp_id alias を同じ AuthConfig へ正規化する。
+	webAuthnRPID := defaultString(raw.WebAuthnRPID, raw.RPID)
 
 	return AuthConfig{
 		ChallengeTTL:                parseDuration(raw.ChallengeTTL, defaults.ChallengeTTL),
@@ -245,7 +394,7 @@ func buildAuthConfig(raw struct {
 		FailureLockThreshold:        defaultInt(raw.FailureThreshold, defaults.FailureLockThreshold),
 		FailureLockWindow:           parseDuration(raw.FailureWindow, defaults.FailureLockWindow),
 		FailureLockDuration:         parseDuration(raw.FailureDuration, defaults.FailureLockDuration),
-		WebAuthnRPID:                defaultString(raw.WebAuthnRPID, defaults.WebAuthnRPID),
+		WebAuthnRPID:                defaultString(webAuthnRPID, defaults.WebAuthnRPID),
 		AccountRecoveryURLBase:      defaultString(raw.AccountRecoveryURLBase, defaults.AccountRecoveryURLBase),
 		AuthBodyLimitBytes:          defaultInt(raw.AuthBodyLimitBytes, defaults.AuthBodyLimitBytes),
 		SecretHashKey:               defaultString(raw.SecretHashKey, defaults.SecretHashKey),

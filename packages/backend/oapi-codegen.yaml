@@ -1,8 +1,15 @@
+# Product surface の Go bindings を既存 Product HTTP adapter 専用 package として生成する。
 package: openapi
+
+# Product 生成物は Product 側 consumer が参照する既存 path に固定し、Admin 生成物と物理的に混在させない。
 output: internal/generated/openapi/openapi.gen.go
+
+# Product runtime が型、Gin server glue、strict server interface を同じ生成物から利用できるようにする。
 generate:
   models: true
   gin-server: true
   strict-server: true
+
+# 未接続 operation も surface contamination 検査や段階的実装で参照できるよう、OpenAPI 上の定義を pruning せず残す。
 output-options:
   skip-prune: true

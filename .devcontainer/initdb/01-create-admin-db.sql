@@ -1,6 +1,5 @@
 -- Devcontainer 初期化用 SQL
--- www-template_admin データベースを postgres 起動時に自動作成する
--- Admin Console 用の最小権限 login role も作成し、backend migration で作成される admin_console_write / admin_console_read ロールへのアクセスを準備する
+-- Admin Console 用の最小権限 login role を作成し、backend migration で作成される admin_console_write / admin_console_read ロールへのアクセスを準備する
 -- このファイルは postgres コンテナの /docker-entrypoint-initdb.d/ にマウントされる
 
 -- admin_console_write / admin_console_read ロール（backend migration と重複しても OK）
@@ -46,11 +45,6 @@ BEGIN
 EXCEPTION WHEN insufficient_privilege OR undefined_schema THEN
     NULL;
 END $$;
-
--- Admin 専用 DB 作成
-CREATE DATABASE www_template_admin;
-GRANT ALL PRIVILEGES ON DATABASE www_template_admin TO "www-template";
-GRANT ALL PRIVILEGES ON DATABASE www_template_admin TO admin_console;
 
 -- 注意: 本番環境では backend migration（packages/backend/db/migrations/000006_create_admin_functions.up.sql）で
 -- admin_console_read / admin_console_write ロールが作成され、release 手順で

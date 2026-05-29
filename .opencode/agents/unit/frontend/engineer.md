@@ -2,7 +2,7 @@
 description: Frontend implementation specialist for packages/frontend and packages/web. Loads gpt-ux, coding-guardian, orchestration-playbook, and agent-browser skills to implement, fix, investigate, and iterate until reviewer approval, then returns results to the caller.
 mode: subagent
 hidden: true
-model: opencode-go/kimi-k2.6
+model: kimi-for-coding/k2p6
 temperature: 0.1
 permission:
   edit: allow

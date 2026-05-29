@@ -1043,7 +1043,7 @@
     "/api/v1/auth/refresh": {
       "post": {
         "operationId": "refreshToken",
-        "summary": "Refreshes an access token using a valid refresh token",
+        "summary": "Refreshes an access token through the HttpOnly refresh cookie",
         "parameters": [],
         "responses": {
           "200": {
@@ -1144,12 +1144,10 @@
         },
         "tags": ["auth"],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshTokenRequest"
-              }
+              "schema": {}
             }
           }
         }
@@ -2121,7 +2119,6 @@
           "passkeyCredentialId",
           "sessionId",
           "accessToken",
-          "refreshToken",
           "expiresAt"
         ],
         "properties": {
@@ -2138,9 +2135,6 @@
             "$ref": "#/components/schemas/UlidId"
           },
           "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
             "type": "string"
           },
           "expiresAt": {
@@ -2242,6 +2236,8 @@
           "rpName",
           "user",
           "pubKeyCredParams",
+          "residentKey",
+          "requireResidentKey",
           "userVerification"
         ],
         "properties": {
@@ -2284,6 +2280,16 @@
             "items": {
               "$ref": "#/components/schemas/WebAuthnCredentialDescriptor"
             }
+          },
+          "residentKey": {
+            "type": "string",
+            "enum": ["required"],
+            "description": "作成する credential が usernameless login で使える discoverable credential であることを要求する。"
+          },
+          "requireResidentKey": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "residentKey required と同じ要求を boolean でも伝える WebAuthn 標準 field。"
           },
           "userVerification": {
             "type": "string",
@@ -2541,27 +2547,13 @@
           }
         }
       },
-      "RefreshTokenRequest": {
-        "type": "object",
-        "required": ["refreshToken"],
-        "properties": {
-          "refreshToken": {
-            "type": "string"
-          }
-        },
-        "description": "リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。"
-      },
       "RefreshTokenResponse": {
         "type": "object",
-        "required": ["accessToken", "refreshToken"],
+        "required": ["accessToken"],
         "properties": {
           "accessToken": {
             "type": "string",
             "description": "ローテーション後に発行された短命の JWT アクセストークン。"
-          },
-          "refreshToken": {
-            "type": "string",
-            "description": "次回以降の rotation に使用する新しいリフレッシュトークン。"
           },
           "accountSetting": {
             "allOf": [
@@ -2572,7 +2564,7 @@
             "description": "refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。"
           }
         },
-        "description": "リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。"
+        "description": "Cookie refresh 成功時に返却される新しい accessToken と Product AccountSetting snapshot。refreshToken rotation は HttpOnly Set-Cookie だけで行い、response body には refreshToken 平文を含めない。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。"
       },
       "SessionItem": {
         "type": "object",
@@ -2823,8 +2815,8 @@
   },
   "servers": [
     {
-      "url": "/",
-      "description": "Default server",
+      "url": "https://product.www-template.example",
+      "description": "Product API server",
       "variables": {}
     }
   ]

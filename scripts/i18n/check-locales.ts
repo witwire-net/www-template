@@ -73,7 +73,7 @@ const SUPPORTED_LOCALES: readonly Locale[] = ['ja', 'en'];
 const SURFACES: readonly { readonly surface: LocaleSurface; readonly root: string }[] = [
   { surface: 'web', root: 'packages/web/src' },
   { surface: 'app', root: 'packages/frontend/app/src' },
-  { surface: 'admin', root: 'packages/admin/src' },
+  { surface: 'admin', root: 'packages/admin/app/src' },
   { surface: 'ui', root: 'packages/frontend/ui/src' },
 ];
 

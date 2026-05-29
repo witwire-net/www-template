@@ -28,6 +28,7 @@ linters-settings:
       cmd:
         files:
           - cmd/api/*.go
+          - cmd/admin-api/*.go
         allow:
           - $gostd
           - www-template/packages/backend/internal/app
@@ -45,38 +46,75 @@ linters-settings:
           - $gostd
           - github.com/oklog/ulid/v2
           - www-template/packages/backend/internal/types
-      usecases:
+      application:
         files:
-          - internal/usecases/*.go
+          - internal/application/*.go
+          - internal/application/**/*.go
         allow:
           - $gostd
           - www-template/packages/backend/internal/domain
-          - www-template/packages/backend/internal/types
-          - www-template/packages/backend/internal/usecases
-      http:
+          - www-template/packages/backend/internal/application
+          - www-template/packages/backend/internal/platform
+      adapter-http:
         files:
-          - internal/http/*.go
+          - internal/adapter/http/*.go
+          - internal/adapter/http/**/*.go
         allow:
           - $gostd
           - github.com/gin-contrib/cors
           - github.com/gin-gonic/gin
           - github.com/oapi-codegen/runtime/types
           - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/application
           - www-template/packages/backend/internal/generated/openapi
-          - www-template/packages/backend/internal/http
-          - www-template/packages/backend/internal/types
-          - www-template/packages/backend/internal/usecases
-      persistence:
+          - www-template/packages/backend/internal/generated/adminopenapi
+          - www-template/packages/backend/internal/platform
+          - www-template/packages/backend/internal/adapter/http
+      adapter-postgres:
         files:
-          - internal/persistence/*.go
+          - internal/adapter/postgres/*.go
+          - internal/adapter/postgres/**/*.go
         allow:
           - $gostd
-          - github.com/redis/go-redis/v9
           - gorm.io/driver/postgres
           - gorm.io/gorm
           - www-template/packages/backend/internal/domain
-          - www-template/packages/backend/internal/persistence
-          - www-template/packages/backend/internal/types
+          - www-template/packages/backend/internal/application
+          - www-template/packages/backend/internal/platform
+          - www-template/packages/backend/internal/adapter/postgres
+      adapter-valkey:
+        files:
+          - internal/adapter/valkey/*.go
+          - internal/adapter/valkey/**/*.go
+        allow:
+          - $gostd
+          - github.com/redis/go-redis/v9
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/application
+          - www-template/packages/backend/internal/platform
+          - www-template/packages/backend/internal/adapter/valkey
+      adapter-webauthn:
+        files:
+          - internal/adapter/webauthn/*.go
+          - internal/adapter/webauthn/**/*.go
+        allow:
+          - $gostd
+          - github.com/go-webauthn/webauthn
+          - github.com/go-webauthn/webauthn/protocol
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/application
+          - www-template/packages/backend/internal/platform
+          - www-template/packages/backend/internal/adapter/webauthn
+      adapter-mailer:
+        files:
+          - internal/adapter/mailer/*.go
+          - internal/adapter/mailer/**/*.go
+        allow:
+          - $gostd
+          - www-template/packages/backend/internal/domain
+          - www-template/packages/backend/internal/application
+          - www-template/packages/backend/internal/platform
+          - www-template/packages/backend/internal/adapter/mailer
       app:
         files:
           - internal/app/*.go
@@ -86,11 +124,14 @@ linters-settings:
           - github.com/go-webauthn/webauthn/protocol
           - github.com/oklog/ulid/v2
           - www-template/packages/backend/internal/app
+          - www-template/packages/backend/internal/adapter/http
+          - www-template/packages/backend/internal/adapter/mailer
+          - www-template/packages/backend/internal/adapter/postgres
+          - www-template/packages/backend/internal/adapter/valkey
+          - www-template/packages/backend/internal/adapter/webauthn
+          - www-template/packages/backend/internal/application
           - www-template/packages/backend/internal/domain
-          - www-template/packages/backend/internal/http
-          - www-template/packages/backend/internal/persistence
-          - www-template/packages/backend/internal/types
-          - www-template/packages/backend/internal/usecases
+          - www-template/packages/backend/internal/platform
   funlen:
     lines: 100
     statements: 60

@@ -54,6 +54,16 @@ const (
 	LogoutResponseRevokedTrue LogoutResponseRevoked = true
 )
 
+// Defines values for PasskeyAddStartResponseRequireResidentKey.
+const (
+	PasskeyAddStartResponseRequireResidentKeyTrue PasskeyAddStartResponseRequireResidentKey = true
+)
+
+// Defines values for PasskeyAddStartResponseResidentKey.
+const (
+	PasskeyAddStartResponseResidentKeyRequired PasskeyAddStartResponseResidentKey = "required"
+)
+
 // Defines values for PasskeyAddStartResponseUserVerification.
 const (
 	PasskeyAddStartResponseUserVerificationRequired PasskeyAddStartResponseUserVerification = "required"
@@ -61,7 +71,7 @@ const (
 
 // Defines values for PasskeyStartResponseUserVerification.
 const (
-	PasskeyStartResponseUserVerificationRequired PasskeyStartResponseUserVerification = "required"
+	Required PasskeyStartResponseUserVerification = "required"
 )
 
 // Defines values for ReauthenticationSessionKind.
@@ -72,7 +82,7 @@ const (
 
 // Defines values for RecoveryAcceptedResponseAccepted.
 const (
-	True RecoveryAcceptedResponseAccepted = true
+	RecoveryAcceptedResponseAcceptedTrue RecoveryAcceptedResponseAccepted = true
 )
 
 // Defines values for TokenKind.
@@ -134,7 +144,6 @@ type AuthSessionResponse struct {
 
 	// PasskeyCredentialId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	PasskeyCredentialId UlidId `json:"passkeyCredentialId"`
-	RefreshToken        string `json:"refreshToken"`
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
@@ -218,7 +227,13 @@ type PasskeyAddStartResponse struct {
 
 	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RequestId UlidId `json:"requestId"`
-	RpId      string `json:"rpId"`
+
+	// RequireResidentKey residentKey required と同じ要求を boolean でも伝える WebAuthn 標準 field。
+	RequireResidentKey PasskeyAddStartResponseRequireResidentKey `json:"requireResidentKey"`
+
+	// ResidentKey 作成する credential が usernameless login で使える discoverable credential であることを要求する。
+	ResidentKey PasskeyAddStartResponseResidentKey `json:"residentKey"`
+	RpId        string                             `json:"rpId"`
 
 	// RpName Relying Party display name.
 	RpName string `json:"rpName"`
@@ -230,6 +245,12 @@ type PasskeyAddStartResponse struct {
 	User             WebAuthnUserEntity                      `json:"user"`
 	UserVerification PasskeyAddStartResponseUserVerification `json:"userVerification"`
 }
+
+// PasskeyAddStartResponseRequireResidentKey residentKey required と同じ要求を boolean でも伝える WebAuthn 標準 field。
+type PasskeyAddStartResponseRequireResidentKey bool
+
+// PasskeyAddStartResponseResidentKey 作成する credential が usernameless login で使える discoverable credential であることを要求する。
+type PasskeyAddStartResponseResidentKey string
 
 // PasskeyAddStartResponseUserVerification defines model for PasskeyAddStartResponse.UserVerification.
 type PasskeyAddStartResponseUserVerification string
@@ -384,21 +405,13 @@ type RecoveryRequest struct {
 	Email openapi_types.Email `json:"email"`
 }
 
-// RefreshTokenRequest リフレッシュトークンを用いて新しいアクセストークンとリフレッシュトークンのペアを取得するリクエスト。
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refreshToken"`
-}
-
-// RefreshTokenResponse リフレッシュ成功時に返却される新しいトークンペアと Product AccountSetting snapshot。accessToken は短命の JWT、refreshToken は長寿命のローテーション可能トークン。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
+// RefreshTokenResponse Cookie refresh 成功時に返却される新しい accessToken と Product AccountSetting snapshot。refreshToken rotation は HttpOnly Set-Cookie だけで行い、response body には refreshToken 平文を含めない。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
 type RefreshTokenResponse struct {
 	// AccessToken ローテーション後に発行された短命の JWT アクセストークン。
 	AccessToken string `json:"accessToken"`
 
 	// AccountSetting refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。
 	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
-
-	// RefreshToken 次回以降の rotation に使用する新しいリフレッシュトークン。
-	RefreshToken string `json:"refreshToken"`
 }
 
 // SessionItem ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。
@@ -515,6 +528,9 @@ type WebAuthnUserEntity struct {
 	Name string `json:"name"`
 }
 
+// RefreshTokenJSONBody defines parameters for RefreshToken.
+type RefreshTokenJSONBody = interface{}
+
 // SendDeviceLinkParams defines parameters for SendDeviceLink.
 type SendDeviceLinkParams struct {
 	XReauthSession string `json:"X-Reauth-Session"`
@@ -553,7 +569,7 @@ type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
 type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
 
 // RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
-type RefreshTokenJSONRequestBody = RefreshTokenRequest
+type RefreshTokenJSONRequestBody = RefreshTokenJSONBody
 
 // FinishPasskeyAdditionJSONRequestBody defines body for FinishPasskeyAddition for application/json ContentType.
 type FinishPasskeyAdditionJSONRequestBody = PasskeyAddFinishRequest
@@ -655,7 +671,7 @@ type ServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(c *gin.Context)
-	// Refreshes an access token using a valid refresh token
+	// Refreshes an access token through the HttpOnly refresh cookie
 	// (POST /api/v1/auth/refresh)
 	RefreshToken(c *gin.Context)
 	// Lists registered passkeys for the current account
@@ -2737,7 +2753,7 @@ type StrictServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(ctx context.Context, request ConsumeRecoveryTokenRequestObject) (ConsumeRecoveryTokenResponseObject, error)
-	// Refreshes an access token using a valid refresh token
+	// Refreshes an access token through the HttpOnly refresh cookie
 	// (POST /api/v1/auth/refresh)
 	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
 	// Lists registered passkeys for the current account

@@ -45,22 +45,10 @@ services:
   admin:
     build:
       context: ..
-      dockerfile: packages/admin/Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_started
-      opensearch:
-        condition: service_started
-    environment:
-      ADMIN_CONFIG_PATH: /app/.config/local.container.admin.toml
-      NODE_ENV: development
+      dockerfile: packages/admin/app/Dockerfile
     ports:
-      - '3001:3000'
+      - '3001:80'
     restart: unless-stopped
-    volumes:
-      - ../.config:/app/.config:ro
 
   postgres:
     image: postgres:18.3

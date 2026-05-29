@@ -4,7 +4,7 @@ import (
 	"context"
 	stdhttp "net/http"
 
-	backendhttp "www-template/packages/backend/internal/adapter/http"
+	producthttp "www-template/packages/backend/internal/adapter/http/product"
 	"www-template/packages/backend/internal/adapter/postgres"
 	"www-template/packages/backend/internal/adapter/valkey"
 	"www-template/packages/backend/internal/platform/config"
@@ -58,7 +58,7 @@ func NewRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Runtime, err
 		return nil, err
 	}
 
-	handler := backendhttp.NewRouter(cfg, backendhttp.Dependencies{
+	handler := producthttp.NewRouter(cfg, producthttp.Dependencies{
 		Auth:            container.Auth,
 		AccountSetting:  container.AccountSetting,
 		AccountSnapshot: container.AccountSnapshot,

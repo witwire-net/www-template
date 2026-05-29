@@ -51,6 +51,8 @@ interface PasskeyAddStartOptions {
   pubKeyCredParams: WebAuthnCredentialParameterLocal[];
   timeout?: number;
   excludeCredentials?: WebAuthnCredentialDescriptorLocal[];
+  residentKey: 'required';
+  requireResidentKey: boolean;
   userVerification: 'required';
   attestation?: string;
 }
@@ -225,6 +227,8 @@ async function createWebAuthnAttestation(
         transports: c.transports as AuthenticatorTransport[] | undefined,
       })) ?? [],
     authenticatorSelection: {
+      residentKey: options.residentKey,
+      requireResidentKey: options.requireResidentKey,
       userVerification: options.userVerification as UserVerificationRequirement,
     },
     attestation: (options.attestation as AttestationConveyancePreference | undefined) ?? 'none',

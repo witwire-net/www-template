@@ -56,6 +56,7 @@ var allowedExternalImports = map[string][]string{
 		"github.com/go-webauthn/webauthn/webauthn",
 	},
 	"platform": {
+		"golang.org/x/crypto/bcrypt",
 		"github.com/oklog/ulid/v2",
 		"github.com/pelletier/go-toml/v2",
 		"go.opentelemetry.io/contrib/instrumentation/runtime",
@@ -91,21 +92,35 @@ var allowedPackageNames = []struct {
 	isRegex     bool
 	packageName string
 }{
+	{pathPattern: "cmd/admin-api/", isRegex: false, packageName: "main"},
+	{pathPattern: "cmd/api/", isRegex: false, packageName: "main"},
 	{pathPattern: "cmd/", isRegex: false, packageName: "main"},
 	{pathPattern: "internal/app/", isRegex: false, packageName: "app"},
 	{pathPattern: "internal/platform/config/", isRegex: false, packageName: "config"},
+	{pathPattern: "internal/platform/secret/", isRegex: false, packageName: "secret"},
 	{pathPattern: "internal/platform/observability/", isRegex: false, packageName: "observability"},
 	{pathPattern: "internal/platform/health/", isRegex: false, packageName: "health"},
 	{pathPattern: "internal/platform/id/", isRegex: false, packageName: "id"},
+	{pathPattern: "internal/generated/adminopenapi/", isRegex: false, packageName: "adminopenapi"},
 	{pathPattern: "internal/generated/openapi/", isRegex: false, packageName: "openapi"},
 	{pathPattern: "tools/analyzers/", isRegex: false, packageName: "main"},
 	{pathPattern: "internal/domain/", isRegex: false, packageName: "domain"},
+	{pathPattern: "internal/application/product/", isRegex: false, packageName: "application"},
+	{pathPattern: "internal/application/admin/", isRegex: false, packageName: "application"},
+	{pathPattern: "internal/application/shared/", isRegex: false, packageName: "application"},
 	{pathPattern: "internal/application/", isRegex: false, packageName: "application"},
-	// internal/adapter/http/
+	// internal/adapter/http/ は Product/Admin/shared subtree を先に判定し、legacy flat package は最後に残す。
+	{pathPattern: "internal/adapter/http/product/", isRegex: false, packageName: "product"},
+	{pathPattern: "internal/adapter/http/admin/", isRegex: false, packageName: "admin"},
+	{pathPattern: "internal/adapter/http/shared/", isRegex: false, packageName: "shared"},
 	{pathPattern: "internal/adapter/http/", isRegex: false, packageName: "http"},
-	// internal/adapter/postgres/
+	// internal/adapter/postgres/ は surface subtree を許可しつつ、既存 flat adapter も移行前互換として検査する。
+	{pathPattern: "internal/adapter/postgres/product/", isRegex: false, packageName: "product"},
+	{pathPattern: "internal/adapter/postgres/admin/", isRegex: false, packageName: "admin"},
 	{pathPattern: "internal/adapter/postgres/", isRegex: false, packageName: "postgres"},
-	// internal/adapter/valkey/
+	// internal/adapter/valkey/ は Product/Admin の session namespace 分離を package 名でも固定する。
+	{pathPattern: "internal/adapter/valkey/product/", isRegex: false, packageName: "product"},
+	{pathPattern: "internal/adapter/valkey/admin/", isRegex: false, packageName: "admin"},
 	{pathPattern: "internal/adapter/valkey/", isRegex: false, packageName: "valkey"},
 	// internal/adapter/webauthn/
 	{pathPattern: "internal/adapter/webauthn/", isRegex: false, packageName: "webauthn"},
@@ -188,6 +203,7 @@ func collectViolations(root string) ([]string, error) {
 			violations = append(violations, checkErrorStringMatching(relativePath, file)...)
 			violations = append(violations, checkForbiddenCalls(relativePath, file)...)
 			violations = append(violations, checkForbiddenHostUsage(relativePath, file)...)
+			violations = append(violations, checkAdminBackendSQLConstruction(relativePath, file)...)
 			violations = append(violations, checkHTTPDomainBoundary(relativePath, file)...)
 			violations = append(violations, checkPortPurity(relativePath, file)...)
 			violations = append(violations, checkRoutePolicy(relativePath, file)...)
@@ -210,6 +226,7 @@ func collectViolations(root string) ([]string, error) {
 
 func verifyGoFilePlacement(path string) []string {
 	allowedPrefixes := []string{
+		"cmd/admin-api/",
 		"cmd/api/",
 		"internal/app/",
 		"internal/platform/",
@@ -229,7 +246,7 @@ func verifyGoFilePlacement(path string) []string {
 		return nil
 	}
 
-	return []string{fmt.Sprintf("%s: go files must live under cmd/api, internal/app, internal/platform, internal/domain, internal/application, internal/adapter, or internal/generated", path)}
+	return []string{fmt.Sprintf("%s: go files must live under cmd/api, cmd/admin-api, internal/app, internal/platform, internal/domain, internal/application, internal/adapter, or internal/generated", path)}
 }
 
 func verifyGeneratedFile(path string) []string {
@@ -318,9 +335,33 @@ func checkImports(path string, file *ast.File) []string {
 				continue
 			}
 
-			// generated/openapi は adapter-http のみ import 可能
-			if importPath == modulePath+"/internal/generated/openapi" && layer != "adapter-http" {
-				violations = append(violations, fmt.Sprintf("%s: only adapter-http may import internal/generated/openapi", path))
+			// HTTP adapter subtree 同士の import は shared helper への片方向依存だけに限定する。
+			// これにより Product/Admin transport が相互に handler や generated 接続を共有する抜け道を塞ぐ。
+			if layer == "adapter-http" && targetLayer == "adapter-http" {
+				if !isAllowedHTTPAdapterBoundaryImport(path, importPath) {
+					violations = append(violations, fmt.Sprintf("%s: HTTP adapter surface must not import %s", path, importPath))
+				}
+				continue
+			}
+
+			// Product/Admin application subtree と persistence adapter は surface を越えた application import を禁止する。
+			// shared/tokenprimitive だけを Product/Admin から参照できる中立 helper として許可する。
+			if targetLayer == "application" && !isAllowedApplicationBoundaryImport(path, importPath) {
+				violations = append(violations, fmt.Sprintf("%s: %s surface must not import %s", path, layer, importPath))
+				continue
+			}
+
+			// Product generated bindings は Product HTTP adapter だけに閉じ込める。
+			// ここで早期に surface を判定し、application / cmd / Admin adapter からの横断 import を fail-closed にする。
+			if importPath == modulePath+"/internal/generated/openapi" && !isProductHTTPAdapterPath(path) {
+				violations = append(violations, fmt.Sprintf("%s: only Product HTTP adapter may import internal/generated/openapi", path))
+				continue
+			}
+
+			// Admin generated bindings は Admin HTTP adapter だけに閉じ込める。
+			// Product binary や既存の flat Product adapter が Admin operation へ到達可能になる経路を拒否する。
+			if importPath == modulePath+"/internal/generated/adminopenapi" && !isAdminHTTPAdapterPath(path) {
+				violations = append(violations, fmt.Sprintf("%s: only Admin HTTP adapter may import internal/generated/adminopenapi", path))
 				continue
 			}
 
@@ -346,6 +387,132 @@ func checkImports(path string, file *ast.File) []string {
 	}
 
 	return violations
+}
+
+// isAllowedHTTPAdapterBoundaryImport は HTTP adapter subtree 間の許可依存だけを判定する。
+// Product/Admin は shared helper を使えるが、互いの handler package や legacy flat package へは依存できない。
+func isAllowedHTTPAdapterBoundaryImport(sourcePath string, importPath string) bool {
+	// Step 1: source file と import target の surface を取り出し、path 文字列の比較を一箇所に集約する。
+	sourceSurface := httpAdapterSurfaceFromPath(sourcePath)
+	targetSurface := httpAdapterSurfaceFromImport(importPath)
+
+	// Step 2: 同一 surface 内の補助 package は許可し、将来 product/internal や admin/internal を増やす余地を残す。
+	if sourceSurface == targetSurface {
+		return true
+	}
+
+	// Step 3: Product/Admin から shared への一方向依存だけを許可し、shared から具体 surface への逆依存は拒否する。
+	return (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "shared"
+}
+
+// isAllowedApplicationBoundaryImport は application package への import が surface 境界を越えていないか判定する。
+// app layer は runtime composition owner のため任意 surface を組み立てられるが、application/adapter 内部では最小限に制限する。
+func isAllowedApplicationBoundaryImport(sourcePath string, importPath string) bool {
+	// Step 1: layer を先に判定し、application 境界が意味を持つ source だけを追加検査の対象にする。
+	sourceLayer, _ := layerFromPath(sourcePath)
+	targetSurface := applicationSurfaceFromImport(importPath)
+
+	// Step 2: internal/app は Product/Admin runtime composition を所有するため、surface-specific application の import を許可する。
+	if sourceLayer == "app" {
+		return true
+	}
+
+	// Step 3: application source は Product/Admin/shared/legacy の相互境界を直接守る。
+	if sourceLayer == "application" {
+		return isAllowedSurfaceApplicationDependency(applicationSurfaceFromPath(sourcePath), targetSurface)
+	}
+
+	// Step 4: transport / persistence adapters は自身の surface に対応する application ports/use cases だけを参照できる。
+	if sourceLayer == "adapter-http" {
+		// Step 4-a: 既存 Product API の use case はまだ internal/application 直下に残っているため、Product HTTP adapter から legacy Product application への参照だけを移行互換として許可する。
+		if httpAdapterSurfaceFromPath(sourcePath) == "product" && targetSurface == "legacy" {
+			return true
+		}
+		return isAllowedSurfaceApplicationDependency(httpAdapterSurfaceFromPath(sourcePath), targetSurface)
+	}
+	if sourceLayer == "adapter-postgres" {
+		return isAllowedSurfaceApplicationDependency(persistenceAdapterSurfaceFromPath(sourcePath, "postgres"), targetSurface)
+	}
+	if sourceLayer == "adapter-valkey" {
+		return isAllowedSurfaceApplicationDependency(persistenceAdapterSurfaceFromPath(sourcePath, "valkey"), targetSurface)
+	}
+
+	// Step 5: それ以外の layer は既存の layer-level allowlist で拒否/許可を判断するため、ここでは追加制限しない。
+	return true
+}
+
+// isAllowedSurfaceApplicationDependency は surface ごとの application 依存を判定する。
+// Product/Admin は shared/tokenprimitive を使えるが相互 import と legacy root application への逆流は拒否する。
+func isAllowedSurfaceApplicationDependency(sourceSurface string, targetSurface string) bool {
+	// Step 1: 同一 surface は許可し、Product->Product や Admin->Admin の use case 分割を妨げない。
+	if sourceSurface == targetSurface {
+		return true
+	}
+
+	// Step 2: Product/Admin から shared への依存だけを許可し、中立 primitive の再利用を surface 境界内に収める。
+	return (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "shared"
+}
+
+// applicationSurfaceFromPath は application 配下のファイル配置から surface 名を返す。
+// legacy は既存 flat package を段階的に守るための名前で、新規 Product/Admin subtree とは混ぜない。
+func applicationSurfaceFromPath(path string) string {
+	return surfaceFromRelativePath(path, "internal/application")
+}
+
+// applicationSurfaceFromImport は application import path から surface 名を返す。
+// module path を剥がした後の判定に統一し、alias import の有無に左右されない境界検査にする。
+func applicationSurfaceFromImport(importPath string) string {
+	return surfaceFromRelativePath(strings.TrimPrefix(importPath, modulePath+"/"), "internal/application")
+}
+
+// httpAdapterSurfaceFromPath は HTTP adapter 配下のファイル配置から Product/Admin/shared/legacy を判定する。
+// legacy flat adapter は現行 Product router の移行前配置として扱い、Admin/shared とは分離する。
+func httpAdapterSurfaceFromPath(path string) string {
+	return surfaceFromRelativePath(path, "internal/adapter/http")
+}
+
+// httpAdapterSurfaceFromImport は HTTP adapter import path から surface 名を返す。
+// Product/Admin/shared の import 境界を package path だけで安定して検査する。
+func httpAdapterSurfaceFromImport(importPath string) string {
+	return surfaceFromRelativePath(strings.TrimPrefix(importPath, modulePath+"/"), "internal/adapter/http")
+}
+
+// persistenceAdapterSurfaceFromPath は Postgres/Valkey adapter 配置から surface 名を返す。
+// adapterKind は "postgres" または "valkey" を渡し、将来の surface subtree を同じ規則で判定する。
+func persistenceAdapterSurfaceFromPath(path string, adapterKind string) string {
+	return surfaceFromRelativePath(path, "internal/adapter/"+adapterKind)
+}
+
+// surfaceFromRelativePath は base directory 直下の最初の segment を surface として抽出する。
+// product/admin/shared 以外は legacy として扱い、意図しない未知 surface の自動許可を避ける。
+func surfaceFromRelativePath(path string, base string) string {
+	// Step 1: base 自体または base 直下の flat file は legacy とし、既存 package と新 surface を混同しない。
+	trimmedBase := strings.TrimSuffix(base, "/")
+	if path == trimmedBase || !strings.HasPrefix(path, trimmedBase+"/") {
+		return "legacy"
+	}
+
+	// Step 2: base からの相対 path の最初の segment を取り出し、surface subtree かどうかを判定する。
+	remainder := strings.TrimPrefix(path, trimmedBase+"/")
+	segment, _, _ := strings.Cut(remainder, "/")
+	switch segment {
+	case "product", "admin", "shared":
+		return segment
+	default:
+		return "legacy"
+	}
+}
+
+// isProductHTTPAdapterPath は Product Go bindings を import してよい HTTP adapter の path だけを許可する。
+// 4.7 以後は product subtree だけを Product surface とみなし、legacy flat HTTP adapter からの generated import を拒否する。
+func isProductHTTPAdapterPath(path string) bool {
+	return strings.HasPrefix(path, "internal/adapter/http/product/")
+}
+
+// isAdminHTTPAdapterPath は Admin Go bindings を import してよい HTTP adapter の path だけを許可する。
+// Admin bindings は強権限 operation を含むため、flat Product adapter や Product binary には絶対に露出させない。
+func isAdminHTTPAdapterPath(path string) bool {
+	return strings.HasPrefix(path, "internal/adapter/http/admin/")
 }
 
 func checkPackageName(path string, file *ast.File) []string {
@@ -855,6 +1022,59 @@ func checkForbiddenHostUsage(path string, file *ast.File) []string {
 	})
 
 	return violations
+}
+
+func checkAdminBackendSQLConstruction(path string, file *ast.File) []string {
+	// Step 1: Admin backend の Postgres repository 実装だけに限定し、Product repository や test fixture の安全な検証文字列へ scope を広げない。
+	if !strings.HasPrefix(path, "internal/adapter/postgres/admin/") || isTestFile(path) {
+		return nil
+	}
+
+	// Step 2: GORM の SQL fragment を受け取る method を AST で検査し、raw SQL と動的 SQL 文字列を拒否する。
+	violations := make([]string, 0)
+	ast.Inspect(file, func(node ast.Node) bool {
+		callExpr, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selector, ok := callExpr.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil {
+			return true
+		}
+
+		// Step 3: Raw/Exec は query 全体を文字列で受けるため、Admin backend repository では使用自体を禁止する。
+		if selector.Sel.Name == "Raw" || selector.Sel.Name == "Exec" {
+			violations = append(violations, fmt.Sprintf("%s: unsafe SQL construction is banned in Admin backend repositories; use GORM parameter binding instead of %s", path, selector.Sel.Name))
+			return true
+		}
+
+		// Step 4: Where/Order などの SQL fragment 引数は静的文字列だけに限定し、変数経由の動的 SQL も拒否する。
+		if isGormSQLFragmentMethod(selector.Sel.Name) && len(callExpr.Args) > 0 && !isStaticStringLiteral(callExpr.Args[0]) {
+			violations = append(violations, fmt.Sprintf("%s: unsafe SQL construction is banned in Admin backend repositories; SQL fragments must be static string literals with bound parameters", path))
+		}
+
+		return true
+	})
+
+	// Step 5: 検出した violation を返し、pnpm lint 経由の guardrail で unsafe query を fail-closed にする。
+	return violations
+}
+
+func isGormSQLFragmentMethod(methodName string) bool {
+	// Step 1: GORM で SQL fragment を受け取る代表 method だけを対象にし、Create/Find など安全な API を誤検知しない。
+	switch methodName {
+	case "Where", "Or", "Not", "Order", "Joins", "Having", "Select", "Table", "Group":
+		return true
+	default:
+		return false
+	}
+}
+
+func isStaticStringLiteral(expr ast.Expr) bool {
+	// Step 1: SQL fragment の第1引数はソース上の string literal だけを許可し、変数・連結・formatting call を安全側で拒否する。
+	literal, ok := expr.(*ast.BasicLit)
+	return ok && literal.Kind == token.STRING
 }
 
 func containsForbiddenPortType(fields *ast.FieldList, imports map[string]string) bool {

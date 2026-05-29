@@ -1,5 +1,5 @@
 -- Admin Console 用の読み取り専用ビューを提供する admin_view スキーマを作成する。
--- ビューは Product DB のベーステーブルを結合して Admin Console の一覧・詳細表示に必要な
+-- ビューは Account のベーステーブルを結合して Admin Console の一覧・詳細表示に必要な
 -- 情報を集約する。
 CREATE SCHEMA IF NOT EXISTS admin_view;
 

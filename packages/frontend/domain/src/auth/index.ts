@@ -47,8 +47,12 @@ export {
   removeSessionById,
   switchActiveSession,
 } from './session/state';
-export { decodeAccessToken, isRefreshNeeded, createEmptyTokenPair } from './session/token_state';
-export type { AccessTokenClaims, MemoryTokenPair } from './session/token_state';
+export {
+  createEmptyAccessTokenState,
+  decodeAccessToken,
+  isRefreshNeeded,
+} from './session/token_state';
+export type { AccessTokenClaims, MemoryAccessTokenState } from './session/token_state';
 export { createGenericRecoverySentView } from './recovery/state';
 export type {
   AuthFailureState,

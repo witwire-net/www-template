@@ -24,8 +24,8 @@ export default defineConfig({
         },
       },
       {
-        extends: './packages/admin/vitest.config.ts',
-        root: './packages/admin',
+        extends: './packages/admin/app/vitest.config.ts',
+        root: './packages/admin/app',
         test: {
           name: 'frontend-admin',
         },

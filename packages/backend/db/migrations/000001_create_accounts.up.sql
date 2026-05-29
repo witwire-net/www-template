@@ -1,4 +1,4 @@
--- Product DB の利用主体である Account root を作成する。
+-- アプリケーションの利用主体である Account root を作成する。
 CREATE TABLE IF NOT EXISTS accounts (
   id         TEXT PRIMARY KEY,
   email      TEXT NOT NULL UNIQUE,
