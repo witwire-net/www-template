@@ -9,7 +9,7 @@
 - `gopls` `goimports` `dlv` `golangci-lint` `air`
 - `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode` `agent-browser`
 - Playwright 実行に必要な Linux 依存
-- PostgreSQL 18 Valkey 9 OpenSearch 3 MinIO Mailpit のローカルサービス
+- PostgreSQL 18、Valkey 9、OpenSearch 3、MinIO、Mailpit、SigNoz のローカルサービス
 - `docker` と `docker compose` をコンテナ内から利用可能
 
 ## コンテナ起動後の状態
@@ -28,6 +28,9 @@
 - MinIO Console: `http://localhost:9001`
 - Mailpit SMTP: `mailpit:1025`
 - Mailpit UI: `http://localhost:8025`
+- SigNoz UI: `http://localhost:3301`
+- SigNoz OTLP gRPC: `signoz-otel-collector:4317` / `http://localhost:4317`
+- SigNoz OTLP HTTP: `http://localhost:4318`
 
 ## Agent Browser
 
@@ -51,9 +54,11 @@
 - `SMTP_HOST=mailpit`
 - `MAIL_FROM_ADDRESS=noreply@example.com`
 - `SMTP_PORT=1025`
+- `PUBLIC_OTEL_COLLECTOR_URL=http://localhost:4318/v1/traces`
 
 ## メモ
 
-- frontend と Go API 向けの主要ポートを forward しています
-- 今後の Go API や OpenNext アプリ向けに `3000` `3001` `8080` `8081` も forward しています
+- frontend、Go API、SigNoz 向けの主要ポートを forward しています
+- 今後の Go API や OpenNext アプリ向けに `3001` `8080` `8081` も forward しています
 - PostgreSQL と OpenSearch は major 更新時のローカルデータ衝突を避けるため versioned named volume を使っています
+- SigNoz の永続データは `signoz-*` named volume に分離し、repo 配下へ runtime data を書き込みません

@@ -46,9 +46,9 @@ product_index_prefix = "product-domain"
 
 [observability]
 # Admin API exports telemetry to the same collector infrastructure as Product, while using its own service name.
-otel_exporter_otlp_endpoint = "otel-collector:4317"
-otel_exporter_otlp_traces_endpoint = "otel-collector:4317"
-otel_exporter_otlp_logs_endpoint = "otel-collector:4317"
+otel_exporter_otlp_endpoint = "signoz-otel-collector:4317"
+otel_exporter_otlp_traces_endpoint = "signoz-otel-collector:4317"
+otel_exporter_otlp_logs_endpoint = "signoz-otel-collector:4317"
 otel_service_name = "www-template-admin-api"
 otel_resource_attributes = "service.namespace=www-template,deployment.environment=production"
 

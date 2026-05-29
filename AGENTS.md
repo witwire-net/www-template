@@ -91,14 +91,11 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 
 ## Observability
 
-- Grafana: `http://localhost:3000` (admin/admin)
-- Prometheus: `http://localhost:9090`
-- Tempo (trace): `http://localhost:3200`
-- Loki (logs): `http://localhost:3100`
-- OTel Collector OTLP: `http://localhost:4317` (gRPC), `http://localhost:4318` (HTTP)
+- SigNoz UI: `http://localhost:3301`
+- SigNoz OTLP endpoint: `http://localhost:4317` (gRPC), `http://localhost:4318` (HTTP)
 - Start observability stack: `pnpm dev:observability`
-- Go backend exposes `/metrics` for Prometheus scraping
-- Frontend browsers send traces to Collector via `PUBLIC_OTEL_COLLECTOR_URL`
+- Go backend exports traces and metrics to SigNoz via OTLP gRPC
+- Frontend browsers send traces to SigNoz via `PUBLIC_OTEL_COLLECTOR_URL`
 
 ## OpenSpec
 

@@ -226,7 +226,7 @@ admin_audit_index_prefix = "admin-audit"
 product_index_prefix = "product-domain"
 
 [observability]
-otel_exporter_otlp_endpoint = "otel-collector:4317"
+otel_exporter_otlp_endpoint = "signoz-otel-collector:4317"
 otel_service_name = "www-template-admin-api"
 `)
 	if err := os.WriteFile(configPath, data, 0o600); err != nil {
@@ -267,7 +267,7 @@ func assertAdminConfigSurfaceInfrastructure(t *testing.T, cfg Config) {
 	if cfg.Infra.OpenSearch.AdminAuditIndexPrefix != "admin-audit" || cfg.Infra.OpenSearch.ProductIndexPrefix != "product-domain" {
 		t.Fatalf("expected OpenSearch namespace mapping, got %#v", cfg.Infra.OpenSearch)
 	}
-	if cfg.Observability.OTELExporterOTLPEndpoint != "otel-collector:4317" || cfg.Observability.OTELServiceName != "www-template-admin-api" {
+	if cfg.Observability.OTELExporterOTLPEndpoint != "signoz-otel-collector:4317" || cfg.Observability.OTELServiceName != "www-template-admin-api" {
 		t.Fatalf("expected Admin observability mapping, got %#v", cfg.Observability)
 	}
 }

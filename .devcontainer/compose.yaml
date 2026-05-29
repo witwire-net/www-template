@@ -106,65 +106,163 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
 
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.123.0
-    command: ['--config=/etc/otel-collector-config.yaml']
+  signoz-zookeeper:
+    image: bitnami/zookeeper:3.7.1
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+      ZOO_AUTOPURGE_INTERVAL: '1'
+      ZOO_SERVER_ID: '1'
+    hostname: zookeeper-1
+    networks:
+      default:
+        aliases:
+          - zookeeper-1
+    restart: unless-stopped
+    user: root
+    volumes:
+      - signoz-zookeeper-data:/bitnami/zookeeper
+
+  signoz-clickhouse:
+    image: clickhouse/clickhouse-server:24.1.2-alpine
+    depends_on:
+      signoz-zookeeper:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', '0.0.0.0:8123/ping']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    hostname: clickhouse
+    logging:
+      options:
+        max-file: '3'
+        max-size: 50m
+    networks:
+      default:
+        aliases:
+          - clickhouse
+    restart: unless-stopped
+    tty: true
+    ulimits:
+      nofile:
+        hard: 262144
+        soft: 262144
+      nproc: 65535
+    volumes:
+      - ./signoz/clickhouse-cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./signoz/custom-function.xml:/etc/clickhouse-server/custom-function.xml:ro
+      - signoz-clickhouse-data:/var/lib/clickhouse
+
+  signoz-otel-migrator-sync:
+    image: signoz/signoz-schema-migrator:0.111.24
+    command: ['sync', '--dsn=tcp://clickhouse:9000', '--up=']
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+    restart: 'no'
+
+  signoz-otel-migrator-async:
+    image: signoz/signoz-schema-migrator:0.111.24
+    command: ['async', '--dsn=tcp://clickhouse:9000', '--up=']
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+      signoz-otel-migrator-sync:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  signoz-query-service:
+    image: signoz/query-service:0.69.0
+    command:
+      - -config=/root/config/query-service.yml
+      - --use-logs-new-schema=true
+      - --use-trace-new-schema=true
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+      signoz-otel-migrator-sync:
+        condition: service_completed_successfully
+    environment:
+      ALERTMANAGER_API_PREFIX: http://alertmanager:9093/api/
+      ClickHouseUrl: tcp://clickhouse:9000
+      DASHBOARDS_PATH: /root/config/dashboards
+      DEPLOYMENT_TYPE: docker-standalone-amd
+      GODEBUG: netdns=go
+      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
+      STORAGE: clickhouse
+      TELEMETRY_ENABLED: 'false'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'localhost:8080/api/v1/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    hostname: query-service
+    networks:
+      default:
+        aliases:
+          - query-service
+    restart: unless-stopped
+    volumes:
+      - ./signoz/alerts.yml:/root/config/alerts.yml:ro
+      - ./signoz/dashboards:/root/config/dashboards:ro
+      - ./signoz/query-service.yml:/root/config/query-service.yml:ro
+      - signoz-query-data:/var/lib/signoz
+
+  signoz-alertmanager:
+    image: signoz/alertmanager:0.23.7
+    command:
+      - --queryService.url=http://query-service:8085
+      - --storage.path=/data
+    depends_on:
+      signoz-query-service:
+        condition: service_healthy
+    hostname: alertmanager
+    networks:
+      default:
+        aliases:
+          - alertmanager
+    restart: unless-stopped
+    volumes:
+      - signoz-alertmanager-data:/data
+
+  signoz-frontend:
+    image: signoz/frontend:0.69.0
+    depends_on:
+      signoz-alertmanager:
+        condition: service_started
+      signoz-query-service:
+        condition: service_healthy
+    ports:
+      - '3301:3301'
+    restart: unless-stopped
+    volumes:
+      - ./signoz/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  signoz-otel-collector:
+    image: signoz/signoz-otel-collector:0.111.24
+    command:
+      - --config=/etc/otel-collector-config.yaml
+      - --manager-config=/etc/manager-config.yaml
+      - --copy-path=/var/tmp/collector-config.yaml
+      - --feature-gates=-pkg.translator.prometheus.NormalizeName
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+      signoz-otel-migrator-sync:
+        condition: service_completed_successfully
+      signoz-query-service:
+        condition: service_healthy
+    environment:
+      LOW_CARDINAL_EXCEPTION_GROUPING: 'false'
+      OTEL_RESOURCE_ATTRIBUTES: host.name=signoz-host,os.type=linux
+    hostname: signoz-otel-collector
     ports:
       - '4317:4317'
       - '4318:4318'
     restart: unless-stopped
     volumes:
-      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-
-  prometheus:
-    image: prom/prometheus:v3.3.0
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.enable-remote-write-receiver'
-    ports:
-      - '9090:9090'
-    restart: unless-stopped
-    volumes:
-      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-
-  tempo:
-    image: grafana/tempo:2.7.0
-    user: '0'
-    command: ['-config.file=/etc/tempo.yml']
-    ports:
-      - '3200:3200'
-    restart: unless-stopped
-    volumes:
-      - ./observability/tempo.yml:/etc/tempo.yml:ro
-      - tempo-data:/var/tempo
-
-  loki:
-    image: grafana/loki:3.4.0
-    command: ['-config.file=/etc/loki/local-config.yaml']
-    ports:
-      - '3100:3100'
-    restart: unless-stopped
-    volumes:
-      - loki-data:/loki
-
-  grafana:
-    image: grafana/grafana:11.6.0
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_DEFAULT_ORG_ROLE: Editor
-      GF_AUTH_ANONYMOUS_ENABLED: 'true'
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_INSTALL_PLUGINS: grafana-clock-panel
-    ports:
-      - '3000:3000'
-    restart: unless-stopped
-    volumes:
-      - ../.devcontainer/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../.devcontainer/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana-data:/var/lib/grafana
+      - ./signoz/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+      - ./signoz/otel-collector-opamp-config.yaml:/etc/manager-config.yaml:ro
 
 volumes:
   go-build-cache:
@@ -175,8 +273,8 @@ volumes:
   pnpm-store:
   postgres18-data:
   valkey-data:
-  prometheus-data:
-  tempo-data:
-  loki-data:
-  grafana-data:
   agent-browser-cache:
+  signoz-alertmanager-data:
+  signoz-clickhouse-data:
+  signoz-query-data:
+  signoz-zookeeper-data:

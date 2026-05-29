@@ -49,10 +49,10 @@ func NewRouter(cfg config.Config, dependencies Dependencies) *gin.Engine {
 	_ = router.SetTrustedProxies(cfg.TrustedProxyCIDRs)
 	router.Use(gin.Recovery())
 	// CORS は認証ミドルウェアより前に配置し、OPTIONS preflight が
-	// 401 になるのを防ぐ。AllowHeaders に X-Reauth-Session を含める。
+	// 401 になるのを防ぐ。OTel の trace context header も明示的に許可する。
 	router.Use(cors.New(cors.Config{
 		AllowCredentials: true,
-		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Reauth-Session"},
+		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Reauth-Session", "traceparent", "tracestate", "baggage"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowOrigins:     cfg.AllowedOrigins,
 		MaxAge:           12 * time.Hour,

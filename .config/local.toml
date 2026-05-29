@@ -58,8 +58,8 @@ password = ""
 from_address = "noreply@example.com"
 
 [observability]
-otel_exporter_otlp_endpoint = "otel-collector:4317"
-otel_exporter_otlp_traces_endpoint = "otel-collector:4317"
-otel_exporter_otlp_logs_endpoint = "otel-collector:4317"
+otel_exporter_otlp_endpoint = "signoz-otel-collector:4317"
+otel_exporter_otlp_traces_endpoint = "signoz-otel-collector:4317"
+otel_exporter_otlp_logs_endpoint = "signoz-otel-collector:4317"
 otel_service_name = "www-template-api"
 otel_resource_attributes = "service.namespace=www-template,deployment.environment=development"
