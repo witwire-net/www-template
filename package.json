@@ -16,7 +16,7 @@
     "dev:server": "go -C packages/backend run ./cmd/api",
     "dev:admin-server": "ADMIN_CONFIG_PATH=../../.config/local.admin.toml go -C packages/backend run ./cmd/admin-api",
     "dev:all": "concurrently \"pnpm dev:server\" \"pnpm dev:admin-server\" \"pnpm dev:web\" \"pnpm dev:app\" \"pnpm dev:admin\"",
-    "dev:observability": "docker compose -f .devcontainer/compose.yaml up -d signoz-otel-migrator-async signoz-frontend signoz-otel-collector",
+    "dev:observability": "docker compose -f .devcontainer/compose.yaml up -d signoz signoz-otel-collector",
     "build:web": "pnpm --filter @www-template/web build",
     "build:app": "pnpm --filter @www-template/app build",
     "build:admin": "pnpm --filter @www-template/admin-app build",
