@@ -146,11 +146,14 @@ artifacts:
       Create the design document that explains HOW to implement the change.
 
       Document structure:
-      - The design MUST use English headings and MUST include all sections present in the template.
-      - If a section is not applicable, keep the section and write "N/A" with a brief reason.
+      - The design MUST use the English headings, structural section labels, and table column names present in the template.
+      - English is allowed ONLY for headings, section labels, table column names, IDs, code identifiers, commands, file paths, API/protocol names, enum values, and short technical terms that should remain exact.
+      - All non-label prose MUST be written in Japanese: section body text, bullet descriptions, table cell descriptions, diagram labels, test names after Scenario IDs, TODO replacements, N/A reasons, and release/rollback explanations.
+      - If a section is not applicable, keep the section and write "N/A" with a brief Japanese reason.
 
       Placeholder rule:
-      - Use `<!-- TODO: details of what to write -->` for placeholders.
+      - Use `<!-- TODO: 日本語で何を書くか -->` for placeholders.
+      - When replacing placeholders, keep the English label or column header intact, but write the replacement content in Japanese unless it is an exact identifier.
 
       Scope:
       - Clearly define In Scope and Out of Scope.
@@ -167,11 +170,12 @@ artifacts:
 
       New / Changed Files:
       - MUST include every created/edited file.
-      - For each entry, state what changes and why.
+      - For each entry, state what changes and why in Japanese.
 
       Diagrams:
       - System/Package/Sequence/Domain Model/ER diagrams MUST reflect the spec units being changed.
       - Keep diagrams minimal but accurate.
+      - Diagram node/edge labels SHOULD be Japanese unless they are exact package names, class names, API paths, protocol names, or identifiers.
 
       UI Wireframes (conditional):
       - Wireframes are produced separately using the `wireframe` skill (`.opencode/skills/wireframe/SKILL.md`).
@@ -180,7 +184,7 @@ artifacts:
          - Add a `## UI Wireframes` section in design.md.
          - For each wireframe HTML file, embed it with a relative-path `<iframe>` and label the screen it represents.
          - Include the wireframe HTML files in **Directory Tree** and **New / Changed Files**.
-      - If no wireframe HTML files exist yet (skill has not been run), keep the `## UI Wireframes` section and write `N/A — wireframe not yet generated`.
+      - If no wireframe HTML files exist yet (skill has not been run), keep the `## UI Wireframes` section and write `N/A。wireframe は未生成。`.
 
       Design boundary rules:
       - design.md explains HOW the approved specs will be implemented.
@@ -191,6 +195,7 @@ artifacts:
       Package-Level Design:
       - Provide a package list with responsibilities, public APIs, and dependencies.
       - For each important package, include key flows, error handling, and testing strategy.
+      - Keep labels such as `Purpose / Responsibility:` and `Testing Strategy:` in English, but write everything after the label in Japanese.
 
       Implementation Plan:
       - Use arrows to show dependency order.
@@ -199,6 +204,7 @@ artifacts:
       Test Plan (mandatory):
       - MUST include 4 required subsections with tables.
       - Each subsection MUST use the exact heading text and the exact columns listed below.
+      - Keep the exact English heading text and column names below, but write every table cell description in Japanese except IDs, category codes, package names, paths, commands, and code identifiers.
 
       1) `### User Acceptance Test (Manual)`
          Columns:
@@ -253,11 +259,11 @@ artifacts:
       - E2E/IT/UT rows SHOULD reference a Scenario ID.
       - A single Scenario ID may be covered by multiple tests (1:N). Add multiple E2E/IT/UT rows referencing the same Scenario ID as needed (happy/error/boundary/security/performance/etc.).
       - Automated tests MUST include the Scenario ID in the test title in brackets:
-        - Example: `test('[USER-MGMT-FE-S001] Create user', async () => { ... })`
+        - Example: `test('[USER-MGMT-FE-S001] ユーザー作成が成功する', async () => { ... })`
 
       Rollback/Migration/Release:
       - If DB or contract changes exist, include rollback and migration steps.
-      - Provide release steps that a teammate can follow.
+      - Provide release steps that a teammate can follow, written in Japanese except commands and identifiers.
     requires:
       - proposal
 

@@ -1,60 +1,60 @@
-## 1. API Contract And Codegen
+## 1. API 契約とコード生成
 
-- [ ] 1.1 Update `packages/typespec/src/models/auth.tsp` with `credentialMode`, Web Cookie session response, Bearer session response, CSRF token, and mode-specific refresh DTOs; done when TypeSpec models express both `web-cookie` and `bearer` flows without implicit token body behavior.
-- [ ] 1.2 Update `packages/typespec/src/routes/v1/auth.tsp` so passkey finish, recovery register, refresh, logout, and protected mutation contracts expose the new request/response shapes and `X-CSRF-Token` where needed; done when generated route signatures can represent Cookie and Bearer modes separately.
-- [ ] 1.3 Run `pnpm gen`; done when `packages/typespec/openapi/openapi.json`, `packages/backend/internal/generated/openapi/openapi.gen.go`, and `packages/frontend/api/src/generated/client.ts` reflect the TypeSpec changes.
-- [ ] 1.4 Run `pnpm check:codegen`; done when generated artifacts have no drift.
+- [ ] 1.1 `packages/typespec/src/models/auth.tsp` に `credentialMode`、Web Cookie session response、Bearer session response、CSRF token、mode 別 refresh DTO を追加・更新する。完了条件: TypeSpec model が暗黙的に body token を返す挙動に依存せず、`web-cookie` と `bearer` の両 flow を表現できる。
+- [ ] 1.2 `packages/typespec/src/routes/v1/auth.tsp` を更新し、passkey finish、recovery register、refresh、logout、protected mutation の契約で新しい request/response shape と必要箇所の `X-CSRF-Token` を公開する。完了条件: 生成される route signature が Cookie mode と Bearer mode を分離して表現できる。
+- [ ] 1.3 `pnpm gen` を実行する。完了条件: `packages/typespec/openapi/openapi.json`、`packages/backend/internal/generated/openapi/openapi.gen.go`、`packages/frontend/api/src/generated/client.ts` が TypeSpec 変更を反映している。
+- [ ] 1.4 `pnpm check:codegen` を実行する。完了条件: 生成 artifact に drift がない。
 
-## 2. Backend Session And Credential Model
+## 2. Backend Session と Credential Model
 
-- [ ] 2.1 Update `packages/backend/internal/application/auth_contracts.go` to represent mode-specific session results, CSRF token output, Bearer refresh token output, and session metadata CSRF hash; done when application DTOs no longer force every Product session response to carry `AccessToken`.
-- [ ] 2.2 Update `packages/backend/internal/application/token_service.go` to issue access credentials, refresh credentials, and CSRF tokens for Web Cookie mode and body token pairs for Bearer mode; done when issue/refresh callers can request either mode explicitly.
-- [ ] 2.3 Update `packages/backend/internal/application/auth_service.go` so passkey finish, recovery register, refresh, and logout propagate `credentialMode` and session credential data correctly; done when no handler needs to infer Web vs Bearer from response body fields.
-- [ ] 2.4 Update `packages/backend/internal/adapter/valkey/session_store.go` to persist and load CSRF hash in session metadata; done when sessions without CSRF hash fail closed for Cookie mutations.
-- [ ] 2.5 Add or update backend application tests for `[AUTH-BE-S043]`, `[AUTH-BE-S044]`, `[AUTH-BE-S045]`, `[AUTH-BE-S046]`, and `[AUTH-BE-S062]`; done when TokenService issue/refresh/expiry/theft tests cover mode-specific credentials.
+- [ ] 2.1 `packages/backend/internal/application/auth_contracts.go` を更新し、mode 別 session result、CSRF token output、Bearer refresh token output、session metadata の CSRF hash を表現する。完了条件: application DTO がすべての Product session response に `AccessToken` を強制しない。
+- [ ] 2.2 `packages/backend/internal/application/token_service.go` を更新し、Web Cookie mode では access credential、refresh credential、CSRF token を発行し、Bearer mode では response body の accessToken / refreshToken を発行する。完了条件: issue/refresh 呼び出し元がどちらの mode も明示的に要求できる。
+- [ ] 2.3 `packages/backend/internal/application/auth_service.go` を更新し、passkey finish、recovery register、refresh、logout が `credentialMode` と session credential data を正しく伝搬する。完了条件: handler が response body field から Web/Bearer を推測する必要がない。
+- [ ] 2.4 `packages/backend/internal/adapter/valkey/session_store.go` を更新し、session metadata の CSRF hash を保存・読み込みする。完了条件: CSRF hash を持たない session は Cookie mutation で fail-close する。
+- [ ] 2.5 `[AUTH-BE-S044]`、`[AUTH-BE-S045]`、`[AUTH-BE-S046]`、`[AUTH-BE-S060]`、`[AUTH-BE-S062]`、`[AUTH-BE-S063]` の backend application test を追加または更新する。完了条件: TokenService の issue/refresh/expiry/theft test が mode 別 credential を網羅する。
 
-## 3. Backend HTTP Boundary
+## 3. Backend HTTP 境界
 
-- [ ] 3.1 Update `packages/backend/internal/adapter/http/product/auth.go` to extract exactly one Product credential source from Cookie or Bearer and reject ambiguity; done when middleware binds an authorized session context without passing raw tokens to handlers.
-- [ ] 3.2 Add Product Origin validation for unsafe Cookie requests; done when disallowed or missing Origin is rejected before protected state mutation.
-- [ ] 3.3 Add Product CSRF validation for Cookie state-changing requests; done when `X-CSRF-Token` is compared against session-bound metadata before handler execution.
-- [ ] 3.4 Update `packages/backend/internal/adapter/http/product/router.go` Cookie helpers for `access_token` and `refresh_token`, including Set-Cookie and clear behavior; done when Web Cookie login/refresh/logout set and clear the correct HttpOnly cookies.
-- [ ] 3.5 Update Product strict handlers in `router.go` to use mode-specific generated DTOs for passkey finish, register, refresh, logout, passkey management, account settings, and session management; done when handlers no longer read `Authorization` directly for Web Cookie requests.
-- [ ] 3.6 Add or update backend endpoint tests for recovery/device-link scenarios `[AUTH-BE-S004]`, `[AUTH-BE-S005]`, `[AUTH-BE-S006]`, `[AUTH-BE-S030]`, `[AUTH-BE-S047]`, and `[AUTH-BE-S060]`; done when token issuance/consume/device-link Cookie session coverage exists.
-- [ ] 3.7 Add or update backend endpoint tests for recovery register scenarios `[AUTH-BE-S007]`, `[AUTH-BE-S008]`, and `[AUTH-BE-S048]`; done when register returns mode-specific sessions and preserves recovery/device-link post-processing.
-- [ ] 3.8 Add or update backend endpoint tests for passkey management scenarios `[AUTH-BE-S014]`, `[AUTH-BE-S015]`, `[AUTH-BE-S016]`, `[AUTH-BE-S017]`, `[AUTH-BE-S018]`, `[AUTH-BE-S019]`, and `[AUTH-BE-S061]`; done when Cookie/Bearer session sources and ambiguity rejection are covered.
-- [ ] 3.9 Add or update backend endpoint tests for WebAuthn reauthentication scenarios `[AUTH-BE-S028]`, `[AUTH-BE-S029]`, `[AUTH-BE-S036]`, and `[AUTH-BE-S037]`; done when high-risk operations require reauthentication with either accepted session credential source.
-- [ ] 3.10 Add or update backend endpoint tests for device-link scenarios `[AUTH-BE-S049]` and `[AUTH-BE-S050]`; done when device-link delivery works with active application session plus reauth and fails without reauth.
-- [ ] 3.11 Add or update backend endpoint tests for session issuance/authorization scenarios `[AUTH-BE-S001]`, `[AUTH-BE-S002]`, `[AUTH-BE-S003]`, `[AUTH-BE-S009]`, `[AUTH-BE-S010]`, `[AUTH-BE-S054]`, `[AUTH-BE-S055]`, `[AUTH-BE-S058]`, `[AUTH-BE-S063]`, `[AUTH-BE-S064]`, and `[AUTH-BE-S065]`; done when Bearer mode, Cookie mode, logout, missing/expired/suspended, CSRF, and ambiguity behavior are covered.
+- [ ] 3.1 `packages/backend/internal/adapter/http/product/auth.go` を更新し、Cookie または Bearer から Product credential source を exactly one として抽出し、曖昧な credential を拒否する。完了条件: middleware が raw token を handler に渡さず、認可済み session context を束縛する。
+- [ ] 3.2 unsafe な Cookie request に Product Origin validation を追加する。完了条件: 許可されていない Origin または欠落した Origin が protected state mutation 前に拒否される。
+- [ ] 3.3 Cookie state-changing request に Product CSRF validation を追加する。完了条件: handler 実行前に `X-CSRF-Token` が session-bound metadata と比較される。
+- [ ] 3.4 `packages/backend/internal/adapter/http/product/router.go` の `access_token` と `refresh_token` 用 Cookie helper を、Set-Cookie と clear behavior を含めて更新する。完了条件: Web Cookie login/refresh/logout が正しい HttpOnly Cookie を設定・削除する。
+- [ ] 3.5 `router.go` の Product strict handler を更新し、passkey finish、register、refresh、logout、passkey management、account settings、session management で mode 別の generated DTO を使う。完了条件: handler が Web Cookie request のために `Authorization` を直接読まない。
+- [ ] 3.6 recovery/device-link scenario `[AUTH-BE-S004]`、`[AUTH-BE-S005]`、`[AUTH-BE-S006]`、`[AUTH-BE-S030]`、`[AUTH-BE-S047]`、`[AUTH-BE-S073]` の backend endpoint test を追加または更新する。完了条件: token issuance/consume/device-link Cookie session の coverage がある。
+- [ ] 3.7 recovery register scenario `[AUTH-BE-S007]`、`[AUTH-BE-S008]`、`[AUTH-BE-S048]` の backend endpoint test を追加または更新する。完了条件: register が mode 別 session を返し、recovery/device-link post-processing を維持する。
+- [ ] 3.8 passkey management scenario `[AUTH-BE-S014]`、`[AUTH-BE-S015]`、`[AUTH-BE-S016]`、`[AUTH-BE-S017]`、`[AUTH-BE-S018]`、`[AUTH-BE-S019]`、`[AUTH-BE-S074]` の backend endpoint test を追加または更新する。完了条件: Cookie/Bearer session source と ambiguity rejection が網羅される。
+- [ ] 3.9 WebAuthn reauthentication scenario `[AUTH-BE-S028]`、`[AUTH-BE-S029]`、`[AUTH-BE-S036]`、`[AUTH-BE-S037]` の backend endpoint test を追加または更新する。完了条件: high-risk operation が、受け入れ可能な session credential source のどちらでも reauthentication を要求する。
+- [ ] 3.10 device-link scenario `[AUTH-BE-S049]` と `[AUTH-BE-S050]` の backend endpoint test を追加または更新する。完了条件: device-link delivery が有効なアプリケーションセッションと reauth で成功し、reauth なしで失敗する。
+- [ ] 3.11 session issuance/authorization scenario `[AUTH-BE-S001]`、`[AUTH-BE-S002]`、`[AUTH-BE-S003]`、`[AUTH-BE-S009]`、`[AUTH-BE-S010]`、`[AUTH-BE-S054]`、`[AUTH-BE-S055]`、`[AUTH-BE-S058]`、`[AUTH-BE-S060]`、`[AUTH-BE-S063]`、`[AUTH-BE-S075]`、`[AUTH-BE-S076]`、`[AUTH-BE-S077]` の backend endpoint test を追加または更新する。完了条件: Bearer mode、Cookie mode、logout、missing/expired/suspended、CSRF、ambiguity behavior が網羅される。
 
-## 4. Frontend Auth State And API Calls
+## 4. Frontend Auth State と API Calls
 
-- [ ] 4.1 Update `packages/frontend/domain/src/auth/types.ts` so Web auth state stores session metadata and CSRF token without `accessToken`; done when TypeScript types make browser-readable Product accessToken unavailable to Web hooks.
-- [ ] 4.2 Update `packages/frontend/domain/src/auth/session/state.ts` to replace Authorization header generation with same-origin credential request helpers and CSRF header helpers; done when Product Web domain code has no `Authorization: Bearer` creation path.
-- [ ] 4.3 Update `packages/frontend/domain/src/auth/session/hook.svelte.ts` for bootstrap refresh, session-expired refresh-once retry, logout, session clearing, account-suspended routing, and AccountSetting snapshot handling; done when auth state is driven by Cookie responses and CSRF token rotation.
-- [ ] 4.4 Update `packages/frontend/domain/src/auth/passkey/login/hook.svelte.ts` to send `credentialMode="web-cookie"` and accept Web Cookie session responses; done when login does not decode or store accessToken.
-- [ ] 4.5 Update `packages/frontend/domain/src/auth/recovery/hook.svelte.ts` to send `credentialMode="web-cookie"` for register and accept CSRF/session metadata; done when recovery/device-link registration enters authenticated state without token body.
-- [ ] 4.6 Update `packages/frontend/domain/src/auth/passkey/management/hook.svelte.ts` and `packages/frontend/domain/src/auth/session/session_api.ts` to send same-origin credentials plus CSRF headers for mutations; done when passkey/device/session management no longer receives Authorization headers from callers.
-- [ ] 4.7 Update `packages/frontend/domain/src/account/hook.svelte.ts` and `packages/frontend/domain/src/account/localeSync.svelte.ts` to use Cookie + CSRF request helpers; done when AccountSetting load/update works without bearer headers.
-- [ ] 4.8 Update `packages/frontend/app/src/tests/mocks/handlers.ts` and related app mocks to return Web Cookie mode response bodies; done when frontend tests no longer depend on mocked `accessToken` body for Product Web.
+- [ ] 4.1 `packages/frontend/domain/src/auth/types.ts` を更新し、Web auth state が `accessToken` なしで session metadata と CSRF token を保存するようにする。完了条件: TypeScript type 上、browser-readable な Product accessToken を Web hook から利用できない。
+- [ ] 4.2 `packages/frontend/domain/src/auth/session/state.ts` を更新し、Authorization header generation を same-origin credential request helper と CSRF header helper に置き換える。完了条件: Product Web domain code に `Authorization: Bearer` 作成 path がない。
+- [ ] 4.3 `packages/frontend/domain/src/auth/session/hook.svelte.ts` を更新し、bootstrap refresh、session-expired refresh-once retry、logout、session clearing、account-suspended routing、AccountSetting snapshot handling を扱う。完了条件: auth state が Cookie response と CSRF token rotation によって駆動される。
+- [ ] 4.4 `packages/frontend/domain/src/auth/passkey/login/hook.svelte.ts` を更新し、`credentialMode="web-cookie"` を送信して Web Cookie session response を受け入れる。完了条件: login が accessToken を decode または保存しない。
+- [ ] 4.5 `packages/frontend/domain/src/auth/recovery/hook.svelte.ts` を更新し、register で `credentialMode="web-cookie"` を送信して CSRF/session metadata を受け入れる。完了条件: recovery/device-link registration が token body なしで authenticated state に入る。
+- [ ] 4.6 `packages/frontend/domain/src/auth/passkey/management/hook.svelte.ts` と `packages/frontend/domain/src/auth/session/session_api.ts` を更新し、mutation で same-origin credential と CSRF header を送信する。完了条件: passkey/device/session management が caller から Authorization header を受け取らない。
+- [ ] 4.7 `packages/frontend/domain/src/account/hook.svelte.ts` と `packages/frontend/domain/src/account/localeSync.svelte.ts` を更新し、Cookie + CSRF request helper を使う。完了条件: AccountSetting load/update が bearer header なしで動作する。
+- [ ] 4.8 `packages/frontend/app/src/tests/mocks/handlers.ts` と関連 app mock を更新し、Web Cookie mode response body を返す。完了条件: frontend test が Product Web 用の mock `accessToken` body に依存しない。
 
 ## 5. Frontend Tests
 
-- [ ] 5.1 Add or update frontend tests for login scenarios `[AUTH-FE-S001]`, `[AUTH-FE-S002]`, and `[AUTH-FE-S045]`; done when passkey login enters authenticated state from CSRF/session metadata without accessToken storage.
-- [ ] 5.2 Add or update frontend tests for recovery/device-link scenarios `[AUTH-FE-S003]`, `[AUTH-FE-S004]`, `[AUTH-FE-S005]`, `[AUTH-FE-S038]`, and `[AUTH-FE-S046]`; done when recovery registration accepts Web Cookie session responses.
-- [ ] 5.3 Add or update frontend tests for refresh/session continuation scenarios `[AUTH-FE-S023]`, `[AUTH-FE-S024]`, `[AUTH-FE-S025]`, `[AUTH-FE-S026]`, and `[AUTH-FE-S047]`; done when bootstrap refresh, retry-on-session-expired, and no persistent token storage are covered.
-- [ ] 5.4 Add or update frontend tests for single active Cookie session scenarios `[AUTH-FE-S027]`, `[AUTH-FE-S028]`, `[AUTH-FE-S029]`, `[AUTH-FE-S030]`, and `[AUTH-FE-S031]`; done when account switching token-list behavior is removed from Product Web.
-- [ ] 5.5 Add or update frontend tests for expiry/logout routing scenarios `[AUTH-FE-S006]`, `[AUTH-FE-S007]`, and `[AUTH-FE-S008]`; done when missing session, expired session, and logout route intents are distinct.
-- [ ] 5.6 Add or update frontend tests for passkey management scenarios `[AUTH-FE-S010]`, `[AUTH-FE-S011]`, `[AUTH-FE-S012]`, `[AUTH-FE-S013]`, `[AUTH-FE-S014]`, `[AUTH-FE-S015]`, `[AUTH-FE-S035]`, and `[AUTH-FE-S037]`; done when management API calls include credentials and CSRF where expected.
-- [ ] 5.7 Add or update frontend tests for security presentation scenarios `[AUTH-FE-S019]`, `[AUTH-FE-S020]`, and `[AUTH-FE-S048]`; done when tokens/Cookie values are absent from state/storage and auth routes keep no-store/security behavior.
-- [ ] 5.8 Add or update frontend tests for suspended account scenarios `[AUTH-FE-S041]`, `[AUTH-FE-S042]`, `[AUTH-FE-S043]`, and `[AUTH-FE-S044]`; done when suspended handling clears Cookie session state and avoids public enumeration.
-- [ ] 5.9 Add or update frontend tests for device management scenarios `[AUTH-FE-S034]`, `[AUTH-FE-S049]`, and `[AUTH-FE-S036]`; done when session list/revoke/revoke-others use Cookie + CSRF requests.
+- [ ] 5.1 login scenario `[AUTH-FE-S001]`、`[AUTH-FE-S002]`、`[AUTH-FE-S051]` の frontend test を追加または更新する。完了条件: passkey login が accessToken を保存せず、CSRF/session metadata から authenticated state に入る。
+- [ ] 5.2 recovery/device-link scenario `[AUTH-FE-S003]`、`[AUTH-FE-S004]`、`[AUTH-FE-S005]`、`[AUTH-FE-S038]`、`[AUTH-FE-S052]` の frontend test を追加または更新する。完了条件: recovery registration が Web Cookie session response を受け入れる。
+- [ ] 5.3 refresh/session continuation scenario `[AUTH-FE-S045]`、`[AUTH-FE-S024]`、`[AUTH-FE-S046]`、`[AUTH-FE-S026]`、`[AUTH-FE-S047]` の frontend test を追加または更新する。完了条件: bootstrap refresh、retry-on-session-expired、persistent token storage 不使用が網羅される。
+- [ ] 5.4 single active Cookie session scenario `[AUTH-FE-S048]`、`[AUTH-FE-S028]`、`[AUTH-FE-S049]`、`[AUTH-FE-S050]`、`[AUTH-FE-S031]` の frontend test を追加または更新する。完了条件: account switching 用 token-list behavior が Product Web から削除される。
+- [ ] 5.5 expiry/logout routing scenario `[AUTH-FE-S006]`、`[AUTH-FE-S007]`、`[AUTH-FE-S008]` の frontend test を追加または更新する。完了条件: missing session、expired session、logout route intent が区別される。
+- [ ] 5.6 passkey management scenario `[AUTH-FE-S010]`、`[AUTH-FE-S011]`、`[AUTH-FE-S012]`、`[AUTH-FE-S013]`、`[AUTH-FE-S014]`、`[AUTH-FE-S015]`、`[AUTH-FE-S035]`、`[AUTH-FE-S037]` の frontend test を追加または更新する。完了条件: management API call が期待どおり credential と CSRF を含む。
+- [ ] 5.7 security presentation scenario `[AUTH-FE-S019]`、`[AUTH-FE-S020]`、`[AUTH-FE-S054]` の frontend test を追加または更新する。完了条件: token/Cookie value が state/storage に存在せず、auth route が no-store/security behavior を維持する。
+- [ ] 5.8 suspended account scenario `[AUTH-FE-S041]`、`[AUTH-FE-S042]`、`[AUTH-FE-S043]`、`[AUTH-FE-S044]` の frontend test を追加または更新する。完了条件: suspended handling が Cookie session state を消去し、public enumeration を避ける。
+- [ ] 5.9 device management scenario `[AUTH-FE-S034]`、`[AUTH-FE-S053]`、`[AUTH-FE-S036]` の frontend test を追加または更新する。完了条件: session list/revoke/revoke-others が Cookie + CSRF request を使う。
 
-## 6. Verification And Artifact Maintenance
+## 6. Verification と Artifact Maintenance
 
-- [ ] 6.1 Run `pnpm lint`; done when lint passes through repository scripts.
-- [ ] 6.2 Run `pnpm check`; done when TypeScript/Svelte/Go type checks pass through repository scripts.
-- [ ] 6.3 Run `pnpm test:server`; done when backend tests covering `[AUTH-BE-*]` scenarios pass.
-- [ ] 6.4 Run `pnpm test:client`; done when frontend tests covering `[AUTH-FE-*]` scenarios pass.
-- [ ] 6.5 Run `pnpm check:codegen` after all implementation edits; done when TypeSpec-generated artifacts are in sync.
-- [ ] 6.6 Update OpenSpec delta specs/design/tasks if implementation uncovers a contract mismatch; done when artifacts and code agree before archive or sync.
+- [ ] 6.1 `pnpm lint` を実行する。完了条件: repository script 経由の lint が通る。
+- [ ] 6.2 `pnpm check` を実行する。完了条件: TypeScript/Svelte/Go の type check が repository script 経由で通る。
+- [ ] 6.3 `pnpm test:server` を実行する。完了条件: `[AUTH-BE-*]` scenario を網羅する backend test が通る。
+- [ ] 6.4 `pnpm test:client` を実行する。完了条件: `[AUTH-FE-*]` scenario を網羅する frontend test が通る。
+- [ ] 6.5 すべての implementation edit 後に `pnpm check:codegen` を実行する。完了条件: TypeSpec generated artifact が同期している。
+- [ ] 6.6 実装中に contract mismatch が見つかった場合、OpenSpec delta specs/design/tasks を更新する。完了条件: archive または sync 前に artifact と code が一致している。

@@ -1,56 +1,58 @@
 ## Scope
 
 <!-- This file explains HOW to implement approved specs. -->
+<!-- English headings, section labels, and table column names are structural and should stay English. -->
+<!-- All non-label prose, TODO replacements, table cell descriptions, and diagram labels MUST be written in Japanese, except code identifiers, paths, commands, API names, IDs, and protocol terms. -->
 <!-- MUST NOT introduce new product requirements that are absent from spec.md. -->
 <!-- MUST NOT replace tasks.md with a prose checklist. -->
 
 ### In Scope
 
-- <!-- TODO: Included features/requirements (user perspective). Reference Spec Units/Requirements/Scenario IDs when helpful. -->
+- <!-- TODO: 対象に含める機能・要件を利用者視点で日本語記述する。必要に応じて Spec Unit / Requirement / Scenario ID を参照する。 -->
 
 ### Out of Scope
 
-- <!-- TODO: Explicitly excluded items. If likely later, include rationale and alternatives. -->
+- <!-- TODO: 対象外の項目を日本語で明示する。後続対応の可能性がある場合は理由と代替案も記述する。 -->
 
 ## Assumptions / Dependencies
 
-- <!-- TODO: Preconditions/dependencies (external systems, existing specs, feature flags, authz, migrations, API contract, etc.). -->
+- <!-- TODO: 前提条件・依存関係を日本語で記述する。外部システム、既存 spec、feature flag、認可、migration、API contract などを含める。 -->
 
 ## Impacted Areas
 
-- <!-- TODO: Impacted areas (modules/components, APIs, DB, jobs, monitoring, security, performance). -->
+- <!-- TODO: 影響範囲を日本語で記述する。module/component、API、DB、job、監視、security、performance などを含める。 -->
 
 ## Directory Tree
 
 ```text
 directory
-└─ <!-- TODO: Root directory / feature directory impacted -->
-   ├─ <!-- TODO: File/dir you will create or edit -->
-   └─ <!-- TODO: File/dir you will create or edit -->
+└─ <!-- TODO: 影響を受ける root directory / feature directory -->
+   ├─ <!-- TODO: 作成または編集する file/dir -->
+   └─ <!-- TODO: 作成または編集する file/dir -->
 README.md
 .gitignore
 ```
 
 ## New / Changed Files
 
-| Type                                             | File           | Change                                          |
-| ------------------------------------------------ | -------------- | ----------------------------------------------- |
-| <!-- TODO: Type e.g., Add/Update/Delete/Move --> | `path/to/file` | <!-- TODO: What changes (one line) and why. --> |
+| Type                                            | File           | Change                                                     |
+| ----------------------------------------------- | -------------- | ---------------------------------------------------------- |
+| <!-- TODO: 種別。例: Add/Update/Delete/Move --> | `path/to/file` | <!-- TODO: 何をなぜ変更するかを日本語で 1 行記述する。 --> |
 
 ## System Diagram
 
 ```mermaid
 flowchart LR
-  %% TODO: Add external systems/users/data stores and key interactions (with directions).
-  User[User] -->|TBD| System[This System]
-  System -->|TBD| External[External System]
+  %% TODO: 外部 system / user / data store と主要 interaction を日本語 label で記述する。
+  User[利用者] -->|TBD| System[対象システム]
+  System -->|TBD| External[外部システム]
 ```
 
 ## Package Diagram
 
 ```mermaid
 flowchart TB
-  %% TODO: Show key modules/components and dependencies (arrows indicate dependency direction).
+  %% TODO: 主要 module/component と依存方向を日本語 label で記述する。
   A[Package A] --> B[Package B]
 ```
 
@@ -58,9 +60,9 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-  %% TODO: Main user flow/use case sequence. Add separate diagram(s) for important failure paths.
-  participant U as User
-  participant S as System
+  %% TODO: 主要 user flow / use case sequence を日本語 label で記述する。重要な failure path は別図を追加する。
+  participant U as 利用者
+  participant S as 対象システム
   U->>S: TBD
   S-->>U: TBD
 ```
@@ -69,15 +71,15 @@ sequenceDiagram
 
 <!-- Wireframes are generated separately with the `wireframe` skill (.opencode/skills/wireframe/SKILL.md). -->
 <!-- The skill outputs `{name}.wireframe.html` files. Embed them below with relative-path iframes once generated. -->
-<!-- If no wireframe files have been generated yet, write: N/A — wireframe not yet generated -->
+<!-- If no wireframe files have been generated yet, write: N/A。wireframe は未生成。 -->
 
-<!-- TODO: For each generated wireframe HTML, add a section like the example below. -->
+<!-- TODO: 生成済み wireframe HTML ごとに、以下の例のような section を追加する。 -->
 
-### <!-- TODO: Screen name -->
+### <!-- TODO: 画面名 -->
 
 <iframe
   src="<!-- TODO: relative path to {name}.wireframe.html -->"
-  title="<!-- TODO: Screen name -->"
+  title="<!-- TODO: 画面名 -->"
   width="<!-- TODO: width in px -->"
   height="<!-- TODO: height in px -->"
 ></iframe>
@@ -86,7 +88,7 @@ sequenceDiagram
 
 ```mermaid
 classDiagram
-  %% TODO: Domain entities/value objects/aggregates. Include key attributes and relationships.
+  %% TODO: domain entity / value object / aggregate を日本語 label で記述する。主要 attribute と関係を含める。
   class ExampleEntity {
     +id: string
   }
@@ -96,7 +98,7 @@ classDiagram
 
 ```mermaid
 erDiagram
-  %% TODO: Only if persistence changes exist. Tables/columns/relationships. Otherwise write N/A with reason.
+  %% TODO: persistence 変更がある場合のみ table / column / relationship を記述する。ない場合は N/A と理由を日本語で書く。
   EXAMPLE_TABLE {
     string id
   }
@@ -106,32 +108,32 @@ erDiagram
 
 ### Package List
 
-| Package                                                                | Purpose / Responsibility                       | Public API                                 | Dependencies                    |
-| ---------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------ | ------------------------------- |
-| <!-- TODO: Module/package name (e.g., frontend/app or frontend/ui) --> | <!-- TODO: Purpose/responsibility (1 line) --> | <!-- TODO: Key public API/entry points --> | <!-- TODO: Key dependencies --> |
+| Package                                                             | Purpose / Responsibility                           | Public API                                   | Dependencies                   |
+| ------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------- | ------------------------------ |
+| <!-- TODO: module/package name。例: frontend/app or frontend/ui --> | <!-- TODO: 目的・責務を日本語で 1 行記述する。 --> | <!-- TODO: 主要 public API / entry point --> | <!-- TODO: 主要 dependency --> |
 
 ### Details
 
 #### <package-name>
 
-- Purpose / Responsibility: <!-- TODO: What this package owns/does not own. -->
-- Public API: <!-- TODO: Externally exposed functions/classes/routes/components. -->
-- Key Data Structures: <!-- TODO: Key types/DTOs/domain objects. -->
-- Key Flows: <!-- TODO: Key flow(s) (input -> processing -> output). -->
-- Dependencies: <!-- TODO: Packages/external interfaces depended on, and why. -->
-- Error Handling: <!-- TODO: Error taxonomy, user-facing messages, logging, retry policy. -->
-- Testing Strategy: <!-- TODO: What is covered by UT/IT/E2E and how it maps to Scenario IDs. -->
-- Non-Functional: <!-- TODO: Availability/ops/monitoring/metrics. -->
-- Performance: <!-- TODO: Performance requirements, bottlenecks, measurement/optimization plan. -->
-- Security: <!-- TODO: Authz, validation, PII handling, audit logs, threat model highlights. -->
+- Purpose / Responsibility: <!-- TODO: この package が所有する責務・所有しない責務を日本語で記述する。 -->
+- Public API: <!-- TODO: 外部へ公開する function / class / route / component を記述する。 -->
+- Key Data Structures: <!-- TODO: 主要 type / DTO / domain object を記述する。 -->
+- Key Flows: <!-- TODO: 主要 flow を input -> processing -> output の形で日本語記述する。 -->
+- Dependencies: <!-- TODO: 依存する package / external interface と、その理由を日本語で記述する。 -->
+- Error Handling: <!-- TODO: error taxonomy、user-facing message、logging、retry policy を日本語で記述する。 -->
+- Testing Strategy: <!-- TODO: UT/IT/E2E で何を検証し、どの Scenario ID に対応するかを日本語で記述する。 -->
+- Non-Functional: <!-- TODO: availability、ops、monitoring、metrics を日本語で記述する。 -->
+- Performance: <!-- TODO: performance 要件、bottleneck、measurement/optimization plan を日本語で記述する。 -->
+- Security: <!-- TODO: authz、validation、PII handling、audit log、threat model highlights を日本語で記述する。 -->
 
 ## Implementation Plan
 
-<!-- Keep this at dependency-order design level, not a full task checklist. -->
+<!-- dependency order が分かる design level に留め、tasks.md の checklist を重複させない。 -->
 
 ```mermaid
 flowchart TD
-  %% TODO: Show dependency order. Use branches for parallelizable work.
+  %% TODO: 依存順を示す。並列化できる作業は branch で表す。
   T1[1. TBD] --> T2[2. TBD]
   T1 --> T3[3. TBD parallel]
   T2 --> T4[4. TBD]
@@ -141,43 +143,44 @@ flowchart TD
 ## Test Plan
 
 <!-- The test plan maps specs to verification strategy. Do not use it as change history. -->
+<!-- Keep headings and column names in English, but write all table cell descriptions in Japanese except IDs, categories, paths, commands, and code identifiers. -->
 
 ### User Acceptance Test (Manual)
 
-| UAT ID                                        | Related Requirement                                       | Spec Summary                            | Customer Problem Summary                                        | Steps                                                     | Expected Behavior                             |
-| --------------------------------------------- | --------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------- |
-| <!-- TODO: e.g., UAT-USER-MGMT-FE-HAP-001 --> | <!-- TODO: e.g., USER-MGMT-FE-R001 + requirement name --> | <!-- TODO: Spec summary (1-2 lines) --> | <!-- TODO: Customer problem summary (from Customer Context) --> | <!-- TODO: Steps (from login/initial state; detailed) --> | <!-- TODO: Expected behavior (observable) --> |
+| UAT ID                                      | Related Requirement                                     | Spec Summary                                       | Customer Problem Summary                                           | Steps                                                                   | Expected Behavior                                     |
+| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------- |
+| <!-- TODO: 例: UAT-USER-MGMT-FE-HAP-001 --> | <!-- TODO: 例: USER-MGMT-FE-R001 + requirement name --> | <!-- TODO: 仕様概要を日本語で 1-2 行記述する。 --> | <!-- TODO: Customer Context 由来の顧客課題を日本語で記述する。 --> | <!-- TODO: login / initial state からの詳細手順を日本語で記述する。 --> | <!-- TODO: 観測可能な期待挙動を日本語で記述する。 --> |
 
 ### E2E Test (Playwright)
 
-| E2E ID                                        | Playwright Test Name                                          | Related Scenario                                   | Category                                      | Summary                         | Steps (Playwright)                                      | Expected Behavior                             |
-| --------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------- |
-| <!-- TODO: e.g., E2E-USER-MGMT-FE-HAP-001 --> | <!-- TODO: e.g., [USER-MGMT-FE-S001] Create user succeeds --> | <!-- TODO: Scenario ID e.g., USER-MGMT-FE-S001 --> | <!-- TODO: Category e.g., HAP/ERR/BND/... --> | <!-- TODO: Summary (1 line) --> | <!-- TODO: Steps performed in Playwright (sequence) --> | <!-- TODO: Expected behavior (observable) --> |
+| E2E ID                                      | Playwright Test Name                                          | Related Scenario                                  | Category                                     | Summary                                      | Steps (Playwright)                                           | Expected Behavior                                     |
+| ------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
+| <!-- TODO: 例: E2E-USER-MGMT-FE-HAP-001 --> | <!-- TODO: 例: [USER-MGMT-FE-S001] ユーザー作成が成功する --> | <!-- TODO: Scenario ID。例: USER-MGMT-FE-S001 --> | <!-- TODO: Category。例: HAP/ERR/BND/... --> | <!-- TODO: 概要を日本語で 1 行記述する。 --> | <!-- TODO: Playwright で実行する手順を日本語で記述する。 --> | <!-- TODO: 観測可能な期待挙動を日本語で記述する。 --> |
 
 ### Integration Test (Endpoint)
 
-| IT ID                                        | Test Name                                                            | Genre                             | Category                                      | Summary                         | Steps (Test)                                         | Expected Behavior                             |
-| -------------------------------------------- | -------------------------------------------------------------------- | --------------------------------- | --------------------------------------------- | ------------------------------- | ---------------------------------------------------- | --------------------------------------------- |
-| <!-- TODO: e.g., IT-USER-MGMT-BE-ERR-002 --> | <!-- TODO: e.g., [USER-MGMT-BE-S004] Duplicate email returns 400 --> | <!-- TODO: fe/be/other/etc... --> | <!-- TODO: Category e.g., HAP/ERR/BND/... --> | <!-- TODO: Summary (1 line) --> | <!-- TODO: Setup -> execute -> assert (sequence) --> | <!-- TODO: Expected behavior (observable) --> |
+| IT ID                                      | Test Name                                                       | Genre                             | Category                                     | Summary                                      | Steps (Test)                                                         | Expected Behavior                                     |
+| ------------------------------------------ | --------------------------------------------------------------- | --------------------------------- | -------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------- |
+| <!-- TODO: 例: IT-USER-MGMT-BE-ERR-002 --> | <!-- TODO: 例: [USER-MGMT-BE-S004] 重複 email は 400 を返す --> | <!-- TODO: fe/be/other/etc... --> | <!-- TODO: Category。例: HAP/ERR/BND/... --> | <!-- TODO: 概要を日本語で 1 行記述する。 --> | <!-- TODO: setup -> execute -> assert の流れを日本語で記述する。 --> | <!-- TODO: 観測可能な期待挙動を日本語で記述する。 --> |
 
 ### Unit/Component Test (UT)
 
-| UT ID                                        | Test Name                                                             | Package                           | Category                                      | Summary                         | Steps (Test)                                       | Expected Behavior                             |
-| -------------------------------------------- | --------------------------------------------------------------------- | --------------------------------- | --------------------------------------------- | ------------------------------- | -------------------------------------------------- | --------------------------------------------- |
-| <!-- TODO: e.g., UT-USER-MGMT-FE-BND-003 --> | <!-- TODO: e.g., [USER-MGMT-FE-S003] Email input validates format --> | <!-- TODO: e.g., frontend/app --> | <!-- TODO: Category e.g., HAP/ERR/BND/... --> | <!-- TODO: Summary (1 line) --> | <!-- TODO: Arrange -> Act -> Assert highlights --> | <!-- TODO: Expected behavior (observable) --> |
+| UT ID                                      | Test Name                                                               | Package                         | Category                                     | Summary                                      | Steps (Test)                                                       | Expected Behavior                                     |
+| ------------------------------------------ | ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| <!-- TODO: 例: UT-USER-MGMT-FE-BND-003 --> | <!-- TODO: 例: [USER-MGMT-FE-S003] Email input は format を検証する --> | <!-- TODO: 例: frontend/app --> | <!-- TODO: Category。例: HAP/ERR/BND/... --> | <!-- TODO: 概要を日本語で 1 行記述する。 --> | <!-- TODO: Arrange -> Act -> Assert の要点を日本語で記述する。 --> | <!-- TODO: 観測可能な期待挙動を日本語で記述する。 --> |
 
 ## Rollback / Migration
 
-- <!-- TODO: Rollback/migration plan. Data migration, feature flags, backward compatibility. If N/A, say why. -->
+- <!-- TODO: rollback / migration plan を日本語で記述する。data migration、feature flag、backward compatibility を含める。N/A の場合は理由を日本語で書く。 -->
 
 ## Release Procedure
 
-- <!-- TODO: Release steps. Write as an executable runbook (commands/order/verification). -->
+- <!-- TODO: release steps を日本語で記述する。commands/order/verification を含む実行可能な runbook にする。 -->
 
 ## Acceptance Criteria
 
-- <!-- TODO: Acceptance criteria. Conditions for UAT/E2E/IT/UT and non-functional requirements. -->
+- <!-- TODO: acceptance criteria を日本語で記述する。UAT/E2E/IT/UT と non-functional requirements の条件を含める。 -->
 
 ## Open Issues
 
-- <!-- TODO: Open questions/decisions needed, owners, and due dates. -->
+- <!-- TODO: 未解決の question / decision、owner、due date を日本語で記述する。 -->

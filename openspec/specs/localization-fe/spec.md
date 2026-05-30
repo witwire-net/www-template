@@ -1,8 +1,6 @@
-# localization-fe Specification
-
 ## Purpose
 
-TBD - created by archiving change add-default-i18n. Update Purpose after archive.
+公開 Web、認証済み Product アプリ、Admin Console の frontend ロケール要件を定義し、URL ロケール、保存済み言語設定、辞書網羅性、表示面ごとの i18n 所有境界を扱う。
 
 ## Requirements
 

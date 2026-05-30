@@ -10,14 +10,14 @@ recovery token は、単回利用・期限付き・enumeration-safe なパスキ
 
 **Requirement**
 
-- The system SHALL treat recovery tokens and device-link tokens as single-use time-limited credentials and MUST keep issuance request responses enumeration-safe.
+- システムは recovery token と device-link token を単回利用・期限付き credential として扱い、発行 request の response は account existence を推測できない形に保たなければならない（SHALL/MUST）。
 - Token は `kind` フィールドを持ち、`"recovery"`（パスキー紛失時の復旧）または `"device-link"`（認証済み端末からの新端末追加）のいずれかを MUST 指定する。
-- The system SHALL expose `POST /api/v1/auth/recovery` to accept a registered email address and issue a single-use time-limited token with `kind=recovery`, then send a recovery URL to the registered address through SMTP.
-- The system SHALL expose `POST /api/v1/passkeys/send-device-link` to accept an authenticated application session with `X-Reauth-Session` header (operation kind `device-link`) and issue a single-use time-limited token with `kind=device-link`, then send a device-link URL to the registered email address through SMTP. This endpoint MUST accept exactly one authenticated session credential source: Web Cookie credential or `Authorization: Bearer`. It MUST require a consumed reauthentication session and SHALL reject session-only requests.
+- システムは `POST /api/v1/auth/recovery` を提供し、登録済みメールアドレスを受け取って `kind=recovery` の単回利用・期限付き token を発行し、登録済みアドレスへ recovery URL を SMTP で送信しなければならない（SHALL）。
+- システムは `POST /api/v1/passkeys/send-device-link` を提供し、`X-Reauth-Session` header（operation kind `device-link`）付きの有効なアプリケーションセッションを受け取って `kind=device-link` の単回利用・期限付き token を発行し、登録済みメールアドレスへ device-link URL を SMTP で送信しなければならない（SHALL）。この endpoint は Web Cookie credential または `Authorization: Bearer` のどちらか一方だけを認証済み session credential source として受け入れなければならず（MUST）、消費済み reauthentication session を要求し、session-only request を拒否しなければならない（MUST/SHALL）。
 - RecoveryToken と RecoverySession は Valkey-backed auth state store に MUST 保持され、`kind` を含む完全な状態で永続化される。
 - RecoveryToken 自体の resource ID、RecoverySession の resource ID、delivery request ID、mail/audit correlation ID など flow を追跡する識別子が必要な箇所は ULID を SHALL 使用する。
 - `POST /api/v1/auth/recovery` および `POST /api/v1/passkeys/send-device-link` は account 有無や throttle 状態を外部から判別できない accepted response を SHALL 返す。
-- The system SHALL expose `POST /api/v1/auth/recovery/consume` to validate a token, mark the token consumed atomically, and create a passkey re-registration RecoverySession that inherits the token's `kind`.
+- システムは `POST /api/v1/auth/recovery/consume` を提供し、token を検証して原子的に consumed とし、token の `kind` を継承する passkey 再登録用 RecoverySession を作成しなければならない（SHALL）。
 - RecoveryToken secret は平文 lookup 値として保存してはならず、server-side keyed hash (HMAC-SHA256 with server-side pepper) で MUST 保存・照合する。
 - RecoveryToken consume と RecoverySession consume は atomic operation として MUST 実行され、同じ token または session から複数の有効結果を作成してはならない。
 - 無効、期限切れ、revoke 済み、または consumed 済みの token から RecoverySession を作成してはならない（MUST NOT）。
@@ -28,37 +28,37 @@ recovery token は、単回利用・期限付き・enumeration-safe なパスキ
 
 - **GIVEN** 利用者が passkey recovery を依頼する
 - **WHEN** 利用者が `POST /api/v1/auth/recovery` を送信する
-- **THEN** system は accepted response を返し、対象アカウントが存在するときだけ `kind=recovery` の time-limited token を発行して recovery URL をメール送信する
+- **THEN** システムは accepted response を返し、対象アカウントが存在するときだけ `kind=recovery` の time-limited token を発行して recovery URL をメール送信する
 
 #### Scenario: 有効な復旧 token は kind を継承した RecoverySession を作成する (AUTH-BE-S005)
 
 - **GIVEN** recovery URL が valid な token (kind=recovery) を含んでいる
 - **WHEN** 利用者が `POST /api/v1/auth/recovery/consume` を送信する
-- **THEN** token は consumed となり、system は `kind=recovery` を継承した RecoverySession を返す
+- **THEN** token は consumed となり、システムは `kind=recovery` を継承した RecoverySession を返す
 
 #### Scenario: 有効なデバイスリンク token は kind を継承した RecoverySession を作成する (AUTH-BE-S047)
 
 - **GIVEN** device-link URL が valid な token (kind=device-link) を含んでいる
 - **WHEN** 利用者が `POST /api/v1/auth/recovery/consume` を送信する
-- **THEN** token は consumed となり、system は `kind=device-link` を継承した RecoverySession を返す
+- **THEN** token は consumed となり、システムは `kind=device-link` を継承した RecoverySession を返す
 
 #### Scenario: 無効な復旧 token は拒否される (AUTH-BE-S006)
 
 - **GIVEN** recovery URL が invalid、expired、または consumed 済みの token を含んでいる
 - **WHEN** 利用者が `POST /api/v1/auth/recovery/consume` を送信する
-- **THEN** system は request を拒否し、RecoverySession を作成しない
+- **THEN** システムは request を拒否し、RecoverySession を作成しない
 
 #### Scenario: token の並行 consume は単一結果だけを許可する (AUTH-BE-S030)
 
 - **GIVEN** 同じ valid token に対する複数の consume request が並行している
-- **WHEN** system が token consume を処理する
+- **WHEN** システムが token consume を処理する
 - **THEN** ちょうど 1 つの request だけが RecoverySession を作成し、残りは generic failure として拒否される
 
-#### Scenario: Cookie session は reauthentication と合わせて device-link token を発行できる (AUTH-BE-S060)
+#### Scenario: Cookie session は reauthentication と合わせて device-link token を発行できる (AUTH-BE-S073)
 
-- **GIVEN** 認証済み Web client が valid な Product auth Cookie と `device-link` 用 reauthentication session を持っている
-- **WHEN** client が `POST /api/v1/passkeys/send-device-link` を呼び出す
-- **THEN** system は Cookie session と reauthentication session の account/session binding を検証し、`kind=device-link` の token を発行する
+- **GIVEN** 認証済み Web クライアントが valid な Product auth Cookie と `device-link` 用 reauthentication session を持っている
+- **WHEN** クライアントが `POST /api/v1/passkeys/send-device-link` を呼び出す
+- **THEN** システムは Cookie session と reauthentication session の account/session binding を検証し、`kind=device-link` の token を発行する
 
 ### Requirement: recovery register branch は既存アカウントの再登録だけを許可する
 
@@ -70,16 +70,16 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 
 **Requirement**
 
-- The system SHALL allow the register branch to operate only on an existing account referenced by a valid RecoverySession, and the shared register endpoint MUST keep an exactly-one selector boundary between recovery and invite state.
+- システムは register branch を valid な RecoverySession が参照する既存アカウントに対してだけ動作させ、shared register endpoint は recovery state と invite state の exactly-one selector boundary を保たなければならない（SHALL/MUST）。
 - `POST /api/v1/auth/passkey/register` は shared endpoint として RecoverySession または InvitationSession の exactly-one を MUST 要求し、register branch は valid な RecoverySession のみを持つときだけ SHALL 成立する。
 - register branch は RecoverySession が指す既存アカウントへ新しい passkey を SHALL 登録し、new Account 作成、Guest / Member state 変更、base role 変更をしてはならない。
 - register branch は invitation-session validation、invite-token consume、invite consent completion、TermsConsent read / write を MUST NOT 要求しない。
 - RecoverySession と InvitationSession を同時に提示する request、または両方を欠く request は branch ambiguity として MUST reject しなければならない。
-- register branch が成功した後は、request の `credentialMode` に従って active application session を SHALL 返す。
+- register branch が成功した後は、request の `credentialMode` に従って有効なアプリケーションセッションを SHALL 返す。
 - `credentialMode="web-cookie"` の register response は access credential と refresh credential を HttpOnly Cookie で設定し、response body には bearer accessToken または refreshToken 平文を含めてはならない（MUST NOT）。body は session metadata と CSRF token を含まなければならない（MUST）。
 - `credentialMode="bearer"` の register response は Bearer accessToken と refreshToken を body に含め、Web auth Cookie を設定してはならない（MUST NOT）。
-- RecoverySession の `kind` が `"recovery"` である場合、system はパスキー登録成功後に該当アカウントの全既存セッションを強制失効しなければならない（SHALL revoke all sessions for the account）。その後、復旧完了を通知するメールを登録済みメールアドレスへ SHALL 送信する。
-- RecoverySession の `kind` が `"device-link"` である場合、system はパスキー登録成功後にセッションを失効してはならない（MUST NOT revoke any session）。新端末追加完了を通知するメールを登録済みメールアドレスへ SHALL 送信する。
+- RecoverySession の `kind` が `"recovery"` である場合、システムはパスキー登録成功後に該当アカウントの全既存セッションを強制失効しなければならない（SHALL revoke all sessions for the account）。その後、復旧完了を通知するメールを登録済みメールアドレスへ SHALL 送信する。
+- RecoverySession の `kind` が `"device-link"` である場合、システムはパスキー登録成功後にセッションを失効してはならない（MUST NOT revoke any session）。新端末追加完了を通知するメールを登録済みメールアドレスへ SHALL 送信する。
 - 通知メールの送信失敗はパスキー登録の成功を妨げてはならない（MUST NOT block registration success）。失敗は fire-and-forget でログ記録する。
 - `POST /api/v1/auth/passkey/register` の response は `Cache-Control: no-store` を SHALL 保ち、cacheable な auth response を返してはならない。
 - consumed 済み RecoverySession を再利用してはならない（MUST NOT）。消費済み state は Valkey-backed auth state store に反映される。
@@ -90,19 +90,19 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 
 - **GIVEN** 利用者が kind=recovery の valid な RecoverySession を保持している
 - **WHEN** 利用者が register branch として `POST /api/v1/auth/passkey/register` を送信する
-- **THEN** system は既存アカウントへ新しい passkey を登録し、該当アカウントの全既存セッションを強制失効し、復旧完了通知メールを送信し、request の `credentialMode` に対応する active session を返す
+- **THEN** システムは既存アカウントへ新しい passkey を登録し、該当アカウントの全既存セッションを強制失効し、復旧完了通知メールを送信し、request の `credentialMode` に対応する有効な session を返す
 
 #### Scenario: device-link session (kind=device-link) は passkey を追加しセッションは失効しない (AUTH-BE-S048)
 
 - **GIVEN** 利用者が kind=device-link の valid な RecoverySession を保持している
 - **WHEN** 利用者が register branch として `POST /api/v1/auth/passkey/register` を送信する
-- **THEN** system は既存アカウントへ新しい passkey を登録し、既存セッションを一切失効せず、新端末追加完了通知メールを送信し、request の `credentialMode` に対応する active session を返す
+- **THEN** システムは既存アカウントへ新しい passkey を登録し、既存セッションを一切失効せず、新端末追加完了通知メールを送信し、request の `credentialMode` に対応する有効な session を返す
 
 #### Scenario: invite-only state では registration を完了できない (AUTH-BE-S008)
 
 - **GIVEN** request が valid な RecoverySession なしで registration を試みる
 - **WHEN** request が invite 向け state のみ、TermsConsent のみ、または利用可能な recovery state を持たない
-- **THEN** system は registration を拒否し、`/login/recovery/*` と `/invite/*` の分離を維持する
+- **THEN** システムは registration を拒否し、`/login/recovery/*` と `/invite/*` の分離を維持する
 
 ### Requirement: 認証済みアカウントは複数のパスキーを登録・管理できる
 
@@ -110,7 +110,7 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 
 **Customer Context**
 
-利用者は MacBook・iPhone・セキュリティキーなど複数のデバイスでパスキーを使い分けたい。新しいデバイスを登録しても他のデバイスのアクセスが失われないことが求められる。複数のパスキーを独立して管理できることで、デバイス追加・紛失後の安全な鍵ローテーションが可能になる。Web 利用者は Cookie session で安全に操作し、外部 client は Bearer session で同じ API capability を利用できる必要がある。
+利用者は MacBook・iPhone・セキュリティキーなど複数のデバイスでパスキーを使い分けたい。新しいデバイスを登録しても他のデバイスのアクセスが失われないことが求められる。複数のパスキーを独立して管理できることで、デバイス追加・紛失後の安全な鍵ローテーションが可能になる。Web 利用者は Cookie session で安全に操作し、外部クライアントは Bearer session で同じ API capability を利用できる必要がある。
 
 **Requirement**
 
@@ -125,13 +125,13 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 
 #### Scenario: 登録済みパスキー一覧を取得できる (AUTH-BE-S014)
 
-- **GIVEN** 認証済みアカウントが active application session を持っている
+- **GIVEN** 認証済みアカウントが有効なアプリケーションセッションを持っている
 - **WHEN** `GET /api/v1/passkeys` を呼び出す
 - **THEN** システムはそのアカウントに紐づくすべての passkey credential のリストを返す
 
 #### Scenario: 新しいパスキーを追加しても既存パスキーが保持される (AUTH-BE-S015)
 
-- **GIVEN** 認証済みアカウントが active application session を持っている
+- **GIVEN** 認証済みアカウントが有効なアプリケーションセッションを持っている
 - **WHEN** `POST /api/v1/passkeys/start` でチャレンジを取得し `POST /api/v1/passkeys/finish` で完了する
 - **THEN** 新しい passkey credential がアカウントへ追加され、それ以前に登録されていたパスキーは削除されない
 
@@ -149,25 +149,25 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 
 #### Scenario: 他のアカウントのパスキーは操作できない (AUTH-BE-S018)
 
-- **GIVEN** アカウント A が active application session を持っている
+- **GIVEN** アカウント A が有効なアプリケーションセッションを持っている
 - **WHEN** アカウント B に属する passkey credential の ID を指定して `DELETE /api/v1/passkeys/{id}` を呼び出す
 - **THEN** システムはリクエストを拒否し、アカウント A のパスキーは変化しない
 
 #### Scenario: 未認証リクエストはパスキー管理 API を利用できない (AUTH-BE-S019)
 
-- **GIVEN** active application session を持たないリクエストがある
+- **GIVEN** 有効なアプリケーションセッションを持たないリクエストがある
 - **WHEN** `/api/v1/passkeys` 以下のいずれかのエンドポイントを呼び出す
 - **THEN** システムは unauthenticated として拒否する
 
-#### Scenario: Cookie と Bearer の同時提示は拒否される (AUTH-BE-S061)
+#### Scenario: Cookie と Bearer の同時提示は拒否される (AUTH-BE-S074)
 
 - **GIVEN** request が Product auth Cookie と `Authorization: Bearer` header の両方を持っている
 - **WHEN** request が `/api/v1/passkeys` 以下の endpoint を呼び出す
-- **THEN** system は credential ambiguity として request を拒否し、handler の state mutation を実行しない
+- **THEN** システムは credential ambiguity として request を拒否し、handler の state mutation を実行しない
 
 ### Requirement: WebAuthn ceremony は user verification を必須にする
 
-Passkey は認証基盤の中核であり、端末所持だけでなく端末内の user verification によって利用者本人の操作であることを確認する必要がある。ログイン、新しい端末でのログイン有効化、復旧後の再登録などの高リスク操作で user verification が optional だと、端末盗難や弱い authenticator policy による不正利用リスクが残るため、system は required user verification を MUST enforce する。
+Passkey は認証基盤の中核であり、端末所持だけでなく端末内の user verification によって利用者本人の操作であることを確認する必要がある。ログイン、新しい端末でのログイン有効化、復旧後の再登録などの高リスク操作で user verification が optional だと、端末盗難や弱い authenticator policy による不正利用リスクが残るため、システムは required user verification を強制しなければならない（MUST）。
 
 システムは、Product Web Cookie session と Bearer session のどちらでも、WebAuthn ceremony と high-risk operation に required user verification と fresh reauthentication を強制しなければならない（MUST）。
 
@@ -176,7 +176,7 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 - システムは認証 ceremony と登録 ceremony で WebAuthn user verification を SHALL require する。
 - システムは high-risk な認証済み passkey 管理操作の前に、fresh な WebAuthn reauthentication session を SHALL require する。
 - `POST /api/v1/auth/passkey/start`、`POST /api/v1/auth/passkey/finish`、`POST /api/v1/passkeys/start`、`POST /api/v1/passkeys/finish`、`POST /api/v1/auth/passkey/register/start`、`POST /api/v1/auth/passkey/register` は user verification required semantics を MUST enforce する。
-- `POST /api/v1/passkeys/send-device-link` と `DELETE /api/v1/passkeys/{id}` は active application session だけで成立してはならず、`X-Reauth-Session` HTTP header で提示された同一 account/session に紐づく短命 reauthentication session を MUST require する。
+- `POST /api/v1/passkeys/send-device-link` と `DELETE /api/v1/passkeys/{id}` は有効なアプリケーションセッションだけで成立してはならず、`X-Reauth-Session` HTTP header で提示された同一 account/session に紐づく短命 reauthentication session を要求しなければならない（MUST）。
 - Reauthentication session は Valkey-backed auth state store に TTL 付きで保持され、対象 account、issuing session、operation kind（`device-link` または `passkey-delete`）、request ID を紐づけなければならない。
 - Reauthentication session は high-risk operation completion 時に atomic consume されるか、短い有効期限で失効しなければならない。
 - 異なる operation kind の reauthentication session を使い回した場合は MUST reject する。
@@ -187,31 +187,31 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 - **GIVEN** passkey login ceremony が開始されている
 - **WHEN** authenticator response が required user verification を満たさない
-- **THEN** system は login を拒否し、application session を発行しない
+- **THEN** システムは login を拒否し、application session を発行しない
 
 #### Scenario: 新端末のログイン有効化は user verification を要求する (AUTH-BE-S029)
 
 - **GIVEN** valid な device-link RecoverySession が存在する
 - **WHEN** 新しい端末が required user verification なしで WebAuthn registration を完了しようとする
-- **THEN** system は registration を拒否し、account に credential を追加しない
+- **THEN** システムは registration を拒否し、account に credential を追加しない
 
 #### Scenario: device-link delivery は fresh な再認証を要求する (AUTH-BE-S036)
 
-- **GIVEN** account は active application session を持つが fresh な reauthentication session を持たない
+- **GIVEN** account は有効なアプリケーションセッションを持つが fresh な reauthentication session を持たない
 - **WHEN** account が device-link delivery を要求する
-- **THEN** system は request を拒否し、device-link token を発行または送信しない
+- **THEN** システムは request を拒否し、device-link token を発行または送信しない
 
 #### Scenario: passkey deletion は fresh な再認証を要求する (AUTH-BE-S037)
 
-- **GIVEN** account は active application session を持つが fresh な reauthentication session を持たない
+- **GIVEN** account は有効なアプリケーションセッションを持つが fresh な reauthentication session を持たない
 - **WHEN** account が登録済み passkey credential の削除を要求する
-- **THEN** system は削除を拒否し、すべての credential を変更しない
+- **THEN** システムは削除を拒否し、すべての credential を変更しない
 
 ### Requirement: 認証済み端末から新端末追加用トークンを発行できる
 
 認証済み端末は、既存パスキーによる再認証を完了した後、登録済みメールアドレスへ新端末追加用の単回利用 URL トークンを SHALL 発行する。トークンは kind=device-link として管理され、消費後に新端末でのパスキー登録を可能にする。
 
-デバイスリンク発行は、exactly-one active application session credential と fresh reauthentication session を検証した場合にのみ成立しなければならない（MUST）。
+デバイスリンク発行は、exactly-one の有効なアプリケーション session credential と fresh reauthentication session を検証した場合にのみ成立しなければならない（MUST）。
 
 **Customer Context**
 
@@ -219,7 +219,7 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 **Requirement**
 
-- `POST /api/v1/passkeys/send-device-link` は認証済み端末から新端末追加用の device-link token を発行し、登録済みメールアドレスへ送信しなければならない（SHALL）。このエンドポイントは exactly one active application session credential と `X-Reauth-Session` header で提示された operation kind `device-link` の reauthentication session を MUST require し、session-only では成立してはならない。
+- `POST /api/v1/passkeys/send-device-link` は認証済み端末から新端末追加用の device-link token を発行し、登録済みメールアドレスへ送信しなければならない（SHALL）。このエンドポイントは exactly one の有効なアプリケーション session credential と `X-Reauth-Session` header で提示された operation kind `device-link` の reauthentication session を要求しなければならず（MUST）、session-only では成立してはならない。
 - device-link token は `kind=device-link` で RecoveryToken として管理され、既存の RecoveryToken と同一のライフサイクル（発行・ハッシュ保存・原子消費・TTL 管理）を SHALL 共有する。
 - device-link token の有効期限は発行から 30 分とし、Valkey-backed auth state store に HMAC-SHA256 + pepper でハッシュ化して保存されなければならない（MUST）。
 - `POST /api/v1/passkeys/send-device-link` の response は `Cache-Control: no-store` を SHALL 保つ。
@@ -227,134 +227,209 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 #### Scenario: 認証済み端末からデバイスリンクを送信できる (AUTH-BE-S049)
 
-- **GIVEN** 認証済みアカウントが active application session を持ち、device-link 用 reauthentication session を保持している
+- **GIVEN** 認証済みアカウントが有効なアプリケーションセッションを持ち、device-link 用 reauthentication session を保持している
 - **WHEN** `POST /api/v1/passkeys/send-device-link` を呼び出す
-- **THEN** system は kind=device-link の token を発行し、新端末追加用 URL を含むメールを登録メールアドレスへ送信し、`{issued: true}` を返す
+- **THEN** システムは kind=device-link の token を発行し、新端末追加用 URL を含むメールを登録メールアドレスへ送信し、`{issued: true}` を返す
 
 #### Scenario: reauthentication なしではデバイスリンクを発行できない (AUTH-BE-S050)
 
-- **GIVEN** 認証済みアカウントが active application session を持つが reauthentication session を持たない
+- **GIVEN** 認証済みアカウントが有効なアプリケーションセッションを持つが reauthentication session を持たない
 - **WHEN** `POST /api/v1/passkeys/send-device-link` を呼び出す
-- **THEN** system は request を拒否し、token を発行しない
+- **THEN** システムは request を拒否し、token を発行しない
 
 ### Requirement: パスキー認証は bearer 互換 application session を発行・失効する
 
-パスキー認証は、`credentialMode` に応じて Web Cookie session または Bearer-compatible application session を SHALL 発行し、logout で MUST revoke しなければならない。Web Cookie session は browser-readable accessToken を返さず、API / mobile / CLI / SDK 向け Bearer session は `Authorization: Bearer <access token>` で `/api/v1/*` を利用できる。DB の `accounts.status='suspended'` の account に対しては、新規 session credential 発行、refresh rotation、既存 session 認可を MUST 拒否する。
+パスキー認証は、`credentialMode` に応じて Web Cookie session または Bearer-compatible application session を SHALL 発行し、logout で MUST revoke しなければならない。Product account 認証ドメインは、Web Cookie mode では短命な account access credential と長寿命 account refresh credential を HttpOnly Cookie として発行し、Bearer mode では API / mobile / CLI / SDK 向けに `Authorization: Bearer <access token>` で `/api/v1/*` を利用できる accessToken / refreshToken を response body で発行する。DB の `accounts.status='suspended'` の account に対しては、新規 session credential 発行、refresh rotation、既存 session 認可を MUST 拒否する。
+
+Admin operator 認証ドメインは Product account 認証ドメインとは別に、operator accessToken と operator refreshToken で構成される Admin operator session を SHALL 発行する。Admin operator accessToken claim と refreshToken state は operator ID / operator session ID / operator role / active state / CSRF binding / Admin Valkey logical DB / `admin:*` key prefix に束縛されなければならない（MUST）。Admin operator auth は Product account auth domain/application を import してはならず（MUST NOT）、Product account auth は Admin operator auth domain/application を import してはならない（MUST NOT）。
+
+両認証ドメインが共有できるのは、HMAC/JWT signer/verifier、opaque token hash、Cookie 属性 helper、ULID/JTI validation、TTL validation helper など中立 primitive に限られる（MUST）。中立 primitive は account / operator の domain enum switch、issuer/audience/domain pairing、RBAC、account status、operator active state、CSRF binding を所有してはならない（MUST NOT）。単一共有 token service に `identityDomain=account|operator` の切替引数を渡して Product/Admin の domain decision を畳み込んではならない（MUST NOT）。
 
 **Customer Context**
 
-Web 利用者は XSS の影響を受けにくい HttpOnly Cookie session でアプリを使い続ける必要がある。一方、外部 client は Cookie に依存しない Bearer token を必要とする。両方の credential を同時に受け入れると session 選択が曖昧になり、CSRF や token replay の検出が不安定になるため、session credential source は request ごとに exactly one でなければならない。
+Web 利用者は XSS の影響を受けにくい HttpOnly Cookie session でアプリを使い続ける必要がある。一方、外部クライアントは Cookie に依存しない Bearer token を必要とする。両方の credential を同時に受け入れると session 選択が曖昧になり、CSRF や token replay の検出が不安定になるため、session credential source は request ごとに exactly one でなければならない。さらに Product 利用者の account 認証と Admin 運営者の operator 認証は、守る対象と失敗時の影響が異なるため、Product Cookie/Bearer 契約を変更しても Admin operator auth domain の分離を崩してはならない。
 
 **Requirement**
 
-- The system SHALL issue an application session on successful passkey authentication according to the requested `credentialMode`.
+- システムは passkey authentication が成功したとき、request の `credentialMode` に応じたアプリケーションセッションを発行しなければならない（SHALL）。
 - `credentialMode="web-cookie"` の session は、short-lived access credential と refresh credential を HttpOnly Cookie として設定し、response body に bearer accessToken または refreshToken 平文を含めてはならない（MUST NOT）。response body は requestId、accountId、passkeyCredentialId、sessionId、expiresAt、CSRF token を含まなければならない（MUST）。
 - `credentialMode="bearer"` の session は、short-lived JWT accessToken と refreshToken を response body に含め、Web auth Cookie を設定してはならない（MUST NOT）。
 - Web auth Cookie は Secure、HttpOnly、SameSite=Lax 以上、限定 Path、適切な Max-Age を SHALL 持つ。refresh Cookie は refresh endpoint に必要な Path だけで送信されなければならない（MUST）。
 - `POST /api/v1/auth/refresh` は `credentialMode="web-cookie"` では HttpOnly refresh Cookie を rotation し、新しい access Cookie、refresh Cookie、CSRF token を返す。body に accessToken または refreshToken 平文を含めてはならない（MUST NOT）。
 - `POST /api/v1/auth/refresh` は `credentialMode="bearer"` では request body の refreshToken を rotation し、新しい accessToken と refreshToken を body で返す。Web auth Cookie を設定してはならない（MUST NOT）。
-- A refresh token SHALL be single-use: once consumed for rotation, the old refresh token MUST be rejected on subsequent attempts.
-- If an already-consumed or unknown refresh token is presented to `POST /api/v1/auth/refresh`, the system SHALL treat it as a potential token theft and MUST revoke all refresh tokens associated with the same account and device/session fingerprint (fail-close rotation failure).
+- refresh token は単回利用でなければならず（SHALL）、rotation で一度 consumed になった旧 refresh token は以後の試行で拒否しなければならない（MUST）。
+- consumed 済みまたは unknown の refresh token が `POST /api/v1/auth/refresh` に提示された場合、システムは token theft の可能性として扱い、同じ account と device/session fingerprint に紐づくすべての refresh token を revoke しなければならない（SHALL/MUST、fail-close rotation failure）。
 - `/api/v1/*` surface は public auth endpoint と status endpoint を除き、exactly one active session credential source を MUST 要求する。Web Cookie credential と `Authorization: Bearer` credential の両方が提示された request は MUST reject する。
 - request が session credential をまったく持たない場合は stable classification `unauthenticated` として SHALL 扱われ、expired / revoked session failure と混同してはならない。
 - expired / revoked session credential が提示された場合は stable classification `session-expired` として SHALL 扱われる。
-- Cookie credential を使う state-changing request は許可済み Origin と session-bound CSRF token を MUST require する。CSRF token が欠落または session と一致しない場合、system は handler の state mutation 前に request を MUST reject する。
+- Cookie credential を使う state-changing request は許可済み Origin と session-bound CSRF token を要求しなければならない（MUST）。CSRF token が欠落または session と一致しない場合、システムは handler の state mutation 前に request を拒否しなければならない（MUST）。
 - Bearer credential だけを使う request は CSRF token を要求してはならない（MUST NOT）。
 - `POST /api/v1/auth/logout` は credential source に対応する active session を revoke し、Cookie session の場合は auth Cookie を server response で削除しなければならない（SHALL）。
 - auth start / finish / `POST /api/v1/auth/logout` / `POST /api/v1/auth/refresh` response は `Cache-Control: no-store` を SHALL 保ち、cacheable な auth response を返してはならない。
+- Admin operator auth は Product account auth domain/application から分離され、Product account auth は Admin operator auth domain/application を import してはならない（MUST NOT）。
+- Product / Admin auth が共有できる token helper は中立 primitive に限られ、account / operator domain decision、RBAC、status 判定、CSRF binding を単一共有 token service の switch に畳み込んではならない（MUST NOT）。
 
 #### Scenario: パスキーログイン成功時に JWT access token と refresh token を作成する (AUTH-BE-S001)
 
 - **GIVEN** active な account が valid な passkey credential を持つ
-- **WHEN** client が `credentialMode="bearer"` で `POST /api/v1/auth/passkey/finish` を完了する
-- **THEN** system は後続の `/api/v1/*` access を `Authorization: Bearer <access token>` で認可できる active session を返し、refreshToken を body で返す
+- **WHEN** クライアントが `credentialMode="bearer"` で `POST /api/v1/auth/passkey/finish` を完了する
+- **THEN** システムは後続の `/api/v1/*` access を `Authorization: Bearer <access token>` で認可できる有効な session を返し、refreshToken を body で返す
 
-#### Scenario: Web Cookie mode のログインは body token を返さない (AUTH-BE-S062)
+#### Scenario: Web Cookie mode のログインは body token を返さない (AUTH-BE-S060)
 
 - **GIVEN** active な account が valid な passkey credential を持つ
-- **WHEN** Web client が `credentialMode="web-cookie"` で `POST /api/v1/auth/passkey/finish` を完了する
-- **THEN** system は HttpOnly access Cookie と HttpOnly refresh Cookie を設定し、response body には bearer accessToken と refreshToken 平文を含めず、CSRF token と session metadata だけを返す
+- **WHEN** Web クライアントが `credentialMode="web-cookie"` で `POST /api/v1/auth/passkey/finish` を完了する
+- **THEN** システムは HttpOnly access Cookie と HttpOnly refresh Cookie を設定し、response body には bearer accessToken と refreshToken 平文を含めず、CSRF token と session metadata だけを返す
+
+#### Scenario: Web Cookie mode はブラウザーから読める token を発行しない (AUTH-BE-S063)
+
+- **GIVEN** login、refresh、recovery registration、または passkey registration が `credentialMode="web-cookie"` で成功する
+- **WHEN** response body と log/trace attributes を確認する
+- **THEN** bearer accessToken と refreshToken の平文値は body、log、trace attribute、error message に存在せず、body には session metadata と CSRF token だけが含まれる
+
+#### Scenario: Admin operator login は Admin operator auth domain を使う (AUTH-BE-S061)
+
+- **GIVEN** operator が Admin passkey authentication を開始している
+- **WHEN** valid operator credential で Admin auth finish を完了する
+- **THEN** response body は operator accessToken と operator session metadata を含む
+- **AND** refreshToken Cookie は operator ID、operator session、CSRF binding、Admin Valkey namespace に束縛される
+- **AND** Product account ID、Product AccountAuth session、Product application service は使用されない
+
+#### Scenario: Product と Admin の認証ドメインは単一 switch に畳み込まれない (AUTH-BE-S067)
+
+- **WHEN** accessToken 発行、refresh rotation、session revoke の implementation を確認する
+- **THEN** Product account auth は Product account auth domain/application の型と service を使う
+- **AND** Admin operator auth は Admin operator auth domain/application の型と service を使う
+- **AND** `identityDomain` などの引数で account/operator domain decision を切り替える単一共有 token service は存在しない
+
+#### Scenario: 中立 token primitive は account/operator domain switch を持たない (AUTH-BE-S068)
+
+- **WHEN** shared token primitive の public API と内部実装を確認する
+- **THEN** 署名、検証、opaque token hash、ULID/JTI validation、TTL validation だけを扱う
+- **AND** account / operator enum、RBAC、status 判定、CSRF 判定、issuer/audience/domain pairing を持たない
+
+#### Scenario: Product AccountAuth domain が account token eligibility を所有する (AUTH-BE-S069)
+
+- **GIVEN** account が suspended または sessionRevokedAfter より古い session を持つ
+- **WHEN** Product account accessToken 発行または refresh rotation を行う
+- **THEN** Product AccountAuth domain object は token eligibility を拒否する
+
+#### Scenario: Admin OperatorAuth domain が operator token eligibility と CSRF binding を所有する (AUTH-BE-S070)
+
+- **GIVEN** operator が inactive、または CSRF token が operator session と一致しない
+- **WHEN** Admin operator accessToken 発行、refresh rotation、protected mutation validation を行う
+- **THEN** Admin OperatorAuth domain object は token eligibility または CSRF binding を拒否する
+
+#### Scenario: Product auth application は Admin auth application を import しない (AUTH-BE-S071)
+
+- **WHEN** `internal/application/product/auth` が `internal/application/admin` または Admin OperatorAuth application を import している
+- **THEN** lint または import-boundary test は失敗する
+
+#### Scenario: Admin auth application は Product auth application を import しない (AUTH-BE-S072)
+
+- **WHEN** `internal/application/admin/auth` が `internal/application/product` または Product AccountAuth application を import している
+- **THEN** lint または import-boundary test は失敗する
 
 #### Scenario: 欠落または inactive な session は拒否される (AUTH-BE-S002)
 
 - **GIVEN** request が active session credential を持たない
 - **WHEN** request が protected `/api/v1/*` endpoint を呼び出す
-- **THEN** system は request を拒否し、protected resource を返さない
+- **THEN** システムは request を拒否し、protected resource を返さない
 
 #### Scenario: logout は active session を revoke する (AUTH-BE-S003)
 
-- **GIVEN** client が active application session を保持している
-- **WHEN** client が `POST /api/v1/auth/logout` を呼び出す
-- **THEN** system は対象 session と関連 refresh credential を revoke し、以降の利用を拒否する
+- **GIVEN** クライアントが有効なアプリケーションセッションを保持している
+- **WHEN** クライアントが `POST /api/v1/auth/logout` を呼び出す
+- **THEN** システムは対象 session と関連 refresh credential を revoke し、以降の利用を拒否する
 
-#### Scenario: Cookie mutation は CSRF token を要求する (AUTH-BE-S063)
+#### Scenario: Cookie mutation は CSRF token を要求する (AUTH-BE-S075)
 
-- **GIVEN** Web client が valid な Product auth Cookie を持つが `X-CSRF-Token` を持たない
-- **WHEN** client が state-changing protected endpoint を呼び出す
-- **THEN** system は state mutation 前に request を拒否する
+- **GIVEN** Web クライアントが valid な Product auth Cookie を持つが `X-CSRF-Token` を持たない
+- **WHEN** クライアントが state-changing protected endpoint を呼び出す
+- **THEN** システムは state mutation 前に request を拒否する
 
-#### Scenario: Cookie と Bearer を同時に提示した protected request は拒否される (AUTH-BE-S064)
+#### Scenario: Cookie と Bearer を同時に提示した protected request は拒否される (AUTH-BE-S076)
 
 - **GIVEN** request が valid な Product auth Cookie と valid な `Authorization: Bearer` header の両方を持っている
 - **WHEN** request が protected `/api/v1/*` endpoint を呼び出す
-- **THEN** system はどちらの session も選択せず credential ambiguity として request を拒否する
+- **THEN** システムはどちらの session も選択せず credential ambiguity として request を拒否する
 
-#### Scenario: suspended account は新規 token pair を発行されない (AUTH-BE-S054)
+#### Scenario: suspended account は新規 session credential を発行されない (AUTH-BE-S054)
 
 - **GIVEN** suspended account が valid passkey assertion を完了している
-- **WHEN** system が session credential を発行しようとする
-- **THEN** system は access credential / refresh credential を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **WHEN** システムが session credential を発行しようとする
+- **THEN** システムは access credential / refresh credential を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
 
 #### Scenario: suspended account の既存 bearer access token は拒否される (AUTH-BE-S055)
 
 - **GIVEN** account が valid bearer access token を持っていた後に Admin Console で suspended になっている
-- **WHEN** client がその bearer access token で protected endpoint を呼び出す
-- **THEN** system は HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **WHEN** クライアントがその bearer access token で protected endpoint を呼び出す
+- **THEN** システムは HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
 
-#### Scenario: suspended account の Cookie session は拒否される (AUTH-BE-S065)
+#### Scenario: suspended account の Cookie session は拒否される (AUTH-BE-S077)
 
 - **GIVEN** account が valid Product auth Cookie を持っていた後に Admin Console で suspended になっている
-- **WHEN** Web client がその Cookie で protected endpoint を呼び出す
-- **THEN** system は HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **WHEN** Web クライアントがその Cookie で protected endpoint を呼び出す
+- **THEN** システムは HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
 
 #### Scenario: suspended account の refresh は rotation されない (AUTH-BE-S058)
 
 - **GIVEN** account が valid refresh credential を持っていた後に Admin Console で suspended になっている
-- **WHEN** client が `POST /api/v1/auth/refresh` を呼び出す
-- **THEN** system は新しい access credential / refresh credential を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **WHEN** クライアントが `POST /api/v1/auth/refresh` を呼び出す
+- **THEN** システムは新しい access credential / refresh credential を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+
+#### Scenario: suspend は account-wide session revocation timestamp を書き込む (AUTH-BE-S056)
+
+- **GIVEN** Admin Console が account suspend を成功させる
+- **WHEN** DB の `accounts.session_revoked_after` を確認する
+- **THEN** suspend 時刻以上の timestamp が保存され、その timestamp 以前に発行された Bearer accessToken、Cookie access credential、refresh credential は拒否される
+
+#### Scenario: restored account は過去 session では復帰できない (AUTH-BE-S057)
+
+- **GIVEN** account が suspended 後に restore されている
+- **WHEN** suspend 前に発行された Bearer accessToken または Product auth Cookie で `/api/v1/*` にアクセスする
+- **THEN** システムは session credential を拒否し、account は再ログインでのみ新しい session credential を取得できる
+
+#### Scenario: account-suspended は stable failure response shape で返される (AUTH-BE-S059)
+
+- **GIVEN** suspended 判定が `POST /api/v1/auth/passkey/finish`、`POST /api/v1/auth/refresh`、または protected `/api/v1/*` endpoint で発生する
+- **WHEN** システムが response を返す
+- **THEN** HTTP status は 403 であり、body は `AuthFailureResponse` の `{ requestId, error: "account-suspended" }` である
+- **AND** response は `Cache-Control: no-store` を含み、`AuthOperationErrorResponse` では返されない
 
 #### Scenario: session を持たない request は session-expired と混同されない (AUTH-BE-S009)
 
-- **GIVEN** client が session credential を持たない
+- **GIVEN** クライアントが session credential を持たない
 - **WHEN** request が protected `/api/v1/*` endpoint を呼び出す
-- **THEN** system は `unauthenticated` failure として拒否し、`session-expired` として扱わない
+- **THEN** システムは `unauthenticated` failure として拒否し、`session-expired` として扱わない
 
 #### Scenario: auth state store unavailable は fail-close で internal-error になる (AUTH-BE-S010)
 
 - **GIVEN** Valkey-backed auth state store が利用できない
-- **WHEN** client が `POST /api/v1/auth/refresh` を送信する
-- **THEN** system は token を発行せず、`internal-error` として fail-close する
+- **WHEN** クライアントが `POST /api/v1/auth/refresh` を送信する
+- **THEN** システムは token を発行せず、`internal-error` として fail-close する
 
-#### Scenario: 有効なリフレッシュトークンをローテーションできる (AUTH-BE-S043)
+#### Scenario: Web Cookie refresh は Cookie credential と CSRF token を rotation する (AUTH-BE-S062)
 
-- **GIVEN** client が valid refresh credential を持っている
-- **WHEN** client が credential mode に対応する `POST /api/v1/auth/refresh` を送信する
-- **THEN** system は旧 refresh credential を atomically consumed とし、新しい access credential と refresh credential を返す
+- **GIVEN** クライアントが valid な HttpOnly refresh Cookie を持っている
+- **WHEN** クライアントが `credentialMode="web-cookie"` で `POST /api/v1/auth/refresh` を送信する
+- **THEN** システムは旧 refresh credential を atomically consumed とし、新しい HttpOnly access Cookie、HttpOnly refresh Cookie、CSRF token、session metadata を返す
+- **AND** response body には bearer accessToken または refreshToken 平文を含めない
 
 #### Scenario: 消費済みリフレッシュトークンの再利用は拒否され関連トークンを失効する (AUTH-BE-S044)
 
 - **GIVEN** refresh credential がすでに rotation で consumed 済みである
 - **WHEN** 同じ旧 refresh credential で `POST /api/v1/auth/refresh` を再試行する
-- **THEN** system は request を拒否し、同じ account と device/session fingerprint に紐づく refresh credential をすべて失効する
+- **THEN** システムは request を拒否し、同じ account と device/session fingerprint に紐づく refresh credential をすべて失効する
 
 #### Scenario: 不正なリフレッシュトークンは拒否される (AUTH-BE-S045)
 
-- **GIVEN** client が unknown または tampered refresh credential を持っている
-- **WHEN** client が `POST /api/v1/auth/refresh` を送信する
-- **THEN** system は request を拒否し、新しい access credential と refresh credential を発行しない
+- **GIVEN** クライアントが unknown または tampered refresh credential を持っている
+- **WHEN** クライアントが `POST /api/v1/auth/refresh` を送信する
+- **THEN** システムは request を拒否し、新しい access credential と refresh credential を発行しない
 
 #### Scenario: access token の有効期限切れは session-expired として拒否される (AUTH-BE-S046)
 
 - **GIVEN** Bearer access token または Cookie access credential が期限切れである
-- **WHEN** client がその credential で `/api/v1/*` を呼び出す
-- **THEN** system は `session-expired` failure として拒否する
+- **WHEN** クライアントがその credential で `/api/v1/*` を呼び出す
+- **THEN** システムは `session-expired` failure として拒否する

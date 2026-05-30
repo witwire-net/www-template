@@ -1,14 +1,14 @@
-# localization-be Specification
+# localization-be 仕様
 
 ## Purpose
 
-TBD - created by archiving change add-default-i18n. Update Purpose after archive.
+Product AccountSetting と Admin operator locale の backend 要件を定義し、保存済み言語設定、認証境界、メール文面選択、辞書境界に必要な永続化・API・認可の責務を扱う。
 
 ## Requirements
 
 ### Requirement: Product AccountSetting API は認証済み Account 本人の言語設定を SHALL 扱う
 
-システムは、Product を利用する主体を Account として扱い、その Account に属する AccountSetting を SHALL 提供する。AccountSetting は Account の表示・通知に使う設定であり、Auth、端末ローカル状態、または UI 専用の一時設定として扱ってはならない（MUST NOT）。システムは、現在の Account の AccountSetting.locale を取得・更新する認証済み Product API 操作を SHALL 提供する。対応する AccountSetting.locale 値は `ja` と `en` でなければならない（MUST）。AccountSetting 取得操作は、現在の認証済み Account の locale を SHALL 返し、`Cache-Control: no-store` を使用しなければならない（MUST）。AccountSetting 更新操作は、対応ロケール値だけを受け入れ、未知ロケール値は永続値を変更せずに拒否しなければならない（MUST）。AccountSetting 操作は `Authorization: Bearer <session token>` を要求しなければならず、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。AccountSetting 操作は bearer session が指す Account だけを対象に SHALL 動作し、別 Account を指定する account ID を path または body で受け入れてはならない（MUST NOT）。`POST /api/v1/auth/refresh` は refresh token の rotation 成功後、Auth が確定した AccountID に対して AccountSetting snapshot を SHALL 読み込み、返却 payload に含める。Product API は Product Account と AccountSetting 専用でなければならず、Admin operator locale や `/api/admin/**` を表現してはならない（MUST NOT）。
+システムは、Product を利用する主体を Account として扱い、その Account に属する AccountSetting を SHALL 提供する。AccountSetting は Account の表示・通知に使う設定であり、Auth、端末ローカル状態、または UI 専用の一時設定として扱ってはならない（MUST NOT）。システムは、現在の Account の AccountSetting.locale を取得・更新する認証済み Product API 操作を SHALL 提供する。対応する AccountSetting.locale 値は `ja` と `en` でなければならない（MUST）。AccountSetting 取得操作は、現在の認証済み Account の locale を SHALL 返し、`Cache-Control: no-store` を使用しなければならない（MUST）。AccountSetting 更新操作は、対応ロケール値だけを受け入れ、未知ロケール値は永続値を変更せずに拒否しなければならない（MUST）。AccountSetting 操作は Product 認証セッションを要求し、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。AccountSetting 操作は Product 認証セッションが指す Account だけを対象に SHALL 動作し、別 Account を指定する account ID を path または body で受け入れてはならない（MUST NOT）。`POST /api/v1/auth/refresh` は refresh token の rotation 成功後、Auth が確定した AccountID に対して AccountSetting snapshot を SHALL 読み込み、返却 payload に含める。Product API は Product Account と AccountSetting 専用でなければならず、Admin operator locale や `/api/admin/**` を表現してはならない（MUST NOT）。
 
 **Customer Context**
 
@@ -22,40 +22,40 @@ TBD - created by archiving change add-default-i18n. Update Purpose after archive
 - 対応する AccountSetting.locale 値は `ja` と `en` でなければならない（MUST）。
 - AccountSetting 取得操作は、現在の認証済み Account の locale を SHALL 返し、`Cache-Control: no-store` を使用しなければならない（MUST）。
 - AccountSetting 更新操作は、対応ロケール値だけを受け入れ、未知ロケール値は永続値を変更せずに拒否しなければならない（MUST）。
-- AccountSetting 操作は `Authorization: Bearer <session token>` を要求しなければならず、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。
-- AccountSetting 操作は bearer session が指す Account だけを対象に SHALL 動作し、別 Account を指定する account ID を path または body で受け入れてはならない（MUST NOT）。
+- AccountSetting 操作は Product 認証セッションを要求し、未認証、期限切れ、停止中セッションを拒否しなければならない（MUST）。
+- AccountSetting 操作は Product 認証セッションが指す Account だけを対象に SHALL 動作し、別 Account を指定する account ID を path または body で受け入れてはならない（MUST NOT）。
 - `POST /api/v1/auth/refresh` は refresh token の rotation 成功後、Auth が確定した AccountID に対して AccountSetting snapshot を SHALL 読み込み、返却 payload に含める。
 - Product API は Product Account と AccountSetting 専用でなければならず、Admin operator locale や `/api/admin/**` を表現してはならない（MUST NOT）。
 
 #### Scenario: 認証済み Account は自分の AccountSetting.locale を取得できる (LOCALIZATION-BE-S001)
 
 - **前提** 認証済み Account が AccountSetting.locale `ja` を持つ
-- **操作** client が AccountSetting 取得 API を呼び出す
+- **操作** クライアントが AccountSetting 取得 API を呼び出す
 - **結果** システムは `locale: "ja"` を含む no-store response を返す
 
 #### Scenario: 認証済み Account は自分の AccountSetting.locale を更新できる (LOCALIZATION-BE-S002)
 
 - **前提** 認証済み Account が AccountSetting.locale `ja` を持つ
-- **操作** client が `locale: "en"` で AccountSetting 更新 API を呼び出す
+- **操作** クライアントが `locale: "en"` で AccountSetting 更新 API を呼び出す
 - **結果** システムは AccountSetting.locale を `en` に更新し、更新後の locale を no-store response で返す
 
 #### Scenario: 未対応 AccountSetting.locale は拒否される (LOCALIZATION-BE-S003)
 
 - **前提** 認証済み Account が存在する
-- **操作** client が未対応 locale 値で AccountSetting 更新 API を呼び出す
+- **操作** クライアントが未対応 locale 値で AccountSetting 更新 API を呼び出す
 - **結果** システムは request を拒否し、AccountSetting.locale は変化しない
 
 #### Scenario: 未認証 request は AccountSetting を利用できない (LOCALIZATION-BE-S004)
 
-- **前提** bearer session を持たない request がある
-- **操作** client が AccountSetting API を呼び出す
+- **前提** Product 認証セッションを持たない request がある
+- **操作** クライアントが AccountSetting API を呼び出す
 - **結果** システムは unauthenticated として拒否し、locale を返さず永続値も変更しない
 
 #### Scenario: refresh 成功時に AccountSetting snapshot を DB から返す (LOCALIZATION-BE-S013)
 
 - **前提** Account が AccountSetting.locale `en` と有効な refresh token を持つ
-- **操作** client が `POST /api/v1/auth/refresh` を呼び出す
-- **結果** システムは token pair を rotation し、DB から読み込んだ AccountSetting snapshot に `locale: "en"` を含めて返す
+- **操作** クライアントが `POST /api/v1/auth/refresh` を呼び出す
+- **結果** システムは session credential を rotation し、DB から読み込んだ AccountSetting snapshot に `locale: "en"` を含めて返す
 
 ### Requirement: Product AccountSetting は永続化されメール言語に SHALL 利用される
 
@@ -104,7 +104,7 @@ TBD - created by archiving change add-default-i18n. Update Purpose after archive
 
 ### Requirement: Auth は Account にぶら下がる認証概念として SHALL 分離される
 
-システムは、Account を Product 利用主体として扱い、Auth をその Account にぶら下がる本人確認・session・token・credential の概念として SHALL 扱う。Auth domain/application は Account aggregate を所有または代替してはならない（MUST NOT）。Auth domain/application は `AuthAccount` または `AuthSubject` という Account 代替モデルを提供してはならない（MUST NOT）。Auth が必要とする認証用 projection は `AccountAuth` として表現し、AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱わなければならない（MUST）。`AccountAuth` は AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を持ってはならない（MUST NOT）。Auth repository は AccountSetting persistence を読み書きしてはならない（MUST NOT）。Auth repository は Account.Auth credential を `account_passkey_credentials` から復元し、`passkey_credentials` を参照してはならない（MUST NOT）。refresh response に AccountSetting snapshot が必要な場合、Auth は token pair と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
+システムは、Account を Product 利用主体として扱い、Auth をその Account にぶら下がる本人確認・session・token・credential の概念として SHALL 扱う。Auth domain/application は Account aggregate を所有または代替してはならない（MUST NOT）。Auth domain/application は `AuthAccount` または `AuthSubject` という Account 代替モデルを提供してはならない（MUST NOT）。Auth が必要とする認証用 projection は `AccountAuth` として表現し、AccountID、認証 identifier、email、status、session revoked boundary、passkey credentials だけを扱わなければならない（MUST）。`AccountAuth` は AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を持ってはならない（MUST NOT）。Auth repository は AccountSetting persistence を読み書きしてはならない（MUST NOT）。Auth repository は Account.Auth credential を `account_passkey_credentials` から復元し、`passkey_credentials` を参照してはならない（MUST NOT）。refresh response に AccountSetting snapshot が必要な場合、Auth は session credential と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
 
 **Customer Context**
 
@@ -119,7 +119,7 @@ TBD - created by archiving change add-default-i18n. Update Purpose after archive
 - `AccountAuth` は AccountSetting、AccountSetting.locale、AccountSetting mutation、AccountSetting snapshot を持ってはならない（MUST NOT）。
 - Auth repository は AccountSetting persistence を読み書きしてはならない（MUST NOT）。
 - Auth repository は Account.Auth credential を `account_passkey_credentials` から復元し、`passkey_credentials` を参照してはならない（MUST NOT）。
-- refresh response に AccountSetting snapshot が必要な場合、Auth は token pair と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
+- refresh response に AccountSetting snapshot が必要な場合、Auth は session credential と AccountID を返し、HTTP composition または account application が AccountSetting を読み込まなければならない（MUST）。
 
 #### Scenario: Auth projection は AccountSetting を所有しない (LOCALIZATION-BE-S014)
 

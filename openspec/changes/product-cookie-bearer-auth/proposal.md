@@ -8,7 +8,7 @@
 
 - Product Web は HttpOnly Cookie を使って authenticated API を利用し、browser-readable accessToken を保持しない。
 - API / mobile / CLI / SDK は `credentialMode="bearer"` を明示したときだけ Bearer accessToken を response body で受け取れる。
-- Web client は `credentialMode="web-cookie"` を明示し、access credential と refresh credential を HttpOnly Cookie として受け取る。
+- Web クライアントは `credentialMode="web-cookie"` を明示し、access credential と refresh credential を HttpOnly Cookie として受け取る。
 - Cookie credential と `Authorization: Bearer` credential が同じ protected request に同時提示された場合、backend は credential ambiguity として request を拒否する。
 - Cookie credential を使う state-changing request は CSRF / Origin 境界で保護される。
 - Web Cookie mode の refreshToken は HttpOnly Cookie 専用 secret として扱い、request / response body や JavaScript 可読 state に戻さない。Bearer mode の refreshToken は API / mobile / CLI / SDK 用 credential として body で返す。
