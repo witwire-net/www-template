@@ -93,10 +93,5 @@
     "vitest": "^3.2.4",
     "wrangler": "^4.57.0"
   },
-  "dependencies": {},
-  "pnpm": {
-    "overrides": {
-      "semver": "^7.6.3"
-    }
-  }
+  "dependencies": {}
 }

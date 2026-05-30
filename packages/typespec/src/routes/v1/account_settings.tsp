@@ -35,7 +35,7 @@ namespace WWWTemplate.ApiV1App {
   @tag("account-settings")
   @summary("Updates the current account settings")
   @operationId("updateAccountSettings")
-  @patch
+  @patch(#{ implicitOptionality: false })
   @route("/account/settings")
   op updateAccountSettings(@body body: WWWTemplate.UpdateAccountSettingRequest):
     | {
