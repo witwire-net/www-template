@@ -340,58 +340,45 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 ### Requirement: リフレッシュトークンは設定可能な TTL で管理される
 
-システムはリフレッシュトークンの有効期限を設定可能な TTL で管理しなければならない（SHALL）。
+リフレッシュトークンは設定可能な TTL で管理されなければならない（SHALL）。TTL validation logic は Product account auth と Admin operator auth から共通利用できる中立 primitive でなければならない（SHALL）。TTL primitive は account / operator の domain decision を所有してはならない（MUST NOT）。TTL 付き refreshToken state は各認証ドメインの Valkey logical DB と key prefix に保存されなければならない（MUST）。refreshToken Cookie の `Max-Age` または `Expires` は server-side refreshToken state の TTL を超えてはならない（MUST NOT）。TTL が未設定またはゼロ値の場合の無期限扱いを許可する場合でも、Cookie と server-side state の整合を保たなければならない（MUST）。
 
 **Customer Context**
 
-運用者はセキュリティポリシーやコンプライアンス要件に応じてリフレッシュトークンの有効期限を調整したい。同時に、期限なし運用を選択する柔軟性も必要。短すぎる TTL を誤設定されるとユーザー体験が損なわれるため、運用ミスを防ぐバリデーションが必要。
+運用者はセキュリティポリシーに応じて refreshToken の寿命を調整したい。Product と Admin で TTL validation が分かれると、片方だけ弱い設定を受け入れる危険がある。一方で TTL helper が account/operator の業務判断まで持つと、認証ドメイン分離が崩れる。
 
-**Requirement**
+#### Scenario: refreshToken Cookie の寿命は server-side TTL を超えない (AUTH-BE-S064)
 
-- システムは `auth.refresh_token_ttl` 設定値を解釈し、リフレッシュトークンの有効期限ポリシーを決定しなければならない（SHALL）。
-- `auth.refresh_token_ttl` が未設定またはゼロ値の場合、リフレッシュトークンは無期限有効としなければならない（MUST）。
-- `auth.refresh_token_ttl` が設定されている場合、その値は 24 時間以上でなければならない（MUST）。24 時間未満の場合、システムは fail-close で起動を拒否しなければならない（MUST）。
-- 設定された TTL はリフレッシュトークン発行時に Valkey-backed auth state store へ TTL 付きで反映されなければならない（MUST）。
+- **GIVEN** refresh token TTL が 30 日に設定されている
+- **WHEN** login または refresh rotation が refreshToken Cookie を設定する
+- **THEN** Cookie の `Max-Age` または `Expires` は server-side refreshToken state の TTL 以下である
+
+#### Scenario: Product と Admin は同じ中立 TTL validation を使う (AUTH-BE-S065)
+
+- **GIVEN** refresh token TTL が許容範囲外に設定されている
+- **WHEN** Product API binary または Admin API binary が起動時 config validation を実行する
+- **THEN** どちらの binary も同じ中立 TTL validation rule で fail-close する
+- **AND** TTL helper は account status、operator role、CSRF を判定しない
 
 #### Scenario: 未設定のリフレッシュトークン TTL は無期限有効とする (AUTH-BE-S038)
 
 - **GIVEN** `auth.refresh_token_ttl` が未設定またはゼロである
 - **WHEN** システムがリフレッシュトークンを発行する
-- **THEN** そのトークンは期限切れにならず、明示的な失効または消費まで有効である
-
-#### Scenario: 24 時間以上の TTL は正常に適用される (AUTH-BE-S039)
-
-- **GIVEN** `auth.refresh_token_ttl` が 24 時間以上に設定されている
-- **WHEN** システムがリフレッシュトークンを発行する
-- **THEN** トークンは設定された期間後に自動失効し、かつシステムは正常に起動する
-
-#### Scenario: 24 時間未満の TTL は起動を拒否する (AUTH-BE-S040)
-
-- **GIVEN** `auth.refresh_token_ttl` が 24 時間未満に設定されている
-- **WHEN** システムが起動時に認証設定を検証する
-- **THEN** システムは fail-close で起動を拒否し、security misconfiguration として報告する
+- **THEN** Cookie と server-side state は整合し、明示的な失効または消費まで有効である
 
 ### Requirement: システムは複数の active session を同時に保持・管理できる
 
-システムは同一デバイス上で複数の独立した認証セッションを同時に保持・管理できなければならない（SHALL）。
+システムは同一 browser 上で複数 account session を保持できなければならない（SHALL）。各 Product account session は accessToken、account session ID、account ID、server-side refreshToken state、refreshToken Cookie binding を持たなければならない（SHALL）。refreshToken が HttpOnly Cookie であるため、client は refreshToken 平文を保持してはならない（MUST NOT）。複数 session の refresh は、Product account auth domain が session selector と Cookie binding を検証して対象 session だけを rotation しなければならない（MUST）。logout や session revoke は対象 session の accessToken metadata と refreshToken state / Cookie を失効させ、他 session に影響してはならない（MUST NOT）。
 
 **Customer Context**
 
-同一の利用者が複数アカウントを所有・操作する場合、各アカウントへの独立したログイン状態を同時に維持したい。ログアウトは操作対象のアカウントのみに影響し、他のアカウントのセッションは維持されなければならない。
+複数アカウントを扱う利用者は、account を切り替えながら作業したい。一方で refreshToken を JavaScript から読める形で保持すると XSS 時の被害が大きい。HttpOnly Cookie と session selector を組み合わせ、複数 session と token 窃取防止を両立する。
 
-**Requirement**
+#### Scenario: 複数 session の refresh は対象 session だけを rotation する (AUTH-BE-S066)
 
-- システムは同一デバイス上で複数の独立した認証セッションを同時に保持できなければならない（SHALL）。各セッションは一意の session ID と紐づく。
-- 各セッションは独立したアクセストークンとリフレッシュトークンのペアを持ち、一方のセッションの失効または消費が他方のセッションに影響してはならない（MUST NOT）。
-- `POST /api/v1/auth/logout` はリクエストで提示されたアクセストークンに紐づく単一セッションだけを失効させなければならない（MUST）。他の active セッションは継続して有効でなければならない（MUST）。
-- セッション一覧の取得や管理エンドポイントは、認証済みアカウントが所有するセッションに対してのみアクセスを許可しなければならない（MUST）。
-- セッション ID、アカウント ID、デバイス指紋、関連する audit / event ID は ULID を使用しなければならない（SHALL）。
-
-#### Scenario: 複数アカウントが独立したセッションを保持する (AUTH-BE-S041)
-
-- **GIVEN** 利用者がアカウント A とアカウント B に対して別々にログインしている
-- **WHEN** 両方のアクセストークンが有効である間
-- **THEN** 各アカウントの保護されたエンドポイントへのアクセスは独立して認可される
+- **GIVEN** browser が account A と account B の active session を持っている
+- **WHEN** account A の session selector で `POST /api/v1/auth/refresh` を呼び出す
+- **THEN** account A の refreshToken state と Cookie binding だけが rotation される
+- **AND** account B の session は維持される
 
 #### Scenario: 単一セッションのログアウトは他のセッションに影響しない (AUTH-BE-S042)
 
@@ -399,82 +386,111 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 - **WHEN** アカウント A のセッションで `POST /api/v1/auth/logout` を実行する
 - **THEN** アカウント A のセッションは失効し、アカウント B のセッションは引き続き有効である
 
-## MODIFIED Requirements
-
 ### Requirement: パスキー認証は bearer 互換 application session を発行・失効する
 
-パスキー認証は、`Authorization: Bearer <access token>` で `/api/v1/*` を利用できる application session を SHALL 発行し、logout で MUST revoke しなければならない。DB の `accounts.status='suspended'` の account に対しては、新規 token pair 発行、refresh rotation、既存 bearer access token 認可を MUST 拒否する。拒否時は HTTP 403 と `AuthFailureResponse` body `{ requestId, error: "account-suspended" }` を MUST 返し、response は `Cache-Control: no-store` を SHALL 含む。`account-suspended` は `AuthFailureClassification` に追加し、`AuthOperationErrorResponse` では返してはならない（MUST NOT）。`POST /api/v1/auth/passkey/finish`、`POST /api/v1/auth/refresh`、bearer-protected `/api/v1/*` endpoint は suspended 判定用の 403 `AuthFailureResponse` を contract に含めなければならない（MUST）。Admin suspend が成功した場合、system は DB の `accounts.session_revoked_after` に suspend 時刻を SHALL 永続化し、`session_revoked_after` 以前に発行された access token / refresh token を MUST 拒否する。restore は `session_revoked_after` を消去してはならず（MUST NOT）、account は再ログインでのみ新規 token pair を取得できる。`account-suspended` error は valid passkey assertion 後、refresh token 検証後、または既存 bearer access token 認可時のみ返し、public passkey start では account existence を漏らしてはならない（MUST NOT）。
+Product account 認証ドメインは、短命な account accessToken と長寿命 account refreshToken で構成される Product account session を SHALL 発行し、`Authorization: Bearer <accessToken>` で Product `/api/v1/*` を利用できるようにしなければならない。Product account refreshToken は response body に含めてはならず（MUST NOT）、`HttpOnly; Secure; SameSite=Lax; Path=/` Cookie として発行・rotation・revoke されなければならない（MUST）。Product account accessToken claim と refreshToken state は account ID / account session ID / device fingerprint / account status / sessionRevokedAfter に束縛されなければならない（MUST）。DB の `accounts.status='suspended'` の account に対しては、新規 accessToken 発行、refresh rotation、既存 bearer accessToken 認可を MUST 拒否する。
+
+Admin operator 認証ドメインは Product account 認証ドメインとは別に、operator accessToken と operator refreshToken で構成される Admin operator session を SHALL 発行する。Admin operator accessToken claim と refreshToken state は operator ID / operator session ID / operator role / active state / CSRF binding / Admin Valkey logical DB / `admin:*` key prefix に束縛されなければならない（MUST）。Admin operator auth は Product account auth domain/application を import してはならず（MUST NOT）、Product account auth は Admin operator auth domain/application を import してはならない（MUST NOT）。
+
+両認証ドメインが共有できるのは、HMAC/JWT signer/verifier、opaque token hash、Cookie 属性 helper、ULID/JTI validation、TTL validation helper など中立 primitive に限られる（MUST）。中立 primitive は account / operator の domain enum switch、issuer/audience/domain pairing、RBAC、account status、operator active state、CSRF binding を所有してはならない（MUST NOT）。単一共有 token service に `identityDomain=account|operator` の切替引数を渡して Product/Admin の domain decision を畳み込んではならない（MUST NOT）。
 
 **Customer Context**
 
-`/api/v1/*`（`/api/v1/auth/*` 除く）は認証必須面であり、企画書と repository rule は bearer 境界として扱います。パスキー認証が session 発行・失効・app surface の認可と一体で定義されていないと、認証面全体の境界が不安定になります。短命な JWT アクセストークンと長寿命なリフレッシュトークンの導入により、セキュリティと使い勝手の両立が必要です。
+Product 利用者の account 認証と Admin 運営者の operator 認証は、守る対象と失敗時の影響が異なる。Cookie 属性や署名検証のような安全な primitive は共通化してよいが、account status、operator role、CSRF、session state を単一 service の切替で扱うと境界が曖昧になり、誤認可や監査漏れにつながる。
 
-**Requirement**
+#### Scenario: Product passkey login は accessToken body と refreshToken Cookie を返す (AUTH-BE-S060)
 
-- The system SHALL issue a bearer-compatible application session on successful passkey authentication. The session consists of a short-lived JWT access token and a long-lived refresh token.
-- The access token SHALL be a JWT containing minimal claims: `accountID`, `sessionID`, `iat`, and `exp`. The access token lifetime SHALL be approximately 15 minutes.
-- The backend SHALL validate the JWT signature and expiration on every protected request to `/api/v1/*`.
-- The system SHALL issue a refresh token bound to the account and a device/session fingerprint. The refresh token SHALL be stored in the Valkey-backed auth state store.
-- The system SHALL expose `POST /api/v1/auth/refresh` to accept a valid refresh token and return a new access token and a new refresh token (rotation). The consumed refresh token SHALL be atomically invalidated via GETDEL or equivalent atomic consume.
-- A refresh token SHALL be single-use: once consumed for rotation, the old refresh token MUST be rejected on subsequent attempts.
-- If an already-consumed or unknown refresh token is presented to `POST /api/v1/auth/refresh`, the system SHALL treat it as a potential token theft and MUST revoke all refresh tokens associated with the same account and device/session fingerprint (fail-close rotation failure).
-- `POST /api/v1/auth/passkey/start` と `POST /api/v1/auth/passkey/finish` は変更なし。
-- `POST /api/v1/auth/passkey/finish` と recovery branch の `POST /api/v1/auth/passkey/register` は、`Authorization: Bearer <access token>` で `/api/v1/*` に提示できる同一の session 契約を SHALL 返す。返却ペイロードにはアクセストークンとリフレッシュトークンの両方を含む。
-- `/api/v1/*` surface は active bearer session を MUST 要求し、missing / expired / revoked session を SHALL 拒否する。
-- request が bearer session をまったく持たない場合は stable classification `unauthenticated` として SHALL 扱われ、expired / revoked session failure と混同してはならない。
-- expired または revoked session は stable classification `session-expired` として SHALL 扱われる。
-- auth state store unavailable などの fail-close な auth boundary failure は stable classification `internal-error` として SHALL 扱われる。
-- logout flow は `POST /api/v1/auth/logout` で active session を SHALL revoke し、その後の `/api/v1/*` request を認可できないようにする。revoke 判定に必要な state は Valkey-backed auth state store に MUST 反映される。revoke 対象はアクセストークンに紐づくセッションだけであり、同一アカウントの他セッションは維持される。
-- auth start / finish / `POST /api/v1/auth/logout` / `POST /api/v1/auth/refresh` response は `Cache-Control: no-store` を SHALL 保ち、cacheable な auth response を返してはならない。
-- account、passkey credential、session、revocation marker、recovery token、`recovery_session`、`invitation_session`、および auth 実行を相互参照する system-owned resource ID は ULID を SHALL 使用し、UUID その他の別方式を新規採用してはならない。
+- **GIVEN** account が Product passkey authentication を開始している
+- **WHEN** valid credential で `POST /api/v1/auth/passkey/finish` を完了する
+- **THEN** response body は account accessToken と Product account session metadata を含む
+- **AND** response body は refreshToken を含まない
+- **AND** `Set-Cookie` は refreshToken を `HttpOnly; Secure; SameSite=Lax; Path=/` で設定する
 
-#### Scenario: パスキーログイン成功時に JWT access token と refresh token を作成する (AUTH-BE-S001)
+#### Scenario: Admin operator login は Admin operator auth domain を使う (AUTH-BE-S061)
 
-- **GIVEN** account が passkey authentication を開始している
-- **WHEN** account が valid credential で `POST /api/v1/auth/passkey/finish` を完了する
-- **THEN** system は後続の `/api/v1/*` access を `Authorization: Bearer <access token>` で認可できる active session を返す。また、リフレッシュトークンも同時に返す。
+- **GIVEN** operator が Admin passkey authentication を開始している
+- **WHEN** valid operator credential で Admin auth finish を完了する
+- **THEN** response body は operator accessToken と operator session metadata を含む
+- **AND** refreshToken Cookie は operator ID、operator session、CSRF binding、Admin Valkey namespace に束縛される
+- **AND** Product account ID、Product AccountAuth session、Product application service は使用されない
 
-#### Scenario: 欠落または inactive な session は拒否される (AUTH-BE-S002)
+#### Scenario: Product と Admin の認証ドメインは単一 switch に畳み込まれない (AUTH-BE-S067)
 
-- **GIVEN** request が `/api/v1/*` を対象にしている
-- **WHEN** request が expired または revoked access token を持つ
-- **THEN** system はその request を `session-expired` failure として拒否する
+- **WHEN** accessToken 発行、refresh rotation、session revoke の implementation を確認する
+- **THEN** Product account auth は Product account auth domain/application の型と service を使う
+- **AND** Admin operator auth は Admin operator auth domain/application の型と service を使う
+- **AND** `identityDomain` などの引数で account/operator domain decision を切り替える単一共有 token service は存在しない
 
-#### Scenario: logout は active session を revoke する (AUTH-BE-S003)
+#### Scenario: 中立 token primitive は account/operator domain switch を持たない (AUTH-BE-S068)
 
-- **GIVEN** account が active session を持っている
-- **WHEN** logout action がその session を revoke する
-- **THEN** revoked session は `/api/v1/*` access を以後認可しない
+- **WHEN** shared token primitive の public API と内部実装を確認する
+- **THEN** 署名、検証、opaque token hash、ULID/JTI validation、TTL validation だけを扱う
+- **AND** account / operator enum、RBAC、status 判定、CSRF 判定、issuer/audience/domain pairing を持たない
 
-#### Scenario: suspended account は新規 token pair を発行されない (AUTH-BE-S054)
+#### Scenario: Product AccountAuth domain が account token eligibility を所有する (AUTH-BE-S069)
+
+- **GIVEN** account が suspended または sessionRevokedAfter より古い session を持つ
+- **WHEN** Product account accessToken 発行または refresh rotation を行う
+- **THEN** Product AccountAuth domain object は token eligibility を拒否する
+
+#### Scenario: Admin OperatorAuth domain が operator token eligibility と CSRF binding を所有する (AUTH-BE-S070)
+
+- **GIVEN** operator が inactive、または CSRF token が operator session と一致しない
+- **WHEN** Admin operator accessToken 発行、refresh rotation、protected mutation validation を行う
+- **THEN** Admin OperatorAuth domain object は token eligibility または CSRF binding を拒否する
+
+#### Scenario: Product auth application は Admin auth application を import しない (AUTH-BE-S071)
+
+- **WHEN** `internal/application/product/auth` が `internal/application/admin` または Admin OperatorAuth application を import している
+- **THEN** lint または import-boundary test は失敗する
+
+#### Scenario: Admin auth application は Product auth application を import しない (AUTH-BE-S072)
+
+- **WHEN** `internal/application/admin/auth` が `internal/application/product` または Product AccountAuth application を import している
+- **THEN** lint または import-boundary test は失敗する
+
+#### Scenario: refresh は Cookie の refreshToken を rotation する (AUTH-BE-S062)
+
+- **GIVEN** client が有効な refreshToken Cookie を持つ
+- **WHEN** client が `POST /api/v1/auth/refresh` を呼び出す
+- **THEN** 対象 auth domain は旧 refreshToken を原子消費し、新しい accessToken を response body に返す
+- **AND** 新しい refreshToken は `Set-Cookie` で rotation され、response body には含まれない
+
+#### Scenario: ブラウザーから読める refreshToken は発行されない (AUTH-BE-S063)
+
+- **GIVEN** login、refresh、recovery registration、または operator login が成功する
+- **WHEN** response body と log/trace attributes を確認する
+- **THEN** refreshToken の平文値は body、log、trace attribute、error message に存在しない
+
+#### Scenario: suspended account は新規 accessToken を発行されない (AUTH-BE-S054)
 
 - **GIVEN** account の `accounts.status` が `suspended` である
 - **WHEN** account が valid passkey で `POST /api/v1/auth/passkey/finish` を完了しようとする
-- **THEN** system は access token / refresh token を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **THEN** system は accessToken / refreshToken Cookie を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
 
-#### Scenario: suspended account の既存 bearer access token は拒否される (AUTH-BE-S055)
+#### Scenario: suspended account の既存 bearer accessToken は拒否される (AUTH-BE-S055)
 
 - **GIVEN** account が active session を持っていた後に Admin Console で suspended になっている
-- **WHEN** その access token で `/api/v1/*` にアクセスする
-- **THEN** system は access token を認可せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **WHEN** その accessToken で `/api/v1/*` にアクセスする
+- **THEN** system は accessToken を認可せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
 
 #### Scenario: suspended account の refresh は rotation されない (AUTH-BE-S058)
 
-- **GIVEN** account が valid refresh token を持っていた後に Admin Console で suspended になっている
+- **GIVEN** account が valid refreshToken Cookie を持っていた後に Admin Console で suspended になっている
 - **WHEN** client が `POST /api/v1/auth/refresh` を呼び出す
-- **THEN** system は新しい access token / refresh token を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
+- **THEN** system は新しい accessToken / refreshToken Cookie を発行せず、HTTP 403 の `AuthFailureResponse` と `error="account-suspended"` で拒否する
 
 #### Scenario: suspend は account-wide session revocation timestamp を書き込む (AUTH-BE-S056)
 
 - **GIVEN** Admin Console が account suspend を成功させる
 - **WHEN** DB の `accounts.session_revoked_after` を確認する
-- **THEN** suspend 時刻以上の timestamp が保存され、その timestamp 以前に発行された access token / refresh token は拒否される
+- **THEN** suspend 時刻以上の timestamp が保存され、その timestamp 以前に発行された accessToken / refreshToken は拒否される
 
 #### Scenario: restored account は過去 session では復帰できない (AUTH-BE-S057)
 
 - **GIVEN** account が suspended 後に restore されている
-- **WHEN** suspend 前に発行された bearer access token で `/api/v1/*` にアクセスする
-- **THEN** system は access token を拒否し、account は再ログインでのみ新しい token pair を取得できる
+- **WHEN** suspend 前に発行された bearer accessToken で `/api/v1/*` にアクセスする
+- **THEN** system は accessToken を拒否し、account は再ログインでのみ新しい token pair を取得できる
 
 #### Scenario: account-suspended は stable failure response shape で返される (AUTH-BE-S059)
 
@@ -495,12 +511,6 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 - **WHEN** Valkey を含む auth state store が unavailable で session / challenge / recovery state を安全に検証できない
 - **THEN** system は fail-close で request を拒否し、stable classification `internal-error` を返す
 
-#### Scenario: 有効なリフレッシュトークンをローテーションできる (AUTH-BE-S043)
-
-- **GIVEN** client が有効なリフレッシュトークンを保持している
-- **WHEN** client が `POST /api/v1/auth/refresh` を送信する
-- **THEN** system は旧リフレッシュトークンを原子消費し、新しいアクセストークンと新しいリフレッシュトークンを返す
-
 #### Scenario: 消費済みリフレッシュトークンの再利用は拒否され関連トークンを失効する (AUTH-BE-S044)
 
 - **GIVEN** リフレッシュトークンが既に消費されている
@@ -511,11 +521,11 @@ Passkey は認証基盤の中核であり、端末所持だけでなく端末内
 
 - **GIVEN** client が存在しないまたは改竄されたリフレッシュトークンを提示している
 - **WHEN** client が `POST /api/v1/auth/refresh` を送信する
-- **THEN** system は request を拒否し、新しいトークンペアを発行しない
+- **THEN** system は request を拒否し、新しい token pair を発行しない
 
-#### Scenario: access token の有効期限切れは session-expired として拒否される (AUTH-BE-S046)
+#### Scenario: accessToken の有効期限切れは session-expired として拒否される (AUTH-BE-S046)
 
-- **GIVEN** client が有効期限切れの JWT access token を保持している
+- **GIVEN** client が有効期限切れの JWT accessToken を保持している
 - **WHEN** そのトークンを `Authorization: Bearer` ヘッダーに設定して `/api/v1/*` を呼び出す
 - **THEN** system は `session-expired` failure として拒否する
 

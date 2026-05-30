@@ -1,149 +1,110 @@
 ## Purpose
 
-Admin Console の frontend auth requirements をまとめる。passkey login、pre-auth bootstrap/setup routes、no-store admin surfaces、passkey management を対象とする。
+Admin Console の frontend auth requirements をまとめる。静的 Admin frontend の passkey login、protected route verification、session expiry handling、bootstrap/setup routes、no-store admin surfaces、passkey management を対象とする。
 
 ## Requirements
 
 ### Requirement: オペレーターは passkey でログインする
 
-Admin Console は `/login` route で passkey 専用ログイン画面を SHALL 提供する。オペレーターは email を入力して WebAuthn passkey 認証を開始し、認証成功時に httpOnly cookie でセッションを確立しなければならない（MUST）。認証失敗時は non-revealing なエラーメッセージを表示し、アカウント有無・登録状態を推測できない体験を SHALL 保つ。`/login` route は password input、password reset copy、invite registration control を表示してはならない（MUST NOT）。
+Admin Console は `/login` route で passkey 専用ログイン画面を SHALL 提供する。Login UI は browser WebAuthn API と `packages/admin/domain` の auth flow を使用し、`packages/admin/api` 経由で same-origin の `/api/v1/auth/passkey/*` API を呼び出さなければならない（SHALL）。Login 成功時、Admin frontend は response body の operator accessToken と session metadata を memory state に保持し、operator refreshToken は Admin backend が `HttpOnly; Secure; SameSite=Lax` Cookie として管理しなければならない（SHALL）。Admin auth UI は SvelteKit server hooks、server load/actions、package-local BFF route を認証判断に使用してはならない（MUST NOT）。Admin auth UI は Product auth API または Product SDK を使用して operator session を作成してはならない（MUST NOT）。認証失敗 UI は operator 存在、passkey 登録状態、setup token 状態を推測できない秘匿的な文言を保たなければならない（MUST）。
 
 **Customer Context**
 
-Admin Console の認証はプロダクションの認証基盤と同じ WebAuthn passkey 方式を使用する。オペレーターは顧客向けアカウントとは独立した Admin 専用の passkey credential を持つ。httpOnly cookie を用いることで、SvelteKit server-side の認証チェックが browser API 呼出ごとに自動で行われる。
+Admin 認証は passkey、operator session、setup token、CSRF を扱うため、画面配信 package に server-side 認証処理が存在すると責務境界が崩れる。運営者は静的 Admin UI から安全に認証し、認証判断は Admin backend に集約される必要がある。
 
-#### Scenario: オペレーターが passkey でログインする (ADMIN-AUTH-FE-S001)
+#### Scenario: Login UI は Admin backend auth API を呼び出す (ADMIN-AUTH-FE-S027)
 
-- **GIVEN** オペレーターが有効な passkey credential を device に登録済みである
-- **WHEN** `/login` で登録済みの email を入力し passkey 認証を完了する
-- **THEN** httpOnly cookie に session JWT が設定され、Dashboard にリダイレクトされる
+- **GIVEN** Operator が `/login` を開いている
+- **WHEN** email を入力して passkey login を開始する
+- **THEN** UI は Admin api layer 経由で Admin backend の passkey start API を呼び出す
+- **AND** package-local BFF route は呼び出されない
 
-#### Scenario: 未登録 email でログインしようとすると non-revealing なエラーになる (ADMIN-AUTH-FE-S002)
+#### Scenario: Product auth SDK は operator session 作成に使われない (ADMIN-AUTH-FE-S028)
 
-- **GIVEN** 入力された email が `admin.operators` に存在しない
-- **WHEN** email を入力して passkey 認証を試みる
-- **THEN** non-revealing なエラーメッセージが表示され、登録済みオペレーターとの区別がつかない
-- **AND** cookie は設定されない
+- **WHEN** Admin auth domain code が Product auth SDK を import して operator login を実装している
+- **THEN** lint は dependency boundary violation として失敗する
 
-#### Scenario: WebAuthn がキャンセルされた場合はログイン画面に留まる (ADMIN-AUTH-FE-S003)
+#### Scenario: Operator login は accessToken だけをブラウザーから読める state に保持する (ADMIN-AUTH-FE-S033)
 
-- **GIVEN** オペレーターが passkey 認証を開始した
-- **WHEN** ブラウザの WebAuthn ダイアログでキャンセルする
-- **THEN** ログイン画面に留まり、エラーメッセージが表示される
-- **AND** cookie は設定されない
-
-#### Scenario: 異なる device の passkey ではログインできない (ADMIN-AUTH-FE-S004)
-
-- **GIVEN** オペレーターの device に登録済み passkey が存在しない
-- **WHEN** WebAuthn が利用可能な credential を見つけられない
-- **THEN** ログイン画面に留まり、non-revealing なエラーが表示される
-
-#### Scenario: ログイン中は loading 状態が表示される (ADMIN-AUTH-FE-S005)
-
-- **GIVEN** オペレーターが email を入力して passkey 認証を開始した
-- **WHEN** WebAuthn ceremony が実行中である
-- **THEN** UI に loading indicator が表示され、二重送信が防止される
-
----
+- **GIVEN** Operator が passkey login を完了する
+- **WHEN** Admin auth domain state を確認する
+- **THEN** operator accessToken と session metadata は memory state に存在する
+- **AND** operator refreshToken 平文は memory state、localStorage、sessionStorage、IndexedDB、URL に存在しない
 
 ### Requirement: 未認証アクセスはログイン画面へリダイレクトする
 
-`hooks.server.ts` は全リクエストで `admin_session` cookie を検証しなければならない（SHALL）。有効な cookie が存在しない場合、認証必須 route（Dashboard、Accounts、Audit、Settings、Passkey 管理、Logout）は `/login` へリダイレクトしなければならない（SHALL）。pre-auth route である `/login`、`/setup`、`/operator-setup`、および `/api/admin/auth/passkey/*`、`/api/admin/auth/setup/*`、`/api/admin/auth/operator-setup/*` は未認証でも login redirect せず処理されなければならない（MUST）。ただし `/api/admin/auth/passkeys*` の passkey 管理 API は pre-auth ではなく、有効な `admin_session` を route-level で必須とし、未認証時は 401 を返さなければならない（MUST）。`/login` route は認証済みの場合、Dashboard へリダイレクトしなければならない（SHALL）。`/setup` は zero-operator bootstrap gate を満たす場合だけ未認証アクセスを許可し、`/operator-setup` は setup token flow のため未認証アクセスを許可しなければならない（MUST）。
+静的 Admin frontend は保護画面を表示する前に Admin backend の current operator / session verification API を SHALL 呼び出す。Current operator request は memory state の operator accessToken を `Authorization: Bearer` header として送信し、必要に応じて same-origin refresh request を credentials 付きで実行しなければならない（SHALL）。Session が無効、期限切れ、または operator inactive の場合、Admin frontend は protected content を表示せず login へ誘導しなければならない（MUST）。Admin frontend は operator role / permission を UI 表示制御に使用できるが、Backend authorization の代替として扱ってはならない（MUST NOT）。Logout UI は Admin backend logout API を呼び出し、client accessToken state と CSRF token state を破棄し、Admin backend に operator refreshToken Cookie の revoke を委ねなければならない（SHALL）。
 
 **Customer Context**
 
-Admin Console の業務画面は認証必須である。一方で初回 admin 作成、追加オペレーター登録、passkey login API は未認証で到達できなければ運用不能になる。`hooks.server.ts` は pre-auth route と protected route を明示的に分け、protected route だけを `/login` へリダイレクトする。
+Admin frontend は静的に配信されるため、画面遷移時の認証済み presentation は browser 側で最新 session 状態を確認する必要がある。一方で最終的な認可は必ず Admin backend API が行い、UI は利便性と誤操作防止を担当する。
 
-#### Scenario: 未認証で Dashboard にアクセスするとログイン画面に飛ぶ (ADMIN-AUTH-FE-S006)
+#### Scenario: 未認証で Accounts 画面に到達しても protected content を表示しない (ADMIN-AUTH-FE-S030)
 
-- **GIVEN** `admin_session` cookie が存在しない
-- **WHEN** `/` にアクセスする
-- **THEN** `/login` にリダイレクトされる（HTTP 302）
+- **GIVEN** operator session が存在しない
+- **WHEN** Operator が `/accounts` を直接開く
+- **THEN** UI は account data を表示せず login へ誘導する
 
-#### Scenario: 認証済みで `/login` にアクセスすると Dashboard に飛ぶ (ADMIN-AUTH-FE-S007)
+#### Scenario: role は UI 制御に使われるが Backend 認可が必須である (ADMIN-AUTH-FE-S031)
 
-- **GIVEN** 有効な `admin_session` cookie が存在する
-- **WHEN** `/login` にアクセスする
-- **THEN** `/` (Dashboard) にリダイレクトされる
+- **GIVEN** Operator role が viewer である
+- **WHEN** UI が account 作成 action を非表示にする
+- **THEN** Backend API は同じ request に対しても Admin RBAC を検証し、UI 表示だけに依存しない
 
-#### Scenario: 保護 route の直接 URL アクセスでログイン後に元の画面に戻る (ADMIN-AUTH-FE-S008)
+#### Scenario: protected route は operator accessToken を検証に使う (ADMIN-AUTH-FE-S034)
 
-- **GIVEN** Operator が未認証状態で `/accounts` に直接アクセスする
-- **WHEN** ログイン画面にリダイレクトされ、ログインを完了する
-- **THEN** `/accounts` にリダイレクトされる（redirectTo パラメータが保持される）
+- **GIVEN** Admin frontend が operator accessToken と session metadata を memory state に保持している
+- **WHEN** Operator が `/accounts` を開く
+- **THEN** UI は `Authorization: Bearer` header で current operator API を呼び出してから protected content を表示する
 
-#### Scenario: pre-auth route は未認証でもログインリダイレクトされない (ADMIN-AUTH-FE-S026)
+#### Scenario: Admin refresh は HttpOnly Cookie に委ねる (ADMIN-AUTH-FE-S035)
 
-- **GIVEN** `admin_session` cookie が存在しない
-- **WHEN** `/setup`、`/operator-setup`、`/api/admin/auth/passkey/start`、`/api/admin/auth/setup/start`、または `/api/admin/auth/operator-setup/start` にアクセスする
-- **THEN** `hooks.server.ts` は `/login` へリダイレクトせず、各 route の bootstrap gate / setup token / auth API 処理へ制御を渡す
-- **AND** `/api/admin/auth/passkeys` のような passkey 管理 API は pre-auth 例外に含まれず、未認証時は 401 になる
-
----
+- **GIVEN** operator accessToken が期限切れ間近で、operator refreshToken Cookie は browser に保持されている
+- **WHEN** Admin frontend が protected Admin API を呼び出そうとする
+- **THEN** UI は credentials を含めて same-origin refresh API を呼び出す
+- **AND** refresh 成功後の response body から新しい operator accessToken を memory state に反映する
 
 ### Requirement: session 期限切れ時はログイン画面へ戻る
 
-session JWT の有効期限が切れている場合、`hooks.server.ts` は cookie をクリアし `/login` へリダイレクトしなければならない（SHALL）。期限切れと未認証の区別は UI に露出せず、どちらもログイン画面へ遷移しなければならない（SHALL）。
+静的 Admin frontend は operator accessToken の期限切れ、Admin refresh 失敗、current operator API の未認証 response、operator inactive response を検知した場合、protected content を表示せず login へ誘導しなければならない（MUST）。Admin frontend は `hooks.server.ts`、server load/actions、package-local BFF、browser-readable refreshToken を session 期限判定に使用してはならない（MUST NOT）。Session expiry と未認証の詳細は UI に露出せず、必要な state cleanup と generic login guidance だけを表示しなければならない（SHALL）。
 
 **Customer Context**
 
-オペレーターの session は有限の有効期限を持つ。期限切れ後は自動的にログイン画面へ戻り、再認証を促す。
+Admin frontend は静的に配信されるため、server hook redirect に依存できない。期限切れ session では顧客情報や監査情報を表示せず、Admin backend current/refresh API の結果で安全に login へ戻す必要がある。
 
-#### Scenario: 期限切れ session でアクセスするとログイン画面に飛ぶ (ADMIN-AUTH-FE-S009)
+#### Scenario: Admin refresh 失敗時は protected content を表示しない (ADMIN-AUTH-FE-S036)
 
-- **GIVEN** `admin_session` cookie の JWT exp が過去である
-- **WHEN** 保護された route にアクセスする
-- **THEN** `Set-Cookie` で cookie がクリアされ、`/login` にリダイレクトされる
+- **GIVEN** operator accessToken が期限切れで、Admin refresh API が 401 を返す
+- **WHEN** Operator が `/accounts` を開く
+- **THEN** Admin frontend は protected content を表示せず、memory state を破棄して login へ誘導する
 
-#### Scenario: 改ざんされた JWT でアクセスするとログイン画面に飛ぶ (ADMIN-AUTH-FE-S010)
+#### Scenario: session expiry reason は UI に露出しない (ADMIN-AUTH-FE-S037)
 
-- **GIVEN** `admin_session` cookie の JWT 署名が無効である
-- **WHEN** 保護された route にアクセスする
-- **THEN** cookie がクリアされ、`/login` にリダイレクトされる
-
----
+- **GIVEN** current operator API が expired、revoked、inactive のいずれかを返す
+- **WHEN** Admin frontend が session state を更新する
+- **THEN** UI は詳細理由を区別せず generic login guidance を表示する
 
 ### Requirement: Admin routes は no-store で配信する
 
-`/login`、`/setup`、`/operator-setup`、認証済み Admin 画面（Dashboard、Accounts、Audit、Settings、Operator 管理、Passkey 管理）および全 Admin BFF route（`/api/admin/*`）の response は `Cache-Control: no-store` を SHALL 保つ。Admin route / BFF response は operator session、顧客 PII、監査情報、bootstrap state、setup token state を含む可能性があるため、CDN / browser / shared proxy で cache してはならない（MUST NOT）。静的 hashed asset はこの no-store 要件の対象外でよいが、HTML / JSON / action / API response は対象外にしてはならない（MUST NOT）。
+Admin static frontend の HTML / route shell / runtime config response は no-store semantics で配信されなければならない（SHALL）。Admin backend の `/api/v1/*` response は no-store header を含まなければならない（SHALL）。Hashed static assets は長期 cache できるが、operator session、顧客 PII、監査情報、bootstrap state、setup token state を含む response は cache してはならない（MUST NOT）。
 
 **Customer Context**
 
-Admin route が cache されると、古い認証状態、顧客 PII、監査ログ、setup token state が再表示され、セキュリティ上の問題となる。
+Admin route が cache されると、古い認証状態、顧客 PII、監査ログ、setup token state が再表示され、セキュリティ上の問題となる。静的配信でも HTML と API response は no-store 境界を維持する必要がある。
 
-#### Scenario: `/login` は no-store で配信される (ADMIN-AUTH-FE-S011)
+#### Scenario: Admin HTML は no-store で配信される (ADMIN-AUTH-FE-S032)
 
-- **GIVEN** ブラウザが `/login` を開く
-- **WHEN** server が response を返す
-- **THEN** response header に `Cache-Control: no-store` が含まれる
-
-#### Scenario: setup 系画面は no-store で配信される (ADMIN-AUTH-FE-S022)
-
-- **GIVEN** ブラウザが `/setup` または `/operator-setup` を開く
-- **WHEN** server が response を返す
-- **THEN** response header に `Cache-Control: no-store` が含まれる
-
-#### Scenario: 認証済み Admin 画面は no-store で配信される (ADMIN-AUTH-FE-S024)
-
-- **GIVEN** 認証済みオペレーターが `/accounts`、`/accounts/{id}`、`/audit`、`/settings`、`/settings/operators`、`/passkeys` のいずれかを開く
-- **WHEN** server が HTML または load response を返す
-- **THEN** response header に `Cache-Control: no-store` が含まれる
-
-#### Scenario: Admin BFF response は no-store で配信される (ADMIN-AUTH-FE-S025)
-
-- **GIVEN** browser が `/api/admin/*` の BFF route を呼び出す
-- **WHEN** server が JSON、redirect、または error response を返す
-- **THEN** response header に `Cache-Control: no-store` が含まれる
-
----
+- **GIVEN** browser が Admin frontend の HTML route を開く
+- **WHEN** response header を確認する
+- **THEN** HTML response は no-store semantics を持つ
 
 ### Requirement: 認証済みオペレーターは自身の passkey を管理できる
 
-認証済みオペレーターは画面上で自身の登録済み passkey credential 一覧を SHALL 確認できる。新しい passkey を追加する WebAuthn 登録フローを SHALL 提供し、特定 passkey の削除アクションを SHALL 提供する。credential handle / public key は認証 material として画面に露出せず、削除対象の識別には公開可能な passkey identifier と登録 metadata を使わなければならない（MUST）。最後の 1 件の削除操作は無効化しなければならない（MUST）。
+認証済みオペレーターは画面上で自身の登録済み passkey credential 一覧を SHALL 確認できる。新しい passkey を追加する WebAuthn 登録フローを SHALL 提供し、特定 passkey の削除アクションを SHALL 提供する。Passkey management UI は browser WebAuthn API と `packages/admin/domain` の flow を使用し、`packages/admin/api` 経由で same-origin の `/api/v1/auth/passkeys*` API を呼び出さなければならない（SHALL）。credential handle / public key は認証 material として画面に露出せず、削除対象の識別には公開可能な passkey identifier と登録 metadata を使わなければならない（MUST）。最後の 1 件の削除操作は無効化しなければならない（MUST）。
 
 **Customer Context**
 
-オペレーターは複数の device で Admin Console にアクセスする。passkey を追加・削除できることで、device 追加や紛失時に安全な鍵管理が可能になる。
+オペレーターは複数の device で Admin Console にアクセスする。passkey を追加・削除できることで、device 追加や紛失時に安全な鍵管理が可能になる。passkey 管理 API は Admin backend が所有し、静的 frontend は server-side BFF を持たずに同一 Admin host の `/api/v1/*` を呼び出す。
 
 #### Scenario: 登録済み passkey 一覧を表示する (ADMIN-AUTH-FE-S012)
 
@@ -175,58 +136,43 @@ Admin route が cache されると、古い認証状態、顧客 PII、監査ロ
 - **WHEN** WebAuthn ダイアログでキャンセルする
 - **THEN** 一覧は変化せず、エラーメッセージが表示される
 
----
-
 ### Requirement: 初回起動時は最初の admin オペレーターを作成する
 
-`/setup` route は `admin.operators` が 0 件で、かつ bootstrap gate（`ADMIN_BOOTSTRAP_ENABLED=true`、有効な bootstrap secret、有効期限内）を満たす場合のみ、最初の admin オペレーター作成と WebAuthn passkey 登録を SHALL 提供する。初回セットアップ画面は email / display_name / bootstrap secret 入力と passkey 登録を同一 flow で完了し、成功後は JWT cookie を設定して Dashboard へリダイレクトしなければならない（MUST）。`admin.operators` が 1 件以上存在する場合、`/setup` は `/login` へリダイレクトするか 403 を返し、新規オペレーター作成 UI を表示してはならない（MUST NOT）。bootstrap gate を満たさない場合も初回セットアップフォームを表示してはならない（MUST NOT）。
+静的 Admin frontend の `/setup` route は、Admin backend の same-origin `/api/v1/auth/setup/*` API を通じて初回 admin operator 作成と passkey 登録を行わなければならない（SHALL）。`/setup` は `hooks.server.ts`、server load/actions、package-local BFF、server-side cookie redirect を使用してはならない（MUST NOT）。Setup 成功時、Admin frontend は response body の operator accessToken と session metadata を memory state に保持し、Admin refreshToken は backend が `HttpOnly; Secure; SameSite=Lax; Path=/` Cookie として設定しなければならない（MUST）。Operator が既に存在する場合、または bootstrap gate が無効な場合、UI は setup form を表示せず login へ誘導または generic unavailable state を表示しなければならない（SHALL）。
 
 **Customer Context**
 
-DB seed や直接 SQL では初期オペレーターを作成しない。オペレーターが存在しない初回起動時だけ、明示 enable flag と短期 bootstrap secret で保護された bootstrap 画面で最初の admin オペレーターを作成する。
+初回 admin 作成は Admin surface の trust anchor である。静的 frontend は secret validation と operator 作成を Admin backend に委譲し、JWT cookie や server hook redirect 前提を持たないことで、Admin auth の責務を backend に集約する。
 
-#### Scenario: オペレーター 0 件時に最初の admin オペレーターを作成できる (ADMIN-AUTH-FE-S017)
+#### Scenario: 静的 setup UI は Admin backend で最初の admin を作成する (ADMIN-AUTH-FE-S038)
 
-- **GIVEN** `admin.operators` が 0 件であり、bootstrap gate が有効である
-- **WHEN** `/setup` で email / display_name / bootstrap secret を入力し WebAuthn 登録を完了する
-- **THEN** role=`admin` のオペレーターが作成され、JWT cookie が設定され Dashboard にリダイレクトされる
+- **GIVEN** operator が 0 件で bootstrap gate が有効である
+- **WHEN** `/setup` で email、display name、bootstrap secret、WebAuthn registration を完了する
+- **THEN** UI は `/api/v1/auth/setup/*` を呼び、operator accessToken と session metadata を memory state に保持する
+- **AND** refreshToken 平文は browser-readable state に存在しない
 
-#### Scenario: オペレーターが存在する場合は `/setup` を利用できない (ADMIN-AUTH-FE-S018)
+#### Scenario: operator が存在する場合は setup form を表示しない (ADMIN-AUTH-FE-S039)
 
-- **GIVEN** `admin.operators` が 1 件以上存在する
-- **WHEN** `/setup` にアクセスする
-- **THEN** `/login` にリダイレクトされるか 403 が表示され、初回セットアップフォームは表示されない
+- **GIVEN** Admin backend current setup state が operator existing を返す
+- **WHEN** Operator が `/setup` を開く
+- **THEN** Admin frontend は setup form を表示せず login へ誘導する
 
-#### Scenario: bootstrap gate が無効な場合は `/setup` フォームを表示しない (ADMIN-AUTH-FE-S023)
+#### Scenario: bootstrap gate 無効時は setup secret 入力欄を表示しない (ADMIN-AUTH-FE-S040)
 
-- **GIVEN** `admin.operators` が 0 件だが、bootstrap enable flag が無効または bootstrap secret が期限切れである
-- **WHEN** `/setup` にアクセスする
-- **THEN** 403 が表示され、email / display_name / bootstrap secret 入力フォームは表示されない
-
----
+- **GIVEN** bootstrap gate が無効または期限切れである
+- **WHEN** Operator が `/setup` を開く
+- **THEN** Admin frontend は bootstrap secret 入力 form を表示せず generic unavailable state を表示する
 
 ### Requirement: 追加オペレーターは setup token で初回 passkey を登録する
 
-`/operator-setup` route は admin が `/settings/operators` で発行した one-time setup token を受け取り、追加オペレーターの初回 WebAuthn passkey 登録を SHALL 提供する。setup token は一度だけ使用でき、登録完了後は JWT cookie が設定され Dashboard へリダイレクトされなければならない（MUST）。既に passkey 登録済みのオペレーターは setup token 登録を利用できず、Dashboard へリダイレクトされなければならない（MUST）。
+`/operator-setup` route は browser WebAuthn API と Admin backend の same-origin `/api/v1/auth/operator-setup/*` API を使って、追加オペレーターの初回 passkey 登録を SHALL 提供する。setup token の検証、challenge 保存、passkey 登録、session 発行は Admin backend が実行し、Admin frontend は平文 token を永続 storage、telemetry、log に保存してはならない（MUST NOT）。setup token が無効、期限切れ、消費済み、または登録済み operator に属する場合、UI は token 状態を区別しない汎用 error を表示しなければならない（SHALL）。
 
 **Customer Context**
 
-admin が追加したオペレーターはまだ passkey credential を持たない。メール配送は対象外のため、admin が安全な別経路で渡した one-time setup token を使って初回登録する。
+admin が追加したオペレーターはまだ passkey credential を持たない。admin が安全な別経路で渡した one-time setup token を使って初回登録する。静的 Admin frontend は token secret を長く保持せず、検証は Admin backend に委譲する。
 
-#### Scenario: setup token で追加オペレーターの初回 passkey を登録できる (ADMIN-AUTH-FE-S019)
+#### Scenario: setup token エラーは秘匿的に表示される (ADMIN-AUTH-FE-S029)
 
-- **GIVEN** 追加オペレーターが one-time setup token を持つ
-- **WHEN** `/operator-setup` で正しい token を入力し WebAuthn 登録を完了する
-- **THEN** JWT cookie が設定され Dashboard にリダイレクトされる
-
-#### Scenario: 不正な setup token では登録できない (ADMIN-AUTH-FE-S020)
-
-- **GIVEN** setup token が不正である
-- **WHEN** `/operator-setup` で token を入力する
-- **THEN** non-revealing なエラーが表示され、登録に進めない
-
-#### Scenario: 既に passkey 登録済みのオペレーターは setup token 登録を利用できない (ADMIN-AUTH-FE-S021)
-
-- **GIVEN** オペレーターが既に passkey 登録済みである
-- **WHEN** `/operator-setup` にアクセスする
-- **THEN** Dashboard にリダイレクトされる
+- **GIVEN** Operator setup token が無効、期限切れ、または消費済みである
+- **WHEN** `/operator-setup` で token を送信する
+- **THEN** UI は token 状態を区別しない汎用 error を表示する

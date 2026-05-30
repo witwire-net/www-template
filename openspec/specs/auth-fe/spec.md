@@ -273,94 +273,58 @@ session expiry と logout の導線は、expired / revoked session と missing s
 
 ### Requirement: クライアントは JWT アクセストークンの有効期限を監視し自動更新する
 
-クライアントは JWT アクセストークンの有効期限を監視し、期限切れ前に自動的に更新しなければならない（MUST）。
+クライアントは JWT accessToken の有効期限を監視し、期限切れ前に自動更新しなければならない（MUST）。クライアントは refreshToken を JavaScript から読める memory、localStorage、sessionStorage、IndexedDB、URL、telemetry、log に保存してはならない（MUST NOT）。refreshToken は `HttpOnly; Secure; SameSite=Lax` Cookie として browser に保持され、refresh request は same-origin `/api/v1/auth/refresh` に credentials を含めて送信されなければならない（SHALL）。refresh 成功時、クライアントは response body の新しい accessToken をメモリ上の対象 session に反映し、refreshToken Cookie の rotation は server response に委ねなければならない（MUST）。
 
 **Customer Context**
 
-利用者はアプリ操作中に認証が突然切れてデータを失う体験を避けたい。クライアントがトークンの残り寿命を把握し、期限切れ前に自動的に更新することで、シームレスなセッション継続が可能になる。
+利用者は操作中に認証が突然切れてデータを失う体験を避けたい。一方で refreshToken を JavaScript から読める場所に保持すると XSS 時の token 窃取リスクが高い。accessToken だけをブラウザーから読める state とし、refreshToken は HttpOnly Cookie に閉じることで安全性と継続利用を両立する。
 
-**Requirement**
+#### Scenario: 期限切れ間近の accessToken は Cookie refresh で更新される (AUTH-FE-S045)
 
-- クライアントは JWT アクセストークンのペイロードをデコードし（署名検証不要）、`exp` クレームを読み取らなければならない（MUST）。
-- アクセストークンの残り有効期限が 1 分未満、または既に期限切れの場合、クライアントは API 呼び出しの前に `POST /api/v1/auth/refresh` を SHALL 呼び出す。
-- クライアントはトークン（アクセストークンおよびリフレッシュトークン）をメモリ上にのみ保持し、localStorage、sessionStorage、IndexedDB、cookie、またはその他の永続ストレージに保存してはならない（MUST NOT）。
-- ブラウザタブまたはアプリを閉じた後、クライアントは以前のトークンを復元せず、未認証状態として正規化しなければならない（MUST）。
-- リフレッシュに失敗した場合（無効なリフレッシュトークン、ネットワークエラー、サーバーエラー）、クライアントは対象セッションを失効として扱い、`/session-expired` へ遷移しなければならない（MUST）。
-- トークン更新中に API 呼び出しが発生した場合、クライアントは更新完了後に順次 API 呼び出しを実行しなければならない（MUST）。更新失敗時は `/session-expired` へ遷移する。
-
-#### Scenario: 期限切れ間近のアクセストークンは自動リフレッシュされる (AUTH-FE-S023)
-
-- **GIVEN** クライアントが有効期限まで 1 分未満のアクセストークンを保持している
+- **GIVEN** クライアントが有効期限まで 1 分未満の accessToken を保持している
 - **WHEN** 保護された API を呼び出そうとする
-- **THEN** クライアントは先に `POST /api/v1/auth/refresh` を実行し、新しいアクセストークンで API を呼び出す
+- **THEN** クライアントは先に credentials を含めて `POST /api/v1/auth/refresh` を実行する
+- **AND** response body の新しい accessToken で API を呼び出す
 
-#### Scenario: 既に期限切れのアクセストークンはリフレッシュ後に API を呼び出す (AUTH-FE-S024)
+#### Scenario: refreshToken はブラウザーから読める storage に保存されない (AUTH-FE-S046)
 
-- **GIVEN** クライアントが期限切れのアクセストークンを保持している
-- **WHEN** 保護された API を呼び出そうとする
-- **THEN** クライアントは `POST /api/v1/auth/refresh` を実行し、成功後に API を呼び出す。リフレッシュ失敗時は `/session-expired` へ遷移する
+- **GIVEN** 利用者が login または refresh に成功する
+- **WHEN** client auth state、localStorage、sessionStorage、IndexedDB、URL state を確認する
+- **THEN** refreshToken 平文は存在せず、accessToken と session metadata だけがブラウザーから読める state に存在する
 
-#### Scenario: トークンは永続ストレージに保存されない (AUTH-FE-S025)
+#### Scenario: refresh 失敗時は対象 session だけを失効扱いにする (AUTH-FE-S047)
 
-- **GIVEN** 利用者がログインしてトークンを受け取る
-- **WHEN** トークンがクライアントに保存される
-- **THEN** トークンはメモリ上にのみ保持され、localStorage、sessionStorage、cookie、URL query、永続ストレージには書き込まれない
-
-#### Scenario: ブラウザ再訪時は未認証状態に正規化される (AUTH-FE-S026)
-
-- **GIVEN** 利用者がトークンを保持した状態でブラウザを閉じる
-- **WHEN** 利用者が再度同じ URL を開く
-- **THEN** クライアントは以前のトークンを復元せず、未認証状態として扱い、`/session-expired` へは遷移しない
+- **GIVEN** client が複数 session を保持している
+- **WHEN** 1 つの session の refresh request が失敗する
+- **THEN** client は対象 session だけを失効扱いにし、他 session の accessToken state は維持する
 
 ### Requirement: クライアントは複数アカウントのセッションを同時に保持・切り替えできる
 
-クライアントはメモリ上で複数アカウントのセッションを同時に保持し、アクティブセッションを切り替えできなければならない（SHALL）。
+クライアントはメモリ上で複数 account session の accessToken と session metadata を同時に保持し、アクティブ session を切り替えできなければならない（SHALL）。ログイン成功時、クライアントは response body の accessToken と session metadata を session list に追加しなければならない（MUST）。refreshToken は HttpOnly Cookie として server が管理するため、クライアントの session list に refreshToken 平文を含めてはならない（MUST NOT）。保護された API 呼び出しはアクティブ session の accessToken を `Authorization: Bearer` header に使用しなければならない（MUST）。refresh が必要な場合、クライアントは対象 session ID を指定して same-origin refresh request を送り、server に Cookie binding の検証と rotation を委ねなければならない（SHALL）。
 
 **Customer Context**
 
-複数アカウントを運用する利用者にとって、都度ログインし直すことなくアカウント間を切り替えられる体験は必須である。各アカウントのセッションは独立して維持され、UI から明示的にアクティブアカウントを選択できる必要がある。
+複数アカウントを運用する利用者にとって、都度ログインし直さずに account を切り替えられる体験は必須である。同時に refreshToken をブラウザーから読める state に入れないことで、XSS 時の被害範囲を抑える。
 
-**Requirement**
+#### Scenario: ログイン毎に accessToken session が追加される (AUTH-FE-S048)
 
-- クライアントはメモリ上で複数の active セッションを同時に保持できなければならない（SHALL）。各セッションは一意のアカウント ID と紐づく。
-- ログインが成功するたびに、クライアントは新しい独立したセッションペア（アクセストークン＋リフレッシュトークン）を既存セッションリストに追加しなければならない（MUST）。
-- クライアントはセッションリストをドメイン状態として管理し、アクティブなセッションを 1 つ選択できなければならない（MUST）。
-- 保護された API 呼び出しは、アクティブに選択されたセッションのアクセストークンを `Authorization: Bearer` ヘッダーに使用しなければならない（MUST）。
-- アクティブセッションの選択はメモリ上にのみ保持され、永続ストレージや URL、サーバー状態に保存してはならない（MUST NOT）。
-- UI は複数の active セッションが存在する場合、アカウント切り替えコントロールを表示しなければならない（MUST）。切り替え操作は再認証を必要としない。
-- ログアウトはアクティブに選択されたセッションのみを対象とし、そのセッションのアクセストークンとリフレッシュトークンをメモリから除去し、`POST /api/v1/auth/logout` を実行してサーバーサイドでも失効させなければならない（MUST）。他のセッションは維持される。
-- セッションリストにアクティブセッションが 1 つもない場合、クライアントは未認証導線へ遷移しなければならない（MUST）。
-- セッション ID、アカウント ID、関連する view model / route state / correlation ID は ULID を使用しなければならない（SHALL）。
+- **GIVEN** 利用者が account A で既に login している
+- **WHEN** 利用者が account B で login する
+- **THEN** account B の accessToken と session metadata が session list に追加される
+- **AND** refreshToken 平文は session list に含まれない
 
-#### Scenario: ログイン毎に新しいセッションが追加される (AUTH-FE-S027)
+#### Scenario: アカウント切り替えで bearer accessToken が変更される (AUTH-FE-S049)
 
-- **GIVEN** 利用者がアカウント A で既にログインしている
-- **WHEN** 利用者がアカウント B でログインする
-- **THEN** アカウント B のセッションがセッションリストに追加され、アカウント A のセッションは維持される
+- **GIVEN** クライアントが account A と account B の session metadata と accessToken を保持している
+- **WHEN** 利用者が UI で account B をアクティブに選択する
+- **THEN** 後続の API 呼び出しは account B の accessToken を使用する
 
-#### Scenario: アカウント切り替えで API 呼び出しのトークンが変更される (AUTH-FE-S028)
+#### Scenario: logout は対象 session の Cookie revoke を server に依頼する (AUTH-FE-S050)
 
-- **GIVEN** クライアントがアカウント A とアカウント B のセッションを保持している
-- **WHEN** 利用者が UI でアカウント B をアクティブに選択する
-- **THEN** 後続の API 呼び出しはアカウント B のアクセストークンを使用し、再認証は不要である
-
-#### Scenario: 複数セッション存在時にアカウント切り替え UI が表示される (AUTH-FE-S029)
-
-- **GIVEN** クライアントが 2 つ以上の active セッションを保持している
-- **WHEN** 認証済みアプリ画面が表示される
-- **THEN** UI はアカウント切り替えコントロールを表示する
-
-#### Scenario: 単一セッションのログアウトは他のセッションを維持する (AUTH-FE-S030)
-
-- **GIVEN** クライアントがアカウント A とアカウント B のセッションを保持している
-- **WHEN** アカウント A をアクティブにしてログアウトする
-- **THEN** アカウント A のセッションはメモリとサーバー両方で失効し、アカウント B のセッションは維持される
-
-#### Scenario: 全セッション消失時は未認証導線へ遷移する (AUTH-FE-S031)
-
-- **GIVEN** クライアントがすべてのセッションをログアウトまたは失効させた
-- **WHEN** セッションリストが空になる
-- **THEN** クライアントは未認証導線へ自動遷移する
+- **GIVEN** クライアントが account A と account B の session を保持している
+- **WHEN** account A をアクティブにして logout する
+- **THEN** client は account A の accessToken state を削除し、server は account A の refreshToken Cookie binding を revoke する
+- **AND** account B の session state は維持される
 
 ## MODIFIED Requirements
 

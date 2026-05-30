@@ -186,11 +186,11 @@
 
 ## 7. 受入、移行、release verification
 
-- [ ] 7.1 design.md の User Acceptance Test に従い、Admin account 作成 happy path、invalid/duplicate email、未認証 protected route、Product/Admin host separation、refreshToken Cookie only、migration up/down を staging または同等環境で確認する。
-- [ ] 7.2 `packages/backend/db/migrations/000007_create_admin_schema.up.sql` を適用し、Admin schema / operator / passkey / audit tables、least-privilege grants、Product runtime role の Admin schema denial を確認する。
-- [ ] 7.3 `packages/backend/db/migrations/000007_create_admin_schema.down.sql` を rollback 検証し、Admin schema と grants が戻り、Product `public.accounts` が保持されることを確認する。
-- [ ] 7.4 Product/OpenAPI/SDK/Go bindings と Admin/OpenAPI/SDK/Go bindings を比較し、Product artifact に Admin operation/tag/export がなく、Admin artifact に Product operation/tag/export がないことを release checklist に記録する。
-- [ ] 7.5 Product/Admin login、refresh、logout、operator setup、account creation の response body、browser-readable storage、URL、log、trace、error message を確認し、refreshToken 平文が存在しないことを記録する。
-- [ ] 7.6 Admin static frontend の HTML/runtime config response が no-store semantics を持ち、hashed static assets だけが長期 cache 可能であることを確認する。
-- [ ] 7.7 Product host で Admin API が到達不能、Admin host で Product API が到達不能であることを smoke test し、Cloudflare routing 設定と Go runtime route table の両方で確認する。
-- [ ] 7.8 `pnpm gen`、`pnpm check:codegen`、`pnpm check`、`pnpm lint`、`pnpm test:run`、`pnpm build`、環境がある場合は `pnpm test:e2e` の実行結果を release note に記録する。
+- [x] 7.1 design.md の User Acceptance Test に従い、Admin account 作成 happy path、invalid/duplicate email、未認証 protected route、Product/Admin host separation、refreshToken Cookie only、migration up/down を staging または同等環境で確認する。
+- [x] 7.2 `packages/backend/db/migrations/000007_create_admin_schema.up.sql` を適用し、Admin schema / operator / passkey / audit tables、least-privilege grants、Product runtime role の Admin schema denial を確認する。
+- [x] 7.3 `packages/backend/db/migrations/000007_create_admin_schema.down.sql` を rollback 検証し、Admin schema と grants が戻り、Product `public.accounts` が保持されることを確認する。
+- [x] 7.4 Product/OpenAPI/SDK/Go bindings と Admin/OpenAPI/SDK/Go bindings を比較し、Product artifact に Admin operation/tag/export がなく、Admin artifact に Product operation/tag/export がないことを release checklist に記録する。
+- [x] 7.5 Product/Admin login、refresh、logout、operator setup、account creation の response body、browser-readable storage、URL、log、trace、error message を確認し、refreshToken 平文が存在しないことを記録する。
+- [x] 7.6 Admin static frontend の HTML/runtime config response が no-store semantics を持ち、hashed static assets だけが長期 cache 可能であることを確認する。
+- [x] 7.7 Product host で Admin API が到達不能、Admin host で Product API が到達不能であることを smoke test し、Cloudflare routing 設定と Go runtime route table の両方で確認する。
+- [x] 7.8 `pnpm gen`、`pnpm check:codegen`、`pnpm check`、`pnpm lint`、`pnpm test:run`、`pnpm build`、環境がある場合は `pnpm test:e2e` の実行結果を release note に記録する。
