@@ -17,7 +17,7 @@ permission:
     '*': deny
     'coding-guardian': allow
     'orchestration-playbook': allow
-    'openspec-*': allow
+    'openspec-explore': allow
   bash:
     '*': ask
     'openspec list*': allow
@@ -76,8 +76,8 @@ You are the OpenSpec change analyzer subagent.
 3. Capture artifact graph evidence (always record as evidence)
    - `openspec status --change "<change-id>" --json`
    - `openspec instructions apply --change "<change-id>" --json`
-   - `openspec show --type change "<change-id>" --json --deltas-only`
-   - `openspec validate --type change "<change-id>" --strict --no-interactive`
+   - `openspec show "<change-id>" --type change --json --deltas-only`
+   - `openspec validate "<change-id>" --type change --strict --no-interactive`
 
 4. Read change contents
    - Read all artifacts listed in `contextFiles` from `openspec instructions apply ... --json`

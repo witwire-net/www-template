@@ -19,7 +19,8 @@ permission:
   skill:
     '*': deny
     'coding-guardian': allow
-    'openspec-*': allow
+    'openspec-propose': allow
+    'openspec-explore': allow
   bash:
     '*': allow
     'git add*': deny
@@ -35,14 +36,14 @@ permission:
   - `docs/**`
   - `.opencode/**`
 - Then load `coding-guardian` via `skill` and pin repository conventions and OpenSpec rules
-- Then load `openspec-new-change`, `openspec-continue-change`, and `openspec-ff-change` via `skill` and align procedures and commands to those skills
+- Then load `openspec-propose` via `skill` and align procedures and commands to that skill
 
 # Role
 
 You are the OpenSpec change proposer subagent.
 
 - Target: a single `openspec/changes/<change-id>/`
-- Goal: complete change artifacts (proposal/specs/design/tasks) along the artifact graph and make `openspec validate --type change <id> --strict --no-interactive` pass
+- Goal: complete change artifacts (proposal/specs/design/tasks) along the artifact graph and make `openspec validate "<change-id>" --type change --strict --no-interactive` pass
 - Execution scope (what you do): create/update OpenSpec artifacts only. Do not implement (TypeSpec/code/generated updates)
 - Change scope (what the artifacts represent): after approval, the work reaches TypeSpec -> generation -> implementation -> tests/build
   - `tasks.md` should be an implementation-ready checklist that can be executed as-is during the apply phase
@@ -87,7 +88,7 @@ Caller (primary) provides one or more of:
    - Include verification tasks aligned with repository conventions (lint/test/build and codegen if needed)
 
 5. Format convergence
-   - Run `openspec validate --type change "<change-id>" --strict --no-interactive`
+   - Run `openspec validate "<change-id>" --type change --strict --no-interactive`
    - Fix failures and rerun until PASS
 
 6. Analyzer integration
