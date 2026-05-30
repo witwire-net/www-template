@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <zookeeper>
+        <node index="1">
+            <host>zookeeper-1</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+
+    <remote_servers>
+        <cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster>
+    </remote_servers>
+
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+
+    <macros>
+        <shard>01</shard>
+        <replica>example01-01-1</replica>
+    </macros>
+
+    <user_defined_executable_functions_config>*function.xml</user_defined_executable_functions_config>
+    <user_scripts_path>/var/lib/clickhouse/user_scripts/</user_scripts_path>
+
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <status_info>true</status_info>
+    </prometheus>
+</clickhouse>

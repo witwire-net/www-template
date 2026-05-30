@@ -42,16 +42,8 @@ services:
       - pnpm-store:/home/node/.local/share/pnpm/store
       - agent-browser-cache:/home/node/.agent-browser
 
-  admin:
-    build:
-      context: ..
-      dockerfile: packages/admin/app/Dockerfile
-    ports:
-      - '3001:80'
-    restart: unless-stopped
-
   postgres:
-    image: postgres:18.3
+    image: postgres:18.4
     environment:
       POSTGRES_DB: www-template
       POSTGRES_PASSWORD: www-template
@@ -106,155 +98,159 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
 
+  signoz-init-clickhouse:
+    image: clickhouse/clickhouse-server:25.5.6
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        version="v0.0.1"
+        node_os=$$(uname -s | tr '[:upper:]' '[:lower:]')
+        node_arch=$$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
+        echo "Fetching histogram-binary for $${node_os}/$${node_arch}"
+        cd /tmp
+        wget -O histogram-quantile.tar.gz "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F$${version}/histogram-quantile_$${node_os}_$${node_arch}.tar.gz"
+        tar -xvzf histogram-quantile.tar.gz
+        mv histogram-quantile /var/lib/clickhouse/user_scripts/histogramQuantile
+        chmod +x /var/lib/clickhouse/user_scripts/histogramQuantile
+    restart: on-failure
+    volumes:
+      - signoz-clickhouse-user-scripts:/var/lib/clickhouse/user_scripts
+
   signoz-zookeeper:
-    image: bitnami/zookeeper:3.7.1
-    environment:
-      ALLOW_ANONYMOUS_LOGIN: 'yes'
-      ZOO_AUTOPURGE_INTERVAL: '1'
-      ZOO_SERVER_ID: '1'
+    image: signoz/zookeeper:3.7.1
+    user: root
     hostname: zookeeper-1
     networks:
       default:
         aliases:
           - zookeeper-1
+    environment:
+      ZOO_SERVER_ID: '1'
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+      ZOO_AUTOPURGE_INTERVAL: '1'
+      ZOO_ENABLE_PROMETHEUS_METRICS: 'yes'
+      ZOO_PROMETHEUS_METRICS_PORT_NUMBER: '9141'
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null']
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
-    user: root
     volumes:
       - signoz-zookeeper-data:/bitnami/zookeeper
 
   signoz-clickhouse:
-    image: clickhouse/clickhouse-server:24.1.2-alpine
+    image: clickhouse/clickhouse-server:25.5.6
     depends_on:
+      signoz-init-clickhouse:
+        condition: service_completed_successfully
       signoz-zookeeper:
-        condition: service_started
+        condition: service_healthy
+    hostname: clickhouse
+    networks:
+      default:
+        aliases:
+          - clickhouse
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: '1'
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', '0.0.0.0:8123/ping']
       interval: 30s
       timeout: 5s
       retries: 3
-    hostname: clickhouse
     logging:
       options:
         max-file: '3'
         max-size: 50m
-    networks:
-      default:
-        aliases:
-          - clickhouse
     restart: unless-stopped
     tty: true
     ulimits:
       nofile:
-        hard: 262144
         soft: 262144
+        hard: 262144
       nproc: 65535
     volumes:
-      - ./signoz/clickhouse-cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./signoz/clickhouse-signoz.xml:/etc/clickhouse-server/config.d/signoz.xml:ro
+      - ./signoz/clickhouse-users.xml:/etc/clickhouse-server/users.d/signoz-users.xml:ro
       - ./signoz/custom-function.xml:/etc/clickhouse-server/custom-function.xml:ro
+      - signoz-clickhouse-user-scripts:/var/lib/clickhouse/user_scripts
       - signoz-clickhouse-data:/var/lib/clickhouse
 
-  signoz-otel-migrator-sync:
-    image: signoz/signoz-schema-migrator:0.111.24
-    command: ['sync', '--dsn=tcp://clickhouse:9000', '--up=']
+  signoz:
+    image: signoz/signoz:v0.126.1
     depends_on:
       signoz-clickhouse:
         condition: service_healthy
-    restart: 'no'
-
-  signoz-otel-migrator-async:
-    image: signoz/signoz-schema-migrator:0.111.24
-    command: ['async', '--dsn=tcp://clickhouse:9000', '--up=']
-    depends_on:
-      signoz-clickhouse:
-        condition: service_healthy
-      signoz-otel-migrator-sync:
-        condition: service_completed_successfully
-    restart: 'no'
-
-  signoz-query-service:
-    image: signoz/query-service:0.69.0
-    command:
-      - -config=/root/config/query-service.yml
-      - --use-logs-new-schema=true
-      - --use-trace-new-schema=true
-    depends_on:
-      signoz-clickhouse:
-        condition: service_healthy
-      signoz-otel-migrator-sync:
-        condition: service_completed_successfully
+    hostname: signoz
+    networks:
+      default:
+        aliases:
+          - signoz
     environment:
-      ALERTMANAGER_API_PREFIX: http://alertmanager:9093/api/
-      ClickHouseUrl: tcp://clickhouse:9000
-      DASHBOARDS_PATH: /root/config/dashboards
-      DEPLOYMENT_TYPE: docker-standalone-amd
-      GODEBUG: netdns=go
-      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
-      STORAGE: clickhouse
-      TELEMETRY_ENABLED: 'false'
+      SIGNOZ_ALERTMANAGER_PROVIDER: signoz
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://clickhouse:9000
+      SIGNOZ_SQLSTORE_SQLITE_PATH: /var/lib/signoz/signoz.db
+      SIGNOZ_TOKENIZER_JWT_SECRET: secret
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', 'localhost:8080/api/v1/health']
       interval: 30s
       timeout: 5s
       retries: 3
-    hostname: query-service
-    networks:
-      default:
-        aliases:
-          - query-service
+    ports:
+      - '3301:8080'
     restart: unless-stopped
     volumes:
-      - ./signoz/alerts.yml:/root/config/alerts.yml:ro
-      - ./signoz/dashboards:/root/config/dashboards:ro
-      - ./signoz/query-service.yml:/root/config/query-service.yml:ro
       - signoz-query-data:/var/lib/signoz
 
-  signoz-alertmanager:
-    image: signoz/alertmanager:0.23.7
-    command:
-      - --queryService.url=http://query-service:8085
-      - --storage.path=/data
-    depends_on:
-      signoz-query-service:
-        condition: service_healthy
-    hostname: alertmanager
-    networks:
-      default:
-        aliases:
-          - alertmanager
-    restart: unless-stopped
-    volumes:
-      - signoz-alertmanager-data:/data
-
-  signoz-frontend:
-    image: signoz/frontend:0.69.0
-    depends_on:
-      signoz-alertmanager:
-        condition: service_started
-      signoz-query-service:
-        condition: service_healthy
-    ports:
-      - '3301:3301'
-    restart: unless-stopped
-    volumes:
-      - ./signoz/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-
-  signoz-otel-collector:
-    image: signoz/signoz-otel-collector:0.111.24
-    command:
-      - --config=/etc/otel-collector-config.yaml
-      - --manager-config=/etc/manager-config.yaml
-      - --copy-path=/var/tmp/collector-config.yaml
-      - --feature-gates=-pkg.translator.prometheus.NormalizeName
+  signoz-telemetrystore-migrator:
+    image: signoz/signoz-otel-collector:v0.144.4
     depends_on:
       signoz-clickhouse:
         condition: service_healthy
-      signoz-otel-migrator-sync:
-        condition: service_completed_successfully
-      signoz-query-service:
-        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - |
+        /signoz-otel-collector migrate bootstrap &&
+        /signoz-otel-collector migrate sync up &&
+        /signoz-otel-collector migrate async up
     environment:
-      LOW_CARDINAL_EXCEPTION_GROUPING: 'false'
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN: tcp://clickhouse:9000
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER: cluster
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_REPLICATION: 'true'
+      SIGNOZ_OTEL_COLLECTOR_TIMEOUT: 10m
+    restart: on-failure
+
+  signoz-otel-collector:
+    image: signoz/signoz-otel-collector:v0.144.4
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+      signoz:
+        condition: service_healthy
+      signoz-telemetrystore-migrator:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - |
+        /signoz-otel-collector migrate sync check &&
+        /signoz-otel-collector \
+          --config=/etc/otel-collector-config.yaml \
+          --manager-config=/etc/manager-config.yaml \
+          --copy-path=/var/tmp/collector-config.yaml
+    environment:
       OTEL_RESOURCE_ATTRIBUTES: host.name=signoz-host,os.type=linux
+      LOW_CARDINAL_EXCEPTION_GROUPING: 'false'
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN: tcp://clickhouse:9000
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER: cluster
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_REPLICATION: 'true'
+      SIGNOZ_OTEL_COLLECTOR_TIMEOUT: 10m
     hostname: signoz-otel-collector
     ports:
       - '4317:4317'
@@ -274,7 +270,7 @@ volumes:
   postgres18-data:
   valkey-data:
   agent-browser-cache:
-  signoz-alertmanager-data:
   signoz-clickhouse-data:
+  signoz-clickhouse-user-scripts:
   signoz-query-data:
   signoz-zookeeper-data:
