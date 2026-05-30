@@ -18,6 +18,7 @@
 - Playwright のブラウザをインストール
 - `agent-browser` と Chrome for Testing を利用可能
 - `packages/backend/go.mod` が存在すれば依存取得を実行
+- `pnpm migrate:up` を実行し、backend migration と Admin Console 用 login role 作成を適用
 
 ## サービス接続先
 
@@ -42,7 +43,8 @@
 
 ## 主要な環境変数
 
-- `DATABASE_URL=postgres://template:template@postgres:5432/template?sslmode=disable`
+- `DATABASE_URL=postgres://www-template:www-template@postgres:5432/www-template?sslmode=disable`
+- `ADMIN_CONFIG_PATH=/workspaces/www-template/.config/local.admin.toml`
 - `VALKEY_URL=redis://valkey:6379/0`
 - `OPENSEARCH_URL=http://opensearch:9200`
 - `R2_ENDPOINT=http://minio:9000`

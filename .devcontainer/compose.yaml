@@ -57,7 +57,6 @@ services:
     restart: unless-stopped
     volumes:
       - postgres18-data:/var/lib/postgresql
-      - ./initdb:/docker-entrypoint-initdb.d:ro
 
   valkey:
     image: valkey/valkey:9.0.3-alpine
