@@ -143,6 +143,9 @@ services:
 
   signoz-clickhouse:
     image: clickhouse/clickhouse-server:25.5.6
+    entrypoint:
+      - /bin/bash
+      - /etc/signoz/clickhouse-entrypoint.sh
     depends_on:
       signoz-init-clickhouse:
         condition: service_completed_successfully
@@ -172,9 +175,12 @@ services:
         hard: 262144
       nproc: 65535
     volumes:
-      - ./signoz/clickhouse-signoz.xml:/etc/clickhouse-server/config.d/signoz.xml:ro
-      - ./signoz/clickhouse-users.xml:/etc/clickhouse-server/users.d/signoz-users.xml:ro
-      - ./signoz/custom-function.xml:/etc/clickhouse-server/custom-function.xml:ro
+      - type: bind
+        source: ./signoz
+        target: /etc/signoz
+        read_only: true
+        bind:
+          create_host_path: false
       - signoz-clickhouse-user-scripts:/var/lib/clickhouse/user_scripts
       - signoz-clickhouse-data:/var/lib/clickhouse
 
@@ -240,8 +246,8 @@ services:
       - |
         /signoz-otel-collector migrate sync check &&
         /signoz-otel-collector \
-          --config=/etc/otel-collector-config.yaml \
-          --manager-config=/etc/manager-config.yaml \
+          --config=/etc/signoz/otel-collector-config.yaml \
+          --manager-config=/etc/signoz/otel-collector-opamp-config.yaml \
           --copy-path=/var/tmp/collector-config.yaml
     environment:
       OTEL_RESOURCE_ATTRIBUTES: host.name=signoz-host,os.type=linux
@@ -256,8 +262,12 @@ services:
       - '4318:4318'
     restart: unless-stopped
     volumes:
-      - ./signoz/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-      - ./signoz/otel-collector-opamp-config.yaml:/etc/manager-config.yaml:ro
+      - type: bind
+        source: ./signoz
+        target: /etc/signoz
+        read_only: true
+        bind:
+          create_host_path: false
 
 volumes:
   go-build-cache:

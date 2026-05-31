@@ -93,7 +93,6 @@ you must translate the Credo below into English and **repeat it back verbatim.**
 
 - SigNoz UI: `http://localhost:3301`
 - SigNoz OTLP endpoint: `http://localhost:4317` (gRPC), `http://localhost:4318` (HTTP)
-- Start observability stack: `pnpm dev:observability`
 - Go backend exports traces and metrics to SigNoz via OTLP gRPC
 - Frontend browsers send traces to SigNoz via `PUBLIC_OTEL_COLLECTOR_URL`
 
