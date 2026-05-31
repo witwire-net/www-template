@@ -22,6 +22,8 @@ permission:
     'git add*': deny
     'git commit*': deny
     'git push*': deny
+    'git checkout*': deny
+    'git reset*': deny
     'git status*': allow
     'git diff*': allow
     'git log*': allow
@@ -65,6 +67,7 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 
 - Do not use the `task` tool except to call `unit/frontend/reviewer` or `.opencode/agents/researcher.md` (runtime alias: `researcher`); no other delegation and no self-calls
 - Do not stage or commit changes (`git add`, `git commit`, `git push` are denied)
+- If the Git worktree contains diffs from other tasks, users, or agents, you must respect those changes and must not discard, revert, overwrite, checkout, reset, clean, or otherwise remove them for any reason. When your task overlaps with those diffs, make the smallest compatible edit that preserves their intent and existing behavior instead of trying to clean the tree.
 - Follow all guardrails enforced by `coding-guardian`
 - Stay within frontend responsibility: `packages/frontend` and `packages/web`
 - Treat `packages/web` as the public landing/public site surface; it may depend on `packages/frontend/ui` only
