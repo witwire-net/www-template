@@ -8,14 +8,16 @@
 - Admin Console 用に HttpOnly operator credential container Cookie と HttpOnly operator refresh Cookie を発行し、CSRF token、active operator auth context metadata、switchable operator auth contexts だけをブラウザーから読める memory state に渡す。
 - Product API / mobile / CLI / SDK 用に Bearer accessToken と refreshToken を response body で返す明示 mode を維持する。
 - Admin API / automation client 用に Bearer operator accessToken と refreshToken を response body で返す明示 mode を追加する。
-- Product 保護 route で Cookie credential と `Authorization: Bearer` credential の同時提示を拒否する。
-- Admin 保護 route で Cookie credential と `Authorization: Bearer` credential の同時提示を拒否する。
+- Product 保護 route で access credential Cookie と `Authorization: Bearer <accessToken>` の同時提示を拒否する。
+- Admin 保護 route で operator access credential Cookie と `Authorization: Bearer <operator accessToken>` の同時提示を拒否する。
 - Product/Admin protected route は Cookie / Bearer のどちらの credential transport でも server-issued `X-Auth-Context-Id` を auth context selector として受け取り、credential がその selector を利用できる場合だけ account/session または operator/session context を束縛する。
-- Cookie credential を使う state-changing request に Origin 検証と session-bound `X-CSRF-Token` 検証を追加する。
+- Product/Admin refresh route は protected route の exactly-one access credential 判定から独立し、refresh credential だけを session continuation credential として扱う。
+- Access credential は Product/Admin とも短命 TTL を発行時に固定し、通常の protected request で sliding extension しない。refresh rotation だけが新しい access credential と新しい refresh credential を発行する。
+- Refresh endpoint を除く protected Cookie access-credential state-changing request に Origin 検証と session-bound `X-CSRF-Token` 検証を追加する。
 - `auth-fe` の Web auth state を accessToken memory state から Cookie + `X-Auth-Context-Id` + CSRF memory state へ移行する。
 - `admin-auth-fe` の Admin auth state を operator accessToken memory state から Cookie + `X-Auth-Context-Id` + CSRF memory state へ移行する。
 - TypeSpec source を更新し、OpenAPI / frontend SDK / Go bindings を `pnpm gen` で再生成する。
-- Scenario ID `AUTH-BE-S060` / `AUTH-BE-S062` / `AUTH-BE-S063` / `AUTH-BE-S073` から `AUTH-BE-S077`、`AUTH-FE-S045` から `AUTH-FE-S054`、`ADMIN-AUTH-BE-S056` から `ADMIN-AUTH-BE-S074`、`ADMIN-AUTH-FE-S027` から `ADMIN-AUTH-FE-S037`、`ADMIN-CONSOLE-BE-S056` から `ADMIN-CONSOLE-BE-S058`、`ADMIN-CONSOLE-BE-S068`、`ADMIN-CONSOLE-BE-S069` を中心に backend / frontend / admin test を追加・更新する。
+- Scenario ID `AUTH-BE-S060` / `AUTH-BE-S062` / `AUTH-BE-S063` / `AUTH-BE-S073` から `AUTH-BE-S081`、`AUTH-FE-S045` から `AUTH-FE-S054`、`ADMIN-AUTH-BE-S056` から `ADMIN-AUTH-BE-S078`、`ADMIN-AUTH-FE-S027` から `ADMIN-AUTH-FE-S037`、`ADMIN-CONSOLE-BE-S056` から `ADMIN-CONSOLE-BE-S058`、`ADMIN-CONSOLE-BE-S068`、`ADMIN-CONSOLE-BE-S069` を中心に backend / frontend / admin test を追加・更新する。
 
 ### Out of Scope
 
@@ -27,11 +29,14 @@
 
 - `packages/typespec/main.tsp` が API contract の source of truth であり、生成 artifact は `pnpm gen` で更新する。
 - Product Web と Product API、Admin Console と Admin API はそれぞれの origin で same-origin credential request を使える。
-- Product Web 認証 Cookie 名は `access_token` と `refresh_token` に統一する。`access_token` は browser credential container を指し、protected `/api/v1/*` に送信され、`refresh_token` は auth refresh/logout に必要な path に限定する。
-- Admin Console 認証 Cookie 名は `admin_access_token` と `admin_refresh_token` に統一する。`admin_access_token` は operator credential container を指し、Admin origin の protected `/api/v1/*` に送信され、`admin_refresh_token` は Admin auth refresh/logout に必要な path に限定する。
+- Product Web 認証 Cookie 名は `access_token` と `refresh_token` に統一する。`access_token` は browser credential container を指し、protected `/api/v1/*` に送信される。`refresh_token` は `Path=/api/v1/auth/refresh` 相当の refresh endpoint 限定 Path にし、通常の protected API へ長寿命 credential を送信してはならない。
+- Admin Console 認証 Cookie 名は `admin_access_token` と `admin_refresh_token` に統一する。`admin_access_token` は operator credential container を指し、Admin origin の protected `/api/v1/*` に送信される。`admin_refresh_token` は Admin refresh endpoint 限定 Path にし、通常の protected Admin API へ長寿命 credential を送信してはならない。
+- Browser JavaScript は `Cookie` header を個別制御できない。`access_token` / `admin_access_token` が refresh endpoint に同送される場合でも、refresh handler は access credential を無視し、refresh credential と request body の `credentialMode` だけで refresh flow を判定する。
+- Bearer refresh は `Authorization` header ではなく body の `refreshToken` を使う。Bearer refresh request に `Authorization` header が存在する場合は access credential と refresh credential の混同を避けるため fail-close で拒否する。
+- Access credential TTL は server clock で `issuedAt + accessCredentialTTL` として計算し、Cookie `Max-Age` はその TTL を超えてはならない。初期値は 15 分を基準にし、Product/Admin の設定値は 0 以下を fail-close で拒否する。
 - CSRF token は session-bound opaque secret として発行し、hash を session metadata に保存する。
 - `X-Auth-Context-Id` は server-issued opaque ULID selector とし、Cookie transport では credential container の auth context registry、Bearer transport では token の account/session または operator/session claims と照合する。
-- Cookie auth の unsafe method は Origin header を必須にし、configured allowed origin と完全一致で検証する。
+- Refresh endpoint を除く protected Cookie access-credential unsafe method は Origin header を必須にし、configured allowed origin と完全一致で検証する。
 - 既存 Valkey session metadata に CSRF hash がない場合、その session は Cookie mutation を許可しない。互換 fallback は置かず、必要なら再ログインで新 session を発行する。
 - `pnpm` script 経由の検証だけを使う。直接 `go test` / `tsc` / `vitest` / `svelte-check` は呼び出さない。
 
@@ -309,9 +314,9 @@ sequenceDiagram
   W->>API: Cookie + X-Auth-Context-Id + X-CSRF-Token 付きで PATCH /api/v1/account/settings
   API->>S: access cookie + auth context 所属 + csrf hash を検証
   API-->>W: 200 no-store
-  W->>API: refresh cookie 付きで POST /api/v1/auth/refresh { credentialMode: "cookie" }
-  API->>S: refresh を原子的に rotation し、新しい csrf hash を保存
-  API-->>W: rotation 後の Cookie と { authContextId, csrfToken, session metadata, accountSetting }
+  W->>API: refresh cookie と同送されうる access cookie 付きで POST /api/v1/auth/refresh { credentialMode: "cookie" }
+  API->>S: access cookie を認可材料として使わず、refresh を原子的に rotation し、新しい access credential TTL と csrf hash を保存
+  API-->>W: rotation 後の access/refresh Cookie と { authContextId, csrfToken, session metadata, accountSetting }
   A->>AA: POST /api/v1/auth/passkey/finish { credentialMode: "cookie" }
   AA->>S: operator credential container + auth context + refresh hash + csrf hash を Admin namespace に保存
   AA-->>A: Set-Cookie admin_access_token; Set-Cookie admin_refresh_token; { authContextId, csrfToken, operator, session metadata }
@@ -398,46 +403,46 @@ classDiagram
 - Purpose / Responsibility: Product/Admin auth 契約で mode を明示し、Cookie response / Bearer response / auth context selector を型で分ける。
 - Public API: `AuthCredentialMode`、`CookieSessionResponse`、`BearerSessionResponse`、`AdminCookieSessionResponse`、`AdminBearerSessionResponse`、`RefreshTokenRequest`、`RefreshTokenResponse`、`X-Auth-Context-Id` parameter、Cookie auth security scheme、Bearer auth security scheme、`X-CSRF-Token` parameter 群。
 - Key Data Structures: `credentialMode: "cookie" | "bearer"`、`authContextId`、`authContexts`、`csrfToken`、Product session metadata、Admin operator/session metadata、Bearer mode の accessToken / refreshToken。
-- Key Flows: Product/Admin login/register/setup/refresh は request mode によって Cookie transport response または Bearer transport response を返す。
+- Key Flows: Product/Admin login/register/setup/refresh は request mode によって Cookie transport response または Bearer transport response を返す。Cookie refresh は refresh endpoint 限定 Cookie を読み、同送される access Cookie を無視し、既存の `X-Auth-Context-Id` / CSRF token を要求しない。Bearer refresh は body refreshToken だけを読み、Authorization header を refresh credential として扱わない。
 - Dependencies: 生成 OpenAPI / SDK / Go bindings。
 - Error Handling: credential の曖昧さ・欠落は `AuthFailureResponse` に正規化する。
 - Testing Strategy: `pnpm check:codegen` で生成物の drift を検出する。
 - Non-Functional: no-store header を契約上維持する。
 - Performance: 契約 shape の変更だけなので追加 network hop はない。
-- Security: Cookie mode では token body 露出を禁止し、Bearer mode では `X-Auth-Context-Id` と token claims の一致を必須にする。
+- Security: Cookie mode では token body 露出を禁止し、refresh Cookie Path を refresh endpoint に限定する。Bearer mode では `X-Auth-Context-Id` と token claims の一致を必須にする。
 
 #### packages/backend/internal/adapter/http/product
 
 - Purpose / Responsibility: HTTP request から credential source を exactly one として抽出し、`X-Auth-Context-Id` selector、CSRF/Origin を handler 前に検証する。
 - Public API: `NewRouter`、`appAuthMiddleware`、strict server handler。
 - Key Data Structures: credential source enum、Product resolved auth context、auth context selector、Cookie option、CSRF header value。
-- Key Flows: request credential 抽出 -> ambiguity 検査 -> `X-Auth-Context-Id` 所属検証 -> session 認可 -> 必要時の CSRF 検証 -> handler context binding。
+- Key Flows: protected request credential 抽出 -> access credential ambiguity 検査 -> `X-Auth-Context-Id` 所属検証 -> session 認可 -> 必要時の CSRF 検証 -> handler context binding。refresh request はこの protected middleware とは別に refresh credential を検証し、同送 access Cookie を認可材料にしない。
 - Dependencies: `application.AuthService`、`application.TokenService`、生成 `openapi` type。
 - Error Handling: missing credential は `unauthenticated`、expired/revoked は `session-expired`、suspended は `account-suspended`、internal は `internal-error`。
 - Testing Strategy: `AUTH-BE-S060` / `AUTH-BE-S074` / `AUTH-BE-S075` / `AUTH-BE-S076` / `AUTH-BE-S077` を router test で固定する。
 - Non-Functional: すべての auth/protected response は `Cache-Control: no-store` を維持する。
 - Performance: Cookie/JWT verification は request ごとに一定量で、CSRF hash compare は local session metadata 検査に閉じる。
-- Security: ambiguous credentials、missing/foreign auth context selector、invalid Origin、missing CSRF、nil dependencies は fail-close する。
+- Security: protected route の ambiguous access credentials、missing/foreign auth context selector、invalid Origin、missing CSRF、nil dependencies は fail-close する。refresh route では既存の selector / CSRF を要求せず、unexpected Authorization header を fail-close し、browser が自動送信した access Cookie は無視する。
 
 #### packages/backend/internal/application
 
 - Purpose / Responsibility: Product account session credential、Admin operator session credential、auth context selector を発行・refresh・revoke し、CSRF binding を session lifecycle と合わせる。
 - Public API: `AuthService.FinishPasskeyAuthentication`、`AuthService.RegisterPasskey`、`AuthService.AuthorizeSession`、`TokenService.Issue`、`TokenService.RefreshWithAccountID`。
 - Key Data Structures: `AuthSession`、`OperatorSession`、`AuthContext`、`SessionMetadata`、`RefreshTokenRecord`、CSRF token/hash。
-- Key Flows: session 発行 -> credential transport 生成 -> auth context selector 生成 -> refresh credential 生成 -> Cookie mode 用 CSRF token 生成 -> metadata/hash 保存 -> mode 別 result 返却。
+- Key Flows: session 発行 -> access credential TTL を server clock で固定 -> credential transport 生成 -> auth context selector 生成 -> refresh credential 生成 -> Cookie mode 用 CSRF token 生成 -> metadata/hash 保存 -> mode 別 result 返却。
 - Dependencies: domain token signing、session store、refresh token store、account repository。
 - Error Handling: store unavailable と generation failure は `ErrInternalError` を返し、token theft detection は refresh family を revoke する。
 - Testing Strategy: mode 別 issue/refresh と CSRF hash persistence を unit test で検証する。
 - Non-Functional: plaintext refresh token または CSRF hash を log/trace に出さない。
 - Performance: crypto random generation と HMAC/SHA hashing は issue/refresh ごとの有界処理に留める。
-- Security: CSRF token は opaque とし、保存時は hash-only、validation path では constant-time compare を使う。
+- Security: access credential は通常 request では延命せず、期限切れは `session-expired` とする。CSRF token は opaque とし、保存時は hash-only、validation path では constant-time compare を使う。
 
 #### packages/frontend/domain
 
 - Purpose / Responsibility: Product Web の認証状態を active auth context metadata + switchable auth contexts + CSRF token に限定し、すべての API call を same-origin credential request と `X-Auth-Context-Id` selector にする。
 - Public API: `useAuthSession`、passkey login/recovery/management hooks、account hooks。
 - Key Data Structures: accessToken を持たない `AuthSessionSummary`、`activeAuthContextId`、`authContexts`、`csrfToken`、route intent、AccountSetting snapshot。
-- Key Flows: bootstrap refresh -> active auth context metadata 受け入れ -> credential + `X-Auth-Context-Id` + CSRF 付き API call -> session-expired 時に refresh を 1 回実行 -> retry または route intent 更新。
+- Key Flows: bootstrap refresh -> active auth context metadata 受け入れ -> credential + `X-Auth-Context-Id` + CSRF 付き API call -> access credential の `session-expired` 時に refresh を 1 回実行 -> retry または route intent 更新。frontend は access credential TTL を読み取らず、server response を正とする。
 - Dependencies: 生成 frontend API SDK。
 - Error Handling: `unauthenticated` -> `/login`、`session-expired` -> refresh を 1 回試行してから `/session-expired`、`account-suspended` -> `/account-suspended`。
 - Testing Strategy: `AUTH-FE-S051` / `AUTH-FE-S047` / `AUTH-FE-S054` と既存の session expiry scenario を Vitest で検証する。
@@ -450,7 +455,7 @@ classDiagram
 - Purpose / Responsibility: Admin Console の browser-readable operator accessToken を廃止し、Admin Cookie/Bearer credential transport、`X-Auth-Context-Id` selector、CSRF / Origin validation、same-origin Admin backend `/api/v1/*` へ移行する。
 - Public API: `packages/admin/api` の生成 Admin SDK、Cookie selector request wrapper、Admin Bearer wrapper、`packages/admin/domain` の Admin auth/current/refresh/passkey hook、`packages/admin/app` の静的 route。
 - Key Data Structures: active operator auth context metadata、switchable operator contexts、operator role、CSRF token、HttpOnly operator credential container Cookie、HttpOnly operator refresh Cookie。
-- Key Flows: login/setup -> operator credential/refresh Cookie を受け取る -> body の authContextId、session metadata、CSRF token を memory state に保持 -> current operator request は same-origin Cookie + `X-Auth-Context-Id` -> refresh は HttpOnly refresh Cookie -> mutation は Admin auth context selector と CSRF token を送信する。
+- Key Flows: login/setup -> operator credential/refresh Cookie を受け取る -> body の authContextId、session metadata、CSRF token を memory state に保持 -> current operator request は same-origin Cookie + `X-Auth-Context-Id` -> refresh は HttpOnly refresh Cookie だけを continuation credential とし、同送 access Cookie は無視する -> mutation は Admin auth context selector と CSRF token を送信する。
 - Dependencies: `admin/app -> admin/domain -> admin/api` を保ち、Product `frontend/api`、Product `frontend/domain`、package-local BFF route、raw fetch に依存しない。
 - Error Handling: refresh/current failure、operator inactive、expired/revoked session は protected content を表示せず generic login guidance へ戻す。
 - Testing Strategy: `ADMIN-AUTH-FE-S027` / `ADMIN-AUTH-FE-S028` / `ADMIN-AUTH-FE-S033` / `ADMIN-AUTH-FE-S034` / `ADMIN-AUTH-FE-S035` と `ADMIN-AUTH-BE-S057` / `ADMIN-AUTH-BE-S060` / `ADMIN-AUTH-BE-S061` / `ADMIN-AUTH-BE-S074` を `pnpm test:admin` と backend test で固定する。
@@ -498,17 +503,20 @@ flowchart TD
 
 ### Integration Test (Endpoint)
 
-| IT ID               | Test Name                                                                        | Genre | Category | Summary                                                           | Steps (Test)                                                                          | Expected Behavior                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------- | ----- | -------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| IT-AUTH-BE-HAP-001  | `[AUTH-BE-S060] Cookie login は body token を返さない`                           | be    | HAP      | Cookie mode login の応答形                                        | `credentialMode=cookie` で passkey auth を完了                                        | credential/refresh Cookie が Set-Cookie され、body は authContextId と csrfToken を持ち accessToken/refreshToken を持たない |
-| IT-AUTH-BE-HAP-002  | `[AUTH-BE-S001] Bearer login は token body を返す`                               | be    | HAP      | Bearer mode が外部クライアント向けに利用可能であることを保つ      | `credentialMode=bearer` で passkey auth を finish                                     | body が accessToken/refreshToken を持ち、Product auth Set-Cookie はない                                                     |
-| IT-AUTH-BE-SEC-003  | `[AUTH-BE-S075] Cookie mutation は CSRF を要求する`                              | be    | SEC      | Cookie mutation を CSRF で保護する                                | valid Cookie PATCH を `X-CSRF-Token` なしで送信                                       | handler mutation 前に 403/401 failure になる                                                                                |
-| IT-AUTH-BE-SEC-004  | `[AUTH-BE-S076] Cookie と Bearer の ambiguity は拒否される`                      | be    | SEC      | exactly-one credential source                                     | valid Cookie と valid Bearer を protected route に同時送信                            | failure response になり、session は選択されない                                                                             |
-| IT-AUTH-BE-HAP-005  | `[AUTH-BE-S062] Cookie refresh は Cookie credential を rotation する`            | be    | HAP      | refresh が Cookie credential、auth context、CSRF を rotation する | refresh Cookie 付きで `credentialMode=cookie` を送信                                  | old refresh が consumed になり、新 Cookie、authContextId、csrfToken が返る                                                  |
-| IT-AUTH-BE-SEC-008  | `[AUTH-BE-S078] Product auth context selector の所属外指定は拒否される`          | be    | SEC      | selector は credential 所属検証後だけ使える                       | valid credential と別 account の `X-Auth-Context-Id` を送信                           | 403 `auth-context-forbidden` になり handler は実行されない                                                                  |
-| IT-ADMIN-BE-SEC-006 | `[ADMIN-AUTH-BE-S057] Admin middleware は operator credential Cookie を検証する` | be    | SEC      | Admin backend 認可境界を Cookie + selector にする                 | valid operator credential Cookie と `X-Auth-Context-Id` で protected Admin API を呼ぶ | Admin context に operator/role/session/CSRF binding が設定され、Product auth と Product Authorization header は使われない   |
-| IT-ADMIN-BE-SEC-008 | `[ADMIN-AUTH-BE-S075] Admin auth context selector の所属外指定は拒否される`      | be    | SEC      | Admin selector は credential 所属検証後だけ使える                 | valid Admin credential と別 operator の `X-Auth-Context-Id` を送信                    | 403 `auth-context-forbidden` になり handler は実行されない                                                                  |
-| IT-ADMIN-BE-SEC-007 | `[ADMIN-AUTH-BE-S061] pre-auth Admin passkey start は Origin を検証する`         | be    | SEC      | Admin pre-auth Origin 境界を維持する                              | session-bound CSRF なしで allowlisted Origin から start を呼ぶ                        | Origin / rate limit が検証され、session-bound CSRF 不在だけでは拒否されない                                                 |
+| IT ID               | Test Name                                                                           | Genre | Category | Summary                                                           | Steps (Test)                                                                          | Expected Behavior                                                                                                           |
+| ------------------- | ----------------------------------------------------------------------------------- | ----- | -------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| IT-AUTH-BE-HAP-001  | `[AUTH-BE-S060] Cookie login は body token を返さない`                              | be    | HAP      | Cookie mode login の応答形                                        | `credentialMode=cookie` で passkey auth を完了                                        | credential/refresh Cookie が Set-Cookie され、body は authContextId と csrfToken を持ち accessToken/refreshToken を持たない |
+| IT-AUTH-BE-HAP-002  | `[AUTH-BE-S001] Bearer login は token body を返す`                                  | be    | HAP      | Bearer mode が外部クライアント向けに利用可能であることを保つ      | `credentialMode=bearer` で passkey auth を finish                                     | body が accessToken/refreshToken を持ち、Product auth Set-Cookie はない                                                     |
+| IT-AUTH-BE-SEC-003  | `[AUTH-BE-S075] Cookie mutation は CSRF を要求する`                                 | be    | SEC      | Cookie mutation を CSRF で保護する                                | valid Cookie PATCH を `X-CSRF-Token` なしで送信                                       | handler mutation 前に 403/401 failure になる                                                                                |
+| IT-AUTH-BE-SEC-004  | `[AUTH-BE-S076] access credential Cookie と Bearer の ambiguity は拒否される`       | be    | SEC      | exactly-one access credential source                              | valid access Cookie と valid Bearer を protected route に同時送信                     | failure response になり、session は選択されない                                                                             |
+| IT-AUTH-BE-HAP-005  | `[AUTH-BE-S062] Cookie refresh は Cookie credential を rotation する`               | be    | HAP      | refresh が Cookie credential、auth context、CSRF を rotation する | refresh Cookie 付きで `credentialMode=cookie` を送信                                  | old refresh が consumed になり、新 Cookie、authContextId、csrfToken が返る                                                  |
+| IT-AUTH-BE-SEC-006  | `[AUTH-BE-S079] Cookie refresh は同送 access Cookie を認可材料にしない`             | be    | SEC      | browser の Cookie 自動送信で refresh が混同されない               | access Cookie と refresh Cookie が同送された refresh request を送信                   | refresh handler は refresh Cookie だけを検証し、protected access credential ambiguity として拒否しない                      |
+| IT-AUTH-BE-SEC-007  | `[AUTH-BE-S080] Bearer refresh は Authorization header を受け付けない`              | be    | SEC      | access token と refresh token の transport を混同しない           | body refreshToken と Authorization header を同時に送信                                | refresh handler は fail-close で拒否し、Authorization header を refresh credential として扱わない                           |
+| IT-AUTH-BE-SEC-008  | `[AUTH-BE-S078] Product auth context selector の所属外指定は拒否される`             | be    | SEC      | selector は credential 所属検証後だけ使える                       | valid credential と別 account の `X-Auth-Context-Id` を送信                           | 403 `auth-context-forbidden` になり handler は実行されない                                                                  |
+| IT-ADMIN-BE-SEC-006 | `[ADMIN-AUTH-BE-S057] Admin middleware は operator credential Cookie を検証する`    | be    | SEC      | Admin backend 認可境界を Cookie + selector にする                 | valid operator credential Cookie と `X-Auth-Context-Id` で protected Admin API を呼ぶ | Admin context に operator/role/session/CSRF binding が設定され、Product auth と Product Authorization header は使われない   |
+| IT-ADMIN-BE-SEC-009 | `[ADMIN-AUTH-BE-S076] Admin Cookie refresh は同送 access Cookie を認可材料にしない` | be    | SEC      | Admin refresh が protected middleware と混同されない              | admin access Cookie と admin refresh Cookie が同送された refresh request を送信       | Admin refresh handler は refresh Cookie だけを検証し、protected access credential ambiguity として拒否しない                |
+| IT-ADMIN-BE-SEC-008 | `[ADMIN-AUTH-BE-S075] Admin auth context selector の所属外指定は拒否される`         | be    | SEC      | Admin selector は credential 所属検証後だけ使える                 | valid Admin credential と別 operator の `X-Auth-Context-Id` を送信                    | 403 `auth-context-forbidden` になり handler は実行されない                                                                  |
+| IT-ADMIN-BE-SEC-007 | `[ADMIN-AUTH-BE-S061] pre-auth Admin passkey start は Origin を検証する`            | be    | SEC      | Admin pre-auth Origin 境界を維持する                              | session-bound CSRF なしで allowlisted Origin から start を呼ぶ                        | Origin / rate limit が検証され、session-bound CSRF 不在だけでは拒否されない                                                 |
 
 ### Unit/Component Test (UT)
 
@@ -516,6 +524,7 @@ flowchart TD
 | ------------------- | --------------------------------------------------------------------------------- | -------------------- | -------- | --------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | UT-AUTH-BE-SEC-001  | `[AUTH-BE-S076] Product credential extraction は Cookie と Bearer を同時拒否する` | backend/product http | SEC      | extraction helper が ambiguity を検出する           | request headers/cookies を用意 -> middleware/helper を呼び出す | next を呼ばずに ambiguity failure を返す                                                                                     |
 | UT-AUTH-BE-HAP-002  | `[AUTH-BE-S060] TokenService は Cookie mode の CSRF binding を発行する`           | backend/application  | HAP      | CSRF hash を session metadata に永続化する          | cookie session を issue                                        | plaintext csrf は一度だけ返り、hash と authContextId は metadata に保存される                                                |
+| UT-AUTH-BE-SEC-008  | `[AUTH-BE-S081] Access credential TTL は通常 request で延長されない`              | backend/application  | SEC      | access credential の寿命を refresh に限定する       | protected request 認可を複数回実行                             | issuedAt / expiresAt は変化せず、refresh flow だけが新しい access credential を発行する                                      |
 | UT-AUTH-FE-SEC-003  | `[AUTH-FE-S054] Auth state は bearer と Cookie value を含めない`                  | frontend/domain      | SEC      | session state は authContextId と CSRF のみ保持する | Cookie session 応答を受け入れる                                | state は csrfToken/authContextId/session metadata を持ち、accessToken field を持たない                                       |
 | UT-AUTH-FE-HAP-004  | `[AUTH-FE-S047] Bootstrap refresh は AccountSetting snapshot を反映する`          | frontend/domain      | HAP      | refresh success で app state を復元する             | csrfToken/accountSetting 付き refresh 200 を mock              | authenticated state と locale snapshot が更新される                                                                          |
 | UT-AUTH-FE-ERR-005  | `[AUTH-FE-S045] 期限切れ API call は refresh を 1 回実行して retry する`          | frontend/domain      | ERR      | session-expired retry behavior                      | protected call が session-expired を返し、refresh は成功する   | 元の call が更新後 CSRF で 1 回だけ retry される                                                                             |
@@ -546,9 +555,12 @@ flowchart TD
 
 - Product/Admin Cookie mode の login/register/setup/refresh response body に accessToken / refreshToken 平文が含まれない。
 - Product/Admin Bearer mode の login/register/setup/refresh response body に accessToken / refreshToken が含まれ、Cookie が設定されない。
-- Product/Admin protected route は Cookie と Bearer の同時提示を拒否し、どちらの transport でも `X-Auth-Context-Id` selector が credential に属さない場合は 403 で拒否する。
+- Product/Admin protected route は access credential Cookie と Bearer access credential の同時提示を拒否し、どちらの transport でも `X-Auth-Context-Id` selector が credential に属さない場合は 403 で拒否する。
+- Product/Admin refresh route は refresh credential だけを continuation credential として扱い、browser が同送する access Cookie を認可材料または credential ambiguity として扱わない。
+- Bearer refresh route は body refreshToken だけを受け入れ、`Authorization` header を refresh credential として扱わない。
+- Access credential TTL は発行時に固定され、通常の protected request では延長されない。TTL 到達時は `session-expired` となり、refresh rotation だけが新しい access credential を発行する。
 - Admin Console は Authorization header を Admin Console credential として生成しない。Admin Bearer client は Admin 専用 Bearer token と `X-Auth-Context-Id` の一致がある場合だけ許可される。
-- Cookie state-changing request は valid Origin と session-bound CSRF token なしでは mutation へ到達しない。
+- Refresh endpoint を除く protected Cookie access-credential state-changing request は valid Origin と session-bound CSRF token なしでは mutation へ到達しない。
 - Product frontend domain state と Admin Console domain state から accessToken が消え、`activeAuthContextId` / `authContexts` / CSRF token / session metadata だけで authenticated state を表現する。
 - Bootstrap refresh 成功で session が復元され、missing session は `/session-expired` ではなく login 導線へ正規化される。
 - Admin Console は HttpOnly credential Cookie、HttpOnly refreshToken Cookie、`X-Auth-Context-Id`、Admin CSRF token を使い、browser-readable operator accessToken / Product SDK / Product domain / `/api/admin/*` を使わない。
@@ -557,4 +569,4 @@ flowchart TD
 
 ## Open Issues
 
-未決定事項はない。credential mode は Product/Admin とも `cookie` / `bearer` で確定済みであり、`X-Auth-Context-Id` は認可材料ではなく credential 所属検証後に使う selector として扱い、Cookie/Bearer 同時提示は fail-close で拒否する。
+未決定事項はない。credential mode は Product/Admin とも `cookie` / `bearer` で確定済みであり、`X-Auth-Context-Id` は認可材料ではなく credential 所属検証後に使う selector として扱い、protected route の Cookie/Bearer access credential 同時提示は fail-close で拒否する。refresh route は refresh credential だけを continuation credential として扱い、browser が自動送信する access Cookie を認可材料にしない。

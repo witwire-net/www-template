@@ -124,7 +124,7 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 - システムは `POST /api/v1/passkeys/start` で WebAuthn 追加登録チャレンジを発行し、`POST /api/v1/passkeys/finish` でチャレンジを検証して既存パスキーを保持したまま新しい passkey credential をアカウントへ追加しなければならない（SHALL）。
 - システムは `DELETE /api/v1/passkeys/{id}` で指定した passkey credential を削除しなければならない（SHALL）。ただし、アカウントに残る passkey credential が 1 件になる場合は削除を拒否しなければならない（MUST）。
 - 上記すべての管理エンドポイントは、exactly one authenticated session credential source と `X-Auth-Context-Id` を必須とする。Cookie credential または `Authorization: Bearer <session token>` のどちらか一方だけを受け入れ、両方を同時に提示した request、または credential に属さない selector を提示した request は MUST reject する。
-- Cookie credential を使う state-changing request は、session-bound CSRF token と許可済み Origin を MUST require する。Bearer credential だけを使う non-browser request は CSRF token を要求してはならない（MUST NOT）。
+- Refresh endpoint を除く protected Cookie access-credential state-changing request は、session-bound CSRF token と許可済み Origin を MUST require する。Bearer credential だけを使う non-browser request は CSRF token を要求してはならない（MUST NOT）。
 - 他のアカウントに属する passkey credential を操作する試みは SHALL 拒否されなければならない。
 - パスキー管理操作で用いる resource ID（credential ID、challenge ID、correlation ID 等）は ULID を使用しなければならない（SHALL）。
 
@@ -164,9 +164,9 @@ Auth コアが扱うのは既存アカウントの passkey 回復・追加であ
 - **WHEN** `/api/v1/passkeys` 以下のいずれかのエンドポイントを呼び出す
 - **THEN** システムは unauthenticated として拒否する
 
-#### Scenario: Cookie と Bearer の同時提示は拒否される (AUTH-BE-S074)
+#### Scenario: access credential Cookie と Bearer の同時提示は拒否される (AUTH-BE-S074)
 
-- **GIVEN** request が Product auth Cookie と `Authorization: Bearer` header の両方を持っている
+- **GIVEN** request が Product access credential Cookie と `Authorization: Bearer` header の両方を持っている
 - **WHEN** request が `/api/v1/passkeys` 以下の endpoint を呼び出す
 - **THEN** システムは credential ambiguity として request を拒否し、handler の state mutation を実行しない
 
@@ -259,15 +259,19 @@ Web 利用者と Admin 運営者は XSS の影響を受けにくい HttpOnly Coo
 - システムは passkey authentication が成功したとき、request の `credentialMode` に応じたアプリケーションセッションを発行しなければならない（SHALL）。
 - `credentialMode="cookie"` の session は、short-lived credential container と refresh credential を HttpOnly Cookie として設定し、response body に bearer accessToken または refreshToken 平文を含めてはならない（MUST NOT）。response body は requestId、accountId、passkeyCredentialId、sessionId、authContextId、expiresAt、CSRF token を含まなければならない（MUST）。
 - `credentialMode="bearer"` の session は、short-lived JWT accessToken と refreshToken を response body に含め、Product auth Cookie を設定してはならない（MUST NOT）。
-- Product auth Cookie は Secure、HttpOnly、SameSite=Lax 以上、限定 Path、適切な Max-Age を SHALL 持つ。refresh Cookie は refresh endpoint に必要な Path だけで送信されなければならない（MUST）。
+- Product auth Cookie は Secure、HttpOnly、SameSite=Lax 以上、限定 Path、適切な Max-Age を SHALL 持つ。access credential Cookie は protected `/api/v1/*` access に必要な Path で送信され、refresh Cookie は `POST /api/v1/auth/refresh` に必要な Path だけで送信されなければならない（MUST）。
+- Product access credential の TTL は server clock で発行時に固定され、通常の protected request で延長されてはならない（MUST NOT）。新しい access credential と新しい expiry は refresh rotation、login、register など session issuance flow だけが発行できる（MUST）。
 - `POST /api/v1/auth/refresh` は `credentialMode="cookie"` では HttpOnly refresh Cookie を rotation し、新しい credential container Cookie、refresh Cookie、authContextId、CSRF token を返す。body に accessToken または refreshToken 平文を含めてはならない（MUST NOT）。
 - `POST /api/v1/auth/refresh` は `credentialMode="bearer"` では request body の refreshToken を rotation し、新しい accessToken と refreshToken を body で返す。Product auth Cookie を設定してはならない（MUST NOT）。
+- Browser JavaScript は送信 Cookie を個別選択できないため、`POST /api/v1/auth/refresh` に access credential Cookie と refresh Cookie が同送された場合でも、システムは access credential Cookie を認可材料として使用してはならず、protected route の credential ambiguity として扱ってはならない（MUST NOT）。
+- Cookie refresh request は既存の `X-Auth-Context-Id` または `X-CSRF-Token` を要求してはならない（MUST NOT）。成功後の response body は新しい `authContextId` と CSRF token を返し、以後の protected request はそれらを使用しなければならない（MUST）。
+- Bearer refresh request は request body の refreshToken だけを session continuation credential として扱い、`Authorization` header を refresh credential として受け入れてはならない（MUST NOT）。Bearer refresh request に `Authorization` header が提示された場合、システムは access credential と refresh credential の混同を避けるため fail-close で拒否しなければならない（MUST）。
 - refresh token は単回利用でなければならず（SHALL）、rotation で一度 consumed になった旧 refresh token は以後の試行で拒否しなければならない（MUST）。
 - consumed 済みまたは unknown の refresh token が `POST /api/v1/auth/refresh` に提示された場合、システムは token theft の可能性として扱い、同じ account と device/session fingerprint に紐づくすべての refresh token を revoke しなければならない（SHALL/MUST、fail-close rotation failure）。
-- `/api/v1/*` surface は public auth endpoint と status endpoint を除き、exactly one active session credential source と `X-Auth-Context-Id` を MUST 要求する。Cookie credential と `Authorization: Bearer` credential の両方が提示された request は MUST reject する。
+- `/api/v1/*` protected surface は public auth endpoint と status endpoint を除き、exactly one active access credential source と `X-Auth-Context-Id` を MUST 要求する。access credential Cookie と `Authorization: Bearer <accessToken>` credential の両方が提示された protected request は MUST reject する。refresh credential は protected route の exactly-one access credential 判定対象ではない。
 - request が session credential をまったく持たない場合は stable classification `unauthenticated` として SHALL 扱われ、expired / revoked session failure と混同してはならない。
 - expired / revoked session credential が提示された場合は stable classification `session-expired` として SHALL 扱われる。
-- Cookie credential を使う state-changing request は許可済み Origin、credential に属する `X-Auth-Context-Id`、session-bound CSRF token を要求しなければならない（MUST）。selector または CSRF token が欠落または session と一致しない場合、システムは handler の state mutation 前に request を拒否しなければならない（MUST）。
+- Refresh endpoint を除く protected Cookie access-credential state-changing request は許可済み Origin、credential に属する `X-Auth-Context-Id`、session-bound CSRF token を要求しなければならない（MUST）。selector または CSRF token が欠落または session と一致しない場合、システムは handler の state mutation 前に request を拒否しなければならない（MUST）。
 - Bearer credential を使う request は `X-Auth-Context-Id` を要求し、Bearer token の account/session claims と selector の account/session が一致しない場合は 403 `auth-context-forbidden` として拒否しなければならない（MUST）。
 - Bearer credential だけを使う request は CSRF token を要求してはならない（MUST NOT）。
 - `POST /api/v1/auth/logout` は credential source に対応する active session を revoke し、Cookie session の場合は credential Cookie を server response で削除しなければならない（SHALL）。
@@ -427,6 +431,27 @@ Web 利用者と Admin 運営者は XSS の影響を受けにくい HttpOnly Coo
 - **WHEN** クライアントが `credentialMode="cookie"` で `POST /api/v1/auth/refresh` を送信する
 - **THEN** システムは旧 refresh credential を atomically consumed とし、新しい HttpOnly credential container Cookie、HttpOnly refresh Cookie、authContextId、CSRF token、session metadata を返す
 - **AND** response body には bearer accessToken または refreshToken 平文を含めない
+
+#### Scenario: Cookie refresh は同送 access Cookie を認可材料にしない (AUTH-BE-S079)
+
+- **GIVEN** browser が valid な Product access credential Cookie と Product refresh Cookie を同時に送信する
+- **WHEN** クライアントが `credentialMode="cookie"` で `POST /api/v1/auth/refresh` を送信する
+- **THEN** システムは refresh Cookie だけを session continuation credential として検証し、access credential Cookie を認可材料として使用しない
+- **AND** protected route の Cookie/Bearer ambiguity として request を拒否しない
+- **AND** 既存の `X-Auth-Context-Id` または `X-CSRF-Token` を要求せず、成功時に新しい `authContextId` と CSRF token を返す
+
+#### Scenario: Bearer refresh は Authorization header を受け付けない (AUTH-BE-S080)
+
+- **GIVEN** クライアントが request body に refreshToken を持ち、同時に `Authorization: Bearer <accessToken>` header を送信している
+- **WHEN** クライアントが `credentialMode="bearer"` で `POST /api/v1/auth/refresh` を送信する
+- **THEN** システムは `Authorization` header を refresh credential として扱わず、fail-close で request を拒否する
+
+#### Scenario: 通常の protected request は access credential TTL を延長しない (AUTH-BE-S081)
+
+- **GIVEN** account が有効な Cookie access credential または Bearer accessToken を持っている
+- **WHEN** クライアントが protected `/api/v1/*` endpoint を複数回呼び出す
+- **THEN** システムは access credential の issuedAt / expiresAt を延長せず、発行時に固定された TTL を維持する
+- **AND** 新しい access credential と expiry は login/register/refresh rotation でだけ発行される
 
 #### Scenario: 消費済みリフレッシュトークンの再利用は拒否され関連トークンを失効する (AUTH-BE-S044)
 

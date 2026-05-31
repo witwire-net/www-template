@@ -105,6 +105,7 @@
 
 - クライアントは Cookie mode の access credential をデコードしてはならない（MUST NOT）。
 - クライアントは authenticated app bootstrap 時、HttpOnly refresh Cookie による `POST /api/v1/auth/refresh` を same-origin credential request として実行し、成功時は active auth context metadata、switchable auth contexts、`authContextId`、CSRF token、AccountSetting snapshot を memory state に反映しなければならない（MUST）。
+- Browser JavaScript は送信 Cookie を個別選択できないため、クライアントは refresh request で access Cookie と refresh Cookie の送信を分岐しようとしてはならない（MUST NOT）。refresh continuation の成否は server response に従い、同送 Cookie の解釈や ambiguity 解決を frontend state で代替してはならない（MUST NOT）。
 - 保護された API 呼び出しが `session-expired` を返した場合、クライアントは同一操作について 1 回だけ `POST /api/v1/auth/refresh` を試行し、成功時は `authContextId` と CSRF token を更新して元の API 呼び出しを再試行しなければならない（SHALL）。
 - refresh が `unauthenticated` を返した場合、クライアントは missing session として通常のログイン導線へ正規化し、`/session-expired` へ遷移してはならない（MUST NOT）。
 - refresh が `session-expired`、`account-suspended`、または fail-close error を返した場合、クライアントは該当 route intent へ遷移しなければならない（MUST）。
@@ -141,6 +142,7 @@
 - **GIVEN** browser が valid な HttpOnly refresh Cookie を保持している
 - **WHEN** app bootstrap が `POST /api/v1/auth/refresh` を実行する
 - **THEN** クライアントは active auth context metadata、`authContextId`、CSRF token、AccountSetting snapshot を memory state に反映し、authenticated state として表示する
+- **AND** クライアントは Cookie header を個別制御しようとせず、refresh endpoint の response を正として扱う
 
 ### Requirement: クライアントは複数アカウントのセッションを同時に保持・切り替えできる
 
