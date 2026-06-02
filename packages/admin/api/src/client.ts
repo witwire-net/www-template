@@ -31,7 +31,6 @@ import {
 } from './generated/client';
 
 import type {
-  AdminCreateAccountRequest,
   AdminCreateOperatorRequest,
   AdminInitialSetupFinishRequest,
   AdminInitialSetupStartRequest,
@@ -40,6 +39,8 @@ import type {
   AdminPasskeyFinishRequest,
   AdminPasskeyStartRequest,
   ListAdminAccountsParams,
+  WWWTemplateBearerContextRefreshRequest,
+  WWWTemplateCreateAccountRequest,
 } from './generated/client';
 
 const adminApiPrefix = '/api/v1/';
@@ -49,24 +50,34 @@ const forbiddenAdminBffPrefix = `/${['api', 'admin'].join('/')}/`;
  * Admin API wrapper が付与する session header の入力です。
  *
  * - `accessToken`: Admin operator auth domain が発行した短命 bearer token です。
- * - `csrfToken`: Admin backend が mutation request で session と照合する CSRF token です。
- *
  * refreshToken は HttpOnly Cookie 専用であり、この型にも response body にも保持しません。
  */
 export interface AdminApiSessionHeaders {
   accessToken?: string | null;
-  csrfToken?: string | null;
 }
 
 /**
  * Admin API wrapper が各 request へ渡す安全な RequestInit です。
  *
  * すべて same-origin Cookie を利用できるよう `credentials: 'same-origin'` を固定し、
- * Admin operator session がある場合だけ Authorization / CSRF header を付与します。
+ * Admin operator session がある場合だけ Authorization header を付与します。
  */
-export interface AdminApiRequestOptions extends AdminApiSessionHeaders {
-  requireCsrf?: boolean;
+export type AdminApiRequestOptions = AdminApiSessionHeaders;
+
+/**
+ * Admin automation client が Bearer mode refresh へ渡す入力です。
+ *
+ * @property authContextId refresh 対象を path で選択する Admin auth context ID。
+ * @property refreshToken automation client が自身の secret store で管理する opaque refresh token。
+ */
+export interface AdminAutomationRefreshInput {
+  authContextId: string;
+  refreshToken: string;
 }
+
+const adminAutomationBearerRequestInit = {
+  credentials: 'omit',
+} as const satisfies RequestInit;
 
 /**
  * Admin generated SDK の URL が同一 origin の `/api/v1/*` だけを指すことを検証します。
@@ -103,7 +114,7 @@ export function assertAdminApiPath(path: string): string {
 /**
  * Admin generated SDK へ渡す RequestInit を生成します。
  *
- * @param options Admin access token / CSRF token と CSRF 要否。
+ * @param options Admin access token を含む request option。
  * @returns `credentials: 'same-origin'` と必要な header を含む RequestInit。
  */
 export function createAdminRequestInit(options: AdminApiRequestOptions = {}): RequestInit {
@@ -117,16 +128,6 @@ export function createAdminRequestInit(options: AdminApiRequestOptions = {}): Re
     options.accessToken !== ''
   ) {
     headers.Authorization = `Bearer ${options.accessToken}`;
-  }
-
-  // mutation route だけ CSRF header を付与し、read route で不要な token 露出を増やさない。
-  if (
-    options.requireCsrf === true &&
-    options.csrfToken !== undefined &&
-    options.csrfToken !== null &&
-    options.csrfToken !== ''
-  ) {
-    headers['X-CSRF-Token'] = options.csrfToken;
   }
 
   // generated SDK の各関数に共通する safe default として same-origin credential を固定する。
@@ -147,7 +148,7 @@ export async function requestAdminAccounts(
   // generated URL の path policy を実行時にも確認し、Admin API wrapper の責務を明示する。
   assertAdminApiPath(getListAdminAccountsUrl(params));
 
-  // read route は CSRF を不要にし、Authorization と Cookie だけで current operator session を検証する。
+  // read route は Authorization と Cookie だけで current operator session を検証する。
   return listAdminAccounts(params, createAdminRequestInit(session));
 }
 
@@ -155,25 +156,25 @@ export async function requestAdminAccounts(
  * Admin account 作成 request を送信します。
  *
  * @param body 作成対象 email と任意 locale。
- * @param session Admin accessToken と CSRF token。
+ * @param session Admin accessToken を含む browser-readable session header。
  * @returns generated SDK の account create response。
  */
 export async function requestCreateAdminAccount(
-  body: AdminCreateAccountRequest,
+  body: WWWTemplateCreateAccountRequest,
   session: AdminApiSessionHeaders
 ) {
   // account mutation は `/api/v1/accounts` に限定し、旧 BFF route を通らないことを確認する。
   assertAdminApiPath(getCreateAdminAccountUrl());
 
-  // mutation route なので CSRF header を必須入力として backend middleware へ渡す。
-  return createAdminAccount(body, createAdminRequestInit({ ...session, requireCsrf: true }));
+  // mutation route でも refreshToken は送らず、Authorization と same-origin Cookie だけを wrapper で固定する。
+  return createAdminAccount(body, createAdminRequestInit(session));
 }
 
 /**
  * Admin operator 作成 request を送信します。
  *
  * @param body 作成対象 operator の email と role。
- * @param session Admin accessToken と CSRF token。
+ * @param session Admin accessToken を含む browser-readable session header。
  * @returns generated SDK の operator create response。
  */
 export async function requestCreateAdminOperator(
@@ -183,8 +184,8 @@ export async function requestCreateAdminOperator(
   // operator mutation は Admin auth namespace の `/api/v1/auth/operators` に限定し、旧 BFF route を経由しない。
   assertAdminApiPath(getCreateAdminOperatorUrl());
 
-  // mutation route なので Authorization と CSRF header を必ず wrapper で付与する。
-  return createAdminOperator(body, createAdminRequestInit({ ...session, requireCsrf: true }));
+  // mutation route なので Authorization を必ず wrapper で付与し、page から generated SDK を直接呼ばせない。
+  return createAdminOperator(body, createAdminRequestInit(session));
 }
 
 /**
@@ -198,7 +199,7 @@ export async function requestAdminAccount(accountId: string, session: AdminApiSe
   // detail URL も same-origin `/api/v1/*` から逸脱しないことを wrapper で確認する。
   assertAdminApiPath(getGetAdminAccountUrl(accountId));
 
-  // read route は CSRF なしで、bearer session validation だけを要求する。
+  // read route は bearer session validation だけを要求する。
   return getAdminAccount(accountId, createAdminRequestInit(session));
 }
 
@@ -240,21 +241,40 @@ export async function requestCurrentAdminOperator(session: AdminApiSessionHeader
   // protected current route が `/api/v1/*` から逸脱しないことを確認する。
   assertAdminApiPath(getGetCurrentAdminOperatorUrl());
 
-  // current は read route なので CSRF なしで session validation へ委譲する。
+  // current は read route なので session validation へ委譲する。
   return getCurrentAdminOperator(createAdminRequestInit(session));
 }
 
 /**
  * HttpOnly refresh Cookie を使って Admin operator session を更新します。
  *
+ * @param authContextId refresh Cookie の Path と対応する Admin auth context ID。
  * @returns generated SDK の refreshed operator session response。
  */
-export async function requestRefreshAdminSession() {
-  // refresh route は accessToken なしで Cookie rotation を行う Admin auth route に限定する。
-  assertAdminApiPath(getRefreshAdminOperatorSessionUrl());
+export async function requestRefreshAdminSession(authContextId: string) {
+  // refresh route は accessToken なしで Cookie rotation を行う Admin auth context route に限定する。
+  assertAdminApiPath(getRefreshAdminOperatorSessionUrl(authContextId));
 
-  // refreshToken は Cookie に閉じるため、wrapper は body や browser-readable state を持たない。
-  return refreshAdminOperatorSession(createAdminRequestInit());
+  // refreshToken は Cookie に閉じるため、wrapper は request body を送らず context ID と same-origin Cookie だけを渡す。
+  return refreshAdminOperatorSession(authContextId, undefined, createAdminRequestInit());
+}
+
+/**
+ * Admin automation client の Bearer mode refresh を実行します。
+ *
+ * @param input authContextId と automation client が保管する refreshToken。
+ * @returns generated SDK の Bearer/Cookie union response。automation caller は Bearer response を扱います。
+ */
+export async function requestRefreshAdminAutomationSession(input: AdminAutomationRefreshInput) {
+  // automation flow は browser Cookie を使わないため、Console wrapper と分離して credentials を omit に固定する。
+  assertAdminApiPath(getRefreshAdminOperatorSessionUrl(input.authContextId));
+
+  // refreshToken は automation client の body credential としてだけ送信し、Authorization header には変換しない。
+  const body: WWWTemplateBearerContextRefreshRequest = {
+    credentialMode: 'bearer',
+    refreshToken: input.refreshToken,
+  };
+  return refreshAdminOperatorSession(input.authContextId, body, adminAutomationBearerRequestInit);
 }
 
 /**
@@ -288,15 +308,15 @@ export async function requestFinishInitialAdminSetup(body: AdminInitialSetupFini
 /**
  * 現在の Admin operator session を logout します。
  *
- * @param session Admin accessToken と CSRF token。
+ * @param session Admin accessToken を含む browser-readable session header。
  * @returns generated SDK の logout response。
  */
 export async function requestLogoutAdminOperator(session: AdminApiSessionHeaders) {
-  // logout は session mutation なので `/api/v1/auth/operator/logout` と CSRF を固定する。
+  // logout は session mutation なので `/api/v1/auth/operator/logout` と Authorization を固定する。
   assertAdminApiPath(getLogoutAdminOperatorUrl());
 
   // backend に refresh Cookie revoke と accessToken/session revoke を委譲する。
-  return logoutAdminOperator(createAdminRequestInit({ ...session, requireCsrf: true }));
+  return logoutAdminOperator(createAdminRequestInit(session));
 }
 
 /**
@@ -309,7 +329,7 @@ export async function requestStartOperatorSetup(body: AdminOperatorSetupStartReq
   // setup token を package-local BFF に渡さず、Go Admin API で hash / expiry 検証させる。
   assertAdminApiPath(getStartAdminOperatorSetupUrl());
 
-  // start route では session-bound CSRF を持たないため、same-origin credentials だけを固定する。
+  // start route では bearer session を持たないため、same-origin credentials だけを固定する。
   return startAdminOperatorSetup(body, createAdminRequestInit());
 }
 
@@ -330,15 +350,15 @@ export async function requestFinishOperatorSetup(body: AdminOperatorSetupFinishR
 /**
  * 現在の Admin operator passkey 一覧を取得します。
  *
- * @param session Admin accessToken と CSRF token。
+ * @param session Admin accessToken を含む browser-readable session header。
  * @returns generated SDK の passkey list response。
  */
 export async function requestAdminOperatorPasskeys(session: AdminApiSessionHeaders) {
-  // passkey 一覧は認証手段列挙なので、read でも CSRF binding を backend へ渡す。
+  // passkey 一覧は認証手段列挙なので、Authorization 付き same-origin request に限定する。
   assertAdminApiPath(getListAdminOperatorPasskeysUrl());
 
-  // backend middleware の policy に合わせ、passkey route では CSRF header も同梱する。
-  return listAdminOperatorPasskeys(createAdminRequestInit({ ...session, requireCsrf: true }));
+  // backend middleware の policy に合わせ、passkey route も wrapper 経由の session header だけを同梱する。
+  return listAdminOperatorPasskeys(createAdminRequestInit(session));
 }
 
 /**

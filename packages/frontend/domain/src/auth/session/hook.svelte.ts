@@ -16,6 +16,16 @@ import {
   switchActiveSession,
 } from './state';
 
+import {
+  clearContextIndex,
+  createEmptyContextIndex,
+  readContextIndex,
+  removeContextEntry,
+  toContextIndexEntry,
+  upsertContextEntry,
+  writeContextIndex,
+} from './context_index';
+
 import { fetchDevices, revokeDevice, revokeOtherDevices } from './session_api';
 
 import { decodeAccessToken, expToIsoString, isRefreshNeeded } from './token_state';
@@ -81,7 +91,7 @@ interface AuthSessionActions {
  */
 const state = $state<AuthSessionState>(createAuthSessionInitialState());
 
-/** 並行リフレッシュを防止するため、sessionId 単位で実行中の refresh Promise を保持する。 */
+/** 並行リフレッシュを防止するため、authContextId 単位で実行中の refresh Promise を保持する。 */
 const refreshInFlight = new SvelteMap<string, Promise<AuthRouteIntent | null>>();
 
 /**
@@ -103,13 +113,13 @@ async function ensureFreshAuthorizationHeaders(
 
   const claims = decodeAccessToken(active.accessToken);
   if (claims != null && isRefreshNeeded(claims.exp, Date.now())) {
-    const sessionId = active.sessionId;
-    let inflight = refreshInFlight.get(sessionId);
+    const authContextId = active.authContextId;
+    let inflight = refreshInFlight.get(authContextId);
     if (inflight == null) {
-      inflight = executeRefreshActiveSession(authState, sessionId).finally(() => {
-        refreshInFlight.delete(sessionId);
+      inflight = executeRefreshActiveSession(authState, active.sessionId).finally(() => {
+        refreshInFlight.delete(authContextId);
       });
-      refreshInFlight.set(sessionId, inflight);
+      refreshInFlight.set(authContextId, inflight);
     }
     await inflight;
   }
@@ -138,7 +148,7 @@ async function attemptRefreshForLogout(authState: AuthSessionState): Promise<voi
   try {
     // Cookie-only refresh は request body を持たないため、生成 SDK の body 引数には
     // `undefined` を渡し、HttpOnly Cookie だけを same-origin 境界で送信する。
-    const response = await refreshToken(undefined, COOKIE_AUTH_REQUEST_INIT);
+    const response = await refreshToken(active.authContextId, undefined, COOKIE_AUTH_REQUEST_INIT);
 
     if (response.status === 200 && 'accessToken' in response.data) {
       const { accessToken } = response.data;
@@ -188,6 +198,31 @@ async function executeLogoutCurrentSession(
     const response = await authApi.logout({ ...COOKIE_AUTH_REQUEST_INIT, headers });
 
     if (response.status === 200) {
+      const data = response.data as {
+        revoked?: boolean;
+        contextIndexUpdateHints?: { action: string; authContextId?: string }[];
+      };
+      // logout response の contextIndexUpdateHints に従い context index を同期する
+      if (Array.isArray(data.contextIndexUpdateHints)) {
+        const index = readContextIndex() ?? createEmptyContextIndex();
+        for (const hint of data.contextIndexUpdateHints) {
+          if (hint.action === 'remove' && hint.authContextId != null) {
+            removeContextEntry(index, hint.authContextId);
+          } else if (hint.action === 'clear-surface') {
+            index.entries = [];
+            index.activeAuthContextId = null;
+          }
+        }
+        writeContextIndex(index);
+      } else {
+        // fallback: active session の authContextId のみを index から削除
+        const activeSession = authState.session;
+        if (activeSession != null) {
+          const index = readContextIndex() ?? createEmptyContextIndex();
+          removeContextEntry(index, activeSession.authContextId);
+          writeContextIndex(index);
+        }
+      }
       return removeActiveSession(authState);
     }
 
@@ -220,6 +255,13 @@ function handleRefreshFailureForTarget(
   authState: AuthSessionState,
   targetSessionId: string
 ): AuthRouteIntent | null {
+  const targetSession = authState.sessions?.find((s) => s.sessionId === targetSessionId);
+  if (targetSession != null) {
+    const index = readContextIndex() ?? createEmptyContextIndex();
+    removeContextEntry(index, targetSession.authContextId);
+    writeContextIndex(index);
+  }
+
   if (authState.activeSessionId !== targetSessionId) {
     authState.sessions = authState.sessions?.filter((s) => s.sessionId !== targetSessionId) ?? [];
     return null;
@@ -240,6 +282,13 @@ function handleAccountSuspendedForTarget(
   targetSessionId: string,
   cacheControl: string | null = null
 ): AuthRouteIntent | null {
+  const targetSession = authState.sessions?.find((s) => s.sessionId === targetSessionId);
+  if (targetSession != null) {
+    const index = readContextIndex() ?? createEmptyContextIndex();
+    removeContextEntry(index, targetSession.authContextId);
+    writeContextIndex(index);
+  }
+
   if (authState.activeSessionId !== targetSessionId) {
     authState.sessions = authState.sessions?.filter((s) => s.sessionId !== targetSessionId) ?? [];
     return null;
@@ -273,7 +322,12 @@ async function executeRefreshActiveSession(
   try {
     // Cookie-only refresh は request body を持たないため、生成 SDK の body 引数には
     // `undefined` を渡し、HttpOnly Cookie だけを same-origin 境界で送信する。
-    const response = await refreshToken(undefined, COOKIE_AUTH_REQUEST_INIT);
+    // authContextId を path parameter として渡し、refresh 対象の選択を URL path で行う。
+    const response = await refreshToken(
+      targetSession.authContextId,
+      undefined,
+      COOKIE_AUTH_REQUEST_INIT
+    );
 
     if (response.status === 200 && 'accessToken' in response.data) {
       const { accessToken, accountSetting } = response.data;
@@ -303,6 +357,15 @@ async function executeRefreshActiveSession(
         authState.lastAccountSettingSnapshot = { locale: accountSetting.locale };
       }
 
+      // refresh 成功時は context index を更新する
+      const index = readContextIndex() ?? createEmptyContextIndex();
+      upsertContextEntry(
+        index,
+        toContextIndexEntry(updatedSession, updatedSession.expiresAt),
+        authState.activeSessionId === targetSessionId
+      );
+      writeContextIndex(index);
+
       return null;
     }
 
@@ -320,13 +383,46 @@ async function executeRefreshActiveSession(
   }
 }
 
-/** ログイン中の全セッション（デバイス）一覧を取得する。 */
-async function executeListDevices(authState: AuthSessionState): Promise<DeviceSession[] | null> {
+/**
+ * protected API call をラップし、session-expired 時に refresh-once retry を行う。
+ * refresh 成功時は新 accessToken で元 API を 1 回だけ retry し、
+ * refresh 失敗時は対象 session を失効扱いにする。
+ */
+async function withRefreshRetry<T>(
+  authState: AuthSessionState,
+  apiCall: (headers: Record<string, string>) => Promise<
+    | { ok: true; data: T }
+    | {
+        ok: false;
+        error: string;
+        status?: number;
+        failure?: 'session-expired' | 'unauthenticated' | 'account-suspended';
+      }
+  >
+): Promise<T | null> {
   const headers = await ensureFreshAuthorizationHeaders(authState);
   if (headers.Authorization == null) {
     return null;
   }
-  const result = await fetchDevices(headers);
+
+  let result = await apiCall(headers);
+
+  // session-expired の場合、active session を 1 回だけ refresh して retry する
+  if (!result.ok && result.failure === SESSION_EXPIRED_ERROR) {
+    const active = authState.session;
+    if (active != null) {
+      const refreshResult = await executeRefreshActiveSession(authState, active.sessionId);
+      if (refreshResult == null) {
+        // refresh 成功: 新しい Authorization header で retry
+        const retryHeaders = createAuthorizationHeaders(authState);
+        if (retryHeaders.Authorization != null) {
+          result = await apiCall(retryHeaders);
+        }
+      }
+      // refresh 失敗時は executeRefreshActiveSession 内で失効処理済み
+    }
+  }
+
   if (!result.ok) {
     if (result.failure === SESSION_EXPIRED_ERROR) {
       applyExpiredSession(authState);
@@ -342,34 +438,39 @@ async function executeListDevices(authState: AuthSessionState): Promise<DeviceSe
     }
     return null;
   }
+
   return result.data;
 }
 
-/** 指定されたセッションをリモートで無効化し、ローカル state を更新する。 */
+/** ログイン中の全セッション（デバイス）一覧を取得する。 */
+async function executeListDevices(authState: AuthSessionState): Promise<DeviceSession[] | null> {
+  return withRefreshRetry(authState, (headers) => fetchDevices(headers));
+}
+
+/** 指定されたセッションをリモートで無効化し、ローカル state と context index を更新する。 */
 async function executeRevokeDevice(
   authState: AuthSessionState,
   sessionId: string
 ): Promise<boolean> {
-  const headers = await ensureFreshAuthorizationHeaders(authState);
-  if (headers.Authorization == null) {
+  const result = await withRefreshRetry(authState, async (headers) => {
+    const res = await revokeDevice(sessionId, headers);
+    if (res.ok) {
+      return { ok: true as const, data: true };
+    }
+    return { ok: false as const, error: res.error, status: 400, failure: res.failure };
+  });
+  if (result == null) {
     return false;
   }
-  const result = await revokeDevice(sessionId, headers);
-  if (!result.ok) {
-    if (result.failure === SESSION_EXPIRED_ERROR) {
-      applyExpiredSession(authState);
-      return false;
-    }
-    if (result.failure === ACCOUNT_SUSPENDED_ERROR) {
-      applyAccountSuspended(authState);
-      return false;
-    }
-    if (result.failure === 'unauthenticated') {
-      applyMissingSession(authState);
-      return false;
-    }
-    return false;
+
+  // 対象 session の context index entry を削除する
+  const targetSession = authState.sessions?.find((s) => s.sessionId === sessionId);
+  if (targetSession != null) {
+    const index = readContextIndex() ?? createEmptyContextIndex();
+    removeContextEntry(index, targetSession.authContextId);
+    writeContextIndex(index);
   }
+
   if (sessionId === authState.activeSessionId) {
     removeActiveSession(authState);
   } else {
@@ -378,39 +479,119 @@ async function executeRevokeDevice(
   return true;
 }
 
-/** 現在のセッション以外をすべてリモートで無効化し、ローカル state を更新する。 */
+/** 現在のセッション以外をすべてリモートで無効化し、ローカル state と context index を更新する。 */
 async function executeRevokeOtherDevices(authState: AuthSessionState): Promise<boolean> {
-  const headers = await ensureFreshAuthorizationHeaders(authState);
-  if (headers.Authorization == null) {
+  const result = await withRefreshRetry(authState, async (headers) => {
+    const res = await revokeOtherDevices(headers);
+    if (res.ok) {
+      return { ok: true as const, data: true };
+    }
+    return { ok: false as const, error: res.error, status: 400, failure: res.failure };
+  });
+  if (result == null) {
     return false;
   }
-  const result = await revokeOtherDevices(headers);
-  if (!result.ok) {
-    if (result.failure === SESSION_EXPIRED_ERROR) {
-      applyExpiredSession(authState);
-      return false;
-    }
-    if (result.failure === ACCOUNT_SUSPENDED_ERROR) {
-      applyAccountSuspended(authState);
-      return false;
-    }
-    if (result.failure === 'unauthenticated') {
-      applyMissingSession(authState);
-      return false;
-    }
-    return false;
-  }
+
+  // 削除された session の context index entry を削除する
   const active = authState.session;
+  if (active != null) {
+    const index = readContextIndex() ?? createEmptyContextIndex();
+    // active 以外の entry をすべて削除
+    index.entries = index.entries.filter((e) => e.authContextId === active.authContextId);
+    index.activeAuthContextId = active.authContextId;
+    writeContextIndex(index);
+  }
+
   authState.sessions = active != null ? [active] : [];
   return true;
 }
 
+/**
+ * モジュール初期化時に context index から session bootstrap を試行する。
+ * index entry ごとに context refresh を実行し、成功した entry だけを memory session に復元する。
+ * tamper された index は fail-close で無視される。
+ */
+async function bootstrapSessionsFromContextIndex(): Promise<void> {
+  const index = readContextIndex();
+  if (index == null || index.entries.length === 0) {
+    return;
+  }
+
+  const restoredSessions: AuthSessionSummary[] = [];
+  let restoredActiveSession: AuthSessionSummary | null = null;
+
+  for (const entry of index.entries) {
+    try {
+      const response = await refreshToken(entry.authContextId, undefined, COOKIE_AUTH_REQUEST_INIT);
+      if (response.status === 200 && 'accessToken' in response.data) {
+        const { accessToken, account, sessionId, expiresAt } = response.data;
+        const accountId = account.accountId;
+        const claims = decodeAccessToken(accessToken);
+        if (claims == null || claims.accountId !== accountId || claims.sessionId !== sessionId) {
+          continue;
+        }
+        const restoredSession: AuthSessionSummary = {
+          requestId: response.data.requestId,
+          authContextId: entry.authContextId,
+          accountId,
+          // refresh response の account subject には passkeyCredentialId が含まれないことがある。
+          // bootstrap では credential ID を復元できないため、省略する。
+          passkeyCredentialId: account.passkeyCredentialId,
+          sessionId,
+          accessToken,
+          expiresAt,
+        };
+        restoredSessions.push(restoredSession);
+        if (index.activeAuthContextId === entry.authContextId) {
+          restoredActiveSession = restoredSession;
+        }
+      }
+    } catch {
+      // refresh failure: 該当 entry は authenticated state として採用しない
+    }
+  }
+
+  if (restoredSessions.length > 0) {
+    state.sessions = restoredSessions;
+    const active = restoredActiveSession ?? restoredSessions[0];
+    state.session = active;
+    state.activeSessionId = active.sessionId;
+    state.phase = 'authenticated';
+    state.routeIntent = '/login';
+    state.lastFailure = null;
+    state.lastError = null;
+
+    // bootstrap 後に index を再構築（失敗した entry は除去）
+    const newIndex = createEmptyContextIndex();
+    for (const s of restoredSessions) {
+      upsertContextEntry(
+        newIndex,
+        toContextIndexEntry(s, s.expiresAt),
+        s.sessionId === active.sessionId
+      );
+    }
+    writeContextIndex(newIndex);
+  } else {
+    // 復元できなかった場合は index をクリアする
+    clearContextIndex();
+  }
+}
+
+/** bootstrap が完了しているかどうかのフラグ。 */
+let hasBootstrapped = false;
+
 /** in-memory bearer session と route 分岐を共有する domain composable。 */
 function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions } {
+  if (!hasBootstrapped) {
+    hasBootstrapped = true;
+    // non-blocking で context index から session を復元する
+    void bootstrapSessionsFromContextIndex();
+  }
   const actions: AuthSessionActions = {
     acceptSession: (session, cacheControl) => {
       const nextSession = {
         requestId: session.requestId,
+        authContextId: session.authContextId,
         accountId: session.accountId,
         passkeyCredentialId: session.passkeyCredentialId,
         sessionId: session.sessionId,
@@ -424,6 +605,11 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
       }
 
       addAuthenticatedSession(state, nextSession, cacheControl);
+
+      // login/refresh 成功時は context index を更新する
+      const index = readContextIndex() ?? createEmptyContextIndex();
+      upsertContextEntry(index, toContextIndexEntry(nextSession, nextSession.expiresAt), true);
+      writeContextIndex(index);
     },
     createAuthorizationHeaders: () => createAuthorizationHeaders(state),
     handleFailure: (classification, message) => {
@@ -443,7 +629,10 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
       return '/login';
     },
     handleMissingSession: () => applyMissingSession(state),
-    clearInMemorySession: () => clearAuthSession(state),
+    clearInMemorySession: () => {
+      clearContextIndex();
+      return clearAuthSession(state);
+    },
     logoutCurrentSession: () => executeLogoutCurrentSession(state),
     refreshActiveSession: () => {
       const active = state.session;
@@ -452,7 +641,18 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
       }
       return executeRefreshActiveSession(state, active.sessionId);
     },
-    switchSession: (sessionId) => switchActiveSession(state, sessionId),
+    switchSession: (sessionId) => {
+      const switched = switchActiveSession(state, sessionId);
+      if (switched) {
+        const active = state.session;
+        if (active != null) {
+          const index = readContextIndex() ?? createEmptyContextIndex();
+          index.activeAuthContextId = active.authContextId;
+          writeContextIndex(index);
+        }
+      }
+      return switched;
+    },
     listDevices: () => executeListDevices(state),
     revokeDevice: (sessionId) => executeRevokeDevice(state, sessionId),
     revokeOtherDevices: () => executeRevokeOtherDevices(state),

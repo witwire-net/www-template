@@ -38,7 +38,7 @@ function useAdminSettings(options: AdminSettingsOptions): {
 
   const actions: AdminSettingsActions = {
     saveLocale: () => {
-      // 保存対象は表示 locale のみで、Admin session token や CSRF token は storage に置かない。
+      // 保存対象は表示 locale のみで、Admin session token は storage に置かない。
       state.localeUpdated = options.writeLocale(state.selectedLocale);
       state.localeError = !state.localeUpdated;
     },

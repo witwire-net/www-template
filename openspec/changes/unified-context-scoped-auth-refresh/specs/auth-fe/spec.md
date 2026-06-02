@@ -44,8 +44,8 @@
 
 - **GIVEN** Product Web が login、context refresh、logout、または revoke result を処理している
 - **WHEN** context index を更新する
-- **THEN** クライアントは Product origin の `localStorage` の surface-specific key だけを更新する
-- **AND** entry には version、surface、authContextId、sessionId、identity kind、display hint、lastSeenAt、expiresHintAt だけを保存し、accessToken、refreshToken、Cookie value を保存しない
+- **THEN** クライアントは Product origin の `localStorage` の service-specific key だけを更新する
+- **AND** entry には version、authContextId、sessionId、display hint、lastSeenAt、expiresHintAt だけを保存し、accessToken、refreshToken、Cookie value を保存しない
 - **AND** 同一 origin の他 tab には `storage` event または `BroadcastChannel` で add/remove/active change を伝搬する
 
 #### Scenario: context index cleanup は logout と refresh failure に追従する (AUTH-FE-S059)

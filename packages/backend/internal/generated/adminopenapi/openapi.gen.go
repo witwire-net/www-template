@@ -20,10 +20,19 @@ const (
 	BearerAuthScopes = "BearerAuth.Scopes"
 )
 
-// Defines values for AdminAccountStatus.
+// Defines values for AdminBearerContextRefreshResponseCredentialMode.
 const (
-	Active    AdminAccountStatus = "active"
-	Suspended AdminAccountStatus = "suspended"
+	AdminBearerContextRefreshResponseCredentialModeBearer AdminBearerContextRefreshResponseCredentialMode = "bearer"
+)
+
+// Defines values for AdminBearerOperatorSessionResponseCredentialMode.
+const (
+	AdminBearerOperatorSessionResponseCredentialModeBearer AdminBearerOperatorSessionResponseCredentialMode = "bearer"
+)
+
+// Defines values for AdminContextRefreshResponseCredentialMode.
+const (
+	AdminContextRefreshResponseCredentialModeCookie AdminContextRefreshResponseCredentialMode = "cookie"
 )
 
 // Defines values for AdminOperatorRole.
@@ -31,6 +40,11 @@ const (
 	Admin    AdminOperatorRole = "admin"
 	Operator AdminOperatorRole = "operator"
 	Viewer   AdminOperatorRole = "viewer"
+)
+
+// Defines values for AdminOperatorSessionResponseCredentialMode.
+const (
+	AdminOperatorSessionResponseCredentialModeCookie AdminOperatorSessionResponseCredentialMode = "cookie"
 )
 
 // Defines values for AdminSetupTokenDeliveryStatus.
@@ -44,12 +58,58 @@ const (
 	Ja WWWTemplateAccountLocale = "ja"
 )
 
+// Defines values for WWWTemplateAccountStatus.
+const (
+	Active    WWWTemplateAccountStatus = "active"
+	Suspended WWWTemplateAccountStatus = "suspended"
+)
+
 // Defines values for WWWTemplateAuthFailureClassification.
 const (
-	AccountSuspended WWWTemplateAuthFailureClassification = "account-suspended"
-	InternalError    WWWTemplateAuthFailureClassification = "internal-error"
-	SessionExpired   WWWTemplateAuthFailureClassification = "session-expired"
-	Unauthenticated  WWWTemplateAuthFailureClassification = "unauthenticated"
+	AccountSuspended         WWWTemplateAuthFailureClassification = "account-suspended"
+	CredentialAmbiguous      WWWTemplateAuthFailureClassification = "credential-ambiguous"
+	InternalError            WWWTemplateAuthFailureClassification = "internal-error"
+	InvalidRefreshCredential WWWTemplateAuthFailureClassification = "invalid-refresh-credential"
+	SessionExpired           WWWTemplateAuthFailureClassification = "session-expired"
+	Unauthenticated          WWWTemplateAuthFailureClassification = "unauthenticated"
+)
+
+// Defines values for WWWTemplateBearerContextRefreshRequestCredentialMode.
+const (
+	WWWTemplateBearerContextRefreshRequestCredentialModeBearer WWWTemplateBearerContextRefreshRequestCredentialMode = "bearer"
+)
+
+// Defines values for WWWTemplateContextIndexUpdateAction.
+const (
+	ClearSurface WWWTemplateContextIndexUpdateAction = "clear-surface"
+	Remove       WWWTemplateContextIndexUpdateAction = "remove"
+	Upsert       WWWTemplateContextIndexUpdateAction = "upsert"
+)
+
+// Defines values for WWWTemplateCookieClearCommandHttpOnly.
+const (
+	WWWTemplateCookieClearCommandHttpOnlyTrue WWWTemplateCookieClearCommandHttpOnly = true
+)
+
+// Defines values for WWWTemplateCookieClearCommandMaxAge.
+const (
+	N0 WWWTemplateCookieClearCommandMaxAge = 0
+)
+
+// Defines values for WWWTemplateCookieClearCommandSameSite.
+const (
+	Lax WWWTemplateCookieClearCommandSameSite = "Lax"
+)
+
+// Defines values for WWWTemplateCookieClearCommandSecure.
+const (
+	WWWTemplateCookieClearCommandSecureTrue WWWTemplateCookieClearCommandSecure = true
+)
+
+// Defines values for WWWTemplateCredentialMode.
+const (
+	WWWTemplateCredentialModeBearer WWWTemplateCredentialMode = "bearer"
+	WWWTemplateCredentialModeCookie WWWTemplateCredentialMode = "cookie"
 )
 
 // Defines values for WWWTemplateLogoutResponseRevoked.
@@ -77,55 +137,88 @@ const (
 	Required WWWTemplatePasskeyStartResponseUserVerification = "required"
 )
 
-// AdminAccountDetailResponse Admin account 詳細 API の response。
-type AdminAccountDetailResponse struct {
-	// Account 対象 Product Account の Admin read model。
-	Account AdminAccountSummary `json:"account"`
-
-	// RequestId 詳細取得 request に対応する canonical ULID の追跡 ID。
-	RequestId WWWTemplateUlidId `json:"requestId"`
+// AdminAuthorizationBoundary Admin operator の authorization concept を所有する marker model。RBAC の詳細は backend application が評価し、契約には role と operator profile だけを公開する。
+type AdminAuthorizationBoundary struct {
+	// OperatorId authorization 判定対象 operator の canonical ULID。
+	OperatorId WWWTemplateUlidId `json:"operatorId"`
 }
 
-// AdminAccountListResponse Admin account 一覧 API の response。requestId は監査・追跡に使用し、accounts は Product route から独立した Admin read model として返す。
-type AdminAccountListResponse struct {
-	// Accounts 検索条件に一致した Product Account の要約一覧。
-	Accounts []AdminAccountSummary `json:"accounts"`
-
-	// NextCursor 次ページが存在するときだけ返す opaque cursor。
-	NextCursor *string `json:"nextCursor,omitempty"`
-
-	// RequestId 一覧取得 request に対応する canonical ULID の追跡 ID。
-	RequestId WWWTemplateUlidId `json:"requestId"`
-}
-
-// AdminAccountStatus Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。
-type AdminAccountStatus string
-
-// AdminAccountSummary Admin account 一覧と詳細で返す Product Account の要約。Admin route から参照する read model であり、Product route namespace には所属しない。
-type AdminAccountSummary struct {
-	// AccountId 対象 Product Account の canonical ULID。
-	AccountId WWWTemplateUlidId `json:"accountId"`
-
-	// CreatedAt Product Account が作成された日時。
-	CreatedAt time.Time `json:"createdAt"`
-
-	// Email Product Account の canonical email address。
-	Email string `json:"email"`
-
-	// PasskeyCount 対象 Product Account に登録済みの passkey 数。
-	PasskeyCount int32 `json:"passkeyCount"`
-
-	// Status Admin API が観測した Product Account lifecycle state。
-	Status AdminAccountStatus `json:"status"`
-}
-
-// AdminAuthSessionResponse Admin operator auth 成功時の response。refreshToken は HttpOnly Cookie で扱うため body には含めない。
-type AdminAuthSessionResponse struct {
-	// AccessToken 短命の Admin operator access token。
+// AdminBearerContextRefreshResponse Admin automation client の Bearer mode context refresh 成功 response。Cookie command や browser context index hint を含めない。
+type AdminBearerContextRefreshResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
 	AccessToken string `json:"accessToken"`
 
-	// CsrfToken mutation request で session と照合する CSRF token。
-	CsrfToken string `json:"csrfToken"`
+	// AuthContextId refreshToken と session metadata を束縛する auth context。
+	AuthContextId WWWTemplateUlidId `json:"authContextId"`
+
+	// CredentialMode external bearer mode で発行されたことを示す discriminator。
+	CredentialMode AdminBearerContextRefreshResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Operator 認証された Admin operator の profile。
+	Operator AdminOperatorProfile `json:"operator"`
+
+	// RefreshToken external client が body で保持し、context refresh で rotation する opaque refreshToken。
+	RefreshToken string `json:"refreshToken"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId WWWTemplateUlidId `json:"sessionId"`
+}
+
+// AdminBearerContextRefreshResponseCredentialMode external bearer mode で発行されたことを示す discriminator。
+type AdminBearerContextRefreshResponseCredentialMode string
+
+// AdminBearerOperatorSessionResponse Admin automation client の Bearer mode operator session response。Cookie command や browser context index hint を含めない。
+type AdminBearerOperatorSessionResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// AuthContextId refreshToken と session metadata を束縛する auth context。
+	AuthContextId WWWTemplateUlidId `json:"authContextId"`
+
+	// CredentialMode external bearer mode で発行されたことを示す discriminator。
+	CredentialMode AdminBearerOperatorSessionResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Operator 認証された Admin operator の profile。
+	Operator AdminOperatorProfile `json:"operator"`
+
+	// RefreshToken external client が body で保持し、context refresh で rotation する opaque refreshToken。
+	RefreshToken string `json:"refreshToken"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId WWWTemplateUlidId `json:"sessionId"`
+}
+
+// AdminBearerOperatorSessionResponseCredentialMode external bearer mode で発行されたことを示す discriminator。
+type AdminBearerOperatorSessionResponseCredentialMode string
+
+// AdminContextRefreshResponse Admin Console context refresh 成功時の response。refreshToken 平文を body に含めず、path-scoped Cookie rotation を transport header に委ねる。
+type AdminContextRefreshResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// AuthContextId refresh path と session metadata を束縛する auth context。
+	AuthContextId WWWTemplateUlidId `json:"authContextId"`
+
+	// ClearCookieCommands logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。
+	ClearCookieCommands []WWWTemplateCookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints browser の origin-local context index を更新する非 secret hint。
+	ContextIndexUpdateHints []WWWTemplateContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// CredentialMode browser cookie mode で発行されたことを示す discriminator。
+	CredentialMode AdminContextRefreshResponseCredentialMode `json:"credentialMode"`
 
 	// ExpiresAt accessToken の失効日時。
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -136,30 +229,12 @@ type AdminAuthSessionResponse struct {
 	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
 	RequestId WWWTemplateUlidId `json:"requestId"`
 
-	// SessionId Admin operator session の canonical ULID。
+	// SessionId 対象 session の canonical ULID。
 	SessionId WWWTemplateUlidId `json:"sessionId"`
 }
 
-// AdminCreateAccountRequest Admin operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。
-type AdminCreateAccountRequest struct {
-	// Email 作成対象 Product Account の email address。
-	Email openapi_types.Email `json:"email"`
-
-	// Locale 作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。
-	Locale *WWWTemplateAccountLocale `json:"locale,omitempty"`
-}
-
-// AdminCreateAccountResponse Admin account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。
-type AdminCreateAccountResponse struct {
-	// Account 作成された Product Account の Admin read model。
-	Account AdminAccountSummary `json:"account"`
-
-	// AuditEventId Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。
-	AuditEventId WWWTemplateUlidId `json:"auditEventId"`
-
-	// RequestId 作成 request に対応する canonical ULID の追跡 ID。
-	RequestId WWWTemplateUlidId `json:"requestId"`
-}
+// AdminContextRefreshResponseCredentialMode browser cookie mode で発行されたことを示す discriminator。
+type AdminContextRefreshResponseCredentialMode string
 
 // AdminCreateOperatorRequest Admin operator 作成 API の request。setup token は secure delivery port だけで配送し、response body には含めない。
 type AdminCreateOperatorRequest struct {
@@ -202,6 +277,9 @@ type AdminInitialSetupFinishRequest struct {
 	// Credential browser WebAuthn API から返された attestation credential。
 	Credential WWWTemplateWebAuthnAttestationCredential `json:"credential"`
 
+	// CredentialMode session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。
+	CredentialMode WWWTemplateCredentialMode `json:"credentialMode"`
+
 	// DisplayName WebAuthn user displayName に使う表示名。
 	DisplayName string `json:"displayName"`
 
@@ -222,6 +300,16 @@ type AdminInitialSetupStartRequest struct {
 
 	// Email 初回 admin operator として登録する canonical email address。
 	Email openapi_types.Email `json:"email"`
+}
+
+// AdminOperatorAuthSessionResponse Admin login / setup が返す credential mode 別 session response。Cookie mode と Bearer mode の body shape を shared auth envelope から構成する。
+type AdminOperatorAuthSessionResponse struct {
+	union json.RawMessage
+}
+
+// AdminOperatorContextRefreshResponse Admin context refresh の credential mode 別 success response。Cookie mode と Bearer mode は同じ auth envelope field 名を使う。
+type AdminOperatorContextRefreshResponse struct {
+	union json.RawMessage
 }
 
 // AdminOperatorPasskeyItem Admin operator 自身が登録している passkey credential の表示用要約。credential handle や public key は秘匿し、管理操作に必要な識別子と時刻だけを返す。
@@ -263,10 +351,46 @@ type AdminOperatorProfile struct {
 // AdminOperatorRole Admin operator の role。UI 表示用の分類であり、最終的な authorization は Admin backend が行う。
 type AdminOperatorRole string
 
+// AdminOperatorSessionResponse Admin Console の operator session response。operator refreshToken は HttpOnly Cookie だけで扱い、body には含めない。
+type AdminOperatorSessionResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// AuthContextId refresh path と session metadata を束縛する auth context。
+	AuthContextId WWWTemplateUlidId `json:"authContextId"`
+
+	// ClearCookieCommands logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。
+	ClearCookieCommands []WWWTemplateCookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints browser の origin-local context index を更新する非 secret hint。
+	ContextIndexUpdateHints []WWWTemplateContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// CredentialMode browser cookie mode で発行されたことを示す discriminator。
+	CredentialMode AdminOperatorSessionResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Operator 認証された Admin operator の profile。
+	Operator AdminOperatorProfile `json:"operator"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId WWWTemplateUlidId `json:"sessionId"`
+}
+
+// AdminOperatorSessionResponseCredentialMode browser cookie mode で発行されたことを示す discriminator。
+type AdminOperatorSessionResponseCredentialMode string
+
 // AdminOperatorSetupFinishRequest Admin operator 初期設定 ceremony を完了する request。
 type AdminOperatorSetupFinishRequest struct {
 	// Credential browser WebAuthn API から返された attestation credential。
 	Credential WWWTemplateWebAuthnAttestationCredential `json:"credential"`
+
+	// CredentialMode session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。
+	CredentialMode WWWTemplateCredentialMode `json:"credentialMode"`
 
 	// RequestId start response と対応する canonical ULID の追跡 ID。
 	RequestId WWWTemplateUlidId `json:"requestId"`
@@ -286,6 +410,9 @@ type AdminPasskeyFinishRequest struct {
 	// Credential browser WebAuthn API から返された assertion credential。
 	Credential WWWTemplateWebAuthnAssertionCredential `json:"credential"`
 
+	// CredentialMode session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。
+	CredentialMode WWWTemplateCredentialMode `json:"credentialMode"`
+
 	// RequestId start response と対応する canonical ULID の追跡 ID。
 	RequestId WWWTemplateUlidId `json:"requestId"`
 }
@@ -299,36 +426,193 @@ type AdminPasskeyStartRequest struct {
 // AdminSetupTokenDeliveryStatus setup token delivery の結果。平文 token ではなく配送状態だけを表す。
 type AdminSetupTokenDeliveryStatus string
 
+// WWWTemplateAccountDetailResponse account 詳細 API の response。
+type WWWTemplateAccountDetailResponse struct {
+	// Account 対象 Product Account の read model。
+	Account WWWTemplateAccountSummary `json:"account"`
+
+	// RequestId 詳細取得 request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+}
+
+// WWWTemplateAccountListResponse account 一覧 API の response。requestId は監査・追跡に使用し、accounts は account concept read model として返す。
+type WWWTemplateAccountListResponse struct {
+	// Accounts 検索条件に一致した Product Account の要約一覧。
+	Accounts []WWWTemplateAccountSummary `json:"accounts"`
+
+	// NextCursor 次ページが存在するときだけ返す opaque cursor。
+	NextCursor *string `json:"nextCursor,omitempty"`
+
+	// RequestId 一覧取得 request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+}
+
 // WWWTemplateAccountLocale Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。
 type WWWTemplateAccountLocale string
 
-// WWWTemplateAuthFailureClassification defines model for WWWTemplate.AuthFailureClassification.
+// WWWTemplateAccountStatus Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。
+type WWWTemplateAccountStatus string
+
+// WWWTemplateAccountSummary Account 一覧と詳細で返す Product Account の要約。Admin route から参照できる account concept model であり、Admin surface 固有の catch-all DTO ではない。
+type WWWTemplateAccountSummary struct {
+	// AccountId 対象 Product Account の canonical ULID。
+	AccountId WWWTemplateUlidId `json:"accountId"`
+
+	// CreatedAt Product Account が作成された日時。
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Email Product Account の canonical email address。
+	Email string `json:"email"`
+
+	// PasskeyCount 対象 Product Account に登録済みの passkey 数。
+	PasskeyCount int32 `json:"passkeyCount"`
+
+	// Status API が観測した Product Account lifecycle state。
+	Status WWWTemplateAccountStatus `json:"status"`
+}
+
+// WWWTemplateAuthFailureClassification 認証・認可 failure を Product/Admin の両 artifact で同じ語彙に正規化する分類。
 type WWWTemplateAuthFailureClassification string
 
-// WWWTemplateAuthFailureResponse defines model for WWWTemplate.AuthFailureResponse.
+// WWWTemplateAuthFailureResponse 認証・認可 failure の共通 response。requestId と normalized error だけを返し、token や Cookie 値は含めない。
 type WWWTemplateAuthFailureResponse struct {
+	// Error client が fail-close 処理を選ぶための normalized failure classification。
 	Error WWWTemplateAuthFailureClassification `json:"error"`
 
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	// RequestId request に対応する canonical ULID の追跡 ID。
 	RequestId WWWTemplateUlidId `json:"requestId"`
 }
 
-// WWWTemplateAuthOperationErrorResponse defines model for WWWTemplate.AuthOperationErrorResponse.
+// WWWTemplateAuthOperationErrorResponse 入力不正や操作競合など、認証 credential 検証以外の operation error response。
 type WWWTemplateAuthOperationErrorResponse struct {
+	// Error client が表示・分岐に使う error code。secret や token 値は含めない。
 	Error string `json:"error"`
 
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	// RequestId request に対応する canonical ULID の追跡 ID。
 	RequestId WWWTemplateUlidId `json:"requestId"`
 }
 
-// WWWTemplateLogoutResponse defines model for WWWTemplate.LogoutResponse.
-type WWWTemplateLogoutResponse struct {
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	RequestId WWWTemplateUlidId                `json:"requestId"`
-	Revoked   WWWTemplateLogoutResponseRevoked `json:"revoked"`
+// WWWTemplateBearerContextRefreshRequest Bearer client が context refresh で送る request body。Cookie mode では body を送らず、path-scoped HttpOnly Cookie だけを提示する。
+type WWWTemplateBearerContextRefreshRequest struct {
+	// CredentialMode external bearer mode refresh であることを示す discriminator。
+	CredentialMode WWWTemplateBearerContextRefreshRequestCredentialMode `json:"credentialMode"`
+
+	// RefreshToken rotation 対象の opaque refreshToken。Authorization header ではなく body だけで提示する。
+	RefreshToken string `json:"refreshToken"`
 }
 
-// WWWTemplateLogoutResponseRevoked defines model for WWWTemplateLogoutResponse.Revoked.
+// WWWTemplateBearerContextRefreshRequestCredentialMode external bearer mode refresh であることを示す discriminator。
+type WWWTemplateBearerContextRefreshRequestCredentialMode string
+
+// WWWTemplateContextIndexDisplayHint browser context index に保存してよい非 secret の表示 hint。accessToken、refreshToken、Cookie 値、setup token は含めない。
+type WWWTemplateContextIndexDisplayHint struct {
+	// Label Account email や operator email など、UI 表示に使う非 secret label。
+	Label string `json:"label"`
+
+	// SecondaryLabel 補助表示に使う任意の非 secret text。role や locale など、認可判断に使わない値だけを入れる。
+	SecondaryLabel *string `json:"secondaryLabel,omitempty"`
+}
+
+// WWWTemplateContextIndexUpdateAction browser 内の context index に対する更新種別。token や Cookie 値を含めず、UI と refresh bootstrap の hint だけを更新する。
+type WWWTemplateContextIndexUpdateAction string
+
+// WWWTemplateContextIndexUpdateHint browser context index を更新するための非 secret hint。service artifact が Product/Admin context を決定するため、payload discriminator は持たない。
+type WWWTemplateContextIndexUpdateHint struct {
+	// Action context index に対して行う操作。
+	Action WWWTemplateContextIndexUpdateAction `json:"action"`
+
+	// AuthContextId 操作対象の auth context。clear-surface では省略できる。
+	AuthContextId *WWWTemplateUlidId `json:"authContextId,omitempty"`
+
+	// DisplayHint token を含まない UI 表示用 hint。upsert 時だけ返す。
+	DisplayHint *WWWTemplateContextIndexDisplayHint `json:"displayHint,omitempty"`
+
+	// ExpiresHintAt context index entry を削除する目安時刻。認可可否は refresh response で再検証する。
+	ExpiresHintAt *time.Time `json:"expiresHintAt,omitempty"`
+
+	// LastSeenAt context が最後に server で確認された時刻。
+	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+
+	// SessionId 対象 session の canonical ULID。upsert 時だけ返す。
+	SessionId *WWWTemplateUlidId `json:"sessionId,omitempty"`
+}
+
+// WWWTemplateCookieClearCommand HttpOnly refresh Cookie を削除するために backend が返す command。transport adapter はこの内容から Set-Cookie Max-Age=0 を組み立てる。
+type WWWTemplateCookieClearCommand struct {
+	// AuthContextId 削除対象 Cookie が束縛されていた auth context。
+	AuthContextId WWWTemplateUlidId `json:"authContextId"`
+
+	// HttpOnly 削除対象 Cookie が HttpOnly 属性を持つこと。
+	HttpOnly WWWTemplateCookieClearCommandHttpOnly `json:"httpOnly"`
+
+	// MaxAge Cookie 削除を表す Max-Age 値。
+	MaxAge WWWTemplateCookieClearCommandMaxAge `json:"maxAge"`
+
+	// Name 削除対象の Cookie 名。
+	Name string `json:"name"`
+
+	// Path 削除対象 Cookie の exact Path。context-scoped refresh path `/api/v1/auth/contexts/{authContextId}/refresh` を返す。
+	Path string `json:"path"`
+
+	// SameSite 削除対象 Cookie の SameSite 属性。
+	SameSite WWWTemplateCookieClearCommandSameSite `json:"sameSite"`
+
+	// Secure 削除対象 Cookie が Secure 属性を持つこと。
+	Secure WWWTemplateCookieClearCommandSecure `json:"secure"`
+}
+
+// WWWTemplateCookieClearCommandHttpOnly 削除対象 Cookie が HttpOnly 属性を持つこと。
+type WWWTemplateCookieClearCommandHttpOnly bool
+
+// WWWTemplateCookieClearCommandMaxAge Cookie 削除を表す Max-Age 値。
+type WWWTemplateCookieClearCommandMaxAge float32
+
+// WWWTemplateCookieClearCommandSameSite 削除対象 Cookie の SameSite 属性。
+type WWWTemplateCookieClearCommandSameSite string
+
+// WWWTemplateCookieClearCommandSecure 削除対象 Cookie が Secure 属性を持つこと。
+type WWWTemplateCookieClearCommandSecure bool
+
+// WWWTemplateCreateAccountRequest operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。
+type WWWTemplateCreateAccountRequest struct {
+	// Email 作成対象 Product Account の email address。
+	Email openapi_types.Email `json:"email"`
+
+	// Locale 作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。
+	Locale *WWWTemplateAccountLocale `json:"locale,omitempty"`
+}
+
+// WWWTemplateCreateAccountResponse account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。
+type WWWTemplateCreateAccountResponse struct {
+	// Account 作成された Product Account の read model。
+	Account WWWTemplateAccountSummary `json:"account"`
+
+	// AuditEventId Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。
+	AuditEventId WWWTemplateUlidId `json:"auditEventId"`
+
+	// RequestId 作成 request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+}
+
+// WWWTemplateCredentialMode 認証 session credential の発行方式。browser は cookie mode を使い、external API / mobile / CLI / SDK は bearer mode を使う。
+type WWWTemplateCredentialMode string
+
+// WWWTemplateLogoutResponse logout / revoke 処理の共通 response。accessToken claims で確定した context の Cookie clear と context index cleanup だけを返す。
+type WWWTemplateLogoutResponse struct {
+	// ClearCookieCommands revocation 対象 refresh Cookie を exact Path で削除する command 一覧。
+	ClearCookieCommands []WWWTemplateCookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints revocation 後に browser context index から対象 entry を削除するための hint。
+	ContextIndexUpdateHints []WWWTemplateContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// RequestId logout / revoke request に対応する canonical ULID の追跡 ID。
+	RequestId WWWTemplateUlidId `json:"requestId"`
+
+	// Revoked 対象 session または refresh family が失効されたことを示す。
+	Revoked WWWTemplateLogoutResponseRevoked `json:"revoked"`
+}
+
+// WWWTemplateLogoutResponseRevoked 対象 session または refresh family が失効されたことを示す。
 type WWWTemplateLogoutResponseRevoked bool
 
 // WWWTemplatePasskeyAddStartResponse WebAuthn PublicKeyCredentialCreationOptions returned by the server after BeginRegistration.
@@ -473,33 +757,11 @@ type ListAdminAccountsParams struct {
 	Limit  *int32  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// CreateAdminAccountParams defines parameters for CreateAdminAccount.
-type CreateAdminAccountParams struct {
-	XCSRFToken string `json:"X-CSRF-Token"`
-}
-
-// LogoutAdminOperatorParams defines parameters for LogoutAdminOperator.
-type LogoutAdminOperatorParams struct {
-	XCSRFToken string `json:"X-CSRF-Token"`
-}
-
-// CreateAdminOperatorParams defines parameters for CreateAdminOperator.
-type CreateAdminOperatorParams struct {
-	XCSRFToken string `json:"X-CSRF-Token"`
-}
-
-// ListAdminOperatorPasskeysParams defines parameters for ListAdminOperatorPasskeys.
-type ListAdminOperatorPasskeysParams struct {
-	XCSRFToken string `json:"X-CSRF-Token"`
-}
-
-// DeleteAdminOperatorPasskeyParams defines parameters for DeleteAdminOperatorPasskey.
-type DeleteAdminOperatorPasskeyParams struct {
-	XCSRFToken string `json:"X-CSRF-Token"`
-}
-
 // CreateAdminAccountJSONRequestBody defines body for CreateAdminAccount for application/json ContentType.
-type CreateAdminAccountJSONRequestBody = AdminCreateAccountRequest
+type CreateAdminAccountJSONRequestBody = WWWTemplateCreateAccountRequest
+
+// RefreshAdminOperatorSessionJSONRequestBody defines body for RefreshAdminOperatorSession for application/json ContentType.
+type RefreshAdminOperatorSessionJSONRequestBody = WWWTemplateBearerContextRefreshRequest
 
 // FinishAdminOperatorSetupJSONRequestBody defines body for FinishAdminOperatorSetup for application/json ContentType.
 type FinishAdminOperatorSetupJSONRequestBody = AdminOperatorSetupFinishRequest
@@ -522,6 +784,130 @@ type FinishAdminInitialSetupJSONRequestBody = AdminInitialSetupFinishRequest
 // StartAdminInitialSetupJSONRequestBody defines body for StartAdminInitialSetup for application/json ContentType.
 type StartAdminInitialSetupJSONRequestBody = AdminInitialSetupStartRequest
 
+// AsAdminOperatorSessionResponse returns the union data inside the AdminOperatorAuthSessionResponse as a AdminOperatorSessionResponse
+func (t AdminOperatorAuthSessionResponse) AsAdminOperatorSessionResponse() (AdminOperatorSessionResponse, error) {
+	var body AdminOperatorSessionResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdminOperatorSessionResponse overwrites any union data inside the AdminOperatorAuthSessionResponse as the provided AdminOperatorSessionResponse
+func (t *AdminOperatorAuthSessionResponse) FromAdminOperatorSessionResponse(v AdminOperatorSessionResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdminOperatorSessionResponse performs a merge with any union data inside the AdminOperatorAuthSessionResponse, using the provided AdminOperatorSessionResponse
+func (t *AdminOperatorAuthSessionResponse) MergeAdminOperatorSessionResponse(v AdminOperatorSessionResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdminBearerOperatorSessionResponse returns the union data inside the AdminOperatorAuthSessionResponse as a AdminBearerOperatorSessionResponse
+func (t AdminOperatorAuthSessionResponse) AsAdminBearerOperatorSessionResponse() (AdminBearerOperatorSessionResponse, error) {
+	var body AdminBearerOperatorSessionResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdminBearerOperatorSessionResponse overwrites any union data inside the AdminOperatorAuthSessionResponse as the provided AdminBearerOperatorSessionResponse
+func (t *AdminOperatorAuthSessionResponse) FromAdminBearerOperatorSessionResponse(v AdminBearerOperatorSessionResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdminBearerOperatorSessionResponse performs a merge with any union data inside the AdminOperatorAuthSessionResponse, using the provided AdminBearerOperatorSessionResponse
+func (t *AdminOperatorAuthSessionResponse) MergeAdminBearerOperatorSessionResponse(v AdminBearerOperatorSessionResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdminOperatorAuthSessionResponse) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdminOperatorAuthSessionResponse) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAdminContextRefreshResponse returns the union data inside the AdminOperatorContextRefreshResponse as a AdminContextRefreshResponse
+func (t AdminOperatorContextRefreshResponse) AsAdminContextRefreshResponse() (AdminContextRefreshResponse, error) {
+	var body AdminContextRefreshResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdminContextRefreshResponse overwrites any union data inside the AdminOperatorContextRefreshResponse as the provided AdminContextRefreshResponse
+func (t *AdminOperatorContextRefreshResponse) FromAdminContextRefreshResponse(v AdminContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdminContextRefreshResponse performs a merge with any union data inside the AdminOperatorContextRefreshResponse, using the provided AdminContextRefreshResponse
+func (t *AdminOperatorContextRefreshResponse) MergeAdminContextRefreshResponse(v AdminContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdminBearerContextRefreshResponse returns the union data inside the AdminOperatorContextRefreshResponse as a AdminBearerContextRefreshResponse
+func (t AdminOperatorContextRefreshResponse) AsAdminBearerContextRefreshResponse() (AdminBearerContextRefreshResponse, error) {
+	var body AdminBearerContextRefreshResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdminBearerContextRefreshResponse overwrites any union data inside the AdminOperatorContextRefreshResponse as the provided AdminBearerContextRefreshResponse
+func (t *AdminOperatorContextRefreshResponse) FromAdminBearerContextRefreshResponse(v AdminBearerContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdminBearerContextRefreshResponse performs a merge with any union data inside the AdminOperatorContextRefreshResponse, using the provided AdminBearerContextRefreshResponse
+func (t *AdminOperatorContextRefreshResponse) MergeAdminBearerContextRefreshResponse(v AdminBearerContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdminOperatorContextRefreshResponse) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdminOperatorContextRefreshResponse) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Lists customer accounts for Admin Console operators
@@ -529,10 +915,13 @@ type ServerInterface interface {
 	ListAdminAccounts(c *gin.Context, params ListAdminAccountsParams)
 	// Creates a customer account through the Admin Console
 	// (POST /api/v1/accounts)
-	CreateAdminAccount(c *gin.Context, params CreateAdminAccountParams)
+	CreateAdminAccount(c *gin.Context)
 	// Gets one customer account for the Admin Console
 	// (GET /api/v1/accounts/{accountId})
 	GetAdminAccount(c *gin.Context, accountId WWWTemplateUlidId)
+	// Refreshes the Admin operator access token for one auth context
+	// (POST /api/v1/auth/contexts/{authContextId}/refresh)
+	RefreshAdminOperatorSession(c *gin.Context, authContextId WWWTemplateUlidId)
 	// Finishes Admin operator setup and returns an operator session
 	// (POST /api/v1/auth/operator-setup/finish)
 	FinishAdminOperatorSetup(c *gin.Context)
@@ -544,13 +933,10 @@ type ServerInterface interface {
 	GetCurrentAdminOperator(c *gin.Context)
 	// Revokes the current Admin operator session
 	// (POST /api/v1/auth/operator/logout)
-	LogoutAdminOperator(c *gin.Context, params LogoutAdminOperatorParams)
-	// Refreshes the Admin operator access token through an HttpOnly refresh cookie
-	// (POST /api/v1/auth/operator/refresh)
-	RefreshAdminOperatorSession(c *gin.Context)
+	LogoutAdminOperator(c *gin.Context)
 	// Creates an Admin operator and delivers a one-time setup token
 	// (POST /api/v1/auth/operators)
-	CreateAdminOperator(c *gin.Context, params CreateAdminOperatorParams)
+	CreateAdminOperator(c *gin.Context)
 	// Finishes Admin operator passkey authentication and returns an operator session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishAdminPasskeyAuthentication(c *gin.Context)
@@ -559,10 +945,10 @@ type ServerInterface interface {
 	StartAdminPasskeyAuthentication(c *gin.Context)
 	// Lists registered passkeys for the current Admin operator
 	// (GET /api/v1/auth/passkeys)
-	ListAdminOperatorPasskeys(c *gin.Context, params ListAdminOperatorPasskeysParams)
+	ListAdminOperatorPasskeys(c *gin.Context)
 	// Deletes a registered passkey for the current Admin operator
 	// (DELETE /api/v1/auth/passkeys/{id})
-	DeleteAdminOperatorPasskey(c *gin.Context, id WWWTemplateUlidId, params DeleteAdminOperatorPasskeyParams)
+	DeleteAdminOperatorPasskey(c *gin.Context, id WWWTemplateUlidId)
 	// Finishes initial Admin operator setup and returns an operator session
 	// (POST /api/v1/auth/setup/finish)
 	FinishAdminInitialSetup(c *gin.Context)
@@ -627,36 +1013,7 @@ func (siw *ServerInterfaceWrapper) ListAdminAccounts(c *gin.Context) {
 // CreateAdminAccount operation middleware
 func (siw *ServerInterfaceWrapper) CreateAdminAccount(c *gin.Context) {
 
-	var err error
-
 	c.Set(BearerAuthScopes, []string{})
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateAdminAccountParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -665,7 +1022,7 @@ func (siw *ServerInterfaceWrapper) CreateAdminAccount(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.CreateAdminAccount(c, params)
+	siw.Handler.CreateAdminAccount(c)
 }
 
 // GetAdminAccount operation middleware
@@ -692,6 +1049,30 @@ func (siw *ServerInterfaceWrapper) GetAdminAccount(c *gin.Context) {
 	}
 
 	siw.Handler.GetAdminAccount(c, accountId)
+}
+
+// RefreshAdminOperatorSession operation middleware
+func (siw *ServerInterfaceWrapper) RefreshAdminOperatorSession(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "authContextId" -------------
+	var authContextId WWWTemplateUlidId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "authContextId", c.Param("authContextId"), &authContextId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter authContextId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RefreshAdminOperatorSession(c, authContextId)
 }
 
 // FinishAdminOperatorSetup operation middleware
@@ -738,37 +1119,8 @@ func (siw *ServerInterfaceWrapper) GetCurrentAdminOperator(c *gin.Context) {
 // LogoutAdminOperator operation middleware
 func (siw *ServerInterfaceWrapper) LogoutAdminOperator(c *gin.Context) {
 
-	var err error
-
 	c.Set(BearerAuthScopes, []string{})
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params LogoutAdminOperatorParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
-
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -776,55 +1128,13 @@ func (siw *ServerInterfaceWrapper) LogoutAdminOperator(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.LogoutAdminOperator(c, params)
-}
-
-// RefreshAdminOperatorSession operation middleware
-func (siw *ServerInterfaceWrapper) RefreshAdminOperatorSession(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.RefreshAdminOperatorSession(c)
+	siw.Handler.LogoutAdminOperator(c)
 }
 
 // CreateAdminOperator operation middleware
 func (siw *ServerInterfaceWrapper) CreateAdminOperator(c *gin.Context) {
 
-	var err error
-
 	c.Set(BearerAuthScopes, []string{})
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateAdminOperatorParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -833,7 +1143,7 @@ func (siw *ServerInterfaceWrapper) CreateAdminOperator(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.CreateAdminOperator(c, params)
+	siw.Handler.CreateAdminOperator(c)
 }
 
 // FinishAdminPasskeyAuthentication operation middleware
@@ -865,36 +1175,7 @@ func (siw *ServerInterfaceWrapper) StartAdminPasskeyAuthentication(c *gin.Contex
 // ListAdminOperatorPasskeys operation middleware
 func (siw *ServerInterfaceWrapper) ListAdminOperatorPasskeys(c *gin.Context) {
 
-	var err error
-
 	c.Set(BearerAuthScopes, []string{})
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAdminOperatorPasskeysParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -903,7 +1184,7 @@ func (siw *ServerInterfaceWrapper) ListAdminOperatorPasskeys(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.ListAdminOperatorPasskeys(c, params)
+	siw.Handler.ListAdminOperatorPasskeys(c)
 }
 
 // DeleteAdminOperatorPasskey operation middleware
@@ -922,33 +1203,6 @@ func (siw *ServerInterfaceWrapper) DeleteAdminOperatorPasskey(c *gin.Context) {
 
 	c.Set(BearerAuthScopes, []string{})
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteAdminOperatorPasskeyParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
-
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -956,7 +1210,7 @@ func (siw *ServerInterfaceWrapper) DeleteAdminOperatorPasskey(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.DeleteAdminOperatorPasskey(c, id, params)
+	siw.Handler.DeleteAdminOperatorPasskey(c, id)
 }
 
 // FinishAdminInitialSetup operation middleware
@@ -1015,11 +1269,11 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/api/v1/accounts", wrapper.ListAdminAccounts)
 	router.POST(options.BaseURL+"/api/v1/accounts", wrapper.CreateAdminAccount)
 	router.GET(options.BaseURL+"/api/v1/accounts/:accountId", wrapper.GetAdminAccount)
+	router.POST(options.BaseURL+"/api/v1/auth/contexts/:authContextId/refresh", wrapper.RefreshAdminOperatorSession)
 	router.POST(options.BaseURL+"/api/v1/auth/operator-setup/finish", wrapper.FinishAdminOperatorSetup)
 	router.POST(options.BaseURL+"/api/v1/auth/operator-setup/start", wrapper.StartAdminOperatorSetup)
 	router.GET(options.BaseURL+"/api/v1/auth/operator/current", wrapper.GetCurrentAdminOperator)
 	router.POST(options.BaseURL+"/api/v1/auth/operator/logout", wrapper.LogoutAdminOperator)
-	router.POST(options.BaseURL+"/api/v1/auth/operator/refresh", wrapper.RefreshAdminOperatorSession)
 	router.POST(options.BaseURL+"/api/v1/auth/operators", wrapper.CreateAdminOperator)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishAdminPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/start", wrapper.StartAdminPasskeyAuthentication)
@@ -1042,7 +1296,7 @@ type ListAdminAccounts200ResponseHeaders struct {
 }
 
 type ListAdminAccounts200JSONResponse struct {
-	Body    AdminAccountListResponse
+	Body    WWWTemplateAccountListResponse
 	Headers ListAdminAccounts200ResponseHeaders
 }
 
@@ -1123,8 +1377,7 @@ func (response ListAdminAccounts503JSONResponse) VisitListAdminAccountsResponse(
 }
 
 type CreateAdminAccountRequestObject struct {
-	Params CreateAdminAccountParams
-	Body   *CreateAdminAccountJSONRequestBody
+	Body *CreateAdminAccountJSONRequestBody
 }
 
 type CreateAdminAccountResponseObject interface {
@@ -1136,7 +1389,7 @@ type CreateAdminAccount201ResponseHeaders struct {
 }
 
 type CreateAdminAccount201JSONResponse struct {
-	Body    AdminCreateAccountResponse
+	Body    WWWTemplateCreateAccountResponse
 	Headers CreateAdminAccount201ResponseHeaders
 }
 
@@ -1246,7 +1499,7 @@ type GetAdminAccount200ResponseHeaders struct {
 }
 
 type GetAdminAccount200JSONResponse struct {
-	Body    AdminAccountDetailResponse
+	Body    WWWTemplateAccountDetailResponse
 	Headers GetAdminAccount200ResponseHeaders
 }
 
@@ -1326,6 +1579,83 @@ func (response GetAdminAccount503JSONResponse) VisitGetAdminAccountResponse(w ht
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RefreshAdminOperatorSessionRequestObject struct {
+	AuthContextId WWWTemplateUlidId `json:"authContextId"`
+	Body          *RefreshAdminOperatorSessionJSONRequestBody
+}
+
+type RefreshAdminOperatorSessionResponseObject interface {
+	VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error
+}
+
+type RefreshAdminOperatorSession200ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshAdminOperatorSession200JSONResponse struct {
+	Body    AdminOperatorContextRefreshResponse
+	Headers RefreshAdminOperatorSession200ResponseHeaders
+}
+
+func (response RefreshAdminOperatorSession200JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshAdminOperatorSession401ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshAdminOperatorSession401JSONResponse struct {
+	Body    WWWTemplateAuthFailureResponse
+	Headers RefreshAdminOperatorSession401ResponseHeaders
+}
+
+func (response RefreshAdminOperatorSession401JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshAdminOperatorSession403ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshAdminOperatorSession403JSONResponse struct {
+	Body    WWWTemplateAuthFailureResponse
+	Headers RefreshAdminOperatorSession403ResponseHeaders
+}
+
+func (response RefreshAdminOperatorSession403JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshAdminOperatorSession503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshAdminOperatorSession503JSONResponse struct {
+	Body    WWWTemplateAuthFailureResponse
+	Headers RefreshAdminOperatorSession503ResponseHeaders
+}
+
+func (response RefreshAdminOperatorSession503JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type FinishAdminOperatorSetupRequestObject struct {
 	Body *FinishAdminOperatorSetupJSONRequestBody
 }
@@ -1339,7 +1669,7 @@ type FinishAdminOperatorSetup200ResponseHeaders struct {
 }
 
 type FinishAdminOperatorSetup200JSONResponse struct {
-	Body    AdminAuthSessionResponse
+	Body    AdminOperatorAuthSessionResponse
 	Headers FinishAdminOperatorSetup200ResponseHeaders
 }
 
@@ -1554,7 +1884,6 @@ func (response GetCurrentAdminOperator503JSONResponse) VisitGetCurrentAdminOpera
 }
 
 type LogoutAdminOperatorRequestObject struct {
-	Params LogoutAdminOperatorParams
 }
 
 type LogoutAdminOperatorResponseObject interface {
@@ -1629,84 +1958,8 @@ func (response LogoutAdminOperator503JSONResponse) VisitLogoutAdminOperatorRespo
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type RefreshAdminOperatorSessionRequestObject struct {
-}
-
-type RefreshAdminOperatorSessionResponseObject interface {
-	VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error
-}
-
-type RefreshAdminOperatorSession200ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshAdminOperatorSession200JSONResponse struct {
-	Body    AdminAuthSessionResponse
-	Headers RefreshAdminOperatorSession200ResponseHeaders
-}
-
-func (response RefreshAdminOperatorSession200JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshAdminOperatorSession401ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshAdminOperatorSession401JSONResponse struct {
-	Body    WWWTemplateAuthFailureResponse
-	Headers RefreshAdminOperatorSession401ResponseHeaders
-}
-
-func (response RefreshAdminOperatorSession401JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshAdminOperatorSession403ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshAdminOperatorSession403JSONResponse struct {
-	Body    WWWTemplateAuthFailureResponse
-	Headers RefreshAdminOperatorSession403ResponseHeaders
-}
-
-func (response RefreshAdminOperatorSession403JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshAdminOperatorSession503ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshAdminOperatorSession503JSONResponse struct {
-	Body    WWWTemplateAuthFailureResponse
-	Headers RefreshAdminOperatorSession503ResponseHeaders
-}
-
-func (response RefreshAdminOperatorSession503JSONResponse) VisitRefreshAdminOperatorSessionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(503)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
 type CreateAdminOperatorRequestObject struct {
-	Params CreateAdminOperatorParams
-	Body   *CreateAdminOperatorJSONRequestBody
+	Body *CreateAdminOperatorJSONRequestBody
 }
 
 type CreateAdminOperatorResponseObject interface {
@@ -1828,7 +2081,7 @@ type FinishAdminPasskeyAuthentication200ResponseHeaders struct {
 }
 
 type FinishAdminPasskeyAuthentication200JSONResponse struct {
-	Body    AdminAuthSessionResponse
+	Body    AdminOperatorAuthSessionResponse
 	Headers FinishAdminPasskeyAuthentication200ResponseHeaders
 }
 
@@ -1951,7 +2204,6 @@ func (response StartAdminPasskeyAuthentication503JSONResponse) VisitStartAdminPa
 }
 
 type ListAdminOperatorPasskeysRequestObject struct {
-	Params ListAdminOperatorPasskeysParams
 }
 
 type ListAdminOperatorPasskeysResponseObject interface {
@@ -2027,8 +2279,7 @@ func (response ListAdminOperatorPasskeys503JSONResponse) VisitListAdminOperatorP
 }
 
 type DeleteAdminOperatorPasskeyRequestObject struct {
-	Id     WWWTemplateUlidId `json:"id"`
-	Params DeleteAdminOperatorPasskeyParams
+	Id WWWTemplateUlidId `json:"id"`
 }
 
 type DeleteAdminOperatorPasskeyResponseObject interface {
@@ -2147,7 +2398,7 @@ type FinishAdminInitialSetup200ResponseHeaders struct {
 }
 
 type FinishAdminInitialSetup200JSONResponse struct {
-	Body    AdminAuthSessionResponse
+	Body    AdminOperatorAuthSessionResponse
 	Headers FinishAdminInitialSetup200ResponseHeaders
 }
 
@@ -2331,6 +2582,9 @@ type StrictServerInterface interface {
 	// Gets one customer account for the Admin Console
 	// (GET /api/v1/accounts/{accountId})
 	GetAdminAccount(ctx context.Context, request GetAdminAccountRequestObject) (GetAdminAccountResponseObject, error)
+	// Refreshes the Admin operator access token for one auth context
+	// (POST /api/v1/auth/contexts/{authContextId}/refresh)
+	RefreshAdminOperatorSession(ctx context.Context, request RefreshAdminOperatorSessionRequestObject) (RefreshAdminOperatorSessionResponseObject, error)
 	// Finishes Admin operator setup and returns an operator session
 	// (POST /api/v1/auth/operator-setup/finish)
 	FinishAdminOperatorSetup(ctx context.Context, request FinishAdminOperatorSetupRequestObject) (FinishAdminOperatorSetupResponseObject, error)
@@ -2343,9 +2597,6 @@ type StrictServerInterface interface {
 	// Revokes the current Admin operator session
 	// (POST /api/v1/auth/operator/logout)
 	LogoutAdminOperator(ctx context.Context, request LogoutAdminOperatorRequestObject) (LogoutAdminOperatorResponseObject, error)
-	// Refreshes the Admin operator access token through an HttpOnly refresh cookie
-	// (POST /api/v1/auth/operator/refresh)
-	RefreshAdminOperatorSession(ctx context.Context, request RefreshAdminOperatorSessionRequestObject) (RefreshAdminOperatorSessionResponseObject, error)
 	// Creates an Admin operator and delivers a one-time setup token
 	// (POST /api/v1/auth/operators)
 	CreateAdminOperator(ctx context.Context, request CreateAdminOperatorRequestObject) (CreateAdminOperatorResponseObject, error)
@@ -2409,10 +2660,8 @@ func (sh *strictHandler) ListAdminAccounts(ctx *gin.Context, params ListAdminAcc
 }
 
 // CreateAdminAccount operation middleware
-func (sh *strictHandler) CreateAdminAccount(ctx *gin.Context, params CreateAdminAccountParams) {
+func (sh *strictHandler) CreateAdminAccount(ctx *gin.Context) {
 	var request CreateAdminAccountRequestObject
-
-	request.Params = params
 
 	var body CreateAdminAccountJSONRequestBody
 	if err := ctx.ShouldBindJSON(&body); err != nil {
@@ -2463,6 +2712,41 @@ func (sh *strictHandler) GetAdminAccount(ctx *gin.Context, accountId WWWTemplate
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(GetAdminAccountResponseObject); ok {
 		if err := validResponse.VisitGetAdminAccountResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshAdminOperatorSession operation middleware
+func (sh *strictHandler) RefreshAdminOperatorSession(ctx *gin.Context, authContextId WWWTemplateUlidId) {
+	var request RefreshAdminOperatorSessionRequestObject
+
+	request.AuthContextId = authContextId
+
+	var body RefreshAdminOperatorSessionJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshAdminOperatorSession(ctx, request.(RefreshAdminOperatorSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshAdminOperatorSession")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RefreshAdminOperatorSessionResponseObject); ok {
+		if err := validResponse.VisitRefreshAdminOperatorSessionResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -2562,10 +2846,8 @@ func (sh *strictHandler) GetCurrentAdminOperator(ctx *gin.Context) {
 }
 
 // LogoutAdminOperator operation middleware
-func (sh *strictHandler) LogoutAdminOperator(ctx *gin.Context, params LogoutAdminOperatorParams) {
+func (sh *strictHandler) LogoutAdminOperator(ctx *gin.Context) {
 	var request LogoutAdminOperatorRequestObject
-
-	request.Params = params
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.LogoutAdminOperator(ctx, request.(LogoutAdminOperatorRequestObject))
@@ -2588,36 +2870,9 @@ func (sh *strictHandler) LogoutAdminOperator(ctx *gin.Context, params LogoutAdmi
 	}
 }
 
-// RefreshAdminOperatorSession operation middleware
-func (sh *strictHandler) RefreshAdminOperatorSession(ctx *gin.Context) {
-	var request RefreshAdminOperatorSessionRequestObject
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.RefreshAdminOperatorSession(ctx, request.(RefreshAdminOperatorSessionRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "RefreshAdminOperatorSession")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(RefreshAdminOperatorSessionResponseObject); ok {
-		if err := validResponse.VisitRefreshAdminOperatorSessionResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // CreateAdminOperator operation middleware
-func (sh *strictHandler) CreateAdminOperator(ctx *gin.Context, params CreateAdminOperatorParams) {
+func (sh *strictHandler) CreateAdminOperator(ctx *gin.Context) {
 	var request CreateAdminOperatorRequestObject
-
-	request.Params = params
 
 	var body CreateAdminOperatorJSONRequestBody
 	if err := ctx.ShouldBindJSON(&body); err != nil {
@@ -2715,10 +2970,8 @@ func (sh *strictHandler) StartAdminPasskeyAuthentication(ctx *gin.Context) {
 }
 
 // ListAdminOperatorPasskeys operation middleware
-func (sh *strictHandler) ListAdminOperatorPasskeys(ctx *gin.Context, params ListAdminOperatorPasskeysParams) {
+func (sh *strictHandler) ListAdminOperatorPasskeys(ctx *gin.Context) {
 	var request ListAdminOperatorPasskeysRequestObject
-
-	request.Params = params
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.ListAdminOperatorPasskeys(ctx, request.(ListAdminOperatorPasskeysRequestObject))
@@ -2742,11 +2995,10 @@ func (sh *strictHandler) ListAdminOperatorPasskeys(ctx *gin.Context, params List
 }
 
 // DeleteAdminOperatorPasskey operation middleware
-func (sh *strictHandler) DeleteAdminOperatorPasskey(ctx *gin.Context, id WWWTemplateUlidId, params DeleteAdminOperatorPasskeyParams) {
+func (sh *strictHandler) DeleteAdminOperatorPasskey(ctx *gin.Context, id WWWTemplateUlidId) {
 	var request DeleteAdminOperatorPasskeyRequestObject
 
 	request.Id = id
-	request.Params = params
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.DeleteAdminOperatorPasskey(ctx, request.(DeleteAdminOperatorPasskeyRequestObject))

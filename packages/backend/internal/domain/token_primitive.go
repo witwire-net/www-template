@@ -523,6 +523,48 @@ func (h OpaqueTokenHash) Matches(token string) bool {
 	return hmac.Equal([]byte(h.String()), []byte(candidate.String()))
 }
 
+// EnsureRefreshContext は request path の authContextID と保存済み refresh/session context の一致を検証する。
+//
+// 役割:
+//   - Cookie Path を認可境界として信用せず、server-side record が持つ context と path selector を必ず照合する。
+//   - Product AccountAuth と Admin OperatorAuth の refresh credential 所有不変条件を、HTTP path 文字列生成から分離して domain に集約する。
+//   - Account/Operator の所有者や権限の判定は各 lifecycle object に残し、この関数は context selector の同一性だけを扱う。
+//
+// 引数:
+//   - requestedAuthContextID: HTTP route path など外側境界から取得した authContextId。
+//   - storedAuthContextID: refresh/session store から復元した authContextId または session selector。
+//
+// 戻り値:
+//   - nil: 両方が canonical ULID で完全一致する場合。
+//   - error: 入力不正または不一致の場合。形式不正は ErrInvalidAuthID、不一致は ErrInvalidToken を返す。
+//
+// 使用例:
+//
+//	if err := EnsureRefreshContext(pathContextID, session.ID().String()); err != nil {
+//		return err
+//	}
+func EnsureRefreshContext(requestedAuthContextID string, storedAuthContextID string) error {
+	// Step 1: path 由来 selector を canonical ULID として検証し、空白や path traversal 文字列を拒否する。
+	requested := strings.TrimSpace(requestedAuthContextID)
+	if err := ValidateAuthID(requested); err != nil {
+		return err
+	}
+
+	// Step 2: store 由来 selector も同じ規則で検証し、壊れた永続化値を fail-closed に扱う。
+	stored := strings.TrimSpace(storedAuthContextID)
+	if err := ValidateAuthID(stored); err != nil {
+		return err
+	}
+
+	// Step 3: 完全一致しない context は credential 所属不一致として拒否し、新しい token を発行させない。
+	if requested != stored {
+		return ErrInvalidToken
+	}
+
+	// Step 4: request path と server-side context が一致したため成功とする。
+	return nil
+}
+
 // NewTokenULID は token 系識別子を ULID として検証する。
 //
 // 役割:

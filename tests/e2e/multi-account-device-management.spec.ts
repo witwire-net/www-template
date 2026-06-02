@@ -9,6 +9,7 @@ const NO_STORE_HEADERS = {
 
 const TEST_ULID = {
   requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+  authContextIdA: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
   accountIdA: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
   passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
   sessionIdA: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -61,15 +62,29 @@ const mockPasskeyLogin = async (
   await page.route('**/api/v1/auth/passkey/finish', async (route) => {
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
-      accountId,
-      passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+      credentialMode: 'cookie',
+      authContextId: authContextIdForSession(sessionId),
       sessionId,
       accessToken: token,
-      refreshToken: `refresh-${sessionId}`,
       expiresAt: '2026-04-04T00:00:00.000Z',
+      contextIndexUpdateHints: [],
+      clearCookieCommands: [],
+      account: {
+        accountId,
+        passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+      },
     });
   });
 };
+
+const accountIdB = '01ARZ3NDEKTSV4RRFFQ69G5FAZ';
+const sessionIdB = '01ARZ3NDEKTSV4RRFFQ69G5FB0';
+const authContextIdB = '01ARZ3NDEKTSV4RRFFQ69G5FB2';
+
+/** session ID に対応する authContextId を返し、E2E の session/context 対応を安定化する。 */
+function authContextIdForSession(sessionId: string): string {
+  return sessionId === TEST_ULID.sessionIdA ? TEST_ULID.authContextIdA : authContextIdB;
+}
 
 /**
  * 既存セッションを保持したまま、別アカウントを追加ログインする。
@@ -101,9 +116,6 @@ const loginViaPasskeyUi = async (
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
   await expect(page).toHaveURL(/app.localhost:5174\/?$/);
 };
-
-const accountIdB = '01ARZ3NDEKTSV4RRFFQ69G5FAZ';
-const sessionIdB = '01ARZ3NDEKTSV4RRFFQ69G5FB0';
 
 /** アカウント B 用の JWT を生成する。 */
 function buildJwtB(exp: number): string {
@@ -277,10 +289,20 @@ test.describe('multi-account and device management', () => {
       sid: TEST_ULID.sessionIdA,
       exp: Math.floor(Date.now() / 1000) + 900,
     });
-    await page.route('**/api/v1/auth/refresh', async (route) => {
+    await page.route('**/api/v1/auth/contexts/*/refresh', async (route) => {
       await fulfillJson(route, 200, {
+        requestId: TEST_ULID.requestId,
+        credentialMode: 'cookie',
+        authContextId: TEST_ULID.authContextIdA,
+        sessionId: TEST_ULID.sessionIdA,
         accessToken: newToken,
-        refreshToken: 'refresh-new',
+        expiresAt: new Date((Math.floor(Date.now() / 1000) + 900) * 1000).toISOString(),
+        contextIndexUpdateHints: [],
+        clearCookieCommands: [],
+        account: {
+          accountId: TEST_ULID.accountIdA,
+          passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+        },
       });
     });
 
@@ -331,7 +353,7 @@ test.describe('multi-account and device management', () => {
     await loginViaPasskeyUi(page, TEST_ULID.accountIdA, TEST_ULID.sessionIdA, tokenA);
 
     // refresh API を失敗でモック
-    await page.route('**/api/v1/auth/refresh', async (route) => {
+    await page.route('**/api/v1/auth/contexts/*/refresh', async (route) => {
       await fulfillJson(route, 401, {
         requestId: TEST_ULID.requestId,
         error: 'session-expired',

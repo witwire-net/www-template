@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AdminAuthSessionResponse } from '@www-template/admin-api';
+import type { AdminOperatorSessionResponse } from '@www-template/admin-api';
 
 import { createCustomerAccount, searchAdminAccounts } from './accounts';
 import { clearAdminSession, finishAdminLogin } from './auth';
@@ -17,8 +17,9 @@ vi.mock('@www-template/admin-api', () => ({
   requestFinishAdminLogin: apiMocks.requestFinishAdminLogin,
 }));
 
-const sessionResponse: AdminAuthSessionResponse = {
+const sessionResponse: AdminOperatorSessionResponse = {
   requestId: '01JREQUEST0000000000000000',
+  credentialMode: 'cookie',
   operator: {
     operatorId: '01JOPERATOR00000000000000',
     email: 'operator@example.com',
@@ -26,9 +27,11 @@ const sessionResponse: AdminAuthSessionResponse = {
     active: true,
   },
   sessionId: '01JSESSION0000000000000000',
+  authContextId: '01JSESSION0000000000000000',
   accessToken: 'operator-access-token',
   expiresAt: '2030-01-01T00:00:00.000Z',
-  csrfToken: 'csrf-token',
+  contextIndexUpdateHints: [],
+  clearCookieCommands: [],
 };
 
 async function seedSession(): Promise<void> {
@@ -123,7 +126,7 @@ describe('Admin account domain orchestration', () => {
 
     expect(apiMocks.requestCreateAdminAccount).toHaveBeenCalledWith(
       { email: 'customer@example.com', locale: 'ja' },
-      expect.objectContaining({ csrfToken: 'csrf-token' })
+      expect.objectContaining({ accessToken: 'operator-access-token' })
     );
     expect(result.success).toBe(true);
   });

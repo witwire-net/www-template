@@ -1,4 +1,5 @@
 import { verifyProtectedAdminRoute } from '../auth';
+import { subscribeAdminContextIndexChanges } from '../context_index';
 
 import type { AdminSessionState } from '../auth';
 
@@ -81,6 +82,25 @@ function useAdminSession(options: AdminSessionOptions): {
 
     // protected route は常に backend current operator 検証を通してから表示する。
     void actions.verifyCurrentRoute(currentPath);
+  });
+
+  $effect(() => {
+    // 別 tab の login/logout/active context 変更を受け、現在 route の認証表示を backend refresh/current で再評価する。
+    const unsubscribe = subscribeAdminContextIndexChanges(() => {
+      const currentPath = options.readPath();
+      if (options.isPublicPath(currentPath)) {
+        actions.markPublicRoute(currentPath);
+        return;
+      }
+
+      // storage event の index 自体は信用せず、必ず Go Admin API の refresh/current 結果で表示 state を決める。
+      void actions.verifyCurrentRoute(currentPath);
+    });
+
+    return () => {
+      // route shell 破棄時に購読を解除し、古い tab event が stale state を更新しないようにする。
+      unsubscribe();
+    };
   });
 
   return { data: { state }, actions };

@@ -62,7 +62,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminAccountListResponse"
+                  "$ref": "#/components/schemas/WWWTemplate.AccountListResponse"
                 }
               }
             }
@@ -154,16 +154,7 @@
       "post": {
         "operationId": "createAdminAccount",
         "summary": "Creates a customer account through the Admin Console",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": "The request has succeeded and a new resource has been created as a result.",
@@ -179,7 +170,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminCreateAccountResponse"
+                  "$ref": "#/components/schemas/WWWTemplate.CreateAccountResponse"
                 }
               }
             }
@@ -286,7 +277,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AdminCreateAccountRequest"
+                "$ref": "#/components/schemas/WWWTemplate.CreateAccountRequest"
               }
             }
           }
@@ -327,7 +318,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminAccountDetailResponse"
+                  "$ref": "#/components/schemas/WWWTemplate.AccountDetailResponse"
                 }
               }
             }
@@ -417,6 +408,111 @@
         ]
       }
     },
+    "/api/v1/auth/contexts/{authContextId}/refresh": {
+      "post": {
+        "operationId": "refreshAdminOperatorSession",
+        "summary": "Refreshes the Admin operator access token for one auth context",
+        "parameters": [
+          {
+            "name": "authContextId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WWWTemplate.UlidId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOperatorContextRefreshResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access is unauthorized.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WWWTemplate.AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access is forbidden.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WWWTemplate.AuthFailureResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store"]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WWWTemplate.AuthFailureResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["admin-auth"],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WWWTemplate.BearerContextRefreshRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/operator-setup/finish": {
       "post": {
         "operationId": "finishAdminOperatorSetup",
@@ -437,7 +533,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminAuthSessionResponse"
+                  "$ref": "#/components/schemas/AdminOperatorAuthSessionResponse"
                 }
               }
             }
@@ -704,16 +800,7 @@
       "post": {
         "operationId": "logoutAdminOperator",
         "summary": "Revokes the current Admin operator session",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "The request has succeeded.",
@@ -800,106 +887,11 @@
         ]
       }
     },
-    "/api/v1/auth/operator/refresh": {
-      "post": {
-        "operationId": "refreshAdminOperatorSession",
-        "summary": "Refreshes the Admin operator access token through an HttpOnly refresh cookie",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminAuthSessionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Access is unauthorized.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WWWTemplate.AuthFailureResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access is forbidden.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WWWTemplate.AuthFailureResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable.",
-            "headers": {
-              "Cache-Control": {
-                "required": true,
-                "schema": {
-                  "type": "string",
-                  "enum": ["no-store"]
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WWWTemplate.AuthFailureResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": ["admin-auth"]
-      }
-    },
     "/api/v1/auth/operators": {
       "post": {
         "operationId": "createAdminOperator",
         "summary": "Creates an Admin operator and delivers a one-time setup token",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": "The request has succeeded and a new resource has been created as a result.",
@@ -1054,7 +1046,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminAuthSessionResponse"
+                  "$ref": "#/components/schemas/AdminOperatorAuthSessionResponse"
                 }
               }
             }
@@ -1211,16 +1203,7 @@
       "get": {
         "operationId": "listAdminOperatorPasskeys",
         "summary": "Lists registered passkeys for the current Admin operator",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "The request has succeeded.",
@@ -1318,14 +1301,6 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/WWWTemplate.UlidId"
-            }
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           }
         ],
@@ -1466,7 +1441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminAuthSessionResponse"
+                  "$ref": "#/components/schemas/AdminOperatorAuthSessionResponse"
                 }
               }
             }
@@ -1679,100 +1654,33 @@
   },
   "components": {
     "schemas": {
-      "AdminAccountDetailResponse": {
+      "AdminAuthorizationBoundary": {
         "type": "object",
-        "required": ["requestId", "account"],
+        "required": ["operatorId"],
         "properties": {
-          "requestId": {
+          "operatorId": {
             "allOf": [
               {
                 "$ref": "#/components/schemas/WWWTemplate.UlidId"
               }
             ],
-            "description": "詳細取得 request に対応する canonical ULID の追跡 ID。"
-          },
-          "account": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AdminAccountSummary"
-              }
-            ],
-            "description": "対象 Product Account の Admin read model。"
+            "description": "authorization 判定対象 operator の canonical ULID。"
           }
         },
-        "description": "Admin account 詳細 API の response。"
+        "description": "Admin operator の authorization concept を所有する marker model。RBAC の詳細は backend application が評価し、契約には role と operator profile だけを公開する。"
       },
-      "AdminAccountListResponse": {
+      "AdminBearerContextRefreshResponse": {
         "type": "object",
-        "required": ["requestId", "accounts"],
-        "properties": {
-          "requestId": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/WWWTemplate.UlidId"
-              }
-            ],
-            "description": "一覧取得 request に対応する canonical ULID の追跡 ID。"
-          },
-          "accounts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AdminAccountSummary"
-            },
-            "description": "検索条件に一致した Product Account の要約一覧。"
-          },
-          "nextCursor": {
-            "type": "string",
-            "description": "次ページが存在するときだけ返す opaque cursor。"
-          }
-        },
-        "description": "Admin account 一覧 API の response。requestId は監査・追跡に使用し、accounts は Product route から独立した Admin read model として返す。"
-      },
-      "AdminAccountStatus": {
-        "type": "string",
-        "enum": ["active", "suspended"],
-        "description": "Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。"
-      },
-      "AdminAccountSummary": {
-        "type": "object",
-        "required": ["accountId", "email", "status", "createdAt", "passkeyCount"],
-        "properties": {
-          "accountId": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/WWWTemplate.UlidId"
-              }
-            ],
-            "description": "対象 Product Account の canonical ULID。"
-          },
-          "email": {
-            "type": "string",
-            "description": "Product Account の canonical email address。"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AdminAccountStatus"
-              }
-            ],
-            "description": "Admin API が観測した Product Account lifecycle state。"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Product Account が作成された日時。"
-          },
-          "passkeyCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "対象 Product Account に登録済みの passkey 数。"
-          }
-        },
-        "description": "Admin account 一覧と詳細で返す Product Account の要約。Admin route から参照する read model であり、Product route namespace には所属しない。"
-      },
-      "AdminAuthSessionResponse": {
-        "type": "object",
-        "required": ["requestId", "operator", "sessionId", "accessToken", "expiresAt", "csrfToken"],
+        "required": [
+          "requestId",
+          "credentialMode",
+          "authContextId",
+          "sessionId",
+          "accessToken",
+          "refreshToken",
+          "expiresAt",
+          "operator"
+        ],
         "properties": {
           "requestId": {
             "allOf": [
@@ -1782,13 +1690,18 @@
             ],
             "description": "認証 request に対応する canonical ULID の追跡 ID。"
           },
-          "operator": {
+          "credentialMode": {
+            "type": "string",
+            "enum": ["bearer"],
+            "description": "external bearer mode で発行されたことを示す discriminator。"
+          },
+          "authContextId": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/AdminOperatorProfile"
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
               }
             ],
-            "description": "認証された Admin operator の profile。"
+            "description": "refreshToken と session metadata を束縛する auth context。"
           },
           "sessionId": {
             "allOf": [
@@ -1796,47 +1709,44 @@
                 "$ref": "#/components/schemas/WWWTemplate.UlidId"
               }
             ],
-            "description": "Admin operator session の canonical ULID。"
+            "description": "対象 session の canonical ULID。"
           },
           "accessToken": {
             "type": "string",
-            "description": "短命の Admin operator access token。"
+            "description": "protected API に Authorization Bearer として送信する短命 accessToken。"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "external client が body で保持し、context refresh で rotation する opaque refreshToken。"
           },
           "expiresAt": {
             "type": "string",
             "format": "date-time",
             "description": "accessToken の失効日時。"
           },
-          "csrfToken": {
-            "type": "string",
-            "description": "mutation request で session と照合する CSRF token。"
-          }
-        },
-        "description": "Admin operator auth 成功時の response。refreshToken は HttpOnly Cookie で扱うため body には含めない。"
-      },
-      "AdminCreateAccountRequest": {
-        "type": "object",
-        "required": ["email"],
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "description": "作成対象 Product Account の email address。"
-          },
-          "locale": {
+          "operator": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/WWWTemplate.AccountLocale"
+                "$ref": "#/components/schemas/AdminOperatorProfile"
               }
             ],
-            "description": "作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。"
+            "description": "認証された Admin operator の profile。"
           }
         },
-        "description": "Admin operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。"
+        "description": "Admin automation client の Bearer mode context refresh 成功 response。Cookie command や browser context index hint を含めない。"
       },
-      "AdminCreateAccountResponse": {
+      "AdminBearerOperatorSessionResponse": {
         "type": "object",
-        "required": ["requestId", "account", "auditEventId"],
+        "required": [
+          "requestId",
+          "credentialMode",
+          "authContextId",
+          "sessionId",
+          "accessToken",
+          "refreshToken",
+          "expiresAt",
+          "operator"
+        ],
         "properties": {
           "requestId": {
             "allOf": [
@@ -1844,26 +1754,129 @@
                 "$ref": "#/components/schemas/WWWTemplate.UlidId"
               }
             ],
-            "description": "作成 request に対応する canonical ULID の追跡 ID。"
+            "description": "認証 request に対応する canonical ULID の追跡 ID。"
           },
-          "account": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AdminAccountSummary"
-              }
-            ],
-            "description": "作成された Product Account の Admin read model。"
+          "credentialMode": {
+            "type": "string",
+            "enum": ["bearer"],
+            "description": "external bearer mode で発行されたことを示す discriminator。"
           },
-          "auditEventId": {
+          "authContextId": {
             "allOf": [
               {
                 "$ref": "#/components/schemas/WWWTemplate.UlidId"
               }
             ],
-            "description": "Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。"
+            "description": "refreshToken と session metadata を束縛する auth context。"
+          },
+          "sessionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "対象 session の canonical ULID。"
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "protected API に Authorization Bearer として送信する短命 accessToken。"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "external client が body で保持し、context refresh で rotation する opaque refreshToken。"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "accessToken の失効日時。"
+          },
+          "operator": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOperatorProfile"
+              }
+            ],
+            "description": "認証された Admin operator の profile。"
           }
         },
-        "description": "Admin account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。"
+        "description": "Admin automation client の Bearer mode operator session response。Cookie command や browser context index hint を含めない。"
+      },
+      "AdminContextRefreshResponse": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "credentialMode",
+          "authContextId",
+          "sessionId",
+          "accessToken",
+          "expiresAt",
+          "contextIndexUpdateHints",
+          "clearCookieCommands",
+          "operator"
+        ],
+        "properties": {
+          "requestId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "認証 request に対応する canonical ULID の追跡 ID。"
+          },
+          "credentialMode": {
+            "type": "string",
+            "enum": ["cookie"],
+            "description": "browser cookie mode で発行されたことを示す discriminator。"
+          },
+          "authContextId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "refresh path と session metadata を束縛する auth context。"
+          },
+          "sessionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "対象 session の canonical ULID。"
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "protected API に Authorization Bearer として送信する短命 accessToken。"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "accessToken の失効日時。"
+          },
+          "contextIndexUpdateHints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.ContextIndexUpdateHint"
+            },
+            "description": "browser の origin-local context index を更新する非 secret hint。"
+          },
+          "clearCookieCommands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.CookieClearCommand"
+            },
+            "description": "logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。"
+          },
+          "operator": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOperatorProfile"
+              }
+            ],
+            "description": "認証された Admin operator の profile。"
+          }
+        },
+        "description": "Admin Console context refresh 成功時の response。refreshToken 平文を body に含めず、path-scoped Cookie rotation を transport header に委ねる。"
       },
       "AdminCreateOperatorRequest": {
         "type": "object",
@@ -1949,7 +1962,14 @@
       },
       "AdminInitialSetupFinishRequest": {
         "type": "object",
-        "required": ["email", "displayName", "bootstrapSecret", "requestId", "credential"],
+        "required": [
+          "email",
+          "displayName",
+          "bootstrapSecret",
+          "requestId",
+          "credentialMode",
+          "credential"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -1971,6 +1991,14 @@
               }
             ],
             "description": "start response と対応する canonical ULID の追跡 ID。"
+          },
+          "credentialMode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.CredentialMode"
+              }
+            ],
+            "description": "session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。"
           },
           "credential": {
             "allOf": [
@@ -2002,6 +2030,28 @@
           }
         },
         "description": "初回 Admin operator 作成 ceremony を開始する request。bootstrapSecret は backend で opaque hash と期限を検証し、response body や永続化先へ出さない。"
+      },
+      "AdminOperatorAuthSessionResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AdminOperatorSessionResponse"
+          },
+          {
+            "$ref": "#/components/schemas/AdminBearerOperatorSessionResponse"
+          }
+        ],
+        "description": "Admin login / setup が返す credential mode 別 session response。Cookie mode と Bearer mode の body shape を shared auth envelope から構成する。"
+      },
+      "AdminOperatorContextRefreshResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AdminContextRefreshResponse"
+          },
+          {
+            "$ref": "#/components/schemas/AdminBearerContextRefreshResponse"
+          }
+        ],
+        "description": "Admin context refresh の credential mode 別 success response。Cookie mode と Bearer mode は同じ auth envelope field 名を使う。"
       },
       "AdminOperatorPasskeyItem": {
         "type": "object",
@@ -2086,9 +2136,86 @@
         "enum": ["admin", "operator", "viewer"],
         "description": "Admin operator の role。UI 表示用の分類であり、最終的な authorization は Admin backend が行う。"
       },
+      "AdminOperatorSessionResponse": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "credentialMode",
+          "authContextId",
+          "sessionId",
+          "accessToken",
+          "expiresAt",
+          "contextIndexUpdateHints",
+          "clearCookieCommands",
+          "operator"
+        ],
+        "properties": {
+          "requestId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "認証 request に対応する canonical ULID の追跡 ID。"
+          },
+          "credentialMode": {
+            "type": "string",
+            "enum": ["cookie"],
+            "description": "browser cookie mode で発行されたことを示す discriminator。"
+          },
+          "authContextId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "refresh path と session metadata を束縛する auth context。"
+          },
+          "sessionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "対象 session の canonical ULID。"
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "protected API に Authorization Bearer として送信する短命 accessToken。"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "accessToken の失効日時。"
+          },
+          "contextIndexUpdateHints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.ContextIndexUpdateHint"
+            },
+            "description": "browser の origin-local context index を更新する非 secret hint。"
+          },
+          "clearCookieCommands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.CookieClearCommand"
+            },
+            "description": "logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。"
+          },
+          "operator": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOperatorProfile"
+              }
+            ],
+            "description": "認証された Admin operator の profile。"
+          }
+        },
+        "description": "Admin Console の operator session response。operator refreshToken は HttpOnly Cookie だけで扱い、body には含めない。"
+      },
       "AdminOperatorSetupFinishRequest": {
         "type": "object",
-        "required": ["setupToken", "requestId", "credential"],
+        "required": ["setupToken", "requestId", "credentialMode", "credential"],
         "properties": {
           "setupToken": {
             "type": "string",
@@ -2101,6 +2228,14 @@
               }
             ],
             "description": "start response と対応する canonical ULID の追跡 ID。"
+          },
+          "credentialMode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.CredentialMode"
+              }
+            ],
+            "description": "session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。"
           },
           "credential": {
             "allOf": [
@@ -2126,7 +2261,7 @@
       },
       "AdminPasskeyFinishRequest": {
         "type": "object",
-        "required": ["requestId", "credential"],
+        "required": ["requestId", "credentialMode", "credential"],
         "properties": {
           "requestId": {
             "allOf": [
@@ -2135,6 +2270,14 @@
               }
             ],
             "description": "start response と対応する canonical ULID の追跡 ID。"
+          },
+          "credentialMode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.CredentialMode"
+              }
+            ],
+            "description": "session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。"
           },
           "credential": {
             "allOf": [
@@ -2163,51 +2306,373 @@
         "enum": ["sent"],
         "description": "setup token delivery の結果。平文 token ではなく配送状態だけを表す。"
       },
+      "WWWTemplate.AccountDetailResponse": {
+        "type": "object",
+        "required": ["requestId", "account"],
+        "properties": {
+          "requestId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "詳細取得 request に対応する canonical ULID の追跡 ID。"
+          },
+          "account": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.AccountSummary"
+              }
+            ],
+            "description": "対象 Product Account の read model。"
+          }
+        },
+        "description": "account 詳細 API の response。"
+      },
+      "WWWTemplate.AccountListResponse": {
+        "type": "object",
+        "required": ["requestId", "accounts"],
+        "properties": {
+          "requestId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "一覧取得 request に対応する canonical ULID の追跡 ID。"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.AccountSummary"
+            },
+            "description": "検索条件に一致した Product Account の要約一覧。"
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "次ページが存在するときだけ返す opaque cursor。"
+          }
+        },
+        "description": "account 一覧 API の response。requestId は監査・追跡に使用し、accounts は account concept read model として返す。"
+      },
       "WWWTemplate.AccountLocale": {
         "type": "string",
         "enum": ["ja", "en"],
         "description": "Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。"
       },
+      "WWWTemplate.AccountStatus": {
+        "type": "string",
+        "enum": ["active", "suspended"],
+        "description": "Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。"
+      },
+      "WWWTemplate.AccountSummary": {
+        "type": "object",
+        "required": ["accountId", "email", "status", "createdAt", "passkeyCount"],
+        "properties": {
+          "accountId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "対象 Product Account の canonical ULID。"
+          },
+          "email": {
+            "type": "string",
+            "description": "Product Account の canonical email address。"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.AccountStatus"
+              }
+            ],
+            "description": "API が観測した Product Account lifecycle state。"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Product Account が作成された日時。"
+          },
+          "passkeyCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "対象 Product Account に登録済みの passkey 数。"
+          }
+        },
+        "description": "Account 一覧と詳細で返す Product Account の要約。Admin route から参照できる account concept model であり、Admin surface 固有の catch-all DTO ではない。"
+      },
       "WWWTemplate.AuthFailureClassification": {
         "type": "string",
-        "enum": ["unauthenticated", "session-expired", "account-suspended", "internal-error"]
+        "enum": [
+          "unauthenticated",
+          "session-expired",
+          "account-suspended",
+          "credential-ambiguous",
+          "invalid-refresh-credential",
+          "internal-error"
+        ],
+        "description": "認証・認可 failure を Product/Admin の両 artifact で同じ語彙に正規化する分類。"
       },
       "WWWTemplate.AuthFailureResponse": {
         "type": "object",
         "required": ["requestId", "error"],
         "properties": {
           "requestId": {
-            "$ref": "#/components/schemas/WWWTemplate.UlidId"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "request に対応する canonical ULID の追跡 ID。"
           },
           "error": {
-            "$ref": "#/components/schemas/WWWTemplate.AuthFailureClassification"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.AuthFailureClassification"
+              }
+            ],
+            "description": "client が fail-close 処理を選ぶための normalized failure classification。"
           }
-        }
+        },
+        "description": "認証・認可 failure の共通 response。requestId と normalized error だけを返し、token や Cookie 値は含めない。"
       },
       "WWWTemplate.AuthOperationErrorResponse": {
         "type": "object",
         "required": ["requestId", "error"],
         "properties": {
           "requestId": {
-            "$ref": "#/components/schemas/WWWTemplate.UlidId"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "request に対応する canonical ULID の追跡 ID。"
           },
           "error": {
-            "type": "string"
+            "type": "string",
+            "description": "client が表示・分岐に使う error code。secret や token 値は含めない。"
           }
-        }
+        },
+        "description": "入力不正や操作競合など、認証 credential 検証以外の operation error response。"
+      },
+      "WWWTemplate.BearerContextRefreshRequest": {
+        "type": "object",
+        "required": ["credentialMode", "refreshToken"],
+        "properties": {
+          "credentialMode": {
+            "type": "string",
+            "enum": ["bearer"],
+            "description": "external bearer mode refresh であることを示す discriminator。"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "rotation 対象の opaque refreshToken。Authorization header ではなく body だけで提示する。"
+          }
+        },
+        "description": "Bearer client が context refresh で送る request body。Cookie mode では body を送らず、path-scoped HttpOnly Cookie だけを提示する。"
+      },
+      "WWWTemplate.ContextIndexDisplayHint": {
+        "type": "object",
+        "required": ["label"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Account email や operator email など、UI 表示に使う非 secret label。"
+          },
+          "secondaryLabel": {
+            "type": "string",
+            "description": "補助表示に使う任意の非 secret text。role や locale など、認可判断に使わない値だけを入れる。"
+          }
+        },
+        "description": "browser context index に保存してよい非 secret の表示 hint。accessToken、refreshToken、Cookie 値、setup token は含めない。"
+      },
+      "WWWTemplate.ContextIndexUpdateAction": {
+        "type": "string",
+        "enum": ["upsert", "remove", "clear-surface"],
+        "description": "browser 内の context index に対する更新種別。token や Cookie 値を含めず、UI と refresh bootstrap の hint だけを更新する。"
+      },
+      "WWWTemplate.ContextIndexUpdateHint": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.ContextIndexUpdateAction"
+              }
+            ],
+            "description": "context index に対して行う操作。"
+          },
+          "authContextId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "操作対象の auth context。clear-surface では省略できる。"
+          },
+          "sessionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "対象 session の canonical ULID。upsert 時だけ返す。"
+          },
+          "displayHint": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.ContextIndexDisplayHint"
+              }
+            ],
+            "description": "token を含まない UI 表示用 hint。upsert 時だけ返す。"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "context が最後に server で確認された時刻。"
+          },
+          "expiresHintAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "context index entry を削除する目安時刻。認可可否は refresh response で再検証する。"
+          }
+        },
+        "description": "browser context index を更新するための非 secret hint。service artifact が Product/Admin context を決定するため、payload discriminator は持たない。"
+      },
+      "WWWTemplate.CookieClearCommand": {
+        "type": "object",
+        "required": ["name", "path", "maxAge", "httpOnly", "secure", "sameSite", "authContextId"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "削除対象の Cookie 名。"
+          },
+          "path": {
+            "type": "string",
+            "description": "削除対象 Cookie の exact Path。context-scoped refresh path `/api/v1/auth/contexts/{authContextId}/refresh` を返す。"
+          },
+          "maxAge": {
+            "type": "number",
+            "enum": [0],
+            "description": "Cookie 削除を表す Max-Age 値。"
+          },
+          "httpOnly": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "削除対象 Cookie が HttpOnly 属性を持つこと。"
+          },
+          "secure": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "削除対象 Cookie が Secure 属性を持つこと。"
+          },
+          "sameSite": {
+            "type": "string",
+            "enum": ["Lax"],
+            "description": "削除対象 Cookie の SameSite 属性。"
+          },
+          "authContextId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "削除対象 Cookie が束縛されていた auth context。"
+          }
+        },
+        "description": "HttpOnly refresh Cookie を削除するために backend が返す command。transport adapter はこの内容から Set-Cookie Max-Age=0 を組み立てる。"
+      },
+      "WWWTemplate.CreateAccountRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "作成対象 Product Account の email address。"
+          },
+          "locale": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.AccountLocale"
+              }
+            ],
+            "description": "作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。"
+          }
+        },
+        "description": "operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。"
+      },
+      "WWWTemplate.CreateAccountResponse": {
+        "type": "object",
+        "required": ["requestId", "account", "auditEventId"],
+        "properties": {
+          "requestId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "作成 request に対応する canonical ULID の追跡 ID。"
+          },
+          "account": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.AccountSummary"
+              }
+            ],
+            "description": "作成された Product Account の read model。"
+          },
+          "auditEventId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。"
+          }
+        },
+        "description": "account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。"
+      },
+      "WWWTemplate.CredentialMode": {
+        "type": "string",
+        "enum": ["cookie", "bearer"],
+        "description": "認証 session credential の発行方式。browser は cookie mode を使い、external API / mobile / CLI / SDK は bearer mode を使う。"
       },
       "WWWTemplate.LogoutResponse": {
         "type": "object",
-        "required": ["requestId", "revoked"],
+        "required": ["requestId", "revoked", "clearCookieCommands", "contextIndexUpdateHints"],
         "properties": {
           "requestId": {
-            "$ref": "#/components/schemas/WWWTemplate.UlidId"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WWWTemplate.UlidId"
+              }
+            ],
+            "description": "logout / revoke request に対応する canonical ULID の追跡 ID。"
           },
           "revoked": {
             "type": "boolean",
-            "enum": [true]
+            "enum": [true],
+            "description": "対象 session または refresh family が失効されたことを示す。"
+          },
+          "clearCookieCommands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.CookieClearCommand"
+            },
+            "description": "revocation 対象 refresh Cookie を exact Path で削除する command 一覧。"
+          },
+          "contextIndexUpdateHints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WWWTemplate.ContextIndexUpdateHint"
+            },
+            "description": "revocation 後に browser context index から対象 entry を削除するための hint。"
           }
-        }
+        },
+        "description": "logout / revoke 処理の共通 response。accessToken claims で確定した context の Cookie clear と context index cleanup だけを返す。"
       },
       "WWWTemplate.PasskeyAddStartResponse": {
         "type": "object",
@@ -2465,7 +2930,7 @@
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。"
+        "description": "JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、subject・sessionID・iat・exp を含む。"
       }
     }
   },

@@ -5,7 +5,6 @@ import {
   type AuthFailureClassification,
   type AuthFailureResponse,
   type AuthOperationErrorResponse,
-  type AuthSessionResponse,
   type DeviceLinkResponse,
   type PasskeyAddFinishRequest,
   type PasskeyAddStartResponse,
@@ -13,6 +12,7 @@ import {
   type PasskeyListResponse,
   type PasskeyRegisterStartRequest,
   type PasskeyStartResponse,
+  type ProductAuthSessionResponse,
   type RecoveryAcceptedResponse,
   type RecoveryConsumeResponse,
   type ReauthenticationSessionKind,
@@ -99,7 +99,7 @@ const authApi = {
   finishPasskeyAuthentication: async (
     credential: WebAuthnAssertionCredential,
     options?: RequestInit
-  ) => sdk.auth.finishPasskeyAuthentication({ credential }, options),
+  ) => sdk.auth.finishPasskeyAuthentication({ credentialMode: 'cookie', credential }, options),
   startReauthentication: async (
     kind: ReauthenticationSessionKind,
     options?: RequestInit
@@ -142,10 +142,40 @@ const authApi = {
     recoverySession: string,
     credential: WebAuthnAttestationCredential,
     options?: RequestInit
-  ) => sdk.auth.registerPasskey({ recovery_session: recoverySession, credential }, options),
+  ) =>
+    sdk.auth.registerPasskey(
+      { recovery_session: recoverySession, credentialMode: 'cookie', credential },
+      options
+    ),
   toFailureClassification: (failure: AuthFailureResponse): AuthFailureClassification =>
     failure.error,
-  toSessionSummary: (session: AuthSessionResponse): AuthSessionResponse => session,
+  /**
+   * Product auth session response から domain 層で使用する最小の session summary を抽出する。
+   * Cookie mode / Bearer mode の共通フィールドだけを返し、refreshToken や Cookie command は含めない。
+   * account subject payload は service artifact 境界で context を決定するため、明示的に account.accountId を抽出する。
+   */
+  toSessionSummary: (
+    session: ProductAuthSessionResponse
+  ): {
+    requestId: string;
+    authContextId: string;
+    accountId: string;
+    passkeyCredentialId?: string;
+    sessionId: string;
+    accessToken: string;
+    expiresAt: string;
+  } => {
+    const account = session.account;
+    return {
+      requestId: session.requestId,
+      authContextId: session.authContextId,
+      accountId: account.accountId,
+      passkeyCredentialId: account.passkeyCredentialId,
+      sessionId: session.sessionId,
+      accessToken: session.accessToken,
+      expiresAt: session.expiresAt,
+    };
+  },
 
   // Passkey management (authenticated surface: /api/v1/passkeys)
   listPasskeys: async (

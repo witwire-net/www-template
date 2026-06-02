@@ -460,9 +460,15 @@ func assertNoMigrationVersionPrefix(t *testing.T, migrations map[string]string, 
 func assertNoAdminPrismaMigrationSystem(t *testing.T) {
 	t.Helper()
 
-	// Admin package は schema.prisma をまだ持ち得るが、DB 変更の実行境界は backend migration system に限定する。
-	adminPackageJSON := readRepositoryFile(t, filepath.Join("packages", "admin", "package.json"))
-	assertNotContainsAny(t, adminPackageJSON, "prisma migrate", "migrate:deploy", "migrate:dev")
+	// Admin package 群は schema.prisma をまだ持ち得るが、DB 変更の実行境界は backend migration system に限定する。
+	for _, packagePath := range []string{
+		filepath.Join("packages", "admin", "api", "package.json"),
+		filepath.Join("packages", "admin", "app", "package.json"),
+		filepath.Join("packages", "admin", "domain", "package.json"),
+	} {
+		adminPackageJSON := readRepositoryFile(t, packagePath)
+		assertNotContainsAny(t, adminPackageJSON, "prisma migrate", "migrate:deploy", "migrate:dev")
+	}
 
 	// package-local ORM migration の出力 directory が残ると Admin schema 管理経路が二重化するため、固定 path を直接検査する。
 	adminPrismaMigrationsDir := repositoryPath("packages", "admin", "prisma", "migrations")

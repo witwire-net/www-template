@@ -173,6 +173,7 @@ func TestAPIContractBES004SharedModelImportsDoNotAddRoutes(t *testing.T) {
 	// Step 1: Product surface の許可 route を列挙し、共有 model import によって Admin route や未承認 route が増えた場合に検知できるようにする。
 	assertOpenAPIRouteSurfaceEqual(t, productOpenAPIArtifactPath, readProductOpenAPIArtifact(t), []openAPIRouteSurface{
 		{path: "/api/v1/account/settings", methods: []string{"get", "patch"}},
+		{path: "/api/v1/auth/contexts/{authContextId}/refresh", methods: []string{"post"}},
 		{path: "/api/v1/auth/logout", methods: []string{"post"}},
 		{path: "/api/v1/auth/passkey/finish", methods: []string{"post"}},
 		{path: "/api/v1/auth/passkey/register", methods: []string{"post"}},
@@ -182,7 +183,6 @@ func TestAPIContractBES004SharedModelImportsDoNotAddRoutes(t *testing.T) {
 		{path: "/api/v1/auth/reauth/start", methods: []string{"post"}},
 		{path: "/api/v1/auth/recovery", methods: []string{"post"}},
 		{path: "/api/v1/auth/recovery/consume", methods: []string{"post"}},
-		{path: "/api/v1/auth/refresh", methods: []string{"post"}},
 		{path: "/api/v1/passkeys", methods: []string{"get"}},
 		{path: "/api/v1/passkeys/finish", methods: []string{"post"}},
 		{path: "/api/v1/passkeys/send-device-link", methods: []string{"post"}},
@@ -198,11 +198,11 @@ func TestAPIContractBES004SharedModelImportsDoNotAddRoutes(t *testing.T) {
 	assertOpenAPIRouteSurfaceEqual(t, adminOpenAPIArtifactPath, readAdminOpenAPIArtifact(t), []openAPIRouteSurface{
 		{path: "/api/v1/accounts", methods: []string{"get", "post"}},
 		{path: "/api/v1/accounts/{accountId}", methods: []string{"get"}},
+		{path: "/api/v1/auth/contexts/{authContextId}/refresh", methods: []string{"post"}},
 		{path: "/api/v1/auth/operator-setup/finish", methods: []string{"post"}},
 		{path: "/api/v1/auth/operator-setup/start", methods: []string{"post"}},
 		{path: "/api/v1/auth/operator/current", methods: []string{"get"}},
 		{path: "/api/v1/auth/operator/logout", methods: []string{"post"}},
-		{path: "/api/v1/auth/operator/refresh", methods: []string{"post"}},
 		{path: "/api/v1/auth/operators", methods: []string{"post"}},
 		{path: "/api/v1/auth/passkey/finish", methods: []string{"post"}},
 		{path: "/api/v1/auth/passkey/start", methods: []string{"post"}},

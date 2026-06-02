@@ -5,6 +5,28 @@
  * OpenAPI spec version: 1.0.0
  */
 /**
+ * account 詳細 API の response。
+ */
+export interface AccountDetailResponse {
+  /** 詳細取得 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** 対象 Product Account の read model。 */
+  account: AccountSummary;
+}
+
+/**
+ * account 一覧 API の response。requestId は監査・追跡に使用し、accounts は account concept read model として返す。
+ */
+export interface AccountListResponse {
+  /** 一覧取得 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** 検索条件に一致した Product Account の要約一覧。 */
+  accounts: AccountSummary[];
+  /** 次ページが存在するときだけ返す opaque cursor。 */
+  nextCursor?: string;
+}
+
+/**
  * Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。
  */
 export type AccountLocale = (typeof AccountLocale)[keyof typeof AccountLocale];
@@ -41,6 +63,36 @@ export interface AccountSettingSnapshot {
   locale: AccountLocale;
 }
 
+/**
+ * Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。
+ */
+export type AccountStatus = (typeof AccountStatus)[keyof typeof AccountStatus];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AccountStatus = {
+  active: 'active',
+  suspended: 'suspended',
+} as const;
+
+/**
+ * Account 一覧と詳細で返す Product Account の要約。Admin route から参照できる account concept model であり、Admin surface 固有の catch-all DTO ではない。
+ */
+export interface AccountSummary {
+  /** 対象 Product Account の canonical ULID。 */
+  accountId: UlidId;
+  /** Product Account の canonical email address。 */
+  email: string;
+  /** API が観測した Product Account lifecycle state。 */
+  status: AccountStatus;
+  /** Product Account が作成された日時。 */
+  createdAt: string;
+  /** 対象 Product Account に登録済みの passkey 数。 */
+  passkeyCount: number;
+}
+
+/**
+ * 認証・認可 failure を Product/Admin の両 artifact で同じ語彙に正規化する分類。
+ */
 export type AuthFailureClassification =
   (typeof AuthFailureClassification)[keyof typeof AuthFailureClassification];
 
@@ -49,26 +101,29 @@ export const AuthFailureClassification = {
   unauthenticated: 'unauthenticated',
   'session-expired': 'session-expired',
   'account-suspended': 'account-suspended',
+  'credential-ambiguous': 'credential-ambiguous',
+  'invalid-refresh-credential': 'invalid-refresh-credential',
   'internal-error': 'internal-error',
 } as const;
 
+/**
+ * 認証・認可 failure の共通 response。requestId と normalized error だけを返し、token や Cookie 値は含めない。
+ */
 export interface AuthFailureResponse {
+  /** request に対応する canonical ULID の追跡 ID。 */
   requestId: UlidId;
+  /** client が fail-close 処理を選ぶための normalized failure classification。 */
   error: AuthFailureClassification;
 }
 
+/**
+ * 入力不正や操作競合など、認証 credential 検証以外の operation error response。
+ */
 export interface AuthOperationErrorResponse {
+  /** request に対応する canonical ULID の追跡 ID。 */
   requestId: UlidId;
+  /** client が表示・分岐に使う error code。secret や token 値は含めない。 */
   error: string;
-}
-
-export interface AuthSessionResponse {
-  requestId: UlidId;
-  accountId: UlidId;
-  passkeyCredentialId: UlidId;
-  sessionId: UlidId;
-  accessToken: string;
-  expiresAt: string;
 }
 
 /**
@@ -92,7 +147,7 @@ export const BearerAuthScheme = {
 } as const;
 
 /**
- * JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。
+ * JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、subject・sessionID・iat・exp を含む。
  */
 export interface BearerAuth {
   /** Http authentication */
@@ -100,6 +155,207 @@ export interface BearerAuth {
   /** bearer auth scheme */
   scheme: BearerAuthScheme;
 }
+
+/**
+ * external bearer mode で発行されたことを示す discriminator。
+ */
+export type BearerAuthEnvelopeCredentialMode =
+  (typeof BearerAuthEnvelopeCredentialMode)[keyof typeof BearerAuthEnvelopeCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BearerAuthEnvelopeCredentialMode = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * Bearer mode session / refresh response が共有する auth envelope。Cookie command や browser context index hint を持たない。
+ */
+export interface BearerAuthEnvelope {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** external bearer mode で発行されたことを示す discriminator。 */
+  credentialMode: BearerAuthEnvelopeCredentialMode;
+  /** refreshToken と session metadata を束縛する auth context。 */
+  authContextId: UlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: UlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** external client が body で保持し、context refresh で rotation する opaque refreshToken。 */
+  refreshToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+}
+
+/**
+ * external bearer mode refresh であることを示す discriminator。
+ */
+export type BearerContextRefreshRequestCredentialMode =
+  (typeof BearerContextRefreshRequestCredentialMode)[keyof typeof BearerContextRefreshRequestCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BearerContextRefreshRequestCredentialMode = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * Bearer client が context refresh で送る request body。Cookie mode では body を送らず、path-scoped HttpOnly Cookie だけを提示する。
+ */
+export interface BearerContextRefreshRequest {
+  /** external bearer mode refresh であることを示す discriminator。 */
+  credentialMode: BearerContextRefreshRequestCredentialMode;
+  /** rotation 対象の opaque refreshToken。Authorization header ではなく body だけで提示する。 */
+  refreshToken: string;
+}
+
+/**
+ * browser context index に保存してよい非 secret の表示 hint。accessToken、refreshToken、Cookie 値、setup token は含めない。
+ */
+export interface ContextIndexDisplayHint {
+  /** Account email や operator email など、UI 表示に使う非 secret label。 */
+  label: string;
+  /** 補助表示に使う任意の非 secret text。role や locale など、認可判断に使わない値だけを入れる。 */
+  secondaryLabel?: string;
+}
+
+/**
+ * browser 内の context index に対する更新種別。token や Cookie 値を含めず、UI と refresh bootstrap の hint だけを更新する。
+ */
+export type ContextIndexUpdateAction =
+  (typeof ContextIndexUpdateAction)[keyof typeof ContextIndexUpdateAction];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ContextIndexUpdateAction = {
+  upsert: 'upsert',
+  remove: 'remove',
+  'clear-surface': 'clear-surface',
+} as const;
+
+/**
+ * browser context index を更新するための非 secret hint。service artifact が Product/Admin context を決定するため、payload discriminator は持たない。
+ */
+export interface ContextIndexUpdateHint {
+  /** context index に対して行う操作。 */
+  action: ContextIndexUpdateAction;
+  /** 操作対象の auth context。clear-surface では省略できる。 */
+  authContextId?: UlidId;
+  /** 対象 session の canonical ULID。upsert 時だけ返す。 */
+  sessionId?: UlidId;
+  /** token を含まない UI 表示用 hint。upsert 時だけ返す。 */
+  displayHint?: ContextIndexDisplayHint;
+  /** context が最後に server で確認された時刻。 */
+  lastSeenAt?: string;
+  /** context index entry を削除する目安時刻。認可可否は refresh response で再検証する。 */
+  expiresHintAt?: string;
+}
+
+/**
+ * browser cookie mode で発行されたことを示す discriminator。
+ */
+export type CookieAuthEnvelopeCredentialMode =
+  (typeof CookieAuthEnvelopeCredentialMode)[keyof typeof CookieAuthEnvelopeCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CookieAuthEnvelopeCredentialMode = {
+  cookie: 'cookie',
+} as const;
+
+/**
+ * Cookie mode session / refresh response が共有する auth envelope。Product/Admin はこの単一定義を spread して同じ field 名を公開する。
+ */
+export interface CookieAuthEnvelope {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** browser cookie mode で発行されたことを示す discriminator。 */
+  credentialMode: CookieAuthEnvelopeCredentialMode;
+  /** refresh path と session metadata を束縛する auth context。 */
+  authContextId: UlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: UlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** browser の origin-local context index を更新する非 secret hint。 */
+  contextIndexUpdateHints: ContextIndexUpdateHint[];
+  /** logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。 */
+  clearCookieCommands: CookieClearCommand[];
+}
+
+/**
+ * Cookie 削除を表す Max-Age 値。
+ */
+export type CookieClearCommandMaxAge =
+  (typeof CookieClearCommandMaxAge)[keyof typeof CookieClearCommandMaxAge];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CookieClearCommandMaxAge = {
+  NUMBER_0: 0,
+} as const;
+
+/**
+ * 削除対象 Cookie の SameSite 属性。
+ */
+export type CookieClearCommandSameSite =
+  (typeof CookieClearCommandSameSite)[keyof typeof CookieClearCommandSameSite];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CookieClearCommandSameSite = {
+  Lax: 'Lax',
+} as const;
+
+/**
+ * HttpOnly refresh Cookie を削除するために backend が返す command。transport adapter はこの内容から Set-Cookie Max-Age=0 を組み立てる。
+ */
+export interface CookieClearCommand {
+  /** 削除対象の Cookie 名。 */
+  name: string;
+  /** 削除対象 Cookie の exact Path。context-scoped refresh path `/api/v1/auth/contexts/{authContextId}/refresh` を返す。 */
+  path: string;
+  /** Cookie 削除を表す Max-Age 値。 */
+  maxAge: CookieClearCommandMaxAge;
+  /** 削除対象 Cookie が HttpOnly 属性を持つこと。 */
+  httpOnly: boolean;
+  /** 削除対象 Cookie が Secure 属性を持つこと。 */
+  secure: boolean;
+  /** 削除対象 Cookie の SameSite 属性。 */
+  sameSite: CookieClearCommandSameSite;
+  /** 削除対象 Cookie が束縛されていた auth context。 */
+  authContextId: UlidId;
+}
+
+/**
+ * operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。
+ */
+export interface CreateAccountRequest {
+  /** 作成対象 Product Account の email address。 */
+  email: string;
+  /** 作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。 */
+  locale?: AccountLocale;
+}
+
+/**
+ * account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。
+ */
+export interface CreateAccountResponse {
+  /** 作成 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** 作成された Product Account の read model。 */
+  account: AccountSummary;
+  /** Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。 */
+  auditEventId: UlidId;
+}
+
+/**
+ * 認証 session credential の発行方式。browser は cookie mode を使い、external API / mobile / CLI / SDK は bearer mode を使う。
+ */
+export type CredentialMode = (typeof CredentialMode)[keyof typeof CredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CredentialMode = {
+  cookie: 'cookie',
+  bearer: 'bearer',
+} as const;
 
 export interface DeviceLinkResponse {
   requestId: UlidId;
@@ -115,6 +371,8 @@ export interface ErrorResponse {
  */
 export interface InvitationPasskeyFinishRequest {
   invitation_session: UlidId;
+  /** session credential の発行方式。browser は cookie、external client は bearer を指定する。 */
+  credentialMode: CredentialMode;
   credential: WebAuthnAttestationCredential;
 }
 
@@ -125,9 +383,18 @@ export interface InvitationPasskeyStartRequest {
   invitation_session: UlidId;
 }
 
+/**
+ * logout / revoke 処理の共通 response。accessToken claims で確定した context の Cookie clear と context index cleanup だけを返す。
+ */
 export interface LogoutResponse {
+  /** logout / revoke request に対応する canonical ULID の追跡 ID。 */
   requestId: UlidId;
+  /** 対象 session または refresh family が失効されたことを示す。 */
   revoked: boolean;
+  /** revocation 対象 refresh Cookie を exact Path で削除する command 一覧。 */
+  clearCookieCommands: CookieClearCommand[];
+  /** revocation 後に browser context index から対象 entry を削除するための hint。 */
+  contextIndexUpdateHints: ContextIndexUpdateHint[];
 }
 
 export interface PasskeyAddFinishRequest {
@@ -179,6 +446,8 @@ export interface PasskeyAddStartResponse {
 }
 
 export interface PasskeyFinishRequest {
+  /** session credential の発行方式。browser は cookie、external client は bearer を指定する。 */
+  credentialMode: CredentialMode;
   credential: WebAuthnAssertionCredential;
 }
 
@@ -230,6 +499,167 @@ export interface PasskeyStartResponse {
   /** Allowed credential descriptors (empty for usernameless flows). */
   allowCredentials?: WebAuthnCredentialDescriptor[];
   userVerification: PasskeyStartResponseUserVerification;
+}
+
+/**
+ * Product auth response の account subject payload。service artifact が Product 文脈を決めるため principal discriminator は持たない。
+ */
+export interface ProductAccountSubject {
+  /** 対象 Product account の canonical ULID。 */
+  accountId: UlidId;
+  /** 認証に使われた passkey credential の canonical ULID。 */
+  passkeyCredentialId?: UlidId;
+}
+
+/**
+ * Product login / register が返す credential mode 別 session response。Cookie mode と Bearer mode の body shape を分離する。
+ */
+export type ProductAuthSessionResponse =
+  | ProductCookieAuthSessionResponse
+  | ProductBearerAuthSessionResponse;
+
+/**
+ * external bearer mode で発行されたことを示す discriminator。
+ */
+export type ProductBearerAuthSessionResponseCredentialMode =
+  (typeof ProductBearerAuthSessionResponseCredentialMode)[keyof typeof ProductBearerAuthSessionResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ProductBearerAuthSessionResponseCredentialMode = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * Product external bearer mode の session response。Cookie command や browser context index hint を含めず、body で refreshToken を返す。
+ */
+export interface ProductBearerAuthSessionResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** external bearer mode で発行されたことを示す discriminator。 */
+  credentialMode: ProductBearerAuthSessionResponseCredentialMode;
+  /** refreshToken と session metadata を束縛する auth context。 */
+  authContextId: UlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: UlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** external client が body で保持し、context refresh で rotation する opaque refreshToken。 */
+  refreshToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** 認証された Product account の subject payload。 */
+  account: ProductAccountSubject;
+  /** login / refresh 後に external client が必要に応じて参照できる Product 設定 snapshot。 */
+  accountSetting?: AccountSettingSnapshot;
+}
+
+/**
+ * external bearer mode で発行されたことを示す discriminator。
+ */
+export type ProductBearerContextRefreshResponseCredentialMode =
+  (typeof ProductBearerContextRefreshResponseCredentialMode)[keyof typeof ProductBearerContextRefreshResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ProductBearerContextRefreshResponseCredentialMode = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * Product Bearer mode context refresh 成功時の response。Cookie command や browser context index hint を含めない。
+ */
+export interface ProductBearerContextRefreshResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** external bearer mode で発行されたことを示す discriminator。 */
+  credentialMode: ProductBearerContextRefreshResponseCredentialMode;
+  /** refreshToken と session metadata を束縛する auth context。 */
+  authContextId: UlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: UlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** external client が body で保持し、context refresh で rotation する opaque refreshToken。 */
+  refreshToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** 認証された Product account の subject payload。 */
+  account: ProductAccountSubject;
+  /** refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。 */
+  accountSetting?: AccountSettingSnapshot;
+}
+
+/**
+ * browser cookie mode で発行されたことを示す discriminator。
+ */
+export type ProductCookieAuthSessionResponseCredentialMode =
+  (typeof ProductCookieAuthSessionResponseCredentialMode)[keyof typeof ProductCookieAuthSessionResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ProductCookieAuthSessionResponseCredentialMode = {
+  cookie: 'cookie',
+} as const;
+
+/**
+ * Product browser cookie mode の session response。refreshToken は HttpOnly Cookie だけで扱い、body には含めない。
+ */
+export interface ProductCookieAuthSessionResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** browser cookie mode で発行されたことを示す discriminator。 */
+  credentialMode: ProductCookieAuthSessionResponseCredentialMode;
+  /** refresh path と session metadata を束縛する auth context。 */
+  authContextId: UlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: UlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** browser の origin-local context index を更新する非 secret hint。 */
+  contextIndexUpdateHints: ContextIndexUpdateHint[];
+  /** logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。 */
+  clearCookieCommands: CookieClearCommand[];
+  /** 認証された Product account の subject payload。 */
+  account: ProductAccountSubject;
+  /** login / refresh 後に Product UI が account 設定を同期するための snapshot。 */
+  accountSetting?: AccountSettingSnapshot;
+}
+
+/**
+ * browser cookie mode で発行されたことを示す discriminator。
+ */
+export type ProductCookieContextRefreshResponseCredentialMode =
+  (typeof ProductCookieContextRefreshResponseCredentialMode)[keyof typeof ProductCookieContextRefreshResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ProductCookieContextRefreshResponseCredentialMode = {
+  cookie: 'cookie',
+} as const;
+
+/**
+ * Product Cookie mode context refresh 成功時の response。refreshToken 平文を body に含めず、path-scoped Cookie rotation を transport header に委ねる。
+ */
+export interface ProductCookieContextRefreshResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: UlidId;
+  /** browser cookie mode で発行されたことを示す discriminator。 */
+  credentialMode: ProductCookieContextRefreshResponseCredentialMode;
+  /** refresh path と session metadata を束縛する auth context。 */
+  authContextId: UlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: UlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** browser の origin-local context index を更新する非 secret hint。 */
+  contextIndexUpdateHints: ContextIndexUpdateHint[];
+  /** logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。 */
+  clearCookieCommands: CookieClearCommand[];
+  /** 認証された Product account の subject payload。 */
+  account: ProductAccountSubject;
+  /** refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。 */
+  accountSetting?: AccountSettingSnapshot;
 }
 
 /**
@@ -294,6 +724,8 @@ export interface RecoveryConsumeResponse {
  */
 export interface RecoveryPasskeyFinishRequest {
   recovery_session: UlidId;
+  /** session credential の発行方式。browser は cookie、external client は bearer を指定する。 */
+  credentialMode: CredentialMode;
   credential: WebAuthnAttestationCredential;
 }
 
@@ -309,14 +741,11 @@ export interface RecoveryRequest {
 }
 
 /**
- * Cookie refresh 成功時に返却される新しい accessToken と Product AccountSetting snapshot。refreshToken rotation は HttpOnly Set-Cookie だけで行い、response body には refreshToken 平文を含めない。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
+ * Product context refresh の credential mode 別 success response。Cookie mode は Cookie command を表現でき、Bearer mode は refreshToken body を返す。
  */
-export interface RefreshTokenResponse {
-  /** ローテーション後に発行された短命の JWT アクセストークン。 */
-  accessToken: string;
-  /** refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。 */
-  accountSetting?: AccountSettingSnapshot;
-}
+export type RefreshTokenResponse =
+  | ProductCookieContextRefreshResponse
+  | ProductBearerContextRefreshResponse;
 
 /**
  * ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。
@@ -579,6 +1008,70 @@ export const updateAccountSettings = async (
 };
 
 /**
+ * @summary Refreshes an access token for one auth context
+ */
+export type refreshTokenResponse200 = {
+  data: RefreshTokenResponse;
+  status: 200;
+};
+
+export type refreshTokenResponse400 = {
+  data: AuthOperationErrorResponse;
+  status: 400;
+};
+
+export type refreshTokenResponse401 = {
+  data: AuthFailureResponse;
+  status: 401;
+};
+
+export type refreshTokenResponse403 = {
+  data: AuthFailureResponse;
+  status: 403;
+};
+
+export type refreshTokenResponse503 = {
+  data: AuthFailureResponse;
+  status: 503;
+};
+
+export type refreshTokenResponseSuccess = refreshTokenResponse200 & {
+  headers: Headers;
+};
+export type refreshTokenResponseError = (
+  | refreshTokenResponse400
+  | refreshTokenResponse401
+  | refreshTokenResponse403
+  | refreshTokenResponse503
+) & {
+  headers: Headers;
+};
+
+export type refreshTokenResponse = refreshTokenResponseSuccess | refreshTokenResponseError;
+
+export const getRefreshTokenUrl = (authContextId: UlidId) => {
+  return `/api/v1/auth/contexts/${authContextId}/refresh`;
+};
+
+export const refreshToken = async (
+  authContextId: UlidId,
+  bearerContextRefreshRequest?: BearerContextRefreshRequest,
+  options?: RequestInit
+): Promise<refreshTokenResponse> => {
+  const res = await fetch(getRefreshTokenUrl(authContextId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bearerContextRefreshRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshTokenResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as refreshTokenResponse;
+};
+
+/**
  * @summary Revokes the current bearer session
  */
 export type logoutResponse200 = {
@@ -627,10 +1120,10 @@ export const logout = async (options?: RequestInit): Promise<logoutResponse> => 
 };
 
 /**
- * @summary Finishes passkey authentication and returns a bearer session
+ * @summary Finishes passkey authentication and returns a credential-mode-specific session
  */
 export type finishPasskeyAuthenticationResponse200 = {
-  data: AuthSessionResponse;
+  data: ProductAuthSessionResponse;
   status: 200;
 };
 
@@ -689,7 +1182,7 @@ export const finishPasskeyAuthentication = async (
  * @summary Finishes a passkey registration ceremony and issues a session
  */
 export type registerPasskeyResponse200 = {
-  data: AuthSessionResponse;
+  data: ProductAuthSessionResponse;
   status: 200;
 };
 
@@ -1076,69 +1569,6 @@ export const consumeRecoveryToken = async (
 
   const data: consumeRecoveryTokenResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as consumeRecoveryTokenResponse;
-};
-
-/**
- * @summary Refreshes an access token through the HttpOnly refresh cookie
- */
-export type refreshTokenResponse200 = {
-  data: RefreshTokenResponse;
-  status: 200;
-};
-
-export type refreshTokenResponse400 = {
-  data: AuthOperationErrorResponse;
-  status: 400;
-};
-
-export type refreshTokenResponse401 = {
-  data: AuthFailureResponse;
-  status: 401;
-};
-
-export type refreshTokenResponse403 = {
-  data: AuthFailureResponse;
-  status: 403;
-};
-
-export type refreshTokenResponse503 = {
-  data: AuthFailureResponse;
-  status: 503;
-};
-
-export type refreshTokenResponseSuccess = refreshTokenResponse200 & {
-  headers: Headers;
-};
-export type refreshTokenResponseError = (
-  | refreshTokenResponse400
-  | refreshTokenResponse401
-  | refreshTokenResponse403
-  | refreshTokenResponse503
-) & {
-  headers: Headers;
-};
-
-export type refreshTokenResponse = refreshTokenResponseSuccess | refreshTokenResponseError;
-
-export const getRefreshTokenUrl = () => {
-  return `/api/v1/auth/refresh`;
-};
-
-export const refreshToken = async (
-  refreshTokenBody?: unknown,
-  options?: RequestInit
-): Promise<refreshTokenResponse> => {
-  const res = await fetch(getRefreshTokenUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(refreshTokenBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: refreshTokenResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as refreshTokenResponse;
 };
 
 /**

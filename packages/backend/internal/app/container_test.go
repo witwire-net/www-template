@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"www-template/packages/backend/internal/adapter/webauthn"
-	application "www-template/packages/backend/internal/application"
+	productaccounts "www-template/packages/backend/internal/application/accounts"
+	application "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
@@ -20,7 +21,7 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	_, err := buildContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
+		func(context.Context, string) (application.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
 			return stubAccountAuthRepository{}, stubAccountSettingRepository{}, func(context.Context) error { return nil }, nil
 		},
 		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
@@ -42,7 +43,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	container, err := buildContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
-		func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
+		func(context.Context, string) (application.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
 			return stubAccountAuthRepository{}, stubAccountSettingRepository{}, func(context.Context) error { return nil }, nil
 		},
 		func(context.Context, config.ValkeyConfig, config.AuthConfig) (application.AuthStateRepository, func(context.Context) error, error) {
@@ -70,7 +71,7 @@ func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testin
 	_, err := buildContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
-		func(context.Context, string) (application.AccountAuthRepository, application.AccountSettingRepository, func(context.Context) error, error) {
+		func(context.Context, string) (application.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
 			return stubAccountAuthRepository{}, stubAccountSettingRepository{}, func(context.Context) error {
 				closed = true
 				return nil

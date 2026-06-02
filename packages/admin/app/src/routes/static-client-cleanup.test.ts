@@ -144,6 +144,7 @@ describe('Admin static client cleanup', () => {
   it('[ADMIN-AUTH-FE-S030/S031] protected routes hide content until backend verification', () => {
     // layout は current operator 検証前に child content を描画せず、role は表示制御だけに限定する。
     const layout = readPackageFile('src/routes/+layout.svelte');
+    const sessionHook = readAdminFile('domain/src/hooks/useAdminSession.svelte.ts');
     const operatorsDomain = readAdminFile('domain/src/operators.ts');
     const accountsDomain = readAdminFile('domain/src/accounts.ts');
 
@@ -154,6 +155,8 @@ describe('Admin static client cleanup', () => {
     expect(operatorsDomain).toContain('canCreateAccounts');
     expect(operatorsDomain).toContain('backend authorization の代替にはしません');
     expect(accountsDomain).toContain("if (status === 403) return 'forbidden'");
+    expect(sessionHook).toContain('subscribeAdminContextIndexChanges');
+    expect(sessionHook).toContain('void actions.verifyCurrentRoute(currentPath)');
   });
 
   it('[ADMIN-AUTH-FE-S032] Admin HTML is served with no-store semantics', () => {
@@ -176,7 +179,7 @@ describe('Admin static client cleanup', () => {
 
     expect(authDomain).toContain('let currentSession: AdminSessionState | null = null');
     expect(authDomain).toContain('requestCurrentAdminOperator(session)');
-    expect(authDomain).toContain('requestRefreshAdminSession()');
+    expect(authDomain).toContain('requestRefreshAdminSession(authContextId)');
     expect(authDomain).toContain('clearAdminSession()');
     expect(authDomain).not.toContain('localStorage');
     expect(authDomain).not.toContain('sessionStorage');
@@ -255,6 +258,6 @@ describe('Admin static client cleanup', () => {
       'requestCreateAdminOperator({ email, role: input.role }, session)'
     );
     expect(apiClient).toContain('getCreateAdminOperatorUrl()');
-    expect(apiClient).toContain('requireCsrf: true');
+    expect(apiClient).toContain('createAdminRequestInit(session)');
   });
 });

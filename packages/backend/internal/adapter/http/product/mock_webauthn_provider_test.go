@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	application "www-template/packages/backend/internal/application"
+	application "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 )
 

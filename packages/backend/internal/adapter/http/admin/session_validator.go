@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
+	adminauth "www-template/packages/backend/internal/application/auth"
 )
 
 // AdminOperatorSessionAuthenticator は Admin HTTP session validator が利用する application auth 境界である。
 //
 // 役割:
 //   - CurrentOperator は read route の bearer/session/snapshot 検証を担う。
-//   - ValidateOperatorMutation は mutation route の bearer/session/CSRF/RBAC 検証を担う。
+//   - mutation route の RBAC は auth package の AuthorizeOperatorSession へ委譲し、HTTP adapter は role matrix を所有しない。
 //   - HTTP adapter は repository/store/signer を生成せず、runtime composition 済み application service だけへ依存する。
 type AdminOperatorSessionAuthenticator interface {
 	CurrentOperator(ctx context.Context, input adminauth.CurrentOperatorInput) (adminauth.OperatorDTO, error)
-	ValidateOperatorMutation(ctx context.Context, input adminauth.ValidateOperatorMutationInput) (adminauth.OperatorDTO, error)
+	AuthorizeOperatorSession(ctx context.Context, input adminauth.AuthorizeOperatorSessionInput) (adminauth.OperatorAuthorizationDecision, error)
 }
 
 type applicationOperatorSessionValidator struct {
@@ -28,7 +28,7 @@ type applicationOperatorSessionValidator struct {
 //   - auth: runtime composition 済み Admin operator auth service。nil の場合は nil を返し、router 側の fail-close を維持する。
 //
 // 戻り値:
-//   - OperatorSessionValidator: protected route の accessToken/CSRF/session 検証に使う adapter。
+//   - OperatorSessionValidator: protected route の accessToken/session/RBAC 検証に使う adapter。
 //
 // エラーケース:
 //   - この関数自体は error を返さない。auth が nil の場合、呼び出し側が nil validator として 503 fail-close させる。
@@ -53,8 +53,8 @@ func (v applicationOperatorSessionValidator) ValidateOperatorSession(ctx context
 		return OperatorSessionContext{}, errAdminOperatorInternal
 	}
 
-	// Step 2: mutation route は permission が明示されたものだけを通し、CSRF を検証しない mutation を拒否する。
-	if input.RequireCSRF {
+	// Step 2: permission が明示された protected route は mutation/credential-management として RBAC 検証へ進める。
+	if input.Permission != "" {
 		return v.validateMutation(ctx, input)
 	}
 
@@ -63,26 +63,26 @@ func (v applicationOperatorSessionValidator) ValidateOperatorSession(ctx context
 	if err != nil {
 		return OperatorSessionContext{}, mapAdminOperatorSessionValidationError(err)
 	}
-	return operatorSessionContextFromDTO(operator, ""), nil
+	return operatorSessionContextFromDTO(operator), nil
 }
 
 func (v applicationOperatorSessionValidator) validateMutation(ctx context.Context, input OperatorSessionValidationInput) (OperatorSessionContext, error) {
-	// Step 1: permission 未割り当ての CSRF route は、CSRF 検証なしで通すより安全側に倒して forbidden とする。
+	// Step 1: permission 未割り当ての mutation route は、RBAC 検証なしで通すより安全側に倒して forbidden とする。
 	if input.Permission == "" {
 		return OperatorSessionContext{}, errAdminOperatorForbidden
 	}
 
-	// Step 2: Admin auth service に bearer/session/CSRF/RBAC の同時検証を委譲し、HTTP adapter で token や role を解釈しない。
-	operator, err := v.auth.ValidateOperatorMutation(ctx, adminauth.ValidateOperatorMutationInput{AccessToken: input.AccessToken, CSRFToken: input.CSRFToken, Permission: input.Permission})
+	// Step 2: Admin auth service で bearer/session/snapshot を検証し、その後 domain.OperatorAuthSession.ValidateAccess による permission 判定まで一貫して実行する。
+	decision, err := v.auth.AuthorizeOperatorSession(ctx, adminauth.AuthorizeOperatorSessionInput{AccessToken: input.AccessToken, Permission: input.Permission})
 	if err != nil {
 		return OperatorSessionContext{}, mapAdminOperatorSessionValidationError(err)
 	}
 
-	// Step 3: 検証済み CSRF header だけを handler context へ残し、未検証値を application account use case に渡さない。
-	return operatorSessionContextFromDTO(operator, input.CSRFToken), nil
+	// Step 3: 検証済み operator/session だけを handler context へ残し、未検証の header 値を application use case に渡さない。
+	return operatorSessionContextFromDTO(decision.Operator), nil
 }
 
-func operatorSessionContextFromDTO(operator adminauth.OperatorDTO, csrfToken string) OperatorSessionContext {
+func operatorSessionContextFromDTO(operator adminauth.OperatorDTO) OperatorSessionContext {
 	// Step 1: application DTO の Admin Operator primitive を middleware context DTO へ写像し、Product account 情報を混入させない。
 	return OperatorSessionContext{
 		OperatorID:                       operator.ID,
@@ -91,18 +91,17 @@ func operatorSessionContextFromDTO(operator adminauth.OperatorDTO, csrfToken str
 		OperatorActive:                   operator.Active,
 		OperatorPasskeyRegistrationState: operator.PasskeyRegistrationState,
 		SessionID:                        operator.SessionID,
-		CSRFToken:                        csrfToken,
 	}
 }
 
 func mapAdminOperatorSessionValidationError(err error) error {
 	// Step 1: application auth の内部エラーは middleware で 503 へ写像できる stable error にする。
-	if errors.Is(err, adminauth.ErrAdminAuthInternal) {
+	if errors.Is(err, adminauth.ErrOperatorAuthUnavailable) {
 		return errAdminOperatorInternal
 	}
 
-	// Step 2: permission/CSRF/inactive 系の拒否は middleware で 403 へ写像できる stable error にする。
-	if errors.Is(err, adminauth.ErrAdminAuthForbidden) {
+	// Step 2: permission/inactive 系の拒否は middleware で 403 へ写像できる stable error にする。
+	if errors.Is(err, adminauth.ErrOperatorAuthForbidden) {
 		return errAdminOperatorForbidden
 	}
 

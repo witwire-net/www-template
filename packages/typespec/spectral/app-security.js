@@ -5,11 +5,11 @@ export default function appSecurity(targetVal, _opts, context) {
 
   const results = [];
   for (const [pathKey, pathItem] of Object.entries(targetVal)) {
-    // /api/v1/auth/* is public (no bearer required)
-    if (pathKey.startsWith('/api/v1/auth/')) {
+    // Product/Admin の login/setup/context refresh は bearer 前の public flow であり、Authorization header を refresh credential として扱わないため security 宣言を要求しない。
+    if (isPublicAuthPath(pathKey)) {
       continue;
     }
-    // /api/v1/status is a public status endpoint
+    // Product status は load balancer / browser から認証なしで確認する public endpoint として維持する。
     if (pathKey === '/api/v1/status') {
       continue;
     }
@@ -41,4 +41,24 @@ export default function appSecurity(targetVal, _opts, context) {
   }
 
   return results;
+}
+
+function isPublicAuthPath(pathKey) {
+  // Product/Admin の pre-auth ceremony と context refresh だけを public とし、logout / reauth / current / passkey management は BearerAuth 必須にする。
+  const publicAuthPaths = new Set([
+    '/api/v1/auth/contexts/{authContextId}/refresh',
+    '/api/v1/auth/operator-setup/finish',
+    '/api/v1/auth/operator-setup/start',
+    '/api/v1/auth/passkey/finish',
+    '/api/v1/auth/passkey/register',
+    '/api/v1/auth/passkey/register/start',
+    '/api/v1/auth/passkey/start',
+    '/api/v1/auth/recovery',
+    '/api/v1/auth/recovery/consume',
+    '/api/v1/auth/setup/finish',
+    '/api/v1/auth/setup/start',
+  ]);
+
+  // 明示 list だけを public とし、将来の `/api/v1/auth/*` 追加が bearer 必須から漏れないよう fail-close にする。
+  return publicAuthPaths.has(pathKey);
 }

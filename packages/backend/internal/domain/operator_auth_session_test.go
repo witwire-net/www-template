@@ -10,11 +10,10 @@ const (
 	operatorAuthTestSessionID         = "01ARZ3NDEKTSV4RRFFQ69G5FB1"
 	operatorAuthTestMismatchSessionID = "01ARZ3NDEKTSV4RRFFQ69G5FB2"
 	operatorAuthTestRefreshToken      = "refresh-token-for-admin-operator"
-	operatorAuthTestCSRFBinding       = "csrf-binding-for-admin-operator"
 	operatorAuthTestJTIULID           = "01ARZ3NDEKTSV4RRFFQ69G5FB3"
 )
 
-// [AUTH-BE-S070] Admin OperatorAuth domain が operator token eligibility と CSRF binding を所有することを検証する。
+// [AUTH-BE-S070] Admin OperatorAuth domain が operator token eligibility と RBAC を所有することを検証する。
 func TestOperatorAuthDomainRejectsIneligibleOperatorAccess(t *testing.T) {
 	t.Parallel()
 
@@ -36,21 +35,14 @@ func TestOperatorAuthDomainRejectsIneligibleOperatorAccess(t *testing.T) {
 		{
 			name: "viewer lacks accounts create permission",
 			act: func(t *testing.T) error {
-				return validateOperatorAuthAccess(t, OperatorRoleViewer, operatorAuthTestCSRFBinding, operatorAuthTestSessionID, now, issuedAt)
+				return validateOperatorAuthAccess(t, OperatorRoleViewer, operatorAuthTestSessionID, now, issuedAt)
 			},
 			wantErr: ErrOperatorAuthPermissionDenied,
 		},
 		{
-			name: "csrf mismatch is rejected",
-			act: func(t *testing.T) error {
-				return validateOperatorAuthAccess(t, OperatorRoleOperator, "wrong-csrf-token", operatorAuthTestSessionID, now, issuedAt)
-			},
-			wantErr: ErrOperatorAuthCSRFMismatch,
-		},
-		{
 			name: "operator session id mismatch is rejected",
 			act: func(t *testing.T) error {
-				return validateOperatorAuthAccess(t, OperatorRoleOperator, operatorAuthTestCSRFBinding, operatorAuthTestMismatchSessionID, now, issuedAt)
+				return validateOperatorAuthAccess(t, OperatorRoleOperator, operatorAuthTestMismatchSessionID, now, issuedAt)
 			},
 			wantErr: ErrOperatorAuthSessionMismatch,
 		},
@@ -80,7 +72,6 @@ func createInactiveOperatorSession(t *testing.T, issuedAt time.Time) error {
 		operator,
 		mustOperatorSessionID(t, operatorAuthTestSessionID),
 		operatorAuthTestRefreshToken,
-		operatorAuthTestCSRFBinding,
 		mustTokenTTL(t),
 		issuedAt,
 	)
@@ -90,7 +81,6 @@ func createInactiveOperatorSession(t *testing.T, issuedAt time.Time) error {
 func validateOperatorAuthAccess(
 	t *testing.T,
 	role OperatorRole,
-	csrfToken string,
 	claimsSessionID string,
 	now time.Time,
 	issuedAt time.Time,
@@ -105,8 +95,8 @@ func validateOperatorAuthAccess(
 	// Step 2: mismatch case では claims の session ID だけを別 session に差し替え、照合失敗を作る。
 	claims.sessionID = mustOperatorSessionID(t, claimsSessionID)
 
-	// Step 3: session state、claims、permission、CSRF を同時に検証し、OperatorAuth domain error を返す。
-	return session.ValidateAccess(operator, claims, OperatorAuthPermissionAccountsCreate, csrfToken, now)
+	// Step 3: session state、claims、permission を同時に検証し、OperatorAuth domain error を返す。
+	return session.ValidateAccess(operator, claims, OperatorAuthPermissionAccountsCreate, now)
 }
 
 func mustOperatorAuthSession(t *testing.T, operator Operator, sessionID string, issuedAt time.Time) OperatorAuthSession {
@@ -117,7 +107,6 @@ func mustOperatorAuthSession(t *testing.T, operator Operator, sessionID string, 
 		operator,
 		mustOperatorSessionID(t, sessionID),
 		operatorAuthTestRefreshToken,
-		operatorAuthTestCSRFBinding,
 		mustTokenTTL(t),
 		issuedAt,
 	)

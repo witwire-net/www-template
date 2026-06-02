@@ -103,11 +103,11 @@ export async function createAdminOperator(
   const email = input.email.trim();
   if (email === '' || !email.includes('@')) return { success: false, error: 'invalid-input' };
 
-  // mutation は memory にある Admin accessToken と CSRF token だけで実行し、refresh token は Cookie 境界に残す。
+  // mutation は memory にある Admin accessToken だけで実行し、refresh token は Cookie 境界に残す。
   const session = getAdminSession();
   if (session === null) return { success: false, error: 'unauthenticated' };
 
-  // API wrapper が same-origin path / Authorization / CSRF を保証し、page から generated SDK を直接呼ばせない。
+  // API wrapper が same-origin path / Authorization を保証し、page から generated SDK を直接呼ばせない。
   const response = await requestCreateAdminOperator({ email, role: input.role }, session);
   if (response.status !== 201) return { success: false, error: mapOperatorStatus(response.status) };
 

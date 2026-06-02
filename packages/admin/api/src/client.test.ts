@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertAdminApiPath,
   createAdminRequestInit,
+  requestRefreshAdminAutomationSession,
   requestRefreshAdminSession,
   requestStartAdminLogin,
   requestStartInitialAdminSetup,
@@ -39,12 +40,13 @@ describe('Admin API wrapper boundary', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const init = createAdminRequestInit({ accessToken: 'access-token', csrfToken: 'csrf-token' });
+    const init = createAdminRequestInit({ accessToken: 'access-token' });
     const headers = init.headers as Record<string, string>;
 
     expect(assertAdminApiPath('/api/v1/accounts')).toBe('/api/v1/accounts');
     expect(init.credentials).toBe('same-origin');
     expect(headers.Authorization).toBe('Bearer access-token');
+    expect(headers['X-Auth-Context-Id']).toBeUndefined();
     expect(headers['X-CSRF-Token']).toBeUndefined();
 
     await requestStartAdminLogin({ identifier: 'operator@example.com' });
@@ -82,22 +84,65 @@ describe('Admin API wrapper boundary', () => {
               active: true,
             },
             sessionId: '01JSESSION0000000000000000',
+            authContextId: '01JSESSION0000000000000000',
             accessToken: 'new-access-token',
             expiresAt: '2030-01-01T00:00:00.000Z',
-            csrfToken: 'csrf-token',
+            credentialMode: 'cookie',
+            contextIndexUpdateHints: [],
+            clearCookieCommands: [],
           }),
           { status: 200 }
         )
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await requestRefreshAdminSession();
+    await requestRefreshAdminSession('01JSESSION0000000000000000');
     const [requestUrl, requestInit] = firstFetchCall(fetchMock);
     const body = requestInit?.body;
 
-    expect(requestUrl).toBe('/api/v1/auth/operator/refresh');
+    expect(requestUrl).toBe('/api/v1/auth/contexts/01JSESSION0000000000000000/refresh');
     expect(requestInit?.credentials).toBe('same-origin');
     expect(body).toBeUndefined();
+  });
+
+  it('[ADMIN-AUTH-FE-S027/S028] automation Bearer refresh is isolated from Console Cookie wrapper', async () => {
+    // automation client だけが body refreshToken を使い、Console wrapper の same-origin Cookie flow と混在しないことを確認する。
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            requestId: '01JADMINREFRESHBEARER0000',
+            operator: {
+              operatorId: '01JOPERATOR00000000000000',
+              email: 'operator@example.com',
+              role: 'admin',
+              active: true,
+            },
+            sessionId: '01JSESSION0000000000000000',
+            authContextId: '01JSESSION0000000000000000',
+            accessToken: 'new-access-token',
+            refreshToken: 'rotated-refresh-token',
+            expiresAt: '2030-01-01T00:00:00.000Z',
+            credentialMode: 'bearer',
+          }),
+          { status: 200 }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await requestRefreshAdminAutomationSession({
+      authContextId: '01JSESSION0000000000000000',
+      refreshToken: 'automation-refresh-token',
+    });
+    const [requestUrl, requestInit] = firstFetchCall(fetchMock);
+    const headers = requestInit?.headers as Record<string, string>;
+
+    expect(requestUrl).toBe('/api/v1/auth/contexts/01JSESSION0000000000000000/refresh');
+    expect(requestInit?.credentials).toBe('omit');
+    expect(headers.Authorization).toBeUndefined();
+    expect(requestInit?.body).toBe(
+      JSON.stringify({ credentialMode: 'bearer', refreshToken: 'automation-refresh-token' })
+    );
   });
 
   it('[ADMIN-AUTH-FE-S038] initial setup calls same-origin /api/v1/auth/setup start', async () => {

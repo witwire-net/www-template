@@ -4,28 +4,27 @@ import (
 	"context"
 	"errors"
 	stdhttp "net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	sharedhttp "www-template/packages/backend/internal/adapter/http/shared"
 	"www-template/packages/backend/internal/generated/adminopenapi"
 	"www-template/packages/backend/internal/platform/config"
 )
 
 const adminAuthHeader = "Authorization"
-const adminCSRFHeader = "X-CSRF-Token"
 const adminOriginHeader = "Origin"
+const adminFetchSiteHeader = "Sec-Fetch-Site"
+const adminSecurityCSP = sharedhttp.SecurityCSP
+const adminSecurityHSTS = sharedhttp.SecurityHSTS
+const adminSecurityReferrerPolicy = sharedhttp.SecurityReferrerPolicy
 const adminContextKeyOperatorID = "admin.operator.id"
 const adminContextKeyOperatorEmail = "admin.operator.email"
 const adminContextKeyOperatorRole = "admin.operator.role"
 const adminContextKeyOperatorActive = "admin.operator.active"
 const adminContextKeyOperatorPasskeyRegistrationState = "admin.operator.passkey_registration_state"
 const adminContextKeySessionID = "admin.operator.session_id"
-const adminContextKeyCSRFToken = "admin.operator.csrf_token"
-const adminSecurityCSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
-const adminSecurityHSTS = "max-age=63072000; includeSubDomains"
-const adminSecurityReferrerPolicy = "no-referrer"
 
 var errAdminOperatorForbidden = errors.New("admin operator forbidden")
 var errAdminOperatorInternal = errors.New("admin operator internal")
@@ -41,7 +40,6 @@ var adminExactRouteKeys = map[string]struct{}{
 	"GET /api/v1/auth/operator/current":       {},
 	"GET /api/v1/auth/passkeys":               {},
 	"POST /api/v1/auth/operator/logout":       {},
-	"POST /api/v1/auth/operator/refresh":      {},
 	"POST /api/v1/auth/passkey/finish":        {},
 	"POST /api/v1/auth/passkey/start":         {},
 }
@@ -51,6 +49,7 @@ type adminContextValueKey string
 type adminRouterDependencies struct {
 	operatorSessions          operatorSessionValidator
 	operatorAuth              adminOperatorAuthenticator
+	operatorPasskeyAuth       adminOperatorPasskeyAuthenticator
 	operatorSetup             adminOperatorSetupper
 	operatorPasskeys          adminOperatorPasskeyVerifier
 	operatorPasskeyManagement adminOperatorPasskeyManager
@@ -62,14 +61,11 @@ type adminRouterDependencies struct {
 //
 // 役割:
 //   - AccessToken は Authorization header から取り出した Admin operator bearer token だけを保持する。
-//   - CSRFToken は mutation route の X-CSRF-Token header であり、RequireCSRF が true の場合だけ必須になる。
-//   - Permission は accounts:create など、application auth service が domain RBAC と CSRF binding を同時検証するための permission 名である。
-//   - RequireCSRF は read route と mutation route を区別し、read route では CurrentOperator 検証だけへ委譲できるようにする。
+//   - Permission は accounts:create など、application auth service が domain RBAC を検証するための permission 名である。
+//   - Permission が空の場合は read route として CurrentOperator 検証だけへ委譲する。
 type OperatorSessionValidationInput struct {
 	AccessToken string
-	CSRFToken   string
 	Permission  string
-	RequireCSRF bool
 }
 
 type operatorSessionValidationInput = OperatorSessionValidationInput
@@ -79,7 +75,6 @@ type operatorSessionValidationInput = OperatorSessionValidationInput
 // 役割:
 //   - Product account の認証状態を含めず、Admin OperatorAuth domain 由来の値だけを保持する。
 //   - SessionID は accessToken payload で検証された Admin operator session selector であり、handler で token を再解析しないために使う。
-//   - CSRFToken は mutation request で検証された header 値だけを保持し、未検証値を application use case へ渡さない。
 type OperatorSessionContext struct {
 	OperatorID                       string
 	OperatorEmail                    string
@@ -87,7 +82,6 @@ type OperatorSessionContext struct {
 	OperatorActive                   bool
 	OperatorPasskeyRegistrationState string
 	SessionID                        string
-	CSRFToken                        string
 }
 
 type operatorSessionContext = OperatorSessionContext
@@ -135,15 +129,19 @@ func adminAuthMiddleware(cfg config.Config, validator operatorSessionValidator) 
 			writeAdminAuthFailure(c, stdhttp.StatusForbidden, adminopenapi.Unauthenticated)
 			return
 		}
+		if !sharedhttp.FetchMetadataAccepted(c.GetHeader(adminFetchSiteHeader)) {
+			writeAdminAuthFailure(c, stdhttp.StatusForbidden, adminopenapi.Unauthenticated)
+			return
+		}
 
-		// Step 3: passkey / setup / refresh の pre-auth flow は session-bound CSRF を持たないため、Origin 検証だけを通過条件にして handler へ委譲する。
+		// Step 3: passkey / setup / refresh の pre-auth flow は bearer accessToken を持たないため、Origin 検証だけを通過条件にして handler へ委譲する。
 		if isAdminPreAuthPath(c.Request.Method, path) {
 			c.Next()
 			return
 		}
 
 		// Step 4: protected route は bearer accessToken を必須にし、Product bearer や空 header を operator session として扱わない。
-		accessToken := adminBearerToken(c.GetHeader(adminAuthHeader))
+		accessToken := sharedhttp.BearerToken(c.GetHeader(adminAuthHeader))
 		if accessToken == "" {
 			writeAdminAuthFailure(c, stdhttp.StatusUnauthorized, adminopenapi.Unauthenticated)
 			return
@@ -155,80 +153,36 @@ func adminAuthMiddleware(cfg config.Config, validator operatorSessionValidator) 
 			return
 		}
 
-		// Step 6: mutation route だけ CSRF binding を必須化し、read route は operator session validation のみを要求する。
-		input := operatorSessionValidationInput{AccessToken: accessToken, RequireCSRF: adminRouteRequiresCSRF(c.Request.Method, path), Permission: adminRoutePermission(c.Request.Method, path)}
-		if input.RequireCSRF {
-			input.CSRFToken = strings.TrimSpace(c.GetHeader(adminCSRFHeader))
-			if input.CSRFToken == "" {
-				writeAdminAuthFailure(c, stdhttp.StatusForbidden, adminopenapi.Unauthenticated)
-				return
-			}
-		}
+		// Step 6: protected route は CSRF header を要求せず、Bearer accessToken と route permission だけを validator へ渡す。
+		input := operatorSessionValidationInput{AccessToken: accessToken, Permission: adminRoutePermission(c.Request.Method, path)}
 
-		// Step 7: adapter では token / CSRF の中身を判定せず、Admin operator session validator に検証を集約する。
+		// Step 7: adapter では token の中身や RBAC を判定せず、Admin operator session validator に検証を集約する。
 		operatorContext, err := validator.ValidateOperatorSession(c.Request.Context(), input)
 		if err != nil {
 			writeAdminAuthValidationError(c, err)
 			return
 		}
-		if input.RequireCSRF {
-			operatorContext.CSRFToken = input.CSRFToken
-		}
 
-		// Step 8: 検証済み operator/session/CSRF 情報を Gin context と request context の両方へ設定し、handler が Product auth state を参照せずに済む境界を作る。
+		// Step 8: 検証済み operator/session 情報を Gin context と request context の両方へ設定し、handler が Product auth state を参照せずに済む境界を作る。
 		bindAdminOperatorContext(c, operatorContext)
 		c.Next()
 	}
 }
 
 func applyAdminSecurityHeaders(c *gin.Context) {
-	// Step 1: Admin API response は operator session や顧客 PII を含み得るため、全 API route を no-store に固定する。
-	c.Header("Cache-Control", noStoreValue)
-
-	// Step 2: Admin API JSON response に対する XSS / clickjacking / MIME sniffing / referer leakage の browser hardening header を設定する。
-	c.Header("Content-Security-Policy", adminSecurityCSP)
-	c.Header("Strict-Transport-Security", adminSecurityHSTS)
-	c.Header("Referrer-Policy", adminSecurityReferrerPolicy)
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("X-Frame-Options", "DENY")
+	// Step 1: Admin API response は operator session や顧客 PII を含み得るため、no-store と browser hardening header を shared helper concept からまとめて適用する。
+	sharedhttp.ApplyBrowserSecurityHeaders(c, noStoreValue)
 }
 
 func adminOriginAccepted(cfg config.Config, originHeader string, method string) bool {
-	// Step 1: unsafe method は browser が付与する Origin を必須にし、CSRF 防御を SameSite Cookie だけに依存しない。
+	// Step 1: unsafe method は browser が付与する Origin を必須にし、cross-site request を Bearer 検証前に拒否する。
 	trimmedOrigin := strings.TrimSpace(originHeader)
 	if trimmedOrigin == "" {
 		return !adminMethodRequiresOrigin(method)
 	}
 
 	// Step 2: Origin header と Admin runtime domain を origin 形式へ正規化してから比較し、大文字小文字や末尾 slash の揺れを吸収する。
-	requestOrigin, ok := normalizeAdminOrigin(trimmedOrigin)
-	if !ok {
-		return false
-	}
-	configuredOrigin, ok := normalizeAdminOrigin(cfg.Admin.Domain)
-	if !ok {
-		return false
-	}
-	return requestOrigin == configuredOrigin
-}
-
-func normalizeAdminOrigin(rawOrigin string) (string, bool) {
-	// Step 1: URL parser で scheme / host / path を分解し、文字列 contains 判定による origin 誤認を避ける。
-	parsed, err := url.Parse(strings.TrimSpace(rawOrigin))
-	if err != nil {
-		return "", false
-	}
-
-	// Step 2: origin は scheme と host だけを持つ値に限定し、path/query/fragment 付きの値を拒否する。
-	if parsed.Scheme == "" || parsed.Host == "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", false
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", false
-	}
-
-	// Step 3: scheme と host を小文字化した canonical origin を返し、比較処理を単純な完全一致へ閉じる。
-	return strings.ToLower(parsed.Scheme + "://" + parsed.Host), true
+	return sharedhttp.OriginMatches(trimmedOrigin, cfg.Admin.Domain)
 }
 
 func adminMethodRequiresOrigin(method string) bool {
@@ -254,11 +208,12 @@ func isAdminRegisteredRoute(method string, path string) bool {
 
 	// Step 2: path parameter 付き route は generated binding が concrete path ではなく pattern として登録するため、prefix と method で保護対象に含める。
 	return (method == stdhttp.MethodGet && strings.HasPrefix(path, "/api/v1/accounts/")) ||
-		(method == stdhttp.MethodDelete && strings.HasPrefix(path, "/api/v1/auth/passkeys/"))
+		(method == stdhttp.MethodDelete && strings.HasPrefix(path, "/api/v1/auth/passkeys/")) ||
+		isAdminContextRefreshPath(method, path)
 }
 
 func isAdminPreAuthPath(method string, path string) bool {
-	// Step 1: session 発行前または Cookie refresh 用の Admin auth route だけを session-bound CSRF 例外にする。
+	// Step 1: session 発行前または Cookie refresh 用の Admin auth route だけを bearer session 検証の例外にする。
 	if method != stdhttp.MethodPost {
 		return false
 	}
@@ -269,23 +224,25 @@ func isAdminPreAuthPath(method string, path string) bool {
 		"/api/v1/auth/operator-setup/finish": {},
 		"/api/v1/auth/setup/start":           {},
 		"/api/v1/auth/setup/finish":          {},
-		"/api/v1/auth/operator/refresh":      {},
 	}
 	_, ok := preAuthPaths[path]
-	return ok
+	return ok || isAdminContextRefreshPath(method, path)
 }
 
-func adminRouteRequiresCSRF(method string, path string) bool {
-	// Step 1: Admin operator passkey 管理は一覧を含めて session-bound CSRF を要求し、認証手段の列挙と削除を同じ session binding に閉じる。
-	if (method == stdhttp.MethodGet && path == "/api/v1/auth/passkeys") ||
-		(method == stdhttp.MethodDelete && strings.HasPrefix(path, "/api/v1/auth/passkeys/")) {
-		return true
+func isAdminContextRefreshPath(method string, path string) bool {
+	// Step 1: Admin context refresh は path scoped Cookie を認証材料にするため、旧固定 refresh path ではなく context ID 付き path だけを pre-auth 対象にする。
+	if method != stdhttp.MethodPost {
+		return false
 	}
 
-	// Step 2: account/operator mutation と logout の transport CSRF 境界を固定し、RBAC 判定は application/domain use case に残す。
-	return (method == stdhttp.MethodPost && path == "/api/v1/accounts") ||
-		(method == stdhttp.MethodPost && path == "/api/v1/auth/operators") ||
-		(method == stdhttp.MethodPost && path == "/api/v1/auth/operator/logout")
+	// Step 2: prefix / suffix / 空 context の三点を検査し、generated route と同じ `/auth/contexts/{authContextId}/refresh` だけを Origin 検証対象に含める。
+	const prefix = "/api/v1/auth/contexts/"
+	const suffix = "/refresh"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return false
+	}
+	contextID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	return contextID != "" && !strings.Contains(contextID, "/")
 }
 
 func adminRoutePermission(method string, path string) string {
@@ -306,19 +263,8 @@ func adminRoutePermission(method string, path string) string {
 		return "operators:logout"
 	}
 
-	// Step 3: permission が未定義の CSRF route は production validator 側で fail-closed にし、CSRF を検証しない mutation を許可しない。
+	// Step 3: permission が未定義の protected route は read-only current validation として扱う。
 	return ""
-}
-
-func adminBearerToken(header string) string {
-	// Step 1: Authorization header を RFC 6750 の Bearer prefix だけに限定し、Basic や Product 固有値を operator token として扱わない。
-	trimmed := strings.TrimSpace(header)
-	if !strings.HasPrefix(trimmed, "Bearer ") {
-		return ""
-	}
-
-	// Step 2: prefix 後の token 本体を空白除去して返し、空 token は呼び出し側で unauthenticated として拒否する。
-	return strings.TrimSpace(strings.TrimPrefix(trimmed, "Bearer "))
 }
 
 func bindAdminOperatorContext(c *gin.Context, operatorContext operatorSessionContext) {
@@ -329,7 +275,6 @@ func bindAdminOperatorContext(c *gin.Context, operatorContext operatorSessionCon
 	c.Set(adminContextKeyOperatorActive, operatorContext.OperatorActive)
 	c.Set(adminContextKeyOperatorPasskeyRegistrationState, operatorContext.OperatorPasskeyRegistrationState)
 	c.Set(adminContextKeySessionID, operatorContext.SessionID)
-	c.Set(adminContextKeyCSRFToken, operatorContext.CSRFToken)
 
 	// Step 2: generated strict handler が受け取る request.Context にも同じ値を束縛し、将来の handler 実装が Gin 依存を広げずに読めるようにする。
 	ctx := c.Request.Context()
@@ -339,7 +284,6 @@ func bindAdminOperatorContext(c *gin.Context, operatorContext operatorSessionCon
 	ctx = context.WithValue(ctx, adminContextValueKey(adminContextKeyOperatorActive), operatorContext.OperatorActive)
 	ctx = context.WithValue(ctx, adminContextValueKey(adminContextKeyOperatorPasskeyRegistrationState), operatorContext.OperatorPasskeyRegistrationState)
 	ctx = context.WithValue(ctx, adminContextValueKey(adminContextKeySessionID), operatorContext.SessionID)
-	ctx = context.WithValue(ctx, adminContextValueKey(adminContextKeyCSRFToken), operatorContext.CSRFToken)
 	c.Request = c.Request.WithContext(ctx)
 }
 
@@ -359,6 +303,6 @@ func writeAdminAuthFailure(c *gin.Context, status int, classification adminopena
 	// Step 1: middleware で返す失敗応答にも no-store と security headers を適用し、generated handler 到達時と同じ header 境界を保つ。
 	applyAdminSecurityHeaders(c)
 
-	// Step 2: non-secret な分類と request ID だけを返し、token/session/CSRF の詳細を外部へ露出しない。
+	// Step 2: non-secret な分類と request ID だけを返し、token/session の詳細を外部へ露出しない。
 	c.AbortWithStatusJSON(status, adminopenapi.WWWTemplateAuthFailureResponse{Error: classification, RequestId: fallbackRequestID})
 }

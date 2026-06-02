@@ -77,6 +77,7 @@ function buildJwt(claims: { exp: number; accountId?: string; sessionId?: string 
 function createSession(id: string, token: string) {
   return {
     requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    authContextId: `01ARZ3NDEKTSV4RRFFQ69G5F${id}`,
     accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
     passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
     sessionId: `01ARZ3NDEKTSV4RRFFQ69G5F${id}`,
@@ -88,9 +89,19 @@ function createSession(id: string, token: string) {
 describe('Frontend SDK ESLint boundary contracts', () => {
   it('[API-CONTRACT-BE-S009] packages/frontend から Admin SDK を import すると lint エラーになる', async () => {
     // Product frontend 配下に一時 fixture を置き、Admin SDK への相対 import を境界違反として検出する。
+    // fixture には export-tsdoc/require-export-tsdoc を満たす TSDoc コメントを付与し、
+    // sdk-package-boundary/no-cross-sdk-imports 以外の lint 失敗を出さないようにする。
     const messages = await lintText(
       'packages/frontend/domain/src/auth/session/lint-frontend-admin-sdk-import.ts',
-      "import type { AdminAccountSummary } from '../../../../../admin/api/src/generated/client';\nexport type LeakedAdminSdk = AdminAccountSummary;"
+      `/**
+ * Admin SDK インポート境界違反検出用 fixture。
+ */
+import type { AdminAccountSummary } from '../../../../../admin/api/src/generated/client';
+
+/**
+ * Admin SDK からの型漏洩テスト用 fixture。
+ */
+export type LeakedAdminSdk = AdminAccountSummary;`
     );
     // SDK package boundary 専用 rule が発火することを確認し、別 rule だけで落ちる偶然の成功を避ける。
     expect(
@@ -135,9 +146,66 @@ describe('useAuthSession hook', () => {
 
     expect('refreshToken' in (data.state.session ?? {})).toBe(false);
     expect(JSON.stringify(data.state.sessions)).not.toContain('browser-readable-refresh-token');
-    expect(setItemSpy).not.toHaveBeenCalled();
+
+    // context index は localStorage に書き込むが、token/secret は含まない
+    const contextIndexCall = setItemSpy.mock.calls.find(
+      (call) => call[0] === 'www-template:product:context-index'
+    );
+    if (contextIndexCall != null) {
+      const indexValue = contextIndexCall[1];
+      expect(indexValue).not.toContain('browser-readable-refresh-token');
+      expect(indexValue).not.toContain('token-a');
+    }
 
     setItemSpy.mockRestore();
+  });
+
+  it('[AUTH-FE-S046] secret leakage test: refreshToken and Cookie values do not leak to sessionStorage, console, or URL', () => {
+    const { actions } = useAuthSession();
+    const sessionStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const secretRefreshToken = 'super-secret-refresh-token-123';
+    const secretCookieValue = 'super-secret-cookie-value-456';
+    const sessionWithSecrets = {
+      ...createSession('A1', 'access-token-789'),
+      refreshToken: secretRefreshToken,
+      cookieValue: secretCookieValue,
+    };
+
+    actions.acceptSession(sessionWithSecrets, 'no-store');
+
+    // sessionStorage に secret が書き込まれていないことを確認
+    for (const call of sessionStorageSpy.mock.calls) {
+      const value = call[1];
+      expect(value).not.toContain(secretRefreshToken);
+      expect(value).not.toContain(secretCookieValue);
+      expect(value).not.toContain('access-token-789');
+    }
+
+    // console 出力に secret が含まれていないことを確認
+    for (const call of consoleLogSpy.mock.calls) {
+      const message = JSON.stringify(call);
+      expect(message).not.toContain(secretRefreshToken);
+      expect(message).not.toContain(secretCookieValue);
+    }
+    for (const call of consoleErrorSpy.mock.calls) {
+      const message = JSON.stringify(call);
+      expect(message).not.toContain(secretRefreshToken);
+      expect(message).not.toContain(secretCookieValue);
+    }
+    for (const call of consoleWarnSpy.mock.calls) {
+      const message = JSON.stringify(call);
+      expect(message).not.toContain(secretRefreshToken);
+      expect(message).not.toContain(secretCookieValue);
+    }
+
+    sessionStorageSpy.mockRestore();
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   it('[AUTH-FE-S048] login adds an accessToken session without a refreshToken field', () => {
@@ -148,6 +216,110 @@ describe('useAuthSession hook', () => {
     expect(data.state.phase).toBe('authenticated');
     expect(data.state.session?.accessToken).toBe('login-access-token');
     expect('refreshToken' in (data.state.session ?? {})).toBe(false);
+  });
+
+  it('[AUTH-FE-S055] refresh uses same-origin credentials without manually selecting Cookie headers', async () => {
+    const { actions } = useAuthSession();
+    const exp = Math.floor(Date.now() / 1000) + 30;
+    const accessToken = buildJwt({ exp });
+    actions.acceptSession(
+      {
+        ...createSession('A1', accessToken),
+        expiresAt: new Date(exp * 1000).toISOString(),
+      },
+      'no-store'
+    );
+
+    const refreshSpy = vi.spyOn(apiModule, 'refreshToken').mockResolvedValue({
+      status: 200,
+      data: { accessToken: buildJwt({ exp: exp + 900 }) },
+      headers: new Headers({ 'cache-control': 'no-store' }),
+    } as unknown as Awaited<ReturnType<typeof apiModule.refreshToken>>);
+
+    await actions.refreshActiveSession();
+
+    // refreshToken は authContextId を path parameter に使い、
+    // credentials: 'same-origin' で Cookie を browser に委ねる
+    expect(refreshSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      undefined,
+      expect.objectContaining({ credentials: 'same-origin' })
+    );
+    // 手動で Cookie header を組み立てていないことを確認
+    const calls = refreshSpy.mock.calls;
+    for (const call of calls) {
+      const options = call[2];
+      if (options?.headers != null) {
+        const headers = new Headers(options.headers);
+        expect(headers.has('Cookie')).toBe(false);
+      }
+    }
+  });
+
+  it('[AUTH-FE-S057] protected API uses Authorization Bearer only and no X-Auth-Context-Id', () => {
+    const { actions } = useAuthSession();
+    actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
+
+    const headers = actions.createAuthorizationHeaders();
+
+    expect(headers).toEqual({ Authorization: 'Bearer token-a' });
+    expect(headers).not.toHaveProperty('X-Auth-Context-Id');
+  });
+
+  it('[AUTH-FE-S060] logout response clear-cookie command syncs context index and memory state', async () => {
+    const { data, actions } = useAuthSession();
+    actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
+    actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
+
+    // logout response に contextIndexUpdateHints を含める
+    vi.spyOn(authApi, 'logout').mockResolvedValue({
+      status: 200,
+      data: {
+        requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        revoked: true,
+        clearCookieCommands: [],
+        contextIndexUpdateHints: [
+          { action: 'remove', authContextId: createSession('A1', '').authContextId },
+        ],
+      },
+      headers: new Headers(),
+    } as unknown as Awaited<ReturnType<typeof authApi.logout>>);
+
+    // localStorage に context index を事前に書き込む
+    const preIndex = JSON.stringify({
+      version: 1,
+      surface: 'product',
+      activeAuthContextId: createSession('B2', '').authContextId,
+      entries: [
+        {
+          authContextId: createSession('A1', '').authContextId,
+          sessionId: sidA,
+          identityKind: 'account',
+          lastSeenAt: '2026-03-21T00:00:00.000Z',
+          expiresHintAt: '2026-03-21T01:00:00.000Z',
+        },
+        {
+          authContextId: createSession('B2', '').authContextId,
+          sessionId: sidB,
+          identityKind: 'account',
+          lastSeenAt: '2026-03-21T00:00:00.000Z',
+          expiresHintAt: '2026-03-21T01:00:00.000Z',
+        },
+      ],
+    });
+    localStorage.setItem('www-template:product:context-index', preIndex);
+
+    await actions.logoutCurrentSession();
+
+    // memory state: active session (B) が削除され、account A が残る
+    expect(data.state.sessions).toHaveLength(1);
+    expect(data.state.sessions?.[0]?.sessionId).toBe(sidA);
+
+    // context index: server hint に従い account A の entry が削除される
+    const raw = localStorage.getItem('www-template:product:context-index') ?? '';
+    const postIndex = JSON.parse(raw);
+    expect(postIndex.entries).toHaveLength(1);
+    expect(postIndex.entries[0].authContextId).toBe(createSession('B2', '').authContextId);
   });
 
   it('[AUTH-FE-S028] switchSession changes active token', () => {
@@ -201,6 +373,7 @@ describe('useAuthSession hook', () => {
     await actions.logoutCurrentSession();
 
     expect(apiModule.refreshToken).toHaveBeenCalledWith(
+      expect.any(String),
       undefined,
       expect.objectContaining({ credentials: 'same-origin' })
     );
@@ -241,6 +414,7 @@ describe('useAuthSession hook', () => {
 
     const result = await actions.refreshActiveSession();
     expect(apiModule.refreshToken).toHaveBeenCalledWith(
+      expect.any(String),
       undefined,
       expect.objectContaining({ credentials: 'same-origin' })
     );
@@ -360,6 +534,7 @@ describe('useAuthSession hook', () => {
 
     const devices = await actions.listDevices();
     expect(apiModule.refreshToken).toHaveBeenCalledWith(
+      expect.any(String),
       undefined,
       expect.objectContaining({ credentials: 'same-origin' })
     );

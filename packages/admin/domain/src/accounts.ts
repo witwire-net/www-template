@@ -2,7 +2,7 @@ import {
   requestAdminAccount,
   requestAdminAccounts,
   requestCreateAdminAccount,
-  type AdminAccountSummary,
+  type WWWTemplateAccountSummary,
   type WWWTemplateAccountLocale,
 } from '@www-template/admin-api';
 
@@ -150,11 +150,11 @@ export async function createCustomerAccount(
   const email = input.email.trim();
   if (email === '' || !email.includes('@')) return { success: false, error: 'invalid-input' };
 
-  // mutation は Admin accessToken と CSRF token が揃った memory session だけを使う。
+  // mutation は Admin accessToken を持つ memory session だけを使い、refreshToken は参照しない。
   const session = getAdminSession();
   if (session === null) return { success: false, error: 'unauthenticated' };
 
-  // Admin API wrapper が Authorization と X-CSRF-Token を付与し、backend が RBAC と CSRF binding を検証する。
+  // Admin API wrapper が Authorization を付与し、backend が RBAC と Cookie session binding を検証する。
   const response = await requestCreateAdminAccount({ email, locale: input.locale }, session);
   if (response.status !== 201) return { success: false, error: mapAccountStatus(response.status) };
 
@@ -162,7 +162,7 @@ export async function createCustomerAccount(
   return { success: true, data: toAccountListItem(response.data.account) };
 }
 
-function toAccountListItem(account: AdminAccountSummary): AdminAccountListItem {
+function toAccountListItem(account: WWWTemplateAccountSummary): AdminAccountListItem {
   // generated DTO の `accountId` を UI component 既存 props の `id` に写像する。
   return {
     id: account.accountId,

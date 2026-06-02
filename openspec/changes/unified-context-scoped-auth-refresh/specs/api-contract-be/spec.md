@@ -1,10 +1,70 @@
+## ADDED Requirements
+
+### Requirement: TypeSpec source は概念単位の単一定義を公開する
+
+TypeSpec source は認証 primitive、WebAuthn、session、refresh、logout、recovery、account read/create model、operator profile、operator setup、authorization などの business concept ごとに model を定義しなければならない（SHALL）。`packages/typespec/main.tsp` の common model imports は concept / capability modules を参照しなければならず（MUST）、surface 固有 catch-all model を common model として参照してはならない（MUST NOT）。同じ contract concept は単一の source definition から Product service と Admin service の artifact へ参照されなければならない（MUST）。Product service と Admin service の到達境界は `routes/v1/product/**`、`routes/v1/admin/**`、service declaration、OpenAPI artifact、SDK package、Go binding package によって表現されなければならない（MUST）。Same auth envelope fields — `accessToken`、`refreshToken`、`authContextId`、`sessionId`、`expiresAt`、`contextIndexUpdateHints`、`clearCookieCommands`、`credentialMode` — は Product/Admin で同じ source definition から来なければならない（MUST）。Account と operator の差分は service-specific subject payload と metadata model で表現されなければならない（MUST）。Maintainability のため、TypeSpec templates/generics が generated SDK/Go usage を読みにくくする場合は、Product response が shared auth envelope に explicit `account` field を、Admin response が shared auth envelope に explicit `operator` field を追加する composed model を使わなければならない（MUST）。`principal` wrapper は必須ではなく、service/artifact boundary が context を決定する payload では `AuthContextIdentityKind`、`identityKind`、`principal.kind` を必須 field にしてはならない（MUST NOT）。
+
+**Customer Context**
+
+同じ認証概念が Product/Admin の名前や catch-all model file に複数回現れると、顧客が使う login / refresh / logout の安全仕様が surface ごとにずれ、修正漏れが発生する。サービス artifact の分離は維持しながら、契約概念の定義は一箇所に集約する必要がある。
+
+#### Scenario: TypeSpec auth concept は単一 source definition から参照される (API-CONTRACT-BE-S013)
+
+- **GIVEN** TypeSpec source tree を検査する
+- **WHEN** `accessToken`、`refreshToken`、`authContextId`、`sessionId`、`expiresAt`、`contextIndexUpdateHints`、`clearCookieCommands`、`credentialMode`、context refresh request/response、AuthFailureResponse の定義箇所を数える
+- **THEN** 各 concept は概念 module の単一定義として存在し、Product service と Admin service はその定義を参照する
+- **AND** Product/Admin 専用 schema は explicit `account` / `operator` subject payload や service metadata の差分だけを表す
+
+#### Scenario: Route source は v1 配下の service boundary で分離される (API-CONTRACT-BE-S014)
+
+- **GIVEN** TypeSpec route source tree を検査する
+- **WHEN** Product と Admin の route modules を列挙する
+- **THEN** Product routes は `routes/v1/product/**` に存在し、Admin routes は `routes/v1/admin/**` に存在する
+- **AND** Product/Admin service artifacts はそれぞれの route subtree から生成される
+
+#### Scenario: Auth response field names は service artifact 間で一致する (API-CONTRACT-BE-S015)
+
+- **GIVEN** Product と Admin の Cookie mode / Bearer mode auth response schema が生成されている
+- **WHEN** access token、refresh token、auth context、expiry、context index hint、clear-cookie command の field name を比較する
+- **THEN** 同じ concept の field name は両 service artifact で一致する
+- **AND** Admin artifact の token field は `accessToken` として公開される
+
+#### Scenario: Subject context は explicit service field で表現される (API-CONTRACT-BE-S016)
+
+- **GIVEN** Product と Admin の auth response schema が生成されている
+- **WHEN** subject payload と context index の schema を検査する
+- **THEN** Product service は explicit `account` subject field を返し、Admin service は explicit `operator` subject field を返す
+- **AND** hosted service artifact が subject context を決定するため、context index entry は authContextId と session/display metadata で bootstrap できる
+- **AND** `principal` wrapper は必須ではなく、必要な場合でも generated consumer の可読性を損なわない場合に限る
+
+#### Scenario: Common model imports は concept modules だけを参照する (API-CONTRACT-BE-S017)
+
+- **GIVEN** `packages/typespec/main.tsp` の common model imports を検査する
+- **WHEN** imported model modules を分類する
+- **THEN** common imports は auth、accounts、operators、sessions、refresh、logout、recovery、authorization などの concept/capability modules を参照する
+- **AND** surface 固有 catch-all model module は common model import に含まれない
+
+#### Scenario: Account read/create DTO は account concept module で定義される (API-CONTRACT-BE-S018)
+
+- **GIVEN** Account read/create DTO の TypeSpec definitions を検査する
+- **WHEN** Product account read model と Admin account creation/search route DTO が同じ account concept を扱う
+- **THEN** DTO は `models/accounts/**` の account concept owner で一度だけ定義される
+- **AND** Admin route DTO は surface 接頭辞の account schema duplicate ではなく account concept definition を参照する
+
+#### Scenario: Auth route DTO は common auth contract concepts を参照する (API-CONTRACT-BE-S019)
+
+- **GIVEN** Product auth routes と Admin auth routes が `routes/v1/product/**` と `routes/v1/admin/**` に分離されている
+- **WHEN** login、setup、register、logout、context refresh の request/response DTO を検査する
+- **THEN** route DTO は common auth contract concepts の Cookie session response、Bearer session response、context refresh request/response、AuthFailureResponse、clear-cookie command を参照する
+- **AND** `AuthContextIdentityKind`、`identityKind`、`principal.kind` を service context discriminator として要求せず、route/service artifact boundary で service context を判断する
+
 ## MODIFIED Requirements
 
 ### Requirement: API surface は service ごとに分離生成される
 
 TypeSpec は Product surface と Admin surface を別 service として表現しなければならない（SHALL）。Product surface の OpenAPI / TypeScript SDK / Go bindings は Product routes のみを含み、Admin operations を含んではならない（MUST NOT）。Admin surface の OpenAPI / TypeScript SDK / Go bindings は Admin operations のみを含み、Product operations を含んではならない（MUST NOT）。Product surface と Admin surface はどちらも `/api/v1/*` path policy に従い、両者の到達境界は origin、service artifact、binary、generated package で分離されなければならない（MUST）。Product/Admin は同じ relative path `POST /api/v1/auth/contexts/{authContextId}/refresh` をそれぞれの service artifact に持てるが、operation/tag/export は surface ごとに分離されなければならない（MUST）。`/api/admin/*` は Product/Admin contract、generated artifacts、frontend/admin source のいずれにも存在してはならない（MUST NOT）。
 
-Product/Admin の Cookie mode session response は body に accessToken、authContextId、identity/session metadata、context index update hints、clear-cookie command list を表現できなければならず（MUST）、refreshToken 平文を含んではならない（MUST NOT）。Bearer mode session response は accessToken と refreshToken を body に含め、Cookie command を含めてはならない（MUST NOT）。Logout / revoke / suspend response は対象 authContextId と exact Cookie Path を持つ clear-cookie command list を surface ごとに表現しなければならない（MUST）。
+Product/Admin の Cookie mode session response は body に accessToken、authContextId、identity/session metadata、context index update hints、clear-cookie command list を表現できなければならず（MUST）、refreshToken 平文を含んではならない（MUST NOT）。Bearer mode session response は accessToken と refreshToken を body に含め、Cookie command を含めてはならない（MUST NOT）。Admin session response は `operatorAccessToken` ではなく common `accessToken` field を公開しなければならない（MUST）。Logout / revoke / suspend response は対象 authContextId と exact Cookie Path を持つ clear-cookie command list を surface ごとに表現しなければならない（MUST）。
 
 **Customer Context**
 

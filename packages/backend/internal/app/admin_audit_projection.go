@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	adminapplication "www-template/packages/backend/internal/application/admin"
+	auditapplication "www-template/packages/backend/internal/application/audit"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/observability"
 )
@@ -36,9 +36,9 @@ type adminAuditProjectionWarningObserver struct {
 //   - cfg: OpenSearch 接続 URL、Admin audit prefix、Product prefix を含む設定。prefix 衝突は config validation と constructor の両方で拒否する。
 //
 // 戻り値:
-//   - adminapplication.AdminAuditProjector: application use case へ注入できる projection port 実装。
+//   - auditapplication.Projector: application use case へ注入できる projection port 実装。
 //   - error: URL 欠落、prefix 欠落、Admin/Product prefix 衝突など、startup で停止すべき設定不備。
-func NewAdminAuditOpenSearchProjector(cfg config.OpenSearchConfig) (adminapplication.AdminAuditProjector, error) {
+func NewAdminAuditOpenSearchProjector(cfg config.OpenSearchConfig) (auditapplication.Projector, error) {
 	// Step 1: startup validation と同じ namespace 分離を projector 単体でも確認し、単体生成時の fail-open を避ける。
 	baseURL, adminPrefix, err := validateAdminAuditOpenSearchProjectionConfig(cfg)
 	if err != nil {
@@ -52,17 +52,17 @@ func NewAdminAuditOpenSearchProjector(cfg config.OpenSearchConfig) (adminapplica
 // NewAdminAuditProjectionWarningObserver は Admin audit projection failure を warning log として観測する observer を生成する。
 //
 // 戻り値:
-//   - adminapplication.AdminAuditProjectionFailureObserver: application use case に注入する failure observer。
+//   - auditapplication.ProjectionFailureObserver: application use case に注入する failure observer。
 //
 // 利用例:
 //
 //	observer := app.NewAdminAuditProjectionWarningObserver()
-func NewAdminAuditProjectionWarningObserver() adminapplication.AdminAuditProjectionFailureObserver {
+func NewAdminAuditProjectionWarningObserver() auditapplication.ProjectionFailureObserver {
 	// Step 1: 既存 observability logger を使い、projection failure を metric/log pipeline へ収集できる warning として出す。
 	return &adminAuditProjectionWarningObserver{logger: observability.Logger()}
 }
 
-func (p *adminAuditOpenSearchProjector) ProjectAdminAuditEvent(ctx context.Context, record adminapplication.AdminAuditProjectionRecord) error {
+func (p *adminAuditOpenSearchProjector) ProjectAdminAuditEvent(ctx context.Context, record auditapplication.ProjectionRecord) error {
 	// Step 1: 呼び出し元 request の cancellation を尊重し、既に中断済みなら OpenSearch I/O を開始しない。
 	if err := ctx.Err(); err != nil {
 		return err
@@ -146,7 +146,7 @@ func adminAuditProjectionIndexName(prefix string, occurredAt time.Time) (string,
 	return fmt.Sprintf("%s-%04d.%02d", prefix, utc.Year(), int(utc.Month())), nil
 }
 
-func adminAuditProjectionBody(record adminapplication.AdminAuditProjectionRecord) ([]byte, error) {
+func adminAuditProjectionBody(record auditapplication.ProjectionRecord) ([]byte, error) {
 	// Step 1: DetailsJSON は保存済み JSON の場合だけ object として入れ、空の場合は null 相当の省略値にする。
 	document := map[string]any{
 		"id":                record.AuditID,

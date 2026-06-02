@@ -11,17 +11,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	adminapplication "www-template/packages/backend/internal/application/admin"
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
-	tokenprimitive "www-template/packages/backend/internal/application/shared/tokenprimitive"
+	accountsapplication "www-template/packages/backend/internal/application/accounts"
+	adminauth "www-template/packages/backend/internal/application/auth"
+	operatorsapplication "www-template/packages/backend/internal/application/operators"
 	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
 
-// OpenSpec 追跡: ADMIN-AUTH-BE-S057 / task 4.40 は TestAdminOperatorContextIsBoundAfterSessionValidation で、operator accessToken 検証後の operator/session/CSRF context binding を固定する。
+// OpenSpec 追跡: ADMIN-AUTH-BE-S057 / task 4.40 は TestAdminOperatorContextIsBoundAfterSessionValidation で、operator accessToken 検証後の operator/session context binding を固定する。
 // OpenSpec 追跡: ADMIN-AUTH-BE-S058 / task 4.41 は TestAdminAPIRejectsProductBearerToken で、Product bearer を Admin operator session として扱わない境界を固定する。
 // OpenSpec 追跡: ADMIN-AUTH-BE-S059 / task 4.42 は TestAdminMutationRejectsDisallowedOriginBeforeSessionValidation で、許可外 Origin を mutation 実行前に 403 へ止める境界を固定する。
-// OpenSpec 追跡: ADMIN-AUTH-BE-S060 / task 4.43 は TestAdminMutationRejectsCSRFMismatch で、session と一致しない CSRF token を 403 へ止める境界を固定する。
+// OpenSpec 追跡: ADMIN-AUTH-BE-S060 / task 4.43 は TestAdminMutationValidatesSessionAndPermissionWithoutCSRF で、protected mutation が CSRF token を要求しない境界を固定する。
 // OpenSpec 追跡: ADMIN-AUTH-BE-S061 / task 4.44 は TestAdminPreAuthPasskeyStartRequiresOriginButNotSessionCSRF で、pre-auth passkey start が session-bound CSRF なしでも許可済み Origin を要求する境界を固定する。
 // OpenSpec 追跡: ADMIN-AUTH-BE-S066 / task 4.49 は assertAdminSecurityHeaders で、Admin API response の no-store と browser security header baseline を固定する。
 
@@ -42,8 +42,8 @@ func TestAdminAPISetsNoStoreAndSecurityHeaders(t *testing.T) {
 		t.Fatalf("expected generated handler to fail closed with 503, got %d body=%s", response.Code, response.Body.String())
 	}
 	assertAdminSecurityHeaders(t, response)
-	if validator.currentInput.AccessToken != "valid-admin-token" || validator.currentInput.RequireCSRF {
-		t.Fatalf("expected read route to validate operator session without CSRF, got input=%+v", validator.currentInput)
+	if validator.currentInput.AccessToken != "valid-admin-token" || validator.currentInput.Permission != "" {
+		t.Fatalf("expected read route to validate operator session without mutation permission, got input=%+v", validator.currentInput)
 	}
 }
 
@@ -68,6 +68,115 @@ func TestAdminProtectedRouteRequiresOperatorSession(t *testing.T) {
 	assertAdminSecurityHeaders(t, response)
 }
 
+func TestAdminProtectedRouteBearerOnlyScenarioTitles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-AUTH-BE-S057] Admin middleware binds operator context after accessToken validation", func(t *testing.T) {
+		// Step 1: protected current route に validator と auth service を注入し、Bearer accessToken 検証後だけ handler へ進む状態を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{operator: validAdminOperatorDTO()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/auth/operator/current", nil)
+		request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+		response := httptest.NewRecorder()
+
+		// Step 2: request を実行し、validator と handler の両方が同じ bearer だけを operator credential として使うことを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected current operator to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		if validator.currentInput.AccessToken != "valid-admin-token" || auth.currentInput.AccessToken != "valid-admin-token" {
+			t.Fatalf("expected bearer accessToken to bind operator context, validator=%+v auth=%+v", validator.currentInput, auth.currentInput)
+		}
+		assertCurrentOperatorResponse(t, response)
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S058] Product bearer token is rejected before Admin handler", func(t *testing.T) {
+		// Step 1: Product account claim 形状の bearer を Admin signer で署名し、署名ではなく payload 意味の不一致を検査する。
+		signer := newAdminBoundarySignVerifier(t)
+		productBearer := signedProductBearerForAdminBoundaryTest(t, signer)
+		validator := &serviceBackedOperatorSessionValidator{auth: newAdminAuthServiceForBoundaryTest(t, signer)}
+		auth := &stubAdminOperatorAuth{operator: validAdminOperatorDTO()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/auth/operator/current", nil)
+		request.Header.Set(adminAuthHeader, "Bearer "+productBearer)
+		response := httptest.NewRecorder()
+
+		// Step 2: Admin validator が Product bearer を拒否し、handler の CurrentOperator へ到達しないことを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected Product bearer token to be rejected with 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.currentInput.AccessToken != "" {
+			t.Fatalf("expected rejected Product bearer not to reach Admin handler, got %+v", auth.currentInput)
+		}
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S080] Admin protected route rejects refresh and legacy cookies without bearer", func(t *testing.T) {
+		// Step 1: protected current route に Admin refresh Cookie と legacy access Cookie だけを付け、ambient Cookie 認可にならない状態を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		router := newAdminTestRouter(validator)
+		request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/auth/operator/current", nil)
+		request.Header.Set("Cookie", adminRefreshCookieName+"=refresh-cookie-value; admin_access_token=legacy-access-cookie")
+		response := httptest.NewRecorder()
+
+		// Step 2: bearer 不在として 401 になり、Cookie 値が validator へ渡らないことを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected Cookie-only protected request to return 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		if validator.calls != 0 {
+			t.Fatalf("expected Cookie-only request to stop before validator, got calls=%d", validator.calls)
+		}
+		assertAdminSecurityHeaders(t, response)
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S060] Admin protected mutation validates bearer and permission without CSRF", func(t *testing.T) {
+		// Step 1: protected mutation に CSRF header を付けず、許可済み Origin と bearer だけを提示する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		router := newAdminTestRouter(validator)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+		response := httptest.NewRecorder()
+
+		// Step 2: CSRF 欠落では止まらず、permission 付き session validation まで進むことを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusServiceUnavailable {
+			t.Fatalf("expected generated handler to fail closed with 503, got %d body=%s", response.Code, response.Body.String())
+		}
+		if validator.mutationInput.AccessToken != "valid-admin-token" || validator.mutationInput.Permission != "accounts:create" {
+			t.Fatalf("expected bearer and accounts:create permission without CSRF, got %+v", validator.mutationInput)
+		}
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S078] Admin protected request does not issue sliding accessToken or Cookie", func(t *testing.T) {
+		// Step 1: 同じ bearer で current route を 2 回呼び、通常 protected request が token rotation endpoint にならないことを観測する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{operator: validAdminOperatorDTO()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+
+		// Step 2: 2 回とも response body に新 accessToken を返さず、Set-Cookie も出さないことを確認する。
+		for i := 0; i < 2; i++ {
+			request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/auth/operator/current", nil)
+			request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != stdhttp.StatusOK {
+				t.Fatalf("expected current operator attempt %d to return 200, got %d body=%s", i+1, response.Code, response.Body.String())
+			}
+			if strings.Contains(response.Body.String(), "accessToken") {
+				t.Fatalf("protected request must not mint a replacement accessToken, body=%s", response.Body.String())
+			}
+			assertNoSetCookie(t, response)
+		}
+	})
+}
+
 // TestAdminAPIRejectsProductBearerToken は Product accessToken 形状の bearer が Admin API の operator session として受理されないことを検証する。
 // Product と Admin は同じ署名 primitive を共有できても claim 意味は別ドメインなので、Admin middleware は operator session validator の拒否を 401 として返す。
 func TestAdminAPIRejectsProductBearerToken(t *testing.T) {
@@ -78,7 +187,7 @@ func TestAdminAPIRejectsProductBearerToken(t *testing.T) {
 	productBearer := signedProductBearerForAdminBoundaryTest(t, signer)
 	validator := &serviceBackedOperatorSessionValidator{auth: newAdminAuthServiceForBoundaryTest(t, signer)}
 	auth := &stubAdminOperatorAuth{operator: validAdminOperatorDTO()}
-	router := newAdminTestRouterWithAuth(validator, auth)
+	router := newAdminTestRouterWithPasskeyAuth(validator, auth)
 	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/auth/operator/current", nil)
 	request.Header.Set(adminAuthHeader, "Bearer "+productBearer)
 	response := httptest.NewRecorder()
@@ -89,7 +198,7 @@ func TestAdminAPIRejectsProductBearerToken(t *testing.T) {
 	if response.Code != stdhttp.StatusUnauthorized {
 		t.Fatalf("expected Product bearer token to be rejected by Admin API with 401, got %d body=%s", response.Code, response.Body.String())
 	}
-	if validator.currentInput.AccessToken != productBearer || validator.currentInput.RequireCSRF {
+	if validator.currentInput.AccessToken != productBearer || validator.currentInput.Permission != "" {
 		t.Fatalf("expected Admin validator to receive Product bearer as read-session input, got %+v", validator.currentInput)
 	}
 	if auth.currentInput.AccessToken != "" {
@@ -98,7 +207,7 @@ func TestAdminAPIRejectsProductBearerToken(t *testing.T) {
 	assertAdminSecurityHeaders(t, response)
 }
 
-// TestAdminRuntimeDoesNotRegisterProductOperations は Admin runtime の router が Product 専用 operation を公開しないことを検証する。
+// [ADMIN-CONSOLE-BE-S057] TestAdminRuntimeDoesNotRegisterProductOperations は Admin runtime の router が Product 専用 operation を公開しないことを検証する。
 // Product と Admin は同じ `/api/v1/*` path 空間を別 origin / 別 binary で使うため、Admin 側で Product 専用 path が 404 になることを route table 境界の証拠にする。
 func TestAdminRuntimeDoesNotRegisterProductOperations(t *testing.T) {
 	t.Parallel()
@@ -132,7 +241,6 @@ func TestAdminRuntimeDoesNotRegisterProductOperations(t *testing.T) {
 		request := newAdminJSONRequest(route.method, route.path, `{}`)
 		request.Header.Set(adminOriginHeader, "https://admin.example.com")
 		request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-		request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 		response := httptest.NewRecorder()
 
 		router.ServeHTTP(response, request)
@@ -151,13 +259,12 @@ func TestAdminRuntimeDoesNotRegisterProductOperations(t *testing.T) {
 func TestAdminMutationRejectsDisallowedOriginBeforeSessionValidation(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: mutation request に許可されない Origin を付け、CSRF や session validator より前に拒否されることを検証する。
+	// Step 1: mutation request に許可されない Origin を付け、session validator より前に拒否されることを検証する。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
 	router := newAdminTestRouter(validator)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://evil.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: Origin 不一致は 403 とし、account creation handler や session validator へ到達させない。
@@ -172,16 +279,92 @@ func TestAdminMutationRejectsDisallowedOriginBeforeSessionValidation(t *testing.
 	assertAdminSecurityHeaders(t, response)
 }
 
-func TestAdminMutationValidatesSessionAndCSRFBinding(t *testing.T) {
+func TestAdminMutationRejectsCrossSiteFetchMetadataBeforeSessionValidation(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: 許可済み Origin / bearer / CSRF を渡し、middleware が session と CSRF binding を validator へ渡すことを確認する。
+	// Step 1: Origin は許可済みでも Fetch Metadata が cross-site の mutation を作り、Bearer 検証前に拒否される境界を固定する。
+	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+	router := newAdminTestRouter(validator)
+	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
+	request.Header.Set(adminOriginHeader, "https://admin.example.com")
+	request.Header.Set(adminFetchSiteHeader, "cross-site")
+	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+	response := httptest.NewRecorder()
+
+	// Step 2: Fetch Metadata 不一致は 403 とし、account creation handler や session validator へ到達させない。
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected cross-site Fetch Metadata to return 403, got %d body=%s", response.Code, response.Body.String())
+	}
+	if validator.calls != 0 {
+		t.Fatalf("expected cross-site Fetch Metadata to stop before validator, got calls=%d", validator.calls)
+	}
+	assertAdminSecurityHeaders(t, response)
+}
+
+func TestAdminCookieSettingPreAuthOriginFetchMetadataAndCORS(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-AUTH-BE-S059] Admin cookie-setting pre-auth rejects disallowed Origin before Set-Cookie", func(t *testing.T) {
+		// Step 1: passkey finish は session Cookie を発行し得るため、許可外 Origin で handler 到達前に止まる状態を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		verifier := &stubAdminOperatorPasskeyVerifier{credentialHandle: "verified-credential-handle"}
+		router := newAdminTestRouterWithAuthAndPasskeyVerifier(validator, auth, verifier)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+		request.Header.Set(adminOriginHeader, "https://evil.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: Origin guard が先に 403 を返し、session Cookie・application service・session validator のいずれにも進まないことを検証する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusForbidden {
+			t.Fatalf("expected disallowed Origin pre-auth finish to return 403, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.finishInput.CredentialHandle != "" || validator.calls != 0 {
+			t.Fatalf("expected disallowed Origin to stop before finish/session validation, auth=%+v calls=%d", auth.finishInput, validator.calls)
+		}
+		if cookies := response.Header().Values("Set-Cookie"); len(cookies) != 0 {
+			t.Fatalf("expected disallowed Origin to avoid Set-Cookie, got %q", cookies)
+		}
+		assertAdminSecurityHeaders(t, response)
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S061] Admin pre-auth CORS preflight is limited to the Admin origin", func(t *testing.T) {
+		// Step 1: browser の Cookie-setting preflight と同じ Origin / requested method を付け、CORS が auth middleware より前に処理できる request を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		router := newAdminTestRouter(validator)
+		request := httptest.NewRequest(stdhttp.MethodOptions, "/api/v1/auth/passkey/finish", nil)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set("Access-Control-Request-Method", stdhttp.MethodPost)
+		response := httptest.NewRecorder()
+
+		// Step 2: preflight は bearer/session/CSRF を要求せず、Admin origin だけを credentialed CORS として許可することを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Header().Get("Access-Control-Allow-Origin") != "https://admin.example.com" {
+			t.Fatalf("expected Admin CORS origin, got %q", response.Header().Get("Access-Control-Allow-Origin"))
+		}
+		if response.Header().Get("Access-Control-Allow-Credentials") != "true" {
+			t.Fatalf("expected credentialed Admin CORS policy, got %q", response.Header().Get("Access-Control-Allow-Credentials"))
+		}
+		if validator.calls != 0 {
+			t.Fatalf("expected CORS preflight to stop before session validator, got calls=%d", validator.calls)
+		}
+		assertAdminSecurityHeaders(t, response)
+	})
+}
+
+func TestAdminMutationValidatesSessionAndPermissionWithoutCSRF(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: 許可済み Origin / bearer を渡し、middleware が CSRF header を要求せず permission を validator へ渡すことを確認する。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
 	router := newAdminTestRouter(validator)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: validator 成功後は未実装 handler の 503 まで進むため、副作用実装なしで middleware 境界だけを検証できる。
@@ -190,8 +373,8 @@ func TestAdminMutationValidatesSessionAndCSRFBinding(t *testing.T) {
 	if response.Code != stdhttp.StatusServiceUnavailable {
 		t.Fatalf("expected generated handler to fail closed with 503, got %d body=%s", response.Code, response.Body.String())
 	}
-	if validator.mutationInput.AccessToken != "valid-admin-token" || validator.mutationInput.CSRFToken != "valid-csrf-token" || !validator.mutationInput.RequireCSRF {
-		t.Fatalf("expected mutation validator to receive bearer and CSRF binding, got input=%+v", validator.mutationInput)
+	if validator.mutationInput.AccessToken != "valid-admin-token" || validator.mutationInput.Permission != "accounts:create" {
+		t.Fatalf("expected mutation validator to receive bearer and accounts:create permission without CSRF, got input=%+v", validator.mutationInput)
 	}
 	assertAdminSecurityHeaders(t, response)
 }
@@ -208,7 +391,6 @@ func TestCreateAdminAccountMapsTransportDTOToApplicationDTO(t *testing.T) {
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: request を実行し、handler が role を自前判定せず application use case に DTO を渡して 201 response を生成することを確認する。
@@ -239,7 +421,6 @@ func TestNewRouterWithDependenciesInjectsOperatorSessionValidatorForAccountCreat
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: request を実行し、nil validator による 503 ではなく account creation handler/use case まで到達することを確認する。
@@ -248,8 +429,8 @@ func TestNewRouterWithDependenciesInjectsOperatorSessionValidatorForAccountCreat
 	if response.Code != stdhttp.StatusCreated {
 		t.Fatalf("expected exported dependency composition to reach account creation use case, got %d body=%s", response.Code, response.Body.String())
 	}
-	if validator.mutationInput.Permission != "accounts:create" || validator.mutationInput.CSRFToken != "valid-csrf-token" {
-		t.Fatalf("expected account creation route to request accounts:create CSRF validation, got %+v", validator.mutationInput)
+	if validator.mutationInput.Permission != "accounts:create" {
+		t.Fatalf("expected account creation route to request accounts:create validation, got %+v", validator.mutationInput)
 	}
 	if creator.calls != 1 {
 		t.Fatalf("expected account creation use case to be called once, got %d", creator.calls)
@@ -262,12 +443,11 @@ func TestCreateAdminAccountMapsApplicationForbidden(t *testing.T) {
 
 	// Step 1: application account creation use case が forbidden を返す状況を作り、handler の責務を error mapping だけに限定する。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
-	creator := &stubAdminAccountCreator{errToReturn: adminapplication.ErrAdminAccountCreationForbidden}
+	creator := &stubAdminAccountCreator{errToReturn: accountsapplication.ErrAccountCreationForbidden}
 	router := newAdminTestRouterWithAccountCreator(validator, creator)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: handler は RBAC を再評価せず、application error を 403 へ写像する。
@@ -287,12 +467,11 @@ func TestCreateAdminAccountMapsDuplicateEmail(t *testing.T) {
 
 	// Step 1: application account creation use case が duplicate email を返す状況を作り、HTTP 409 のみ handler で決める。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
-	creator := &stubAdminAccountCreator{errToReturn: adminapplication.ErrAdminAccountDuplicateEmail}
+	creator := &stubAdminAccountCreator{errToReturn: accountsapplication.ErrAccountDuplicateEmail}
 	router := newAdminTestRouterWithAccountCreator(validator, creator)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: handler は duplicate 判定を自前で行わず、application error を 409 と安定 error code へ写像する。
@@ -314,8 +493,8 @@ func TestListAdminAccountsRejectsOutOfRangeLimitBeforeRepository(t *testing.T) {
 
 	// Step 1: real application search service と fake repository を使い、HTTP query が use case validation を通る状態を作る。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
-	repository := &stubAdminAccountSearchRepository{}
-	searcher, err := adminapplication.NewAdminAccountSearchService(repository)
+	repository := &stubAccountSearchRepository{}
+	searcher, err := accountsapplication.NewAccountSearchService(repository)
 	if err != nil {
 		t.Fatalf("new admin account search service: %v", err)
 	}
@@ -337,41 +516,17 @@ func TestListAdminAccountsRejectsOutOfRangeLimitBeforeRepository(t *testing.T) {
 	assertAdminSecurityHeaders(t, response)
 }
 
-func TestAdminMutationRejectsCSRFMismatch(t *testing.T) {
-	t.Parallel()
-
-	// Step 1: validator が CSRF mismatch 相当の forbidden を返す状況を作り、HTTP middleware が 403 へ変換することを確認する。
-	validator := &stubOperatorSessionValidator{errToReturn: errAdminOperatorForbidden}
-	router := newAdminTestRouter(validator)
-	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
-	request.Header.Set(adminOriginHeader, "https://admin.example.com")
-	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "wrong-csrf-token")
-	response := httptest.NewRecorder()
-
-	// Step 2: mismatch の詳細を response へ出さず、stable auth failure と no-store/security headers だけを返す。
-	router.ServeHTTP(response, request)
-
-	if response.Code != stdhttp.StatusForbidden {
-		t.Fatalf("expected CSRF mismatch to return 403, got %d body=%s", response.Code, response.Body.String())
-	}
-	if validator.mutationInput.CSRFToken != "wrong-csrf-token" || !validator.mutationInput.RequireCSRF {
-		t.Fatalf("expected mutation validator to receive mismatched CSRF, got input=%+v", validator.mutationInput)
-	}
-	assertAdminSecurityHeaders(t, response)
-}
-
 func TestAdminPreAuthPasskeyStartRequiresOriginButNotSessionCSRF(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: passkey start は session 発行前 flow なので、許可済み Origin だけを付け bearer/CSRF なしで送る。
+	// Step 1: passkey start は session 発行前 flow なので、許可済み Origin だけを付け bearer なしで送る。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
 	router := newAdminTestRouter(validator)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/start", `{"identifier":"admin@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	response := httptest.NewRecorder()
 
-	// Step 2: middleware は session-bound CSRF 不在では止めず、未実装 handler の fail-close response まで到達させる。
+	// Step 2: middleware は session bearer 不在では止めず、未実装 handler の fail-close response まで到達させる。
 	router.ServeHTTP(response, request)
 
 	if response.Code != stdhttp.StatusServiceUnavailable {
@@ -410,7 +565,7 @@ func TestAdminPasskeyStartMapsTransportDTOToApplicationService(t *testing.T) {
 	// Step 1: passkey start 用 auth service stub を注入し、pre-auth route が session validator を使わず application service に委譲する状態を作る。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
 	auth := &stubAdminOperatorAuth{challenge: validAdminPasskeyChallenge()}
-	router := newAdminTestRouterWithAuth(validator, auth)
+	router := newAdminTestRouterWithPasskeyAuth(validator, auth)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/start", `{"identifier":"admin@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	response := httptest.NewRecorder()
@@ -439,7 +594,7 @@ func TestAdminPasskeyFinishIssuesSessionCookieWithoutBodyExposure(t *testing.T) 
 	auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
 	verifier := &stubAdminOperatorPasskeyVerifier{credentialHandle: "verified-credential-handle"}
 	router := newAdminTestRouterWithAuthAndPasskeyVerifier(validator, auth, verifier)
-	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	response := httptest.NewRecorder()
 
@@ -449,7 +604,7 @@ func TestAdminPasskeyFinishIssuesSessionCookieWithoutBodyExposure(t *testing.T) 
 	if response.Code != stdhttp.StatusOK {
 		t.Fatalf("expected passkey finish to return 200, got %d body=%s", response.Code, response.Body.String())
 	}
-	if verifier.challengeID != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" || verifier.credential.RawID != "credential-handle" {
+	if verifier.challengeID != "" || verifier.credential.RawID != "credential-handle" {
 		t.Fatalf("expected raw assertion to reach passkey verifier, got %+v", verifier)
 	}
 	if auth.finishInput.ChallengeID != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" || auth.finishInput.CredentialHandle != "verified-credential-handle" {
@@ -466,8 +621,8 @@ func TestAdminPasskeyFinishRequiresVerifiedCredentialHandle(t *testing.T) {
 	// Step 1: auth service は注入するが verifier は注入せず、rawId だけで session 発行に進まない fail-closed 状態を作る。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
 	auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
-	router := newAdminTestRouterWithAuth(validator, auth)
-	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+	router := newAdminTestRouterWithPasskeyAuth(validator, auth)
+	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	response := httptest.NewRecorder()
 
@@ -481,6 +636,152 @@ func TestAdminPasskeyFinishRequiresVerifiedCredentialHandle(t *testing.T) {
 		t.Fatalf("expected raw credential handle not to reach auth service without verifier, got %+v", auth.finishInput)
 	}
 	assertAdminSecurityHeaders(t, response)
+}
+
+func TestAdminIssuanceSubjectPayloadScenarioTitles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[AUTH-BE-S094] Admin adapter returns explicit operator subject payload only", func(t *testing.T) {
+		// Step 1: Admin Cookie mode login を実行し、HTTP adapter が Admin generated response の operator field を明示 subject として出す経路を観測する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		verifier := &stubAdminOperatorPasskeyVerifier{credentialHandle: "verified-credential-handle"}
+		router := newAdminTestRouterWithAuthAndPasskeyVerifier(validator, auth, verifier)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: response は operator subject payload を含み、Product account payload を混入しないことを境界 evidence として固定する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected admin login to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		assertAdminAuthSessionResponse(t, response, "01B7X9BN4X2Y3Z4A5B6C7D8E9F")
+	})
+
+}
+
+func TestAdminIssuanceCredentialModeScenarios(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-AUTH-BE-S074] Admin Cookie mode login returns accessToken body and path-scoped refresh Cookie", func(t *testing.T) {
+		// Step 1: passkey finish を cookie mode で実行し、body secret と Cookie 属性の分離を観測する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		verifier := &stubAdminOperatorPasskeyVerifier{credentialHandle: "verified-credential-handle"}
+		router := newAdminTestRouterWithAuthAndPasskeyVerifier(validator, auth, verifier)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: Cookie mode は refreshToken を body に出さず、Admin context refresh path に限定した Set-Cookie を出す。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected cookie mode login to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		assertAdminAuthSessionResponse(t, response, "01B7X9BN4X2Y3Z4A5B6C7D8E9F")
+		assertAdminRefreshCookieSet(t, response, "admin-refresh-cookie-value")
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S079] Admin Bearer mode login returns body refreshToken without Cookie", func(t *testing.T) {
+		// Step 1: passkey finish を bearer mode で実行し、automation client 用 body token と Cookie 不発行を観測する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		verifier := &stubAdminOperatorPasskeyVerifier{credentialHandle: "verified-credential-handle"}
+		router := newAdminTestRouterWithAuthAndPasskeyVerifier(validator, auth, verifier)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"bearer","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: Bearer mode は refreshToken を body に返し、Admin refresh Cookie を設定しない。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected bearer mode login to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		assertAdminBearerAuthSessionResponse(t, response, "01B7X9BN4X2Y3Z4A5B6C7D8E9F")
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S064] Admin setup finish Cookie mode keeps Secure Lax context Path", func(t *testing.T) {
+		// Step 1: initial setup finish を cookie mode で実行し、login 以外の issuance flow でも同じ Cookie 属性を使うことを検証する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		setupper := &stubAdminOperatorSetupper{sessionResult: validAdminAuthSessionResult()}
+		router := newAdminTestRouterWithSetupper(validator, setupper)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/setup/finish", `{"email":"admin@example.com","displayName":"Admin","bootstrapSecret":"bootstrap-secret","requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"clientDataJSON":"client-data","attestationObject":"attestation"}}}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: setup 完了時も refreshToken body exposure なしで Secure/Lax/context Path の Cookie だけを発行する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected setup finish to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		if setupper.finishInitialInput.BootstrapSecret != "bootstrap-secret" {
+			t.Fatalf("expected setup finish input to reach application service, got %+v", setupper.finishInitialInput)
+		}
+		assertAdminAuthSessionResponse(t, response, "01B7X9BN4X2Y3Z4A5B6C7D8E9F")
+		assertAdminRefreshCookieSet(t, response, "admin-refresh-cookie-value")
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S079] Admin operator-setup Bearer mode returns body refreshToken without Cookie", func(t *testing.T) {
+		// Step 1: operator setup finish を bearer mode で実行し、setup flow でも automation client 用 response を選べることを検証する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		setupper := &stubAdminOperatorSetupper{sessionResult: validAdminAuthSessionResult()}
+		router := newAdminTestRouterWithSetupper(validator, setupper)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/operator-setup/finish", `{"setupToken":"setup-token","requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"bearer","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"clientDataJSON":"client-data","attestationObject":"attestation"}}}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: Bearer mode operator setup は refreshToken を body に返し、Set-Cookie を出さない。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected operator setup bearer finish to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		if setupper.finishOperatorInput.SetupToken != "setup-token" {
+			t.Fatalf("expected operator setup input to reach application service, got %+v", setupper.finishOperatorInput)
+		}
+		assertAdminBearerAuthSessionResponse(t, response, "01B7X9BN4X2Y3Z4A5B6C7D8E9F")
+	})
+}
+
+func TestAdminIssuanceRejectsInvalidRefreshContextCommandScenario(t *testing.T) {
+	t.Parallel()
+
+	unsafeCommands := []struct {
+		name   string
+		mutate func(*adminauth.OperatorRefreshCookieCommand)
+	}{
+		{name: "missing auth context", mutate: func(command *adminauth.OperatorRefreshCookieCommand) { command.AuthContextID = "" }},
+		{name: "invalid auth context", mutate: func(command *adminauth.OperatorRefreshCookieCommand) { command.AuthContextID = "not-a-ulid" }},
+	}
+
+	for _, tt := range unsafeCommands {
+		tt := tt
+		t.Run("[ADMIN-AUTH-BE-S065] Admin Cookie mode issuance rejects invalid refresh context command "+tt.name, func(t *testing.T) {
+			// Step 1: application service が Cookie 属性ではなく不正な auth context selector を返す状況を作り、adapter が fail-close できるかを検査する。
+			validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+			unsafeResult := validAdminAuthSessionResult()
+			tt.mutate(&unsafeResult.RefreshCookie)
+			auth := &stubAdminOperatorAuth{sessionResult: unsafeResult}
+			verifier := &stubAdminOperatorPasskeyVerifier{credentialHandle: "verified-credential-handle"}
+			router := newAdminTestRouterWithAuthAndPasskeyVerifier(validator, auth, verifier)
+			request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/passkey/finish", `{"requestId":"01B7X9BN4X2Y3Z4A5B6C7D8E9F","credentialMode":"cookie","credential":{"id":"credential-id","rawId":"credential-handle","type":"public-key","response":{"authenticatorData":"auth-data","clientDataJSON":"client-data","signature":"signature"}}}`)
+			request.Header.Set(adminOriginHeader, "https://admin.example.com")
+			response := httptest.NewRecorder()
+
+			// Step 2: 不正な context selector では Cookie Path を構築せず 503 に倒し、Admin browser session を半端に返さないことを確認する。
+			router.ServeHTTP(response, request)
+
+			if response.Code != stdhttp.StatusServiceUnavailable {
+				t.Fatalf("expected invalid refresh context command to fail closed with 503, got %d body=%s", response.Code, response.Body.String())
+			}
+			assertNoSetCookie(t, response)
+		})
+	}
 }
 
 func TestGetCurrentAdminOperatorCallsApplicationService(t *testing.T) {
@@ -514,7 +815,7 @@ func TestRefreshAdminOperatorSessionIssuesNewCSRFAndCookie(t *testing.T) {
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
 	auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
 	router := newAdminTestRouterWithAuth(validator, auth)
-	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/operator/refresh", `{}`)
+	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set("Cookie", adminRefreshCookieName+"=old-refresh-cookie-value")
 	response := httptest.NewRecorder()
@@ -525,7 +826,7 @@ func TestRefreshAdminOperatorSessionIssuesNewCSRFAndCookie(t *testing.T) {
 	if response.Code != stdhttp.StatusOK {
 		t.Fatalf("expected refresh to return 200, got %d body=%s", response.Code, response.Body.String())
 	}
-	if auth.refreshInput.RefreshCookieValue != "old-refresh-cookie-value" || validator.calls != 0 {
+	if auth.refreshInput.AuthContextID != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" || auth.refreshInput.RefreshTokenValue != "old-refresh-cookie-value" || validator.calls != 0 {
 		t.Fatalf("expected refresh cookie input without session validator, input=%+v calls=%d", auth.refreshInput, validator.calls)
 	}
 	assertAdminAuthSessionResponse(t, response, "")
@@ -533,17 +834,174 @@ func TestRefreshAdminOperatorSessionIssuesNewCSRFAndCookie(t *testing.T) {
 	assertAdminSecurityHeaders(t, response)
 }
 
+func TestRefreshAdminOperatorSessionRejectsMissingOriginBeforeCookieRotation(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: context refresh は session-bound CSRF 例外だが Cookie rotation を伴う unsafe method なので、Origin が無い request を作る。
+	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+	auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+	router := newAdminTestRouterWithAuth(validator, auth)
+	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{}`)
+	request.Header.Set("Cookie", adminRefreshCookieName+"=old-refresh-cookie-value")
+	response := httptest.NewRecorder()
+
+	// Step 2: middleware が handler より前に 403 へ止め、refresh Cookie を application service へ渡さないことを検証する。
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected missing Origin refresh to return 403, got %d body=%s", response.Code, response.Body.String())
+	}
+	if auth.refreshInput.RefreshTokenValue != "" || validator.calls != 0 {
+		t.Fatalf("expected missing Origin to stop before refresh/service validation, input=%+v calls=%d", auth.refreshInput, validator.calls)
+	}
+	assertAdminSecurityHeaders(t, response)
+}
+
+func TestRefreshAdminOperatorSessionRejectsDisallowedOriginBeforeCookieRotation(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: 許可外 Origin 付きの context refresh を作り、path parameter route でも Origin guard が適用されることを確認する。
+	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+	auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+	router := newAdminTestRouterWithAuth(validator, auth)
+	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{}`)
+	request.Header.Set(adminOriginHeader, "https://evil.example.com")
+	request.Header.Set("Cookie", adminRefreshCookieName+"=old-refresh-cookie-value")
+	response := httptest.NewRecorder()
+
+	// Step 2: 許可外 Origin は Cookie の有無に関係なく 403 とし、rotation service を呼ばないことを検証する。
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected disallowed Origin refresh to return 403, got %d body=%s", response.Code, response.Body.String())
+	}
+	if auth.refreshInput.RefreshTokenValue != "" || validator.calls != 0 {
+		t.Fatalf("expected disallowed Origin to stop before refresh/service validation, input=%+v calls=%d", auth.refreshInput, validator.calls)
+	}
+	assertAdminSecurityHeaders(t, response)
+}
+
+func TestAdminContextRefreshCredentialScenarios(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-AUTH-BE-S081] Admin Cookie refresh rotates path-scoped refresh Cookie", func(t *testing.T) {
+		// Step 1: Cookie mode refresh に path authContextId と HttpOnly Cookie だけを提示する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set("Cookie", adminRefreshCookieName+"=old-refresh-cookie-value")
+		response := httptest.NewRecorder()
+
+		// Step 2: handler は Cookie credential と path context を application service へ渡し、body refreshToken を返さない。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected cookie refresh to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.refreshInput.AuthContextID != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" || auth.refreshInput.RefreshTokenValue != "old-refresh-cookie-value" {
+			t.Fatalf("expected cookie refresh credential input, got %+v", auth.refreshInput)
+		}
+		assertAdminAuthSessionResponse(t, response, "")
+		assertAdminRefreshCookieSet(t, response, "admin-refresh-cookie-value")
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S084] Admin Bearer refresh rotates body refreshToken without Cookie", func(t *testing.T) {
+		// Step 1: Bearer mode refresh に body refreshToken だけを提示し、Cookie を送らない。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{"credentialMode":"bearer","refreshToken":"old-bearer-refresh-token"}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		response := httptest.NewRecorder()
+
+		// Step 2: handler は body refreshToken を application service へ渡し、新しい refreshToken を body に返す。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected bearer refresh to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.refreshInput.RefreshTokenValue != "old-bearer-refresh-token" {
+			t.Fatalf("expected bearer refresh token input, got %+v", auth.refreshInput)
+		}
+		assertAdminBearerAuthSessionResponse(t, response, "")
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S082] Admin Bearer refresh rejects Authorization header", func(t *testing.T) {
+		// Step 1: body refreshToken と Authorization header を同時に付け、accessToken を refresh credential として使わせない。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{"credentialMode":"bearer","refreshToken":"old-bearer-refresh-token"}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set(adminAuthHeader, "Bearer access-token-must-not-refresh")
+		response := httptest.NewRecorder()
+
+		// Step 2: Authorization header がある refresh request は service 到達前に 401 へ止まる。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected Authorization refresh to return 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.refreshInput.RefreshTokenValue != "" || validator.calls != 0 {
+			t.Fatalf("expected Authorization refresh to stop before service/validator, input=%+v calls=%d", auth.refreshInput, validator.calls)
+		}
+		assertNoSetCookie(t, response)
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S083] Admin refresh rejects Cookie and body refreshToken ambiguity", func(t *testing.T) {
+		// Step 1: Cookie mode と Bearer mode の credential を同時に送信し、曖昧な rotation request を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult()}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{"credentialMode":"bearer","refreshToken":"old-bearer-refresh-token"}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set("Cookie", adminRefreshCookieName+"=old-refresh-cookie-value")
+		response := httptest.NewRecorder()
+
+		// Step 2: exactly-one 違反は service 到達前に 401 へ止まり、新 credential を発行しない。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected ambiguous refresh to return 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.refreshInput.RefreshTokenValue != "" || validator.calls != 0 {
+			t.Fatalf("expected ambiguous refresh to stop before service/validator, input=%+v calls=%d", auth.refreshInput, validator.calls)
+		}
+		assertNoSetCookie(t, response)
+	})
+
+	t.Run("[ADMIN-AUTH-BE-S085] Admin invalid refresh token does not issue a new credential", func(t *testing.T) {
+		// Step 1: application service が invalid/reuse refresh を拒否する状況を作り、handler が Set-Cookie を出さないことを確認する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{sessionResult: validAdminAuthSessionResult(), errToReturn: adminauth.ErrOperatorAuthUnauthenticated}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh", `{}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set("Cookie", adminRefreshCookieName+"=replayed-refresh-cookie-value")
+		response := httptest.NewRecorder()
+
+		// Step 2: invalid/reuse refresh は 401 に畳まれ、新しい accessToken / Cookie を発行しない。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected invalid refresh to return 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		assertNoSetCookie(t, response)
+	})
+}
+
 func TestLogoutAdminOperatorClearsRefreshCookie(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: logout 用 auth service stub と mutation validator を注入し、CSRF 検証後に revoke service へ委譲する経路を作る。
+	// Step 1: logout 用 auth service stub と mutation validator を注入し、Bearer/RBAC 検証後に revoke service へ委譲する経路を作る。
 	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
-	auth := &stubAdminOperatorAuth{logoutCookie: adminauth.RefreshCookieCommand{Name: adminRefreshCookieName, HTTPOnly: true, Secure: true, SameSite: "Lax", Path: "/", Clear: true}}
+	auth := &stubAdminOperatorAuth{logoutCookie: adminauth.OperatorRefreshCookieCommand{AuthContextID: "01B7X9BN4X2Y3Z4A5B6C7D8E9F", Clear: true}}
 	router := newAdminTestRouterWithAuth(validator, auth)
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/operator/logout", `{}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
-	request.Header.Set(adminCSRFHeader, "valid-csrf-token")
 	response := httptest.NewRecorder()
 
 	// Step 2: request を実行し、handler が session revoke を application service へ委譲し、Cookie 削除 header を返すことを検証する。
@@ -552,12 +1010,124 @@ func TestLogoutAdminOperatorClearsRefreshCookie(t *testing.T) {
 	if response.Code != stdhttp.StatusOK {
 		t.Fatalf("expected logout to return 200, got %d body=%s", response.Code, response.Body.String())
 	}
-	if auth.logoutInput.AccessToken != "valid-admin-token" || !validator.mutationInput.RequireCSRF {
-		t.Fatalf("expected logout access token and CSRF validation, input=%+v validator=%+v", auth.logoutInput, validator.mutationInput)
+	if auth.logoutInput.AccessToken != "valid-admin-token" || validator.mutationInput.Permission != "operators:logout" {
+		t.Fatalf("expected logout access token and operators:logout validation, input=%+v validator=%+v", auth.logoutInput, validator.mutationInput)
 	}
 	assertAdminRefreshCookieCleared(t, response)
 	assertLogoutResponse(t, response)
 	assertAdminSecurityHeaders(t, response)
+}
+
+func TestAdminConsoleRejectsProductBearerScenario(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-CONSOLE-BE-S058] Product bearer token cannot authorize Admin account search", func(t *testing.T) {
+		// Step 1: Product account claim 形状の bearer と Admin account search use case を用意し、Admin 管理 API が Product token で開かないことを検査する。
+		signer := newAdminBoundarySignVerifier(t)
+		productBearer := signedProductBearerForAdminBoundaryTest(t, signer)
+		validator := &serviceBackedOperatorSessionValidator{auth: newAdminAuthServiceForBoundaryTest(t, signer)}
+		repository := &stubAccountSearchRepository{}
+		searcher, err := accountsapplication.NewAccountSearchService(repository)
+		if err != nil {
+			t.Fatalf("new account search service: %v", err)
+		}
+		router := newAdminTestRouterWithAccountSearcher(validator, searcher)
+		request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/accounts", nil)
+		request.Header.Set(adminAuthHeader, "Bearer "+productBearer)
+		response := httptest.NewRecorder()
+
+		// Step 2: session validation で 401 になり、account search repository へ到達しないことを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected Product bearer account search to return 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		if repository.calls != 0 {
+			t.Fatalf("expected rejected Product bearer not to reach account search, got calls=%d", repository.calls)
+		}
+	})
+}
+
+func TestAdminConsoleRejectsRefreshCookieMutationScenario(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-CONSOLE-BE-S094] Admin refresh Cookie cannot authorize account mutation", func(t *testing.T) {
+		// Step 1: account mutation に refresh Cookie だけを提示し、operator accessToken 不在の境界を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		creator := &stubAdminAccountCreator{created: validCreatedAdminAccount()}
+		router := newAdminTestRouterWithAccountCreator(validator, creator)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set("Cookie", adminRefreshCookieName+"=refresh-cookie-value")
+		response := httptest.NewRecorder()
+
+		// Step 2: refresh Cookie は認可材料にならず、validator と account creation use case の前で 401 になることを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("expected refresh-cookie-only mutation to return 401, got %d body=%s", response.Code, response.Body.String())
+		}
+		if validator.calls != 0 || creator.calls != 0 {
+			t.Fatalf("expected refresh-cookie-only mutation to stop before validator/use case, validator=%d creator=%d", validator.calls, creator.calls)
+		}
+	})
+}
+
+func TestAdminConsoleRBACInputScenario(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-CONSOLE-BE-S095] RBAC input is built from validated operator session only", func(t *testing.T) {
+		// Step 1: 有効な bearer に加えて Cookie と X-Auth-Context-Id を混ぜ、handler 入力が検証済み operator context だけから作られるかを確認する。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		creator := &stubAdminAccountCreator{created: validCreatedAdminAccount()}
+		router := newAdminTestRouterWithAccountCreator(validator, creator)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+		request.Header.Set("Cookie", adminRefreshCookieName+"=ignored-refresh-cookie")
+		request.Header.Set("X-Auth-Context-Id", "ignored-context")
+		response := httptest.NewRecorder()
+
+		// Step 2: account creation input と validator input が operator/session/permission だけで構成されることを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusCreated {
+			t.Fatalf("expected account creation to return 201, got %d body=%s", response.Code, response.Body.String())
+		}
+		if validator.mutationInput.AccessToken != "valid-admin-token" || validator.mutationInput.Permission != "accounts:create" {
+			t.Fatalf("expected validator to use bearer and permission only, got %+v", validator.mutationInput)
+		}
+		if creator.input.OperatorID != "01ARZ3NDEKTSV4RRFFQ69G5FAV" || creator.input.OperatorRole != "admin" || creator.input.Email != "customer@example.com" {
+			t.Fatalf("expected account creation input from validated operator context and body only, got %+v", creator.input)
+		}
+	})
+}
+
+func TestAdminLogoutScenarioTitle(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-AUTH-BE-S086] Admin logout revokes active operator session and clears scoped refresh Cookie", func(t *testing.T) {
+		// Step 1: logout 用 auth service stub と mutation validator を注入し、Bearer operator accessToken から対象 session を選ぶ状態を作る。
+		validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+		auth := &stubAdminOperatorAuth{logoutCookie: adminauth.OperatorRefreshCookieCommand{AuthContextID: "01B7X9BN4X2Y3Z4A5B6C7D8E9F", Clear: true}}
+		router := newAdminTestRouterWithAuth(validator, auth)
+		request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/auth/operator/logout", `{}`)
+		request.Header.Set(adminOriginHeader, "https://admin.example.com")
+		request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+		response := httptest.NewRecorder()
+
+		// Step 2: logout use case が bearer だけを受け取り、対象 refresh Cookie path の削除 command が response header に出ることを確認する。
+		router.ServeHTTP(response, request)
+
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("expected logout to return 200, got %d body=%s", response.Code, response.Body.String())
+		}
+		if auth.logoutInput.AccessToken != "valid-admin-token" || validator.mutationInput.Permission != "operators:logout" {
+			t.Fatalf("expected logout access token and operators:logout validation, input=%+v validator=%+v", auth.logoutInput, validator.mutationInput)
+		}
+		assertAdminRefreshCookieCleared(t, response)
+		assertLogoutResponse(t, response)
+	})
 }
 
 func TestAdminOperatorSetupRemainsFailClosed(t *testing.T) {
@@ -597,11 +1167,25 @@ func newAdminTestRouterWithAuth(validator operatorSessionValidator, auth adminOp
 	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: validator, operatorAuth: auth})
 }
 
-func newAdminTestRouterWithAuthAndPasskeyVerifier(validator operatorSessionValidator, auth adminOperatorAuthenticator, verifier adminOperatorPasskeyVerifier) stdhttp.Handler {
+func newAdminTestRouterWithPasskeyAuth(validator operatorSessionValidator, auth adminOperatorPasskeyAuthenticator) stdhttp.Handler {
+	// Step 1: passkey login handler だけを差し替え、session lifecycle handler とは別 dependency として動かす。
+	cfg := config.Config{}
+	cfg.Admin.Domain = "https://admin.example.com"
+	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: validator, operatorPasskeyAuth: auth})
+}
+
+func newAdminTestRouterWithAuthAndPasskeyVerifier(validator operatorSessionValidator, auth adminOperatorPasskeyAuthenticator, verifier adminOperatorPasskeyVerifier) stdhttp.Handler {
 	// Step 1: passkey finish handler の WebAuthn verifier seam だけを追加で差し替え、raw credential から直接 session 発行できないことを検査可能にする。
 	cfg := config.Config{}
 	cfg.Admin.Domain = "https://admin.example.com"
-	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: validator, operatorAuth: auth, operatorPasskeys: verifier})
+	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: validator, operatorPasskeyAuth: auth, operatorPasskeys: verifier})
+}
+
+func newAdminTestRouterWithSetupper(validator operatorSessionValidator, setupper adminOperatorSetupper) stdhttp.Handler {
+	// Step 1: initial setup / operator setup handler だけを差し替え、credential mode ごとの response 境界を DB なしで検証できるようにする。
+	cfg := config.Config{}
+	cfg.Admin.Domain = "https://admin.example.com"
+	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: validator, operatorSetup: setupper})
 }
 
 func newAdminTestRouterWithAccountCreator(validator operatorSessionValidator, creator adminAccountCreator) stdhttp.Handler {
@@ -625,18 +1209,18 @@ func newAdminJSONRequest(method string, path string, body string) *stdhttp.Reque
 	return request
 }
 
-func newAdminBoundarySignVerifier(t *testing.T) tokenprimitive.JSONSignVerifier {
+func newAdminBoundarySignVerifier(t *testing.T) adminauth.JSONSignVerifier {
 	t.Helper()
 
-	// Step 1: Product / Admin が共有可能な中立 JWT primitive を作り、後続 helper と Admin auth service の両方へ同じ検証境界を渡す。
-	signer, err := tokenprimitive.NewJWTSignVerifier([]byte("admin-api-product-bearer-boundary-test-secret"))
+	// Step 1: domain JWT primitive を application/auth capability adapter 経由で作り、後続 helper と Admin auth service の両方へ同じ検証境界を渡す。
+	signer, err := adminauth.NewTokenJSONSignVerifier([]byte("admin-api-product-bearer-boundary-test-secret"))
 	if err != nil {
 		t.Fatalf("create admin boundary signer: %v", err)
 	}
 	return signer
 }
 
-func signedProductBearerForAdminBoundaryTest(t *testing.T, signer tokenprimitive.JSONSignVerifier) string {
+func signedProductBearerForAdminBoundaryTest(t *testing.T, signer adminauth.JSONSignVerifier) string {
 	t.Helper()
 
 	// Step 1: Product AccountAuth payload と同じ `status` claim を含め、Admin OperatorAuth payload が必要とする `role` / `active` claim を含めない。
@@ -660,19 +1244,20 @@ func signedProductBearerForAdminBoundaryTest(t *testing.T, signer tokenprimitive
 	return token
 }
 
-func newAdminAuthServiceForBoundaryTest(t *testing.T, signer tokenprimitive.JSONSignVerifier) *adminauth.Service {
+func newAdminAuthServiceForBoundaryTest(t *testing.T, signer adminauth.JSONSignVerifier) *adminauth.OperatorSessionService {
 	t.Helper()
 
 	// Step 1: Product bearer の payload 検証だけを観測するため、repository / store / secret / ID port は deterministic な最小実装で埋める。
-	service, err := adminauth.NewService(
-		adminBoundaryOperatorRepository{},
-		adminBoundaryOperatorSessionStore{},
-		nil,
-		signer,
-		adminBoundarySecretGenerator{},
-		adminBoundaryIDGenerator{},
-		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
-		adminauth.AdminAuthConfig{AccessTokenTTL: 15 * time.Minute, RefreshSessionTTL: time.Hour, RefreshCookieLifetime: 30 * time.Minute, WebAuthnRPID: "admin.example.com"},
+	service, err := adminauth.NewOperatorSessionService(
+		adminauth.OperatorSessionDependencies{
+			Operators: adminBoundaryOperatorRepository{},
+			Sessions:  adminBoundaryOperatorSessionStore{},
+			Signer:    signer,
+			Secrets:   adminBoundarySecretGenerator{},
+			IDs:       adminBoundaryIDGenerator{},
+			Clock:     func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+		},
+		adminauth.OperatorSessionConfig{OperatorAccessTokenTTL: 15 * time.Minute, OperatorRefreshSessionTTL: time.Hour, OperatorRefreshCookieLifetime: 30 * time.Minute, WebAuthnRPID: "admin.example.com"},
 	)
 	if err != nil {
 		t.Fatalf("create admin auth service for boundary test: %v", err)
@@ -681,7 +1266,7 @@ func newAdminAuthServiceForBoundaryTest(t *testing.T, signer tokenprimitive.JSON
 }
 
 type serviceBackedOperatorSessionValidator struct {
-	auth         *adminauth.Service
+	auth         *adminauth.OperatorSessionService
 	calls        int
 	currentInput operatorSessionValidationInput
 }
@@ -715,29 +1300,29 @@ func (adminBoundaryOperatorRepository) FindOperatorByID(context.Context, string)
 
 type adminBoundaryOperatorSessionStore struct{}
 
-func (adminBoundaryOperatorSessionStore) SaveOperatorSession(context.Context, adminauth.OperatorSessionRecord, time.Duration) error {
+func (adminBoundaryOperatorSessionStore) Save(context.Context, adminauth.OperatorSessionRecord, time.Duration) error {
 	// Step 1: Product bearer rejection test では session 保存を行わないため、副作用なしで成功扱いにする。
 	return nil
 }
 
-func (adminBoundaryOperatorSessionStore) GetOperatorSession(context.Context, string) (adminauth.OperatorSessionRecord, error) {
+func (adminBoundaryOperatorSessionStore) Get(context.Context, string) (adminauth.OperatorSessionRecord, error) {
 	// Step 1: Product bearer rejection test では payload validation で止まるため、到達した場合も有効 record を返して境界外要因で落とさない。
-	return adminauth.OperatorSessionRecord{SessionID: "01B7X9BN4X2Y3Z4A5B6C7D8E9F", OperatorID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", RefreshTokenHash: "refresh-hash", CSRFTokenHash: "csrf-hash", RoleSnapshot: "admin", ActiveSnapshot: true, IssuedAt: time.Unix(1_700_000_000, 0).UTC(), ExpiresAt: time.Unix(1_700_003_600, 0).UTC()}, nil
+	return adminauth.OperatorSessionRecord{SessionID: "01B7X9BN4X2Y3Z4A5B6C7D8E9F", OperatorID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", RefreshTokenHash: "refresh-hash", RoleSnapshot: "admin", ActiveSnapshot: true, IssuedAt: time.Unix(1_700_000_000, 0).UTC(), ExpiresAt: time.Unix(1_700_003_600, 0).UTC()}, nil
 }
 
-func (adminBoundaryOperatorSessionStore) RotateOperatorSession(context.Context, string, string, adminauth.OperatorSessionRecord, time.Duration) error {
+func (adminBoundaryOperatorSessionStore) Rotate(context.Context, string, string, adminauth.OperatorSessionRecord, time.Duration) error {
 	// Step 1: Product bearer rejection test では rotation を行わないため、副作用なしで成功扱いにする。
 	return nil
 }
 
-func (adminBoundaryOperatorSessionStore) RevokeOperatorSession(context.Context, string, string) error {
+func (adminBoundaryOperatorSessionStore) Revoke(context.Context, string, string) error {
 	// Step 1: Product bearer rejection test では revoke を行わないため、副作用なしで成功扱いにする。
 	return nil
 }
 
 type adminBoundarySecretGenerator struct{}
 
-func (adminBoundarySecretGenerator) NewOpaqueToken() (string, error) {
+func (adminBoundarySecretGenerator) NewToken() (string, error) {
 	// Step 1: Product bearer rejection test では secret 発行へ到達しないため、deterministic な非空値を返す。
 	return "admin-boundary-secret", nil
 }
@@ -758,7 +1343,6 @@ func validOperatorSessionContext() operatorSessionContext {
 		OperatorActive:                   true,
 		OperatorPasskeyRegistrationState: string(domain.OperatorPasskeyRegistrationRegistered),
 		SessionID:                        "01B7X9BN4X2Y3Z4A5B6C7D8E9F",
-		CSRFToken:                        "valid-csrf-token",
 	}
 }
 
@@ -836,7 +1420,7 @@ func assertPasskeyStartResponse(t *testing.T, response *httptest.ResponseRecorde
 func assertAdminAuthSessionResponse(t *testing.T, response *httptest.ResponseRecorder, expectedRequestID string) {
 	t.Helper()
 
-	// Step 1: session response は accessToken/CSRF/operator を含み、refreshToken 平文や Cookie command 構造を含まないことを確認する。
+	// Step 1: session response は accessToken/operator を含み、refreshToken 平文や Cookie command 構造を含まないことを確認する。
 	bodyText := response.Body.String()
 	if strings.Contains(bodyText, "admin-refresh-cookie-value") || strings.Contains(bodyText, "refreshToken") || strings.Contains(bodyText, "RefreshCookie") {
 		t.Fatalf("expected response body not to expose refresh cookie value, got %s", bodyText)
@@ -845,15 +1429,55 @@ func assertAdminAuthSessionResponse(t *testing.T, response *httptest.ResponseRec
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode admin auth session response: %v", err)
 	}
-	if body["accessToken"] != "admin-access-token" || body["csrfToken"] != "admin-csrf-token" || body["sessionId"] != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" {
+	if body["accessToken"] != "admin-access-token" || body["sessionId"] != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" || body["authContextId"] != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" {
 		t.Fatalf("expected auth session fields, got %#v", body)
 	}
 	if expectedRequestID != "" && body["requestId"] != expectedRequestID {
 		t.Fatalf("expected requestId %q, got %#v", expectedRequestID, body)
 	}
+	if _, ok := body["account"]; ok {
+		t.Fatalf("expected Admin auth session response not to contain Product account payload, got %#v", body["account"])
+	}
 	operator, ok := body["operator"].(map[string]any)
 	if !ok || operator["operatorId"] != "01ARZ3NDEKTSV4RRFFQ69G5FAV" || operator["role"] != "admin" {
 		t.Fatalf("expected operator profile in auth session response, got %#v", body["operator"])
+	}
+}
+
+func assertAdminBearerAuthSessionResponse(t *testing.T, response *httptest.ResponseRecorder, expectedRequestID string) {
+	t.Helper()
+
+	// Step 1: Bearer mode response は automation client 用の refreshToken を body に含め、Cookie command 構造は含めないことを検査する。
+	bodyText := response.Body.String()
+	if !strings.Contains(bodyText, `"refreshToken":"admin-refresh-cookie-value"`) || strings.Contains(bodyText, "RefreshCookie") {
+		t.Fatalf("expected bearer response body to expose only refreshToken field, got %s", bodyText)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode admin bearer auth session response: %v", err)
+	}
+	if body["credentialMode"] != "bearer" || body["accessToken"] != "admin-access-token" || body["refreshToken"] != "admin-refresh-cookie-value" || body["sessionId"] != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" {
+		t.Fatalf("expected bearer auth session fields, got %#v", body)
+	}
+	if expectedRequestID != "" && body["requestId"] != expectedRequestID {
+		t.Fatalf("expected requestId %q, got %#v", expectedRequestID, body)
+	}
+	if _, ok := body["account"]; ok {
+		t.Fatalf("expected Admin bearer session response not to contain Product account payload, got %#v", body["account"])
+	}
+	operator, ok := body["operator"].(map[string]any)
+	if !ok || operator["operatorId"] != "01ARZ3NDEKTSV4RRFFQ69G5FAV" || operator["role"] != "admin" {
+		t.Fatalf("expected operator profile in bearer auth session response, got %#v", body["operator"])
+	}
+	assertNoSetCookie(t, response)
+}
+
+func assertNoSetCookie(t *testing.T, response *httptest.ResponseRecorder) {
+	t.Helper()
+
+	// Step 1: Bearer mode や拒否 response が ambient Cookie credential を作らないことを Set-Cookie header の不在で固定する。
+	if cookies := response.Header().Values("Set-Cookie"); len(cookies) != 0 {
+		t.Fatalf("expected no Set-Cookie header, got %q", cookies)
 	}
 }
 
@@ -879,7 +1503,7 @@ func assertAdminRefreshCookieSet(t *testing.T, response *httptest.ResponseRecord
 
 	// Step 1: Set-Cookie header に HttpOnly/Secure/SameSite 属性付きの Admin refresh Cookie が含まれることを確認する。
 	for _, header := range response.Header().Values("Set-Cookie") {
-		if strings.Contains(header, adminRefreshCookieName+"="+expectedValue) && strings.Contains(header, "HttpOnly") && strings.Contains(header, "Secure") && strings.Contains(header, "SameSite=Lax") {
+		if strings.Contains(header, adminRefreshCookieName+"="+expectedValue) && strings.Contains(header, "HttpOnly") && strings.Contains(header, "Secure") && strings.Contains(header, "SameSite=Lax") && strings.Contains(header, "Path=/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh") {
 			return
 		}
 	}
@@ -891,7 +1515,7 @@ func assertAdminRefreshCookieCleared(t *testing.T, response *httptest.ResponseRe
 
 	// Step 1: logout response が refresh Cookie を Max-Age=0 で削除し、HttpOnly/Secure 属性を保つことを確認する。
 	for _, header := range response.Header().Values("Set-Cookie") {
-		if strings.Contains(header, adminRefreshCookieName+"=") && strings.Contains(header, "Max-Age=0") && strings.Contains(header, "HttpOnly") && strings.Contains(header, "Secure") {
+		if strings.Contains(header, adminRefreshCookieName+"=") && strings.Contains(header, "Max-Age=0") && strings.Contains(header, "HttpOnly") && strings.Contains(header, "Secure") && strings.Contains(header, "Path=/api/v1/auth/contexts/01B7X9BN4X2Y3Z4A5B6C7D8E9F/refresh") {
 			return
 		}
 	}
@@ -921,45 +1545,58 @@ type stubOperatorSessionValidator struct {
 
 type stubAdminAccountCreator struct {
 	calls       int
-	input       adminapplication.AdminCreateAccountInput
-	created     adminapplication.AdminCreatedAccount
+	input       accountsapplication.CreateAccountInput
+	created     accountsapplication.CreatedAccount
 	errToReturn error
 }
 
-type stubAdminAccountSearchRepository struct {
+type stubAccountSearchRepository struct {
 	calls       int
 	detailCalls int
-	query       adminapplication.AdminAccountSearchQuery
+	query       accountsapplication.AccountSearchQuery
 }
 
 type stubAdminOperatorAuth struct {
-	startInput    adminauth.StartOperatorPasskeyInput
-	finishInput   adminauth.FinishOperatorPasskeyInput
-	refreshInput  adminauth.RefreshOperatorSessionInput
-	currentInput  adminauth.CurrentOperatorInput
-	logoutInput   adminauth.LogoutOperatorInput
-	challenge     adminauth.OperatorPasskeyChallenge
-	sessionResult adminauth.OperatorSessionResult
-	operator      adminauth.OperatorDTO
-	logoutCookie  adminauth.RefreshCookieCommand
-	errToReturn   error
+	startInput     adminauth.StartOperatorPasskeyInput
+	finishInput    adminauth.FinishOperatorPasskeyInput
+	refreshInput   adminauth.RefreshOperatorSessionInput
+	currentInput   adminauth.CurrentOperatorInput
+	authorizeInput adminauth.AuthorizeOperatorSessionInput
+	logoutInput    adminauth.LogoutOperatorInput
+	challenge      adminauth.OperatorPasskeyChallenge
+	sessionResult  adminauth.OperatorSessionResult
+	operator       adminauth.OperatorDTO
+	logoutCookie   adminauth.OperatorRefreshCookieCommand
+	errToReturn    error
+}
+
+type stubAdminOperatorSetupper struct {
+	startInitialInput   operatorsapplication.InitialSetupStartInput
+	finishInitialInput  operatorsapplication.InitialSetupFinishInput
+	startOperatorInput  operatorsapplication.SetupStartInput
+	finishOperatorInput operatorsapplication.SetupFinishInput
+	createInput         operatorsapplication.CreateOperatorInput
+	challenge           operatorsapplication.SetupChallengeResult
+	sessionResult       adminauth.OperatorSessionResult
+	createdOperator     operatorsapplication.CreatedOperator
+	errToReturn         error
 }
 
 type stubAdminOperatorPasskeyVerifier struct {
 	challengeID      string
-	credential       adminWebAuthnAssertionCredential
+	credential       adminauth.WebAuthnAssertionCredentialDTO
 	credentialHandle string
 	errToReturn      error
 }
 
-func (s *stubAdminAccountCreator) CreateAccount(_ context.Context, input adminapplication.AdminCreateAccountInput) (adminapplication.AdminCreatedAccount, error) {
+func (s *stubAdminAccountCreator) CreateAccount(_ context.Context, input accountsapplication.CreateAccountInput) (accountsapplication.CreatedAccount, error) {
 	// Step 1: handler が渡した application DTO を記録し、transport mapping と operator context mapping をテストで観測できるようにする。
 	s.calls++
 	s.input = input
 
 	// Step 2: error 注入時は application use case の失敗としてそのまま返し、handler の HTTP mapping を独立して検証する。
 	if s.errToReturn != nil {
-		return adminapplication.AdminCreatedAccount{}, s.errToReturn
+		return accountsapplication.CreatedAccount{}, s.errToReturn
 	}
 
 	// Step 3: 成功時は request correlation を保持した結果を返し、handler の response DTO 変換を検証できるようにする。
@@ -968,31 +1605,31 @@ func (s *stubAdminAccountCreator) CreateAccount(_ context.Context, input adminap
 	return created, nil
 }
 
-func (s *stubAdminAccountSearchRepository) SearchAccounts(_ context.Context, query adminapplication.AdminAccountSearchQuery) (adminapplication.AdminAccountSearchRepositoryResult, error) {
+func (s *stubAccountSearchRepository) SearchAccounts(_ context.Context, query accountsapplication.AccountSearchQuery) (accountsapplication.AccountSearchRepositoryResult, error) {
 	// Step 1: application validation 後にだけ呼ばれる repository fake として、呼び出し回数と検証済み query を記録する。
 	s.calls++
 	s.query = query
 
 	// Step 2: S083 の invalid limit test では呼ばれない想定だが、正常系で使われても空結果を安全に返せるようにする。
-	return adminapplication.AdminAccountSearchRepositoryResult{}, nil
+	return accountsapplication.AccountSearchRepositoryResult{}, nil
 }
 
-func (s *stubAdminAccountSearchRepository) FindAccountByID(_ context.Context, accountID string) (adminapplication.AdminAccountSummaryRecord, error) {
+func (s *stubAccountSearchRepository) FindAccountByID(_ context.Context, accountID string) (accountsapplication.AccountSummaryRecord, error) {
 	// Step 1: detail repository fake として呼び出し回数を記録し、handler/service の wiring を検証可能にする。
 	s.detailCalls++
 
 	// Step 2: 空 ID は対象不在として返し、実 repository と同じ stable error に畳む。
 	if accountID == "" {
-		return adminapplication.AdminAccountSummaryRecord{}, adminapplication.ErrAdminAccountSearchNotFound
+		return accountsapplication.AccountSummaryRecord{}, accountsapplication.ErrAccountSearchNotFound
 	}
 
 	// Step 3: deterministic read model を返し、detail route の response conversion を DB なしで実行できるようにする。
-	return adminapplication.AdminAccountSummaryRecord{AccountID: accountID, Email: "customer@example.com", Status: "active", PasskeyCount: 1, CreatedAt: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)}, nil
+	return accountsapplication.AccountSummaryRecord{AccountID: accountID, Email: "customer@example.com", Status: "active", PasskeyCount: 1, CreatedAt: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)}, nil
 }
 
-func validCreatedAdminAccount() adminapplication.AdminCreatedAccount {
+func validCreatedAdminAccount() accountsapplication.CreatedAccount {
 	// Step 1: handler success response の期待値として使う deterministic な application DTO を組み立てる。
-	return adminapplication.AdminCreatedAccount{
+	return accountsapplication.CreatedAccount{
 		AccountID:    "01ARZ3NDEKTSV4RRFFQ69G5FAV",
 		Email:        "customer@example.com",
 		Status:       "active",
@@ -1017,18 +1654,13 @@ func validAdminAuthSessionResult() adminauth.OperatorSessionResult {
 	// Step 1: auth session response と Set-Cookie header の expected value として、refresh Cookie command 付き DTO を組み立てる。
 	return adminauth.OperatorSessionResult{
 		AccessToken: "admin-access-token",
-		CSRFToken:   "admin-csrf-token",
 		Operator:    validAdminOperatorDTO(),
 		SessionID:   "01B7X9BN4X2Y3Z4A5B6C7D8E9F",
 		ExpiresAt:   time.Date(2026, 5, 26, 12, 15, 0, 0, time.UTC),
-		RefreshCookie: adminauth.RefreshCookieCommand{
-			Name:     adminRefreshCookieName,
-			Value:    "admin-refresh-cookie-value",
-			MaxAge:   30 * time.Minute,
-			HTTPOnly: true,
-			Secure:   true,
-			SameSite: "Lax",
-			Path:     "/",
+		RefreshCookie: adminauth.OperatorRefreshCookieCommand{
+			AuthContextID: "01B7X9BN4X2Y3Z4A5B6C7D8E9F",
+			Value:         "admin-refresh-cookie-value",
+			MaxAge:        30 * time.Minute,
 		},
 	}
 }
@@ -1074,16 +1706,78 @@ func (s *stubAdminOperatorAuth) CurrentOperator(_ context.Context, input adminau
 	return s.operator, nil
 }
 
-func (s *stubAdminOperatorAuth) LogoutOperator(_ context.Context, input adminauth.LogoutOperatorInput) (adminauth.RefreshCookieCommand, error) {
+func (s *stubAdminOperatorAuth) AuthorizeOperatorSession(_ context.Context, input adminauth.AuthorizeOperatorSessionInput) (adminauth.OperatorAuthorizationDecision, error) {
+	// Step 1: middleware が渡した bearer と permission を記録し、HTTP adapter が role matrix を持たず auth application へ委譲することを検証可能にする。
+	s.authorizeInput = input
+	if s.errToReturn != nil {
+		return adminauth.OperatorAuthorizationDecision{}, s.errToReturn
+	}
+
+	// Step 2: 成功時は current operator DTO と同じ primitive を許可済み decision として返し、handler context 変換を deterministic にする。
+	operator := s.operator
+	if operator.SessionID == "" {
+		operator.SessionID = "01B7X9BN4X2Y3Z4A5B6C7D8E9F"
+	}
+	return adminauth.OperatorAuthorizationDecision{Operator: operator, SessionID: operator.SessionID, Permission: input.Permission, Allowed: true}, nil
+}
+
+func (s *stubAdminOperatorAuth) LogoutOperator(_ context.Context, input adminauth.LogoutOperatorInput) (adminauth.OperatorRefreshCookieCommand, error) {
 	// Step 1: handler が header から抽出した accessToken を記録し、Cookie clear command を返す。
 	s.logoutInput = input
 	if s.errToReturn != nil {
-		return adminauth.RefreshCookieCommand{}, s.errToReturn
+		return adminauth.OperatorRefreshCookieCommand{}, s.errToReturn
 	}
 	return s.logoutCookie, nil
 }
 
-func (s *stubAdminOperatorPasskeyVerifier) VerifyOperatorPasskey(_ context.Context, challengeID string, credential adminWebAuthnAssertionCredential) (string, error) {
+func (s *stubAdminOperatorSetupper) StartInitialSetup(_ context.Context, input operatorsapplication.InitialSetupStartInput) (operatorsapplication.SetupChallengeResult, error) {
+	// Step 1: handler が bootstrap / identity DTO を application 境界へ渡した事実を記録する。
+	s.startInitialInput = input
+	if s.errToReturn != nil {
+		return operatorsapplication.SetupChallengeResult{}, s.errToReturn
+	}
+	return s.challenge, nil
+}
+
+func (s *stubAdminOperatorSetupper) FinishInitialSetup(_ context.Context, input operatorsapplication.InitialSetupFinishInput) (adminauth.OperatorSessionResult, error) {
+	// Step 1: handler が attestation DTO を application 境界へ渡した事実を記録し、session 発行結果を返す。
+	s.finishInitialInput = input
+	if s.errToReturn != nil {
+		return adminauth.OperatorSessionResult{}, s.errToReturn
+	}
+	return s.sessionResult, nil
+}
+
+func (s *stubAdminOperatorSetupper) StartOperatorSetup(_ context.Context, input operatorsapplication.SetupStartInput) (operatorsapplication.SetupChallengeResult, error) {
+	// Step 1: handler が setup token を application 境界へ渡した事実を記録する。
+	s.startOperatorInput = input
+	if s.errToReturn != nil {
+		return operatorsapplication.SetupChallengeResult{}, s.errToReturn
+	}
+	return s.challenge, nil
+}
+
+func (s *stubAdminOperatorSetupper) FinishOperatorSetup(_ context.Context, input operatorsapplication.SetupFinishInput) (adminauth.OperatorSessionResult, error) {
+	// Step 1: handler が setup token と attestation DTO を application 境界へ渡した事実を記録し、session 発行結果を返す。
+	s.finishOperatorInput = input
+	if s.errToReturn != nil {
+		return adminauth.OperatorSessionResult{}, s.errToReturn
+	}
+	return s.sessionResult, nil
+}
+
+func (s *stubAdminOperatorSetupper) CreateOperator(_ context.Context, input operatorsapplication.CreateOperatorInput) (operatorsapplication.CreatedOperator, error) {
+	// Step 1: handler が検証済み acting operator context と作成 request を application 境界へ渡した事実を記録する。
+	s.createInput = input
+	if s.errToReturn != nil {
+		return operatorsapplication.CreatedOperator{}, s.errToReturn
+	}
+	created := s.createdOperator
+	created.RequestID = input.RequestID
+	return created, nil
+}
+
+func (s *stubAdminOperatorPasskeyVerifier) VerifyOperatorPasskey(_ context.Context, challengeID string, credential adminauth.WebAuthnAssertionCredentialDTO) (string, error) {
 	// Step 1: handler が渡した challenge と assertion DTO を記録し、検証済み credential handle だけを auth service に渡せるよう返す。
 	s.challengeID = challengeID
 	s.credential = credential
@@ -1094,9 +1788,9 @@ func (s *stubAdminOperatorPasskeyVerifier) VerifyOperatorPasskey(_ context.Conte
 }
 
 func (s *stubOperatorSessionValidator) ValidateOperatorSession(_ context.Context, input operatorSessionValidationInput) (operatorSessionContext, error) {
-	// Step 1: 呼び出し回数と入力を記録し、テストが route 種別ごとの session/CSRF 要求を検査できるようにする。
+	// Step 1: 呼び出し回数と入力を記録し、テストが route 種別ごとの session/RBAC 要求を検査できるようにする。
 	s.calls++
-	if input.RequireCSRF {
+	if input.Permission != "" {
 		s.mutationInput = input
 	} else {
 		s.currentInput = input
@@ -1131,8 +1825,8 @@ func TestAdminOperatorContextIsBoundAfterSessionValidation(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode context observer response: %v", err)
 	}
-	if body[adminContextKeyOperatorID] != "01ARZ3NDEKTSV4RRFFQ69G5FAV" || body[adminContextKeySessionID] != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" || body[adminContextKeyCSRFToken] != "valid-csrf-token" {
-		t.Fatalf("expected operator/session/CSRF context, got %#v", body)
+	if body[adminContextKeyOperatorID] != "01ARZ3NDEKTSV4RRFFQ69G5FAV" || body[adminContextKeySessionID] != "01B7X9BN4X2Y3Z4A5B6C7D8E9F" {
+		t.Fatalf("expected operator/session context, got %#v", body)
 	}
 }
 
@@ -1146,7 +1840,6 @@ func ginlessAdminContextTestRouter(validator operatorSessionValidator) stdhttp.H
 		c.JSON(stdhttp.StatusOK, map[string]any{
 			adminContextKeyOperatorID:                       c.GetString(adminContextKeyOperatorID),
 			adminContextKeySessionID:                        c.Request.Context().Value(adminContextValueKey(adminContextKeySessionID)),
-			adminContextKeyCSRFToken:                        c.Request.Context().Value(adminContextValueKey(adminContextKeyCSRFToken)),
 			adminContextKeyOperatorRole:                     c.GetString(adminContextKeyOperatorRole),
 			adminContextKeyOperatorPasskeyRegistrationState: c.GetString(adminContextKeyOperatorPasskeyRegistrationState),
 		})

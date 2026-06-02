@@ -12,17 +12,23 @@ import (
 	adminhttp "www-template/packages/backend/internal/adapter/http/admin"
 	"www-template/packages/backend/internal/adapter/mailer"
 	"www-template/packages/backend/internal/adapter/postgres"
+	accountspostgres "www-template/packages/backend/internal/adapter/postgres/accounts"
 	adminpostgres "www-template/packages/backend/internal/adapter/postgres/admin"
+	auditpostgres "www-template/packages/backend/internal/adapter/postgres/audit"
 	adminvalkey "www-template/packages/backend/internal/adapter/valkey/admin"
 	webauthnadapter "www-template/packages/backend/internal/adapter/webauthn"
-	adminapplication "www-template/packages/backend/internal/application/admin"
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
-	tokenprimitive "www-template/packages/backend/internal/application/shared/tokenprimitive"
+	accountsapplication "www-template/packages/backend/internal/application/accounts"
+	auditapplication "www-template/packages/backend/internal/application/audit"
+	adminauth "www-template/packages/backend/internal/application/auth"
+	operatorsapplication "www-template/packages/backend/internal/application/operators"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/health"
 	"www-template/packages/backend/internal/platform/id"
 	"www-template/packages/backend/internal/platform/observability"
+	"www-template/packages/backend/internal/platform/secret"
 )
+
+const defaultAdminOperatorSetupTokenTTL = 24 * time.Hour
 
 // AdminRuntime は Admin API 専用 binary の runtime 構成を保持する。
 // Product Runtime と別型にすることで、Product application container や Product HTTP router を誤って共有しない。
@@ -34,19 +40,36 @@ type AdminRuntime struct {
 	closeObs  func(context.Context) error
 }
 
+type bcryptSecretHashVerifier struct{}
+
+func (bcryptSecretHashVerifier) HashSecret(secretValue string) (string, error) {
+	// Step 1: Admin setup/bootstrap secret の保存形式は platform/secret の bcrypt helper に委譲する。
+	return secret.HashBcryptSecret(secretValue)
+}
+
+func (bcryptSecretHashVerifier) MatchesSecret(hash string, secretValue string) bool {
+	// Step 1: Admin setup/bootstrap secret の照合は platform/secret の bcrypt helper に委譲し、高速 digest fallback を作らない。
+	return secret.MatchesBcryptSecret(hash, secretValue)
+}
+
 // AdminContainer は Admin API binary 専用の application service と close 関数を保持する。
 //
 // 役割:
 //   - Product container と共有せず、Admin schema / Admin audit projection を使う service だけを runtime へ渡す。
-//   - OperatorAuth は middleware 用 session validator の source であり、auth/setup handler をここでは開放しない。
+//   - OperatorAuth は middleware 用 session validator と refresh/current/logout の source である。
+//   - OperatorPasskeyLogin は WebAuthn login outer flow を担当し、session lifecycle と challenge 発行の責務を分離する。
+//   - OperatorPasskeyVerifier は Admin WebAuthn assertion を検証し、raw credential handle を session 発行へ直通させない。
 //   - AccountCreation は Admin audit OpenSearch projection を含む mutation use case である。
 //   - AccountSearch は Product Account read model を Admin 権限で読む read use case である。
 type AdminContainer struct {
-	OperatorAuth    *adminauth.Service
-	OperatorSetup   *adminapplication.AdminOperatorService
-	AccountCreation *adminapplication.AdminAccountCreationService
-	AccountSearch   *adminapplication.AdminAccountSearchService
-	close           func(context.Context) error
+	OperatorAuth            *adminauth.OperatorSessionService
+	OperatorPasskeyLogin    *adminauth.OperatorPasskeyLoginService
+	OperatorPasskeyVerifier adminauth.OperatorPasskeyVerifier
+	OperatorPasskeys        *adminauth.OperatorCredentialService
+	OperatorSetup           *operatorsapplication.OperatorService
+	AccountCreation         *accountsapplication.AccountCreationService
+	AccountSearch           *accountsapplication.AccountSearchService
+	close                   func(context.Context) error
 }
 
 type adminAccountIDGenerator struct{}
@@ -120,8 +143,10 @@ func NewAdminRuntimeWithConfig(ctx context.Context, cfg config.Config) (*AdminRu
 		Handler: adminhttp.NewRouterWithDependencies(cfg, adminhttp.Dependencies{
 			OperatorSessions:          adminhttp.NewOperatorSessionValidator(container.OperatorAuth),
 			OperatorAuth:              container.OperatorAuth,
+			OperatorPasskeyAuth:       container.OperatorPasskeyLogin,
+			OperatorPasskeyVerifier:   container.OperatorPasskeyVerifier,
 			OperatorSetup:             container.OperatorSetup,
-			OperatorPasskeyManagement: container.OperatorAuth,
+			OperatorPasskeyManagement: container.OperatorPasskeys,
 			AccountCreation:           container.AccountCreation,
 			AccountSearch:             container.AccountSearch,
 		}),
@@ -164,11 +189,11 @@ func BuildAdminContainer(ctx context.Context, cfg config.Config) (*AdminContaine
 	}()
 
 	// Step 3: Admin schema repository と account repository を同じ DB handle で構成し、account 作成 transaction と audit intent/outcome を同じ database 境界へ置く。
-	accountRepo := adminpostgres.NewAccountRepository(db)
+	accountRepo := accountspostgres.NewAccountRepository(db)
 	operatorRepo := adminpostgres.NewOperatorRepository(db)
 	operatorPasskeyRepo := adminpostgres.NewOperatorPasskeyRepository(db)
-	auditRepo := adminpostgres.NewAuditRepository(db)
-	auditService, err := adminapplication.NewAdminAuditService(auditRepo, func() time.Time { return time.Now().UTC() })
+	auditRepo := auditpostgres.NewRepository(db)
+	auditService, err := auditapplication.NewAuditService(auditRepo, func() time.Time { return time.Now().UTC() })
 	if err != nil {
 		return nil, err
 	}
@@ -180,22 +205,32 @@ func BuildAdminContainer(ctx context.Context, cfg config.Config) (*AdminContaine
 	}
 
 	// Step 5: Admin WebAuthn provider を Admin logical DB の challenge store と組み合わせ、login/setup registration ceremony を同じ provider で検証する。
-	registrationProvider, challengeProvider, err := newAdminWebAuthnProviders(cfg, valkeyStore)
+	webAuthnProvider, registrationProvider, challengeProvider, err := newAdminWebAuthnProviders(cfg, valkeyStore)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 6: Admin operator auth service は login/current/refresh/setup session 発行を提供し、Product auth service を共有しない。
-	authService, err := newAdminOperatorAuthService(cfg, operatorRepo, adminvalkey.NewOperatorSessionStore(valkeyStore), challengeProvider)
+	// Step 6: Admin operator session lifecycle service は current/refresh/logout/session 発行を提供し、Product auth service を共有しない。
+	authService, err := newAdminOperatorAuthService(cfg, operatorRepo, adminvalkey.NewOperatorRefreshSessionStore(valkeyStore))
 	if err != nil {
 		return nil, err
 	}
-	if err := authService.AttachOperatorPasskeyRepository(operatorPasskeyRepo); err != nil {
+	operatorPasskeyLogin, err := newAdminOperatorPasskeyLoginService(cfg, operatorRepo, challengeProvider, authService)
+	if err != nil {
+		return nil, err
+	}
+	operatorPasskeyVerifier, err := adminauth.NewOperatorPasskeyVerifier(webAuthnProvider, operatorPasskeyRepo)
+	if err != nil {
+		return nil, err
+	}
+	operatorCredentials, err := adminauth.NewOperatorCredentialService(operatorPasskeyRepo)
+	if err != nil {
 		return nil, err
 	}
 
 	// Step 7: Admin operator setup / creation use case を構成し、setup token 平文は mailer delivery port だけへ渡す。
-	operatorSetup, err := adminapplication.NewAdminOperatorService(operatorRepo, auditService, adminAccountIDGenerator{}, adminOpaqueTokenGenerator{}, registrationProvider, authService, mailer.NewAdminSetupTokenDelivery(mailer.NewSMTPSender(cfg.Infra), cfg), func() time.Time { return time.Now().UTC() }, adminapplication.AdminOperatorBootstrapConfig{Enabled: cfg.Admin.Bootstrap.Enabled, SecretHash: cfg.Admin.Bootstrap.SecretHash, ExpiresAt: cfg.Admin.Bootstrap.ExpiresAt})
+	secretHashVerifier := bcryptSecretHashVerifier{}
+	operatorSetup, err := operatorsapplication.NewOperatorService(operatorRepo, auditService, adminAccountIDGenerator{}, adminOpaqueTokenGenerator{}, registrationProvider, authService, mailer.NewSetupTokenDeliveryPort(mailer.NewSMTPSender(cfg.Infra), cfg), secretHashVerifier, secretHashVerifier, func() time.Time { return time.Now().UTC() }, operatorsapplication.BootstrapConfig{Enabled: cfg.Admin.Bootstrap.Enabled, SecretHash: cfg.Admin.Bootstrap.SecretHash, ExpiresAt: cfg.Admin.Bootstrap.ExpiresAt}, defaultAdminOperatorSetupTokenTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -205,18 +240,30 @@ func BuildAdminContainer(ctx context.Context, cfg config.Config) (*AdminContaine
 	if err != nil {
 		return nil, err
 	}
-	accountCreation, err := adminapplication.NewAdminAccountCreationService(accountRepo, auditService, adminAccountIDGenerator{}, projector, NewAdminAuditProjectionWarningObserver())
+	accountCreation, err := accountsapplication.NewAccountCreationService(accountRepo, auditService, adminAccountIDGenerator{}, projector, NewAdminAuditProjectionWarningObserver())
 	if err != nil {
 		return nil, err
 	}
-	accountSearch, err := adminapplication.NewAdminAccountSearchService(accountRepo)
+	accountSearch, err := accountsapplication.NewAccountSearchService(accountRepo)
 	if err != nil {
 		return nil, err
 	}
 
 	// Step 9: 構成済み use case と DB/Valkey close をまとめて返し、AdminRuntime.Close が一括解放できるようにする。
 	cleanupOnError = false
-	return &AdminContainer{OperatorAuth: authService, OperatorSetup: operatorSetup, AccountCreation: accountCreation, AccountSearch: accountSearch, close: composeClosers(func(context.Context) error { return valkeyStore.Close() }, func(context.Context) error { return closeGormDatabase(db) })}, nil
+	return &AdminContainer{
+		OperatorAuth:            authService,
+		OperatorPasskeyLogin:    operatorPasskeyLogin,
+		OperatorPasskeyVerifier: operatorPasskeyVerifier,
+		OperatorPasskeys:        operatorCredentials,
+		OperatorSetup:           operatorSetup,
+		AccountCreation:         accountCreation,
+		AccountSearch:           accountSearch,
+		close: composeClosers(
+			func(context.Context) error { return valkeyStore.Close() },
+			func(context.Context) error { return closeGormDatabase(db) },
+		),
+	}, nil
 }
 
 func openAdminRuntimeValkeyStore(ctx context.Context, cfg config.Config) (*adminvalkey.Store, error) {
@@ -234,25 +281,25 @@ func openAdminRuntimeValkeyStore(ctx context.Context, cfg config.Config) (*admin
 	return store, nil
 }
 
-func newAdminWebAuthnProviders(cfg config.Config, store *adminvalkey.Store) (adminauth.OperatorPasskeyRegistrationProvider, adminauth.OperatorPasskeyChallengeProvider, error) {
+func newAdminWebAuthnProviders(cfg config.Config, store *adminvalkey.Store) (adminauth.WebAuthnProvider, adminauth.OperatorPasskeyRegistrationProvider, adminauth.OperatorPasskeyChallengeProvider, error) {
 	// Step 1: Admin origin/domain 専用の WebAuthn provider を生成し、Product RP origin を Admin setup/login ceremony に混在させない。
 	webAuthnProvider, err := webauthnadapter.NewWebAuthnProvider(cfg.AuthRuntime().WebAuthnRPID, []string{cfg.Admin.Domain}, cfg.AuthRuntime().ChallengeTTL, store)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Step 2: setup registration に必要な provider interface を満たさない場合は、credential 登録を開始せず起動を止める。
 	registrationProvider, ok := webAuthnProvider.(adminauth.OperatorPasskeyRegistrationProvider)
 	if !ok {
-		return nil, nil, errors.New("admin webauthn provider does not implement operator registration")
+		return nil, nil, nil, errors.New("admin webauthn provider does not implement operator registration")
 	}
 
 	// Step 3: login challenge に必要な provider interface を満たさない場合は、認証開始 route を fail-close にするため起動を止める。
 	challengeProvider, ok := webAuthnProvider.(adminauth.OperatorPasskeyChallengeProvider)
 	if !ok {
-		return nil, nil, errors.New("admin webauthn provider does not implement operator login challenge")
+		return nil, nil, nil, errors.New("admin webauthn provider does not implement operator login challenge")
 	}
-	return registrationProvider, challengeProvider, nil
+	return webAuthnProvider, registrationProvider, challengeProvider, nil
 }
 
 func closeAdminContainerResources(db gormDatabaseHandle, store *adminvalkey.Store) {
@@ -267,40 +314,52 @@ func closeAdminContainerResources(db gormDatabaseHandle, store *adminvalkey.Stor
 	}
 }
 
-func newAdminOperatorAuthService(cfg config.Config, operators adminauth.OperatorRepository, sessions adminauth.OperatorSessionStore, challenges adminauth.OperatorPasskeyChallengeProvider) (*adminauth.Service, error) {
+func newAdminOperatorAuthService(cfg config.Config, operators adminauth.OperatorRepository, sessions adminauth.OperatorRefreshSessionStore) (*adminauth.OperatorSessionService, error) {
 	// Step 1: runtime default を反映した auth config を使い、Admin session TTL と署名 secret の未設定を development default で補完する。
 	authRuntime := cfg.AuthRuntime()
-	signer, err := tokenprimitive.NewJWTSignVerifier([]byte(authRuntime.JWTSecret))
+	signer, err := adminauth.NewTokenJSONSignVerifier([]byte(authRuntime.JWTSecret))
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 2: Admin auth service に Admin logical DB の WebAuthn challenge provider を渡し、login start も production path として動作させる。
-	return adminauth.NewService(
-		operators,
-		sessions,
-		challenges,
-		signer,
-		adminOpaqueTokenGenerator{},
-		newAuthIDPolicy(),
-		func() time.Time { return time.Now().UTC() },
-		adminAuthConfigFromRuntime(authRuntime),
+	// Step 2: Admin session lifecycle service には challenge provider を渡さず、WebAuthn outer flow と session 発行を分離する。
+	return adminauth.NewOperatorSessionService(
+		adminauth.OperatorSessionDependencies{
+			Operators: operators,
+			Sessions:  sessions,
+			Signer:    signer,
+			Secrets:   adminOpaqueTokenGenerator{},
+			IDs:       newAuthIDPolicy(),
+			Clock:     func() time.Time { return time.Now().UTC() },
+		},
+		operatorAuthConfigFromRuntime(authRuntime),
 	)
 }
 
-func adminAuthConfigFromRuntime(authRuntime config.AuthConfig) adminauth.AdminAuthConfig {
-	// Step 1: Admin refresh session は Product の refresh_token_ttl が設定されていればそれを使い、未設定時は絶対 session TTL に丸めて無期限 session を避ける。
+func newAdminOperatorPasskeyLoginService(cfg config.Config, operators adminauth.OperatorRepository, challenges adminauth.OperatorPasskeyChallengeProvider, sessions adminauth.OperatorSessionIssuer) (*adminauth.OperatorPasskeyLoginService, error) {
+	// Step 1: session lifecycle と同じ auth runtime config を使い、Admin RP ID と TTL policy を login facade に共有する。
+	authRuntime := cfg.AuthRuntime()
+
+	// Step 2: WebAuthn challenge provider と session issuer を passkey login service に渡し、OperatorSessionService から outer flow 依存を排除する。
+	return adminauth.NewOperatorPasskeyLoginService(
+		adminauth.OperatorPasskeyLoginDependencies{Operators: operators, Challenges: challenges, Sessions: sessions},
+		operatorAuthConfigFromRuntime(authRuntime),
+	)
+}
+
+func operatorAuthConfigFromRuntime(authRuntime config.AuthConfig) adminauth.OperatorSessionConfig {
+	// Step 1: Admin operator refresh session は共通 auth runtime の refresh TTL を operator session TTL として解釈し、未設定時は絶対 session TTL に丸めて無期限 operator session を避ける。
 	refreshSessionTTL := authRuntime.RefreshTokenTTL
 	if refreshSessionTTL == 0 {
 		refreshSessionTTL = authRuntime.SessionAbsoluteTTL
 	}
 
-	// Step 2: Cookie lifetime を server-side session TTL と同じ長さにし、server 期限を超えて refresh Cookie が残らないようにする。
-	return adminauth.AdminAuthConfig{
-		AccessTokenTTL:        authRuntime.SessionIdleTTL,
-		RefreshSessionTTL:     refreshSessionTTL,
-		RefreshCookieLifetime: refreshSessionTTL,
-		WebAuthnRPID:          authRuntime.WebAuthnRPID,
+	// Step 2: Admin operator refresh Cookie lifetime を server-side operator session TTL と同じ長さにし、server 期限を超えて refresh Cookie が残らないようにする。
+	return adminauth.OperatorSessionConfig{
+		OperatorAccessTokenTTL:        authRuntime.SessionIdleTTL,
+		OperatorRefreshSessionTTL:     refreshSessionTTL,
+		OperatorRefreshCookieLifetime: refreshSessionTTL,
+		WebAuthnRPID:                  authRuntime.WebAuthnRPID,
 	}
 }
 
@@ -348,14 +407,14 @@ func (adminAccountIDGenerator) Next() (string, error) {
 	return id.NewULID(time.Now().UTC(), rand.Reader)
 }
 
-func (adminOpaqueTokenGenerator) NewOpaqueToken() (string, error) {
-	// Step 1: refreshToken/CSRF token 用に 64 byte の暗号学的乱数を生成し、弱い fallback は行わない。
+func (adminOpaqueTokenGenerator) NewToken() (string, error) {
+	// Step 1: refreshToken 用に 64 byte の暗号学的乱数を生成し、弱い fallback は行わない。
 	raw := make([]byte, 64)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
 
-	// Step 2: Cookie/header で扱いやすい padding なし Base64URL 文字列へ変換する。
+	// Step 2: Cookie で扱いやすい padding なし Base64URL 文字列へ変換する。
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 

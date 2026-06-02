@@ -82,7 +82,7 @@ func TestAPIContractBES005ProductTypespecRejectsAdminNamespaceImport(t *testing.
 	// Step 2: Product route source が Admin route file を import する contamination fixture を一時 file に作る。
 	fixturePath := filepath.Join(t.TempDir(), "product_imports_admin.tsp")
 	fixtureSource := `import "@typespec/http";
-import "../../src/routes/admin-v1/accounts.tsp";
+import "../../src/routes/v1/admin/accounts.tsp";
 
 using Http;
 
@@ -290,9 +290,11 @@ func TestAdminConsoleBES072BackendSurfacePlacementsAreAllowed(t *testing.T) {
 		{path: "internal/adapter/http/product/router.go", packageName: "product"},
 		{path: "internal/adapter/http/admin/router.go", packageName: "admin"},
 		{path: "internal/adapter/http/shared/cookie.go", packageName: "shared"},
-		{path: "internal/application/product/service.go", packageName: "application"},
-		{path: "internal/application/admin/service.go", packageName: "application"},
-		{path: "internal/application/shared/tokenprimitive/ttl.go", packageName: "application"},
+		{path: "internal/application/auth/account_session_service.go", packageName: "auth"},
+		{path: "internal/application/auth/operator_session_service.go", packageName: "auth"},
+		{path: "internal/application/accounts/creation_service.go", packageName: "accounts"},
+		{path: "internal/application/operators/service.go", packageName: "operators"},
+		{path: "internal/application/audit/service.go", packageName: "audit"},
 		{path: "internal/adapter/postgres/product/account_repository.go", packageName: "product"},
 		{path: "internal/adapter/postgres/admin/account_repository.go", packageName: "admin"},
 		{path: "internal/adapter/valkey/product/account_session_store.go", packageName: "product"},
@@ -315,31 +317,106 @@ func TestAdminConsoleBES072BackendSurfacePlacementsAreAllowed(t *testing.T) {
 			}
 		})
 	}
+
+	forbiddenApplicationConceptPackages := []string{
+		"internal/application/auth/facade_contracts.go",
+		"internal/application/accounts/creation_service.go",
+		"internal/application/audit/service.go",
+		"internal/application/operators/service.go",
+	}
+	for _, forbiddenPath := range forbiddenApplicationConceptPackages {
+		forbiddenPath := forbiddenPath
+		// Step 4: concept subdirectory が legacy root `package application` へ戻ると owner 境界が曖昧になるため、package 名 guardrail で必ず拒否する。
+		t.Run("reject package application in "+forbiddenPath, func(t *testing.T) {
+			t.Parallel()
+			file := parseGuardrailTestFile(t, "package application\n")
+			assertGuardrailViolationContains(t, checkPackageName(forbiddenPath, file), "package name")
+		})
+	}
+}
+
+// [AUTH-BE-S096] [AUTH-BE-S097] application owner は Product/Admin surface ではなく concept package に置くことを guardrail で検証する。
+func TestAuthBES096ApplicationConceptOwnerPlacement(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: 単一 auth concept package は production owner として許可し、Account/Operator の明示 service 分割を guardrail の正常系にする。
+	allowedConceptOwnerPaths := []string{
+		"internal/application/auth/refresh.go",
+		"internal/application/auth/account_session_service.go",
+		"internal/application/auth/operator_session_service.go",
+		"internal/application/accounts/creation_service.go",
+		"internal/application/operators/service.go",
+		"internal/application/audit/service.go",
+	}
+	for _, allowedPath := range allowedConceptOwnerPaths {
+		allowedPath := allowedPath
+		t.Run("allow "+allowedPath, func(t *testing.T) {
+			t.Parallel()
+			if violations := verifyApplicationConceptOwnership(allowedPath); len(violations) != 0 {
+				t.Fatalf("expected concept owner path to pass, got violations: %v", violations)
+			}
+		})
+	}
+
+	// Step 2: root flat application file は責務 bucket を復活させるため、concept package への移動を強制する。
+	rootOwnerViolations := verifyApplicationConceptOwnership("internal/application/auth_service.go")
+	assertGuardrailViolationContains(t, rootOwnerViolations, "root internal/application production files are forbidden")
+
+	// Step 3: Product/Admin surface application subtree は旧 lifecycle owner の復活地点として拒否し、artifact/binary/HTTP 境界だけに surface 名を残す。
+	forbiddenSurfaceOwnerPaths := []string{
+		"internal/application/product/auth/service.go",
+		"internal/application/admin/auth/service.go",
+		"internal/application/shared/token_service.go",
+	}
+	for _, forbiddenPath := range forbiddenSurfaceOwnerPaths {
+		forbiddenPath := forbiddenPath
+		t.Run("reject "+forbiddenPath, func(t *testing.T) {
+			t.Parallel()
+			violations := verifyApplicationConceptOwnership(forbiddenPath)
+			assertGuardrailViolationContains(t, violations, "application owners must be concept packages")
+		})
+	}
 }
 
 // [ADMIN-CONSOLE-BE-S075] Product/Admin application subtree の相互 import と legacy root 逆流を拒否することを検証する。
 func TestAdminConsoleBES075ApplicationSurfaceImportBoundary(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: Product application は shared/tokenprimitive だけを中立 helper として import できることを確認する。
-	productImportsShared := parseGuardrailTestFile(t, `package auth
+	// Step 1: Account/Operator auth lifecycle は domain primitive と canonical auth concept を中立 helper として import できることを確認する。
+	productImportsDomain := parseGuardrailTestFile(t, `package auth
 
-import _ "`+modulePath+`/internal/application/shared/tokenprimitive"
+import _ "`+modulePath+`/internal/domain"
 `)
-	if violations := checkImports("internal/application/product/auth/service.go", productImportsShared); len(violations) != 0 {
-		t.Fatalf("expected Product application to import shared tokenprimitive, got violations: %v", violations)
+	if violations := checkImports("internal/application/auth/account_session_service.go", productImportsDomain); len(violations) != 0 {
+		t.Fatalf("expected Account auth lifecycle to import domain primitive, got violations: %v", violations)
 	}
+	operatorsImportsAdminAuth := parseGuardrailTestFile(t, `package operators
 
+import _ "`+modulePath+`/internal/application/auth"
+`)
+	if violations := checkImports("internal/application/operators/service.go", operatorsImportsAdminAuth); len(violations) != 0 {
+		t.Fatalf("expected operators concept to import operator auth session boundary, got violations: %v", violations)
+	}
+	productHTTPImportsAccountSettings := parseGuardrailTestFile(t, `package product
+
+import _ "`+modulePath+`/internal/application/accounts"
+`)
+	if violations := checkImports("internal/adapter/http/product/router.go", productHTTPImportsAccountSettings); len(violations) != 0 {
+		t.Fatalf("expected Product HTTP adapter to import account settings concept, got violations: %v", violations)
+	}
 	// Step 2: Product/Admin application の相互 import と root legacy application への逆流を拒否し、単一 service 共有へ戻れないようにする。
 	forbiddenCases := []struct {
 		name       string
 		sourcePath string
 		importPath string
 	}{
-		{name: "product imports admin", sourcePath: "internal/application/product/auth/service.go", importPath: modulePath + "/internal/application/admin/auth"},
-		{name: "admin imports product", sourcePath: "internal/application/admin/auth/service.go", importPath: modulePath + "/internal/application/product/auth"},
-		{name: "product imports legacy root", sourcePath: "internal/application/product/auth/service.go", importPath: modulePath + "/internal/application"},
-		{name: "shared imports product", sourcePath: "internal/application/shared/tokenprimitive/signer.go", importPath: modulePath + "/internal/application/product/auth"},
+		{name: "auth imports legacy product auth", sourcePath: "internal/application/auth/operator_session_service.go", importPath: modulePath + "/internal/application/product/auth"},
+		{name: "auth imports legacy admin auth", sourcePath: "internal/application/auth/operator_session_service.go", importPath: modulePath + "/internal/application/admin/auth"},
+		{name: "auth imports accounts concept", sourcePath: "internal/application/auth/operator_session_service.go", importPath: modulePath + "/internal/application/accounts"},
+		{name: "auth imports audit concept", sourcePath: "internal/application/auth/operator_session_service.go", importPath: modulePath + "/internal/application/audit"},
+		{name: "auth imports operators concept", sourcePath: "internal/application/auth/operator_session_service.go", importPath: modulePath + "/internal/application/operators"},
+		{name: "auth imports legacy root", sourcePath: "internal/application/auth/account_session_service.go", importPath: modulePath + "/internal/application"},
+		{name: "auth imports shared wrapper", sourcePath: "internal/application/auth/signer.go", importPath: modulePath + "/internal/application/shared"},
 	}
 
 	for _, forbiddenCase := range forbiddenCases {
@@ -362,44 +439,44 @@ func TestAdminConsoleBES074AccountInvariantUsecaseBoundary(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: Account 作成 use case が domain を直接呼ばない fixture を作り、AccountEmail / lifecycle constructor 迂回を拒否する。
-	missingDomainTouch := parseGuardrailTestFile(t, `package application
+	missingDomainTouch := parseGuardrailTestFile(t, `package accounts
 
-type AdminCreateAccountInput struct {
+type CreateAccountInput struct {
 	Email string
 }
 
-func CreateAccount(input AdminCreateAccountInput) error {
+func CreateAccount(input CreateAccountInput) error {
 	return nil
 }
 `)
-	missingDomainViolations := checkWriteUsecasesTouchDomain("internal/application/admin/account_creation_service.go", missingDomainTouch)
+	missingDomainViolations := checkWriteUsecasesTouchDomain("internal/application/accounts/creation_service.go", missingDomainTouch)
 	assertGuardrailViolationContains(t, missingDomainViolations, "must call into domain directly")
 
 	// Step 2: raw email の trim / 空文字判定を use case に置く fixture を作り、正規化と validation が domain object に残ることを固定する。
-	inlineValidation := parseGuardrailTestFile(t, `package application
+	inlineValidation := parseGuardrailTestFile(t, `package accounts
 
 import "strings"
 
-type AdminCreateAccountInput struct {
+type CreateAccountInput struct {
 	Email string
 }
 
-func CreateAccount(input AdminCreateAccountInput) error {
+func CreateAccount(input CreateAccountInput) error {
 	if strings.TrimSpace(input.Email) == "" {
 		return nil
 	}
 	return nil
 }
 `)
-	inlineValidationViolations := checkUsecaseInlineBusinessValidation("internal/application/admin/account_creation_service.go", inlineValidation)
+	inlineValidationViolations := checkUsecaseInlineBusinessValidation("internal/application/accounts/creation_service.go", inlineValidation)
 	assertGuardrailViolationContains(t, inlineValidationViolations, "must delegate trimming and validation to domain")
 }
 
-// [ADMIN-CONSOLE-BE-S074] HTTP adapter は shared helper の片方向利用だけを許可し、Product/Admin 相互 import を拒否することを検証する。
-func TestAdminConsoleBES074HTTPAdapterSurfaceImportBoundary(t *testing.T) {
+// [AUTH-BE-S099] [AUTH-BE-S071] [AUTH-BE-S072] HTTP adapter は shared helper concept の片方向利用だけを許可し、Product/Admin 相互 import と generated artifact 混入を拒否することを検証する。
+func TestAuthBES099HTTPAdapterConceptImportBoundary(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: Product HTTP adapter から shared HTTP helper への依存は Cookie などの中立 transport helper 用に許可する。
+	// Step 1: Product HTTP adapter から shared HTTP helper への依存は Bearer/Origin/security header などの中立 transport helper 用に許可する。
 	productImportsShared := parseGuardrailTestFile(t, `package product
 
 import _ "`+modulePath+`/internal/adapter/http/shared"
@@ -407,8 +484,24 @@ import _ "`+modulePath+`/internal/adapter/http/shared"
 	if violations := checkImports("internal/adapter/http/product/router.go", productImportsShared); len(violations) != 0 {
 		t.Fatalf("expected Product HTTP adapter to import shared HTTP helper, got violations: %v", violations)
 	}
+	adminImportsShared := parseGuardrailTestFile(t, `package admin
 
-	// Step 2: Product/Admin HTTP adapter の相互 import と shared から concrete surface への逆依存を拒否する。
+import _ "`+modulePath+`/internal/adapter/http/shared"
+`)
+	if violations := checkImports("internal/adapter/http/admin/router.go", adminImportsShared); len(violations) != 0 {
+		t.Fatalf("expected Admin HTTP adapter to import shared HTTP helper, got violations: %v", violations)
+	}
+
+	// Step 2: Admin HTTP adapter は surface ownership ではなく auth concept owner package へ接続できることを固定する。
+	adminImportsAuthConcept := parseGuardrailTestFile(t, `package admin
+
+import _ "`+modulePath+`/internal/application/auth"
+`)
+	if violations := checkImports("internal/adapter/http/admin/session_validator.go", adminImportsAuthConcept); len(violations) != 0 {
+		t.Fatalf("expected Admin HTTP adapter to import auth concept, got violations: %v", violations)
+	}
+
+	// Step 3: Product/Admin HTTP adapter の相互 import と shared から concrete surface への逆依存を拒否する。
 	forbiddenCases := []struct {
 		name       string
 		sourcePath string
@@ -421,7 +514,7 @@ import _ "`+modulePath+`/internal/adapter/http/shared"
 
 	for _, forbiddenCase := range forbiddenCases {
 		forbiddenCase := forbiddenCase
-		// Step 3: 禁止 import が layer-level allow で偶然通らないことを、対象 import path を含む violation で確認する。
+		// Step 4: 禁止 import が layer-level allow で偶然通らないことを、対象 import path を含む violation で確認する。
 		t.Run(forbiddenCase.name, func(t *testing.T) {
 			t.Parallel()
 			file := parseGuardrailTestFile(t, `package product
@@ -438,13 +531,13 @@ import _ "`+forbiddenCase.importPath+`"
 func TestAdminConsoleBES076PersistenceSurfaceImportBoundary(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: Product persistence が Product application port を参照する正常系を固定し、subtree 移行後の repository 実装を許可する。
+	// Step 1: Product persistence が account auth lifecycle port を参照する正常系を固定し、concept package 移行後の repository 実装を許可する。
 	productImportsProductApplication := parseGuardrailTestFile(t, `package product
 
-import _ "`+modulePath+`/internal/application/product/auth"
+import _ "`+modulePath+`/internal/application/auth"
 `)
 	if violations := checkImports("internal/adapter/postgres/product/account_repository.go", productImportsProductApplication); len(violations) != 0 {
-		t.Fatalf("expected Product Postgres adapter to import Product application, got violations: %v", violations)
+		t.Fatalf("expected Product Postgres adapter to import account auth application, got violations: %v", violations)
 	}
 
 	// Step 2: Product/Admin persistence adapter の application cross import を拒否し、repository 実装が反対 surface の use case/port へ依存しないようにする。
@@ -454,7 +547,7 @@ import _ "`+modulePath+`/internal/application/product/auth"
 		importPath string
 	}{
 		{name: "product postgres imports admin", sourcePath: "internal/adapter/postgres/product/account_repository.go", importPath: modulePath + "/internal/application/admin/auth"},
-		{name: "admin postgres imports product", sourcePath: "internal/adapter/postgres/admin/account_repository.go", importPath: modulePath + "/internal/application/product/auth"},
+		{name: "admin account postgres imports product", sourcePath: "internal/adapter/postgres/accounts/account_repository.go", importPath: modulePath + "/internal/application/product/auth"},
 		{name: "product valkey imports admin", sourcePath: "internal/adapter/valkey/product/account_session_store.go", importPath: modulePath + "/internal/application/admin/auth"},
 		{name: "admin valkey imports product", sourcePath: "internal/adapter/valkey/admin/operator_session_store.go", importPath: modulePath + "/internal/application/product/auth"},
 	}
@@ -475,7 +568,7 @@ import _ "`+forbiddenCase.importPath+`"
 }
 
 // [ADMIN-CONSOLE-BE-S084] Admin account search repository の unsafe raw SQL construction を guardrail が拒否することを検証する。
-func TestAdminConsoleBES084AdminAccountRepositoryRejectsUnsafeSQLConstruction(t *testing.T) {
+func TestAdminConsoleBES084AccountRepositoryRejectsUnsafeSQLConstruction(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: GORM parameter binding を使う clean fixture を確認し、静的 SQL fragment と bound parameter の正常系を固定する。
@@ -485,7 +578,7 @@ func search(queryBuilder query, email string) query {
 	return queryBuilder.Where("email ILIKE ?", email).Order("created_at DESC, id DESC")
 }
 `)
-	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/admin/account_repository.go", cleanRepository); len(violations) != 0 {
+	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/accounts/account_repository.go", cleanRepository); len(violations) != 0 {
 		t.Fatalf("expected parameterized query fixture to pass, got violations: %v", violations)
 	}
 
@@ -529,7 +622,7 @@ func search(db query, email string) query {
 		t.Run(unsafeCase.name, func(t *testing.T) {
 			t.Parallel()
 			file := parseGuardrailTestFile(t, unsafeCase.source)
-			violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/admin/account_repository.go", file)
+			violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/accounts/account_repository.go", file)
 			assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
 		})
 	}
@@ -548,6 +641,15 @@ func find(db query, operatorID string) query {
 `)
 	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/admin/operator_repository.go", cleanRepository); len(violations) != 0 {
 		t.Fatalf("expected parameterized Admin backend query fixture to pass, got violations: %v", violations)
+	}
+	auditCleanRepository := parseGuardrailTestFile(t, `package audit
+
+func complete(db query, auditID string) query {
+	return db.Where("id = ?", auditID).Select("id, outcome, completed_at")
+}
+`)
+	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/audit/repository.go", auditCleanRepository); len(violations) != 0 {
+		t.Fatalf("expected parameterized Admin audit query fixture to pass, got violations: %v", violations)
 	}
 
 	// Step 2: account search 以外の Admin backend repository でも Raw/Exec と動的 SQL fragment を拒否し、将来の repository 追加で抜け道ができないようにする。
@@ -589,6 +691,23 @@ func summarize(db query, groupColumn string) query {
 			t.Parallel()
 			file := parseGuardrailTestFile(t, unsafeCase.source)
 			violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/admin/operator_repository.go", file)
+			assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
+		})
+	}
+
+	// Step 4: rehome 後の accounts/audit repository path でも unsafe SQL を拒否し、旧 admin path だけを検査する退行を防ぐ。
+	for _, repositoryPath := range []string{"internal/adapter/postgres/accounts/account_repository.go", "internal/adapter/postgres/audit/repository.go"} {
+		repositoryPath := repositoryPath
+		t.Run(repositoryPath, func(t *testing.T) {
+			t.Parallel()
+			file := parseGuardrailTestFile(t, `package application
+
+func find(db query, email string) query {
+	condition := "email = '" + email + "'"
+	return db.Where(condition)
+}
+`)
+			violations := checkAdminBackendSQLConstruction(repositoryPath, file)
 			assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
 		})
 	}

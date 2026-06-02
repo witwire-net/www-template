@@ -150,6 +150,75 @@ func NewAccountAccessTokenClaims(account Account, sessionID AccountAuthSessionID
 	}, nil
 }
 
+// ReconstituteAccountAccessTokenClaims は署名済み JSON payload から Product AccountAuth claims を復元する。
+//
+// 役割:
+//   - application 層で decode した primitive 値を domain claim snapshot に戻し、status/current account/expiry の判定を EnsureEligible へ集約する。
+//   - JWT 署名や JSON field の必須性は application が担当し、この helper は Product AccountAuth として意味を持つ値だけを検証する。
+//   - Admin Operator claims と混在しないよう、AccountID と AccountAuthSessionID の Product 専用 constructor を必ず通す。
+//
+// 引数:
+//   - accountID: accessToken `sub` から復元した Product AccountID。
+//   - sessionID: accessToken `sid` から復元した Product AccountAuth session ID。
+//   - jti: accessToken `jti` から復元した token ID。
+//   - status: 発行時点の Product AccountStatus snapshot。
+//   - issuedAt: accessToken `iat` の UTC 時刻。zero time は拒否される。
+//   - expiresAt: accessToken `exp` の UTC 時刻。issuedAt より後でなければならない。
+//
+// 戻り値:
+//   - AccountAccessTokenClaims: 復元済み Product AccountAuth claims。
+//   - error: ID、status、時刻、TTL が不正な場合の domain error。
+//
+// 使用例:
+//
+//	claims, err := ReconstituteAccountAccessTokenClaims(accountID, sessionID, jti, status, issuedAt, expiresAt)
+//	if err != nil {
+//		return err
+//	}
+func ReconstituteAccountAccessTokenClaims(
+	accountID AccountID,
+	sessionID AccountAuthSessionID,
+	jti TokenJTI,
+	status AccountStatus,
+	issuedAt time.Time,
+	expiresAt time.Time,
+) (AccountAccessTokenClaims, error) {
+	// Step 1: Product AccountID は canonical constructor に通し、別 domain の ID や空値を拒否する。
+	validatedAccountID, err := NewAccountID(accountID.String())
+	if err != nil {
+		return AccountAccessTokenClaims{}, err
+	}
+
+	// Step 2: Product AccountAuth session ID と JTI の形式を検証し、手組み zero value を拒否する。
+	if err := validateAccountAuthSessionAndJTI(sessionID, jti); err != nil {
+		return AccountAccessTokenClaims{}, err
+	}
+
+	// Step 3: status snapshot は Product lifecycle status として検証し、未知 status を fail-closed にする。
+	validatedStatus, err := NewAccountStatus(status.String())
+	if err != nil {
+		return AccountAccessTokenClaims{}, err
+	}
+
+	// Step 4: iat/exp から TTL を検証し、期限が逆転した署名済み payload を拒否する。
+	if issuedAt.IsZero() || !expiresAt.UTC().After(issuedAt.UTC()) {
+		return AccountAccessTokenClaims{}, ErrInvalidTokenTTL
+	}
+	if _, err := ValidateTokenTTL(expiresAt.UTC().Sub(issuedAt.UTC())); err != nil {
+		return AccountAccessTokenClaims{}, err
+	}
+
+	// Step 5: 復元済み snapshot を返し、現在 Account との eligibility は EnsureEligible に委譲する。
+	return AccountAccessTokenClaims{
+		accountID: validatedAccountID,
+		sessionID: sessionID,
+		jti:       jti,
+		status:    validatedStatus,
+		issuedAt:  issuedAt.UTC(),
+		expiresAt: expiresAt.UTC(),
+	}, nil
+}
+
 // EnsureEligible は accessToken claim が現在の Product Account 状態と session selector に対して有効か検証する。
 //
 // account は現在の Account root、expectedSessionID は request/session store から選択された Product session ID を表す。
@@ -180,7 +249,12 @@ func (c AccountAccessTokenClaims) EnsureEligible(account Account, expectedSessio
 		return ErrAccountAuthTokenIneligible
 	}
 
-	// Step 6: 現在の Account lifecycle により token 発行時刻が失効済みかを最終判定する。
+	// Step 6: 発行時点 status と現在 status がずれた token は lifecycle 変更後の古い snapshot として拒否する。
+	if c.status != account.Status() {
+		return ErrAccountAuthTokenIneligible
+	}
+
+	// Step 7: 現在の Account lifecycle により token 発行時刻が失効済みかを最終判定する。
 	return ensureAccountAuthEligibleAt(account, c.issuedAt)
 }
 

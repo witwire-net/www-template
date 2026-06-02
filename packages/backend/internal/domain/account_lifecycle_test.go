@@ -47,7 +47,7 @@ func TestAdminConsoleBES077AccountEmailRejectsInvalidFormat(t *testing.T) {
 }
 
 // [ADMIN-CONSOLE-BE-S077] Admin 作成 Account は active 初期状態と既定設定を保持する。
-func TestAdminConsoleBES077NewAdminCreatedAccountInitializesActiveRoot(t *testing.T) {
+func TestAdminConsoleBES077NewCreatedAccountInitializesActiveRoot(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: AccountID と AccountEmail を canonical value object として準備する。
@@ -55,21 +55,21 @@ func TestAdminConsoleBES077NewAdminCreatedAccountInitializesActiveRoot(t *testin
 	email := mustAccountLifecycleTestEmail(t, "customer@example.com")
 
 	// Step 2: Admin 作成 constructor を通し、初期 lifecycle と child setting を同時生成する。
-	account, err := NewAdminCreatedAccount(accountID, email)
+	account, err := NewCreatedAccount(accountID, email)
 	if err != nil {
 		t.Fatalf("expected admin-created account, got error: %v", err)
 	}
 
 	// Step 3: root が AccountEmail、active status、DefaultAccountSetting、revoke 境界なしを保持することを検証する。
-	assertInitialAdminCreatedAccount(t, account, accountID)
+	assertInitialCreatedAccount(t, account, accountID)
 }
 
 // [ADMIN-CONSOLE-BE-S077] Admin 作成 Account constructor は不正な email 値オブジェクトを再検証する。
-func TestAdminConsoleBES077NewAdminCreatedAccountRejectsInvalidEmail(t *testing.T) {
+func TestAdminConsoleBES077NewCreatedAccountRejectsInvalidEmail(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: 手組みの不正 AccountEmail を渡し、constructor が再検証することを確認する。
-	_, err := NewAdminCreatedAccount(mustAccountLifecycleTestAccountID(t), AccountEmail("not-email"))
+	_, err := NewCreatedAccount(mustAccountLifecycleTestAccountID(t), AccountEmail("not-email"))
 	if !errors.Is(err, ErrInvalidAccountEmail) {
 		t.Fatalf("expected ErrInvalidAccountEmail, got %v", err)
 	}
@@ -80,7 +80,7 @@ func TestAdminConsoleBES077SuspendRestoreAndSessionBoundary(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: active Account を作成し、停止操作に使う deterministic な境界時刻を準備する。
-	account, err := NewAdminCreatedAccount(mustAccountLifecycleTestAccountID(t), mustAccountLifecycleTestEmail(t, "customer@example.com"))
+	account, err := NewCreatedAccount(mustAccountLifecycleTestAccountID(t), mustAccountLifecycleTestEmail(t, "customer@example.com"))
 	if err != nil {
 		t.Fatalf("expected admin-created account, got error: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestAdminConsoleBES077SuspendRejectsZeroBoundary(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: zero time を停止境界に使えないことを domain error として確認する。
-	account, err := NewAdminCreatedAccount(mustAccountLifecycleTestAccountID(t), mustAccountLifecycleTestEmail(t, "customer@example.com"))
+	account, err := NewCreatedAccount(mustAccountLifecycleTestAccountID(t), mustAccountLifecycleTestEmail(t, "customer@example.com"))
 	if err != nil {
 		t.Fatalf("expected admin-created account, got error: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestAdminConsoleBES077SuspendRejectsZeroBoundary(t *testing.T) {
 	}
 }
 
-func assertInitialAdminCreatedAccount(t *testing.T, account Account, accountID AccountID) {
+func assertInitialCreatedAccount(t *testing.T, account Account, accountID AccountID) {
 	t.Helper()
 
 	// Step 1: Account root が指定した AccountID と canonical email を保持することを検証する。

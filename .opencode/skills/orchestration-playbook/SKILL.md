@@ -279,6 +279,8 @@ Stage 4: Operate supervision
 - Attach evidence to each important claim
 - Separate observation from inference
 - If it cannot be observed, stop and report
+- Completion is never inferred from intent, task labels, checkbox state, scenario ID strings, helper presence, import presence, or a delegate's `DONE` claim
+- Completion requires both positive evidence and negative evidence; if either side is missing, return `NEEDS_FIX` and request the missing evidence from the responsible subordinate agent
 
 Examples of evidence:
 
@@ -286,8 +288,31 @@ Examples of evidence:
 - Summary of commands run
 - Explanation of diffs
 
-## Stop conditions
+## Evidence-gated completion protocol
 
+Use this protocol for every task that can be accepted, checked off, approved, or reported as complete.
+
+- Positive evidence proves the required implementation now exists, is wired into production callers, and is covered by commands or tests
+- Negative evidence proves prohibited states are absent, such as old owners, forbidden imports, stale callers, generated hand edits, secret leakage, bypasses, or route contamination
+- Reviewer evidence proves the responsible reviewer inspected both positive and negative evidence and returned `Approve`
+- Command evidence proves repository-approved commands ran through the allowed scripts and did not use direct tools or bypasses
+- A completion report is perfect only when it includes positive evidence, negative evidence, reviewer evidence, command evidence, residual risks, and open items
+- If the report is incomplete, contradictory, unsupported by `path:line`, or missing a required negative check, return `NEEDS_FIX`; keep returning `NEEDS_FIX` to the responsible subordinate agent until the report is complete
+- Treat missing evidence, unchecked constraints, skipped negative checks, premature `DONE`, or task-order drift as a subordinate instruction violation, not as a neutral blocker
+- When a subordinate agent violates an order, explicitly call out the violation, name the agent role, cite the violated instruction, and issue a corrective order; do not soften it into a risk or optional follow-up
+- If a task includes removal, migration, deduplication, security, dependency boundary, generated artifact, or storage/secret claims, negative evidence is mandatory
+- If the old implementation can still be found but is claimed to be non-production, require caller/callee evidence showing every production caller moved away
+- If the evidence only proves helper/type/import/test-name existence, reject completion unless it also proves ownership, caller wiring, and old-state absence
+
+## Correction and stop conditions
+
+- NEEDS_FIX
+  - Missing positive evidence from a subordinate report
+  - Missing negative evidence from a subordinate report
+  - Missing reviewer approval for a review-gated task
+  - Incomplete or contradictory completion report
+  - Premature `DONE`, premature checkbox update, skipped dependency gate, or task-order drift
+  - Any fixable implementation or report defect owned by a subordinate agent
 - ASK_FIRST_REQUIRED
   - Dependency additions/updates
   - Permission boundaries
@@ -296,9 +321,12 @@ Examples of evidence:
   - Secrets
   - Legal and licensing
 - BLOCKED
-  - Missing information
+  - Missing external information not owned by a subordinate agent
   - No access
   - Spec contradictions
+  - Required external decision
+  - Required agent/tool is not allowed by permissions
+  - Ask-first item cannot proceed without user approval
 - CONFLICT
   - Areas likely to conflict with parallel tasks
 
@@ -369,11 +397,16 @@ Operations are the sequence.
 
 - Accept only the reply format
 - For each claim, inspect PATH and LINE
+- Reject replies that do not include both Positive evidence and Negative evidence when completion is claimed
+- Return `NEEDS_FIX` to the responsible subordinate until the report is complete; do not downgrade missing evidence to a risk or follow-up
+- Name the subordinate instruction violation when a required check or evidence class is omitted
 
 7 Accept or request changes
 
 - Accept if ACCEPTANCE is met
-- Request changes if evidence is thin
+- Request changes if implementation is wrong but evidence is sufficient to diagnose it
+- Return `NEEDS_FIX` if evidence is thin, missing, contradictory, or lacks required negative checks
+- Return `BLOCKED` only for missing external decisions, no access, permission/tool impossibility, or true spec contradictions
 - Stop on boundary violations
 
 8 Integrate
@@ -470,6 +503,7 @@ ASK_FIRST:
 - __ASK_FIRST_1__
 - __ASK_FIRST_2__
 STOP_CONDITIONS:
+- NEEDS_FIX
 - ASK_FIRST_REQUIRED
 - BLOCKED
 - CONFLICT
@@ -594,7 +628,14 @@ Work Order v1+
   - __COMMAND_1__
 - Evidence required in your reply:
   - __EVIDENCE_POLICY__
-- Stop conditions return immediately:
+- Completion gate:
+  - Positive evidence: __POSITIVE_EVIDENCE_REQUIRED__
+  - Negative evidence: __NEGATIVE_EVIDENCE_REQUIRED__
+  - Reviewer evidence: __REVIEWER_EVIDENCE_REQUIRED__
+  - Command evidence: __COMMAND_EVIDENCE_REQUIRED__
+  - If any item is missing or contradictory, return `NEEDS_FIX` instead of `DONE`.
+- Correction or stop conditions return immediately:
+  - NEEDS_FIX: __REASON_NEEDS_FIX__
   - ASK_FIRST_REQUIRED: __REASON_ASK_FIRST__
   - BLOCKED: __REASON_BLOCKED__
   - CONFLICT: __REASON_CONFLICT__
@@ -619,6 +660,18 @@ What I did:
 
 Delivered:
 - __DELIVERED_1__
+
+Positive evidence:
+- __PATH_1__:__LINE_1__ __REQUIRED_STATE_NOW_EXISTS__
+
+Negative evidence:
+- __PATH_OR_SEARCH_1__ __PROHIBITED_STATE_IS_ABSENT__
+
+Reviewer evidence:
+- __REVIEWER_VERDICT__ __REVIEWER_REFERENCE__
+
+Instruction violations:
+- __AGENT_ROLE__ violated __INSTRUCTION__ by __VIOLATION__; corrective order: __ORDER__
 
 Next:
 - __NEXT_1__
@@ -665,6 +718,9 @@ Orchestrator:
 - END_STATE is observable
 - ACCEPTANCE is met
 - Each claim has evidence
+- Positive evidence and negative evidence are both present for every completion claim
+- Reviewer evidence is present when a review gate applies
+- Completion reports with missing evidence are returned as `NEEDS_FIX`, not accepted as partial success
 - NON_GOALS are not violated
 - Ask-first boundaries are not crossed
 - No hand-edits to generated artifacts

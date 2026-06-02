@@ -8,17 +8,17 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
+	adminauth "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 )
 
-// OperatorSessionStore は Admin Operator refresh session state を Valkey に保存する adapter である。
+// OperatorRefreshSessionStore は Admin Operator refresh session state を Valkey に保存する adapter である。
 //
 // 役割:
-//   - adminauth.OperatorSessionStore port を実装し、Admin operator auth だけへ公開する。
+//   - adminauth.OperatorRefreshSessionStore port を実装し、Admin operator auth だけへ公開する。
 //   - key は `admin:auth:operator-session:*` と `admin:auth:operator-sessions:*` に限定する。
 //   - Product account session record や Product application package を import しない。
-type OperatorSessionStore struct {
+type OperatorRefreshSessionStore struct {
 	store *Store
 }
 
@@ -26,7 +26,6 @@ type operatorSessionRecord struct {
 	SessionID        string    `json:"sessionId"`
 	OperatorID       string    `json:"operatorId"`
 	RefreshTokenHash string    `json:"refreshTokenHash"`
-	CSRFTokenHash    string    `json:"csrfTokenHash"`
 	RoleSnapshot     string    `json:"roleSnapshot"`
 	ActiveSnapshot   bool      `json:"activeSnapshot"`
 	IssuedAt         time.Time `json:"issuedAt"`
@@ -34,14 +33,14 @@ type operatorSessionRecord struct {
 	Revoked          bool      `json:"revoked"`
 }
 
-// NewOperatorSessionStore は Admin Operator session store を構築する。
-func NewOperatorSessionStore(store *Store) *OperatorSessionStore {
+// NewOperatorRefreshSessionStore は Admin Operator refresh session store を構築する。
+func NewOperatorRefreshSessionStore(store *Store) *OperatorRefreshSessionStore {
 	// Step 1: Admin application port 実装と Admin Valkey store を結びつける。
-	return &OperatorSessionStore{store: store}
+	return &OperatorRefreshSessionStore{store: store}
 }
 
-// SaveOperatorSession は Admin Operator session record を TTL 付きで保存する。
-func (s *OperatorSessionStore) SaveOperatorSession(ctx context.Context, record adminauth.OperatorSessionRecord, ttl time.Duration) error {
+// Save は Admin Operator session record を TTL 付きで保存する。
+func (s *OperatorRefreshSessionStore) Save(ctx context.Context, record adminauth.OperatorSessionRecord, ttl time.Duration) error {
 	// Step 1: application DTO を保存 DTO に写像し、JSON encode する。
 	payload, err := json.Marshal(operatorSessionRecordFromApplication(record))
 	if err != nil {
@@ -62,8 +61,8 @@ func (s *OperatorSessionStore) SaveOperatorSession(ctx context.Context, record a
 	return nil
 }
 
-// GetOperatorSession は session ID から Admin Operator session record を取得する。
-func (s *OperatorSessionStore) GetOperatorSession(ctx context.Context, sessionID string) (adminauth.OperatorSessionRecord, error) {
+// Get は session ID から Admin Operator session record を取得する。
+func (s *OperatorRefreshSessionStore) Get(ctx context.Context, sessionID string) (adminauth.OperatorSessionRecord, error) {
 	// Step 1: Admin namespace の session key を読み取り、存在しない session は not found として返す。
 	value, err := s.store.client.Get(ctx, s.sessionKey(sessionID)).Result()
 	if err != nil {
@@ -81,8 +80,8 @@ func (s *OperatorSessionStore) GetOperatorSession(ctx context.Context, sessionID
 	return record.toApplication(), nil
 }
 
-// RotateOperatorSession は current refresh hash 一致時だけ replacement を保存する。
-func (s *OperatorSessionStore) RotateOperatorSession(ctx context.Context, sessionID string, currentRefreshTokenHash string, replacement adminauth.OperatorSessionRecord, ttl time.Duration) error {
+// Rotate は current refresh hash 一致時だけ replacement を保存する。
+func (s *OperatorRefreshSessionStore) Rotate(ctx context.Context, sessionID string, currentRefreshTokenHash string, replacement adminauth.OperatorSessionRecord, ttl time.Duration) error {
 	// Step 1: 旧 session key を監視し、hash 照合と置換を Redis transaction 境界に閉じ込める。
 	oldKey := s.sessionKey(sessionID)
 	err := s.store.client.Watch(ctx, func(tx *redis.Tx) error {
@@ -104,8 +103,8 @@ func (s *OperatorSessionStore) RotateOperatorSession(ctx context.Context, sessio
 	return nil
 }
 
-// RevokeOperatorSession は対象 Admin Operator session を削除する。
-func (s *OperatorSessionStore) RevokeOperatorSession(ctx context.Context, operatorID string, sessionID string) error {
+// Revoke は対象 Admin Operator session を削除する。
+func (s *OperatorRefreshSessionStore) Revoke(ctx context.Context, operatorID string, sessionID string) error {
 	// Step 1: session key を削除し、以後の refresh/current 検証で使えないようにする。
 	if err := s.store.client.Del(ctx, s.sessionKey(sessionID)).Err(); err != nil {
 		return domain.ErrAuthStoreUnavailable
@@ -118,7 +117,7 @@ func (s *OperatorSessionStore) RevokeOperatorSession(ctx context.Context, operat
 	return nil
 }
 
-func (s *OperatorSessionStore) loadOperatorSessionForRotation(ctx context.Context, tx *redis.Tx, oldKey string) (adminauth.OperatorSessionRecord, error) {
+func (s *OperatorRefreshSessionStore) loadOperatorSessionForRotation(ctx context.Context, tx *redis.Tx, oldKey string) (adminauth.OperatorSessionRecord, error) {
 	// Step 1: WATCH 対象 key から現在 record を読み、存在しない session は stable not found に畳む。
 	value, err := tx.Get(ctx, oldKey).Result()
 	if err != nil {
@@ -136,7 +135,7 @@ func (s *OperatorSessionStore) loadOperatorSessionForRotation(ctx context.Contex
 	return record.toApplication(), nil
 }
 
-func (s *OperatorSessionStore) replaceOperatorSession(ctx context.Context, tx *redis.Tx, current adminauth.OperatorSessionRecord, replacement adminauth.OperatorSessionRecord, ttl time.Duration, oldKey string) error {
+func (s *OperatorRefreshSessionStore) replaceOperatorSession(ctx context.Context, tx *redis.Tx, current adminauth.OperatorSessionRecord, replacement adminauth.OperatorSessionRecord, ttl time.Duration, oldKey string) error {
 	// Step 1: replacement payload を先に作り、transaction 内では Redis 操作だけを実行できる状態にする。
 	payload, err := json.Marshal(operatorSessionRecordFromApplication(replacement))
 	if err != nil {
@@ -160,20 +159,20 @@ func (s *OperatorSessionStore) replaceOperatorSession(ctx context.Context, tx *r
 	return nil
 }
 
-func (s *OperatorSessionStore) sessionKey(sessionID string) string {
+func (s *OperatorRefreshSessionStore) sessionKey(sessionID string) string {
 	return s.store.key("auth", "operator-session", sessionID)
 }
 
-func (s *OperatorSessionStore) operatorIndexKey(operatorID string) string {
+func (s *OperatorRefreshSessionStore) operatorIndexKey(operatorID string) string {
 	return s.store.key("auth", "operator-sessions", operatorID)
 }
 
 func operatorSessionRecordFromApplication(record adminauth.OperatorSessionRecord) operatorSessionRecord {
 	// Step 1: application DTO を Admin Valkey 保存形式へ写像する。
-	return operatorSessionRecord{SessionID: record.SessionID, OperatorID: record.OperatorID, RefreshTokenHash: record.RefreshTokenHash, CSRFTokenHash: record.CSRFTokenHash, RoleSnapshot: record.RoleSnapshot, ActiveSnapshot: record.ActiveSnapshot, IssuedAt: record.IssuedAt, ExpiresAt: record.ExpiresAt, Revoked: record.Revoked}
+	return operatorSessionRecord{SessionID: record.SessionID, OperatorID: record.OperatorID, RefreshTokenHash: record.RefreshTokenHash, RoleSnapshot: record.RoleSnapshot, ActiveSnapshot: record.ActiveSnapshot, IssuedAt: record.IssuedAt, ExpiresAt: record.ExpiresAt, Revoked: record.Revoked}
 }
 
 func (r operatorSessionRecord) toApplication() adminauth.OperatorSessionRecord {
 	// Step 1: 保存 record から application DTO へ必要な primitive を戻す。
-	return adminauth.OperatorSessionRecord{SessionID: r.SessionID, OperatorID: r.OperatorID, RefreshTokenHash: r.RefreshTokenHash, CSRFTokenHash: r.CSRFTokenHash, RoleSnapshot: r.RoleSnapshot, ActiveSnapshot: r.ActiveSnapshot, IssuedAt: r.IssuedAt, ExpiresAt: r.ExpiresAt, Revoked: r.Revoked}
+	return adminauth.OperatorSessionRecord{SessionID: r.SessionID, OperatorID: r.OperatorID, RefreshTokenHash: r.RefreshTokenHash, RoleSnapshot: r.RoleSnapshot, ActiveSnapshot: r.ActiveSnapshot, IssuedAt: r.IssuedAt, ExpiresAt: r.ExpiresAt, Revoked: r.Revoked}
 }

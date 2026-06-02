@@ -44,7 +44,9 @@ export default defineConfig({
     },
     {
       command: 'pnpm --filter @www-template/app dev',
-      url: 'http://localhost:5174',
+      /* app は canonical host redirect で app.localhost へ寄せるため、Node 側の readiness GET が
+       * app.localhost の名前解決に依存しないように TCP port の起動確認だけを行う。 */
+      port: 5174,
       reuseExistingServer: process.env.CI === undefined,
       timeout: 120 * 1000,
     },

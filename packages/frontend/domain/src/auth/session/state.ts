@@ -232,12 +232,13 @@ function createAuthorizationHeaders(state: AuthSessionState): Record<string, str
 
 /** auth summary が ULID 方針を満たすか確認する。 */
 function hasUlidAuthSessionShape(session: AuthSessionSummary): boolean {
-  return [
-    session.requestId,
-    session.accountId,
-    session.passkeyCredentialId,
-    session.sessionId,
-  ].every(isUlid);
+  const required = [session.requestId, session.authContextId, session.accountId, session.sessionId];
+  // passkeyCredentialId は refresh response で省略されることがあるため、
+  // 存在する場合のみ ULID 検証を行う。
+  if (session.passkeyCredentialId != null) {
+    required.push(session.passkeyCredentialId);
+  }
+  return required.every(isUlid);
 }
 
 export {

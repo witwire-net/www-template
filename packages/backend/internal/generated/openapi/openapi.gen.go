@@ -26,22 +26,78 @@ const (
 	Ja AccountLocale = "ja"
 )
 
+// Defines values for AccountStatus.
+const (
+	Active    AccountStatus = "active"
+	Suspended AccountStatus = "suspended"
+)
+
 // Defines values for AuthFailureClassification.
 const (
-	AccountSuspended AuthFailureClassification = "account-suspended"
-	InternalError    AuthFailureClassification = "internal-error"
-	SessionExpired   AuthFailureClassification = "session-expired"
-	Unauthenticated  AuthFailureClassification = "unauthenticated"
+	AccountSuspended         AuthFailureClassification = "account-suspended"
+	CredentialAmbiguous      AuthFailureClassification = "credential-ambiguous"
+	InternalError            AuthFailureClassification = "internal-error"
+	InvalidRefreshCredential AuthFailureClassification = "invalid-refresh-credential"
+	SessionExpired           AuthFailureClassification = "session-expired"
+	Unauthenticated          AuthFailureClassification = "unauthenticated"
 )
 
 // Defines values for BearerAuthScheme.
 const (
-	Bearer BearerAuthScheme = "bearer"
+	BearerAuthSchemeBearer BearerAuthScheme = "bearer"
 )
 
 // Defines values for BearerAuthType.
 const (
 	Http BearerAuthType = "http"
+)
+
+// Defines values for BearerAuthEnvelopeCredentialMode.
+const (
+	BearerAuthEnvelopeCredentialModeBearer BearerAuthEnvelopeCredentialMode = "bearer"
+)
+
+// Defines values for BearerContextRefreshRequestCredentialMode.
+const (
+	BearerContextRefreshRequestCredentialModeBearer BearerContextRefreshRequestCredentialMode = "bearer"
+)
+
+// Defines values for ContextIndexUpdateAction.
+const (
+	ClearSurface ContextIndexUpdateAction = "clear-surface"
+	Remove       ContextIndexUpdateAction = "remove"
+	Upsert       ContextIndexUpdateAction = "upsert"
+)
+
+// Defines values for CookieAuthEnvelopeCredentialMode.
+const (
+	CookieAuthEnvelopeCredentialModeCookie CookieAuthEnvelopeCredentialMode = "cookie"
+)
+
+// Defines values for CookieClearCommandHttpOnly.
+const (
+	CookieClearCommandHttpOnlyTrue CookieClearCommandHttpOnly = true
+)
+
+// Defines values for CookieClearCommandMaxAge.
+const (
+	N0 CookieClearCommandMaxAge = 0
+)
+
+// Defines values for CookieClearCommandSameSite.
+const (
+	Lax CookieClearCommandSameSite = "Lax"
+)
+
+// Defines values for CookieClearCommandSecure.
+const (
+	CookieClearCommandSecureTrue CookieClearCommandSecure = true
+)
+
+// Defines values for CredentialMode.
+const (
+	CredentialModeBearer CredentialMode = "bearer"
+	CredentialModeCookie CredentialMode = "cookie"
 )
 
 // Defines values for DeviceLinkResponseIssued.
@@ -74,6 +130,26 @@ const (
 	Required PasskeyStartResponseUserVerification = "required"
 )
 
+// Defines values for ProductBearerAuthSessionResponseCredentialMode.
+const (
+	ProductBearerAuthSessionResponseCredentialModeBearer ProductBearerAuthSessionResponseCredentialMode = "bearer"
+)
+
+// Defines values for ProductBearerContextRefreshResponseCredentialMode.
+const (
+	ProductBearerContextRefreshResponseCredentialModeBearer ProductBearerContextRefreshResponseCredentialMode = "bearer"
+)
+
+// Defines values for ProductCookieAuthSessionResponseCredentialMode.
+const (
+	ProductCookieAuthSessionResponseCredentialModeCookie ProductCookieAuthSessionResponseCredentialMode = "cookie"
+)
+
+// Defines values for ProductCookieContextRefreshResponseCredentialMode.
+const (
+	Cookie ProductCookieContextRefreshResponseCredentialMode = "cookie"
+)
+
 // Defines values for ReauthenticationSessionKind.
 const (
 	ReauthenticationSessionKindDeviceLink    ReauthenticationSessionKind = "device-link"
@@ -90,6 +166,27 @@ const (
 	TokenKindDeviceLink TokenKind = "device-link"
 	TokenKindRecovery   TokenKind = "recovery"
 )
+
+// AccountDetailResponse account 詳細 API の response。
+type AccountDetailResponse struct {
+	// Account 対象 Product Account の read model。
+	Account AccountSummary `json:"account"`
+
+	// RequestId 詳細取得 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+}
+
+// AccountListResponse account 一覧 API の response。requestId は監査・追跡に使用し、accounts は account concept read model として返す。
+type AccountListResponse struct {
+	// Accounts 検索条件に一致した Product Account の要約一覧。
+	Accounts []AccountSummary `json:"accounts"`
+
+	// NextCursor 次ページが存在するときだけ返す opaque cursor。
+	NextCursor *string `json:"nextCursor,omitempty"`
+
+	// RequestId 一覧取得 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+}
 
 // AccountLocale Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。
 type AccountLocale string
@@ -115,44 +212,49 @@ type AccountSettingSnapshot struct {
 	Locale AccountLocale `json:"locale"`
 }
 
-// AuthFailureClassification defines model for AuthFailureClassification.
+// AccountStatus Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。
+type AccountStatus string
+
+// AccountSummary Account 一覧と詳細で返す Product Account の要約。Admin route から参照できる account concept model であり、Admin surface 固有の catch-all DTO ではない。
+type AccountSummary struct {
+	// AccountId 対象 Product Account の canonical ULID。
+	AccountId UlidId `json:"accountId"`
+
+	// CreatedAt Product Account が作成された日時。
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Email Product Account の canonical email address。
+	Email string `json:"email"`
+
+	// PasskeyCount 対象 Product Account に登録済みの passkey 数。
+	PasskeyCount int32 `json:"passkeyCount"`
+
+	// Status API が観測した Product Account lifecycle state。
+	Status AccountStatus `json:"status"`
+}
+
+// AuthFailureClassification 認証・認可 failure を Product/Admin の両 artifact で同じ語彙に正規化する分類。
 type AuthFailureClassification string
 
-// AuthFailureResponse defines model for AuthFailureResponse.
+// AuthFailureResponse 認証・認可 failure の共通 response。requestId と normalized error だけを返し、token や Cookie 値は含めない。
 type AuthFailureResponse struct {
+	// Error client が fail-close 処理を選ぶための normalized failure classification。
 	Error AuthFailureClassification `json:"error"`
 
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	// RequestId request に対応する canonical ULID の追跡 ID。
 	RequestId UlidId `json:"requestId"`
 }
 
-// AuthOperationErrorResponse defines model for AuthOperationErrorResponse.
+// AuthOperationErrorResponse 入力不正や操作競合など、認証 credential 検証以外の operation error response。
 type AuthOperationErrorResponse struct {
+	// Error client が表示・分岐に使う error code。secret や token 値は含めない。
 	Error string `json:"error"`
 
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
+	// RequestId request に対応する canonical ULID の追跡 ID。
 	RequestId UlidId `json:"requestId"`
 }
 
-// AuthSessionResponse defines model for AuthSessionResponse.
-type AuthSessionResponse struct {
-	AccessToken string `json:"accessToken"`
-
-	// AccountId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	AccountId UlidId    `json:"accountId"`
-	ExpiresAt time.Time `json:"expiresAt"`
-
-	// PasskeyCredentialId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	PasskeyCredentialId UlidId `json:"passkeyCredentialId"`
-
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	RequestId UlidId `json:"requestId"`
-
-	// SessionId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	SessionId UlidId `json:"sessionId"`
-}
-
-// BearerAuth JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、accountID・sessionID・iat・exp を含む。
+// BearerAuth JWT 形式のアクセストークンを使用した Bearer 認証。Authorization ヘッダーに `Bearer <JWT>` を付与すること。トークンは短命の JWT であり、subject・sessionID・iat・exp を含む。
 type BearerAuth struct {
 	// Scheme bearer auth scheme
 	Scheme BearerAuthScheme `json:"scheme"`
@@ -166,6 +268,168 @@ type BearerAuthScheme string
 
 // BearerAuthType Http authentication
 type BearerAuthType string
+
+// BearerAuthEnvelope Bearer mode session / refresh response が共有する auth envelope。Cookie command や browser context index hint を持たない。
+type BearerAuthEnvelope struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// AuthContextId refreshToken と session metadata を束縛する auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// CredentialMode external bearer mode で発行されたことを示す discriminator。
+	CredentialMode BearerAuthEnvelopeCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RefreshToken external client が body で保持し、context refresh で rotation する opaque refreshToken。
+	RefreshToken string `json:"refreshToken"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId UlidId `json:"sessionId"`
+}
+
+// BearerAuthEnvelopeCredentialMode external bearer mode で発行されたことを示す discriminator。
+type BearerAuthEnvelopeCredentialMode string
+
+// BearerContextRefreshRequest Bearer client が context refresh で送る request body。Cookie mode では body を送らず、path-scoped HttpOnly Cookie だけを提示する。
+type BearerContextRefreshRequest struct {
+	// CredentialMode external bearer mode refresh であることを示す discriminator。
+	CredentialMode BearerContextRefreshRequestCredentialMode `json:"credentialMode"`
+
+	// RefreshToken rotation 対象の opaque refreshToken。Authorization header ではなく body だけで提示する。
+	RefreshToken string `json:"refreshToken"`
+}
+
+// BearerContextRefreshRequestCredentialMode external bearer mode refresh であることを示す discriminator。
+type BearerContextRefreshRequestCredentialMode string
+
+// ContextIndexDisplayHint browser context index に保存してよい非 secret の表示 hint。accessToken、refreshToken、Cookie 値、setup token は含めない。
+type ContextIndexDisplayHint struct {
+	// Label Account email や operator email など、UI 表示に使う非 secret label。
+	Label string `json:"label"`
+
+	// SecondaryLabel 補助表示に使う任意の非 secret text。role や locale など、認可判断に使わない値だけを入れる。
+	SecondaryLabel *string `json:"secondaryLabel,omitempty"`
+}
+
+// ContextIndexUpdateAction browser 内の context index に対する更新種別。token や Cookie 値を含めず、UI と refresh bootstrap の hint だけを更新する。
+type ContextIndexUpdateAction string
+
+// ContextIndexUpdateHint browser context index を更新するための非 secret hint。service artifact が Product/Admin context を決定するため、payload discriminator は持たない。
+type ContextIndexUpdateHint struct {
+	// Action context index に対して行う操作。
+	Action ContextIndexUpdateAction `json:"action"`
+
+	// AuthContextId 操作対象の auth context。clear-surface では省略できる。
+	AuthContextId *UlidId `json:"authContextId,omitempty"`
+
+	// DisplayHint token を含まない UI 表示用 hint。upsert 時だけ返す。
+	DisplayHint *ContextIndexDisplayHint `json:"displayHint,omitempty"`
+
+	// ExpiresHintAt context index entry を削除する目安時刻。認可可否は refresh response で再検証する。
+	ExpiresHintAt *time.Time `json:"expiresHintAt,omitempty"`
+
+	// LastSeenAt context が最後に server で確認された時刻。
+	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+
+	// SessionId 対象 session の canonical ULID。upsert 時だけ返す。
+	SessionId *UlidId `json:"sessionId,omitempty"`
+}
+
+// CookieAuthEnvelope Cookie mode session / refresh response が共有する auth envelope。Product/Admin はこの単一定義を spread して同じ field 名を公開する。
+type CookieAuthEnvelope struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// AuthContextId refresh path と session metadata を束縛する auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// ClearCookieCommands logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。
+	ClearCookieCommands []CookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints browser の origin-local context index を更新する非 secret hint。
+	ContextIndexUpdateHints []ContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// CredentialMode browser cookie mode で発行されたことを示す discriminator。
+	CredentialMode CookieAuthEnvelopeCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId UlidId `json:"sessionId"`
+}
+
+// CookieAuthEnvelopeCredentialMode browser cookie mode で発行されたことを示す discriminator。
+type CookieAuthEnvelopeCredentialMode string
+
+// CookieClearCommand HttpOnly refresh Cookie を削除するために backend が返す command。transport adapter はこの内容から Set-Cookie Max-Age=0 を組み立てる。
+type CookieClearCommand struct {
+	// AuthContextId 削除対象 Cookie が束縛されていた auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// HttpOnly 削除対象 Cookie が HttpOnly 属性を持つこと。
+	HttpOnly CookieClearCommandHttpOnly `json:"httpOnly"`
+
+	// MaxAge Cookie 削除を表す Max-Age 値。
+	MaxAge CookieClearCommandMaxAge `json:"maxAge"`
+
+	// Name 削除対象の Cookie 名。
+	Name string `json:"name"`
+
+	// Path 削除対象 Cookie の exact Path。context-scoped refresh path `/api/v1/auth/contexts/{authContextId}/refresh` を返す。
+	Path string `json:"path"`
+
+	// SameSite 削除対象 Cookie の SameSite 属性。
+	SameSite CookieClearCommandSameSite `json:"sameSite"`
+
+	// Secure 削除対象 Cookie が Secure 属性を持つこと。
+	Secure CookieClearCommandSecure `json:"secure"`
+}
+
+// CookieClearCommandHttpOnly 削除対象 Cookie が HttpOnly 属性を持つこと。
+type CookieClearCommandHttpOnly bool
+
+// CookieClearCommandMaxAge Cookie 削除を表す Max-Age 値。
+type CookieClearCommandMaxAge float32
+
+// CookieClearCommandSameSite 削除対象 Cookie の SameSite 属性。
+type CookieClearCommandSameSite string
+
+// CookieClearCommandSecure 削除対象 Cookie が Secure 属性を持つこと。
+type CookieClearCommandSecure bool
+
+// CreateAccountRequest operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。
+type CreateAccountRequest struct {
+	// Email 作成対象 Product Account の email address。
+	Email openapi_types.Email `json:"email"`
+
+	// Locale 作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。
+	Locale *AccountLocale `json:"locale,omitempty"`
+}
+
+// CreateAccountResponse account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。
+type CreateAccountResponse struct {
+	// Account 作成された Product Account の read model。
+	Account AccountSummary `json:"account"`
+
+	// AuditEventId Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。
+	AuditEventId UlidId `json:"auditEventId"`
+
+	// RequestId 作成 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+}
+
+// CredentialMode 認証 session credential の発行方式。browser は cookie mode を使い、external API / mobile / CLI / SDK は bearer mode を使う。
+type CredentialMode string
 
 // DeviceLinkResponse defines model for DeviceLinkResponse.
 type DeviceLinkResponse struct {
@@ -188,6 +452,9 @@ type InvitationPasskeyFinishRequest struct {
 	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
 	Credential WebAuthnAttestationCredential `json:"credential"`
 
+	// CredentialMode session credential の発行方式。browser は cookie、external client は bearer を指定する。
+	CredentialMode CredentialMode `json:"credentialMode"`
+
 	// InvitationSession Canonical ULID string used for auth-owned resource and correlation identifiers.
 	InvitationSession UlidId `json:"invitation_session"`
 }
@@ -198,14 +465,22 @@ type InvitationPasskeyStartRequest struct {
 	InvitationSession UlidId `json:"invitation_session"`
 }
 
-// LogoutResponse defines model for LogoutResponse.
+// LogoutResponse logout / revoke 処理の共通 response。accessToken claims で確定した context の Cookie clear と context index cleanup だけを返す。
 type LogoutResponse struct {
-	// RequestId Canonical ULID string used for auth-owned resource and correlation identifiers.
-	RequestId UlidId                `json:"requestId"`
-	Revoked   LogoutResponseRevoked `json:"revoked"`
+	// ClearCookieCommands revocation 対象 refresh Cookie を exact Path で削除する command 一覧。
+	ClearCookieCommands []CookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints revocation 後に browser context index から対象 entry を削除するための hint。
+	ContextIndexUpdateHints []ContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// RequestId logout / revoke request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// Revoked 対象 session または refresh family が失効されたことを示す。
+	Revoked LogoutResponseRevoked `json:"revoked"`
 }
 
-// LogoutResponseRevoked defines model for LogoutResponse.Revoked.
+// LogoutResponseRevoked 対象 session または refresh family が失効されたことを示す。
 type LogoutResponseRevoked bool
 
 // PasskeyAddFinishRequest defines model for PasskeyAddFinishRequest.
@@ -259,6 +534,9 @@ type PasskeyAddStartResponseUserVerification string
 type PasskeyFinishRequest struct {
 	// Credential WebAuthn PublicKeyCredential for login (navigator.credentials.get result).
 	Credential WebAuthnAssertionCredential `json:"credential"`
+
+	// CredentialMode session credential の発行方式。browser は cookie、external client は bearer を指定する。
+	CredentialMode CredentialMode `json:"credentialMode"`
 }
 
 // PasskeyItem defines model for PasskeyItem.
@@ -313,6 +591,158 @@ type PasskeyStartResponse struct {
 
 // PasskeyStartResponseUserVerification defines model for PasskeyStartResponse.UserVerification.
 type PasskeyStartResponseUserVerification string
+
+// ProductAccountSubject Product auth response の account subject payload。service artifact が Product 文脈を決めるため principal discriminator は持たない。
+type ProductAccountSubject struct {
+	// AccountId 対象 Product account の canonical ULID。
+	AccountId UlidId `json:"accountId"`
+
+	// PasskeyCredentialId 認証に使われた passkey credential の canonical ULID。
+	PasskeyCredentialId *UlidId `json:"passkeyCredentialId,omitempty"`
+}
+
+// ProductAuthSessionResponse Product login / register が返す credential mode 別 session response。Cookie mode と Bearer mode の body shape を分離する。
+type ProductAuthSessionResponse struct {
+	union json.RawMessage
+}
+
+// ProductBearerAuthSessionResponse Product external bearer mode の session response。Cookie command や browser context index hint を含めず、body で refreshToken を返す。
+type ProductBearerAuthSessionResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// Account 認証された Product account の subject payload。
+	Account ProductAccountSubject `json:"account"`
+
+	// AccountSetting login / refresh 後に external client が必要に応じて参照できる Product 設定 snapshot。
+	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
+
+	// AuthContextId refreshToken と session metadata を束縛する auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// CredentialMode external bearer mode で発行されたことを示す discriminator。
+	CredentialMode ProductBearerAuthSessionResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RefreshToken external client が body で保持し、context refresh で rotation する opaque refreshToken。
+	RefreshToken string `json:"refreshToken"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId UlidId `json:"sessionId"`
+}
+
+// ProductBearerAuthSessionResponseCredentialMode external bearer mode で発行されたことを示す discriminator。
+type ProductBearerAuthSessionResponseCredentialMode string
+
+// ProductBearerContextRefreshResponse Product Bearer mode context refresh 成功時の response。Cookie command や browser context index hint を含めない。
+type ProductBearerContextRefreshResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// Account 認証された Product account の subject payload。
+	Account ProductAccountSubject `json:"account"`
+
+	// AccountSetting refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。
+	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
+
+	// AuthContextId refreshToken と session metadata を束縛する auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// CredentialMode external bearer mode で発行されたことを示す discriminator。
+	CredentialMode ProductBearerContextRefreshResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RefreshToken external client が body で保持し、context refresh で rotation する opaque refreshToken。
+	RefreshToken string `json:"refreshToken"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId UlidId `json:"sessionId"`
+}
+
+// ProductBearerContextRefreshResponseCredentialMode external bearer mode で発行されたことを示す discriminator。
+type ProductBearerContextRefreshResponseCredentialMode string
+
+// ProductCookieAuthSessionResponse Product browser cookie mode の session response。refreshToken は HttpOnly Cookie だけで扱い、body には含めない。
+type ProductCookieAuthSessionResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// Account 認証された Product account の subject payload。
+	Account ProductAccountSubject `json:"account"`
+
+	// AccountSetting login / refresh 後に Product UI が account 設定を同期するための snapshot。
+	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
+
+	// AuthContextId refresh path と session metadata を束縛する auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// ClearCookieCommands logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。
+	ClearCookieCommands []CookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints browser の origin-local context index を更新する非 secret hint。
+	ContextIndexUpdateHints []ContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// CredentialMode browser cookie mode で発行されたことを示す discriminator。
+	CredentialMode ProductCookieAuthSessionResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId UlidId `json:"sessionId"`
+}
+
+// ProductCookieAuthSessionResponseCredentialMode browser cookie mode で発行されたことを示す discriminator。
+type ProductCookieAuthSessionResponseCredentialMode string
+
+// ProductCookieContextRefreshResponse Product Cookie mode context refresh 成功時の response。refreshToken 平文を body に含めず、path-scoped Cookie rotation を transport header に委ねる。
+type ProductCookieContextRefreshResponse struct {
+	// AccessToken protected API に Authorization Bearer として送信する短命 accessToken。
+	AccessToken string `json:"accessToken"`
+
+	// Account 認証された Product account の subject payload。
+	Account ProductAccountSubject `json:"account"`
+
+	// AccountSetting refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。
+	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
+
+	// AuthContextId refresh path と session metadata を束縛する auth context。
+	AuthContextId UlidId `json:"authContextId"`
+
+	// ClearCookieCommands logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。
+	ClearCookieCommands []CookieClearCommand `json:"clearCookieCommands"`
+
+	// ContextIndexUpdateHints browser の origin-local context index を更新する非 secret hint。
+	ContextIndexUpdateHints []ContextIndexUpdateHint `json:"contextIndexUpdateHints"`
+
+	// CredentialMode browser cookie mode で発行されたことを示す discriminator。
+	CredentialMode ProductCookieContextRefreshResponseCredentialMode `json:"credentialMode"`
+
+	// ExpiresAt accessToken の失効日時。
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// RequestId 認証 request に対応する canonical ULID の追跡 ID。
+	RequestId UlidId `json:"requestId"`
+
+	// SessionId 対象 session の canonical ULID。
+	SessionId UlidId `json:"sessionId"`
+}
+
+// ProductCookieContextRefreshResponseCredentialMode browser cookie mode で発行されたことを示す discriminator。
+type ProductCookieContextRefreshResponseCredentialMode string
 
 // ReauthenticationFinishRequest Reauthentication finish request that completes the WebAuthn ceremony and binds to the operation kind.
 type ReauthenticationFinishRequest struct {
@@ -390,6 +820,9 @@ type RecoveryPasskeyFinishRequest struct {
 	// Credential WebAuthn PublicKeyCredential for registration (navigator.credentials.create result).
 	Credential WebAuthnAttestationCredential `json:"credential"`
 
+	// CredentialMode session credential の発行方式。browser は cookie、external client は bearer を指定する。
+	CredentialMode CredentialMode `json:"credentialMode"`
+
 	// RecoverySession Canonical ULID string used for auth-owned resource and correlation identifiers.
 	RecoverySession UlidId `json:"recovery_session"`
 }
@@ -405,13 +838,9 @@ type RecoveryRequest struct {
 	Email openapi_types.Email `json:"email"`
 }
 
-// RefreshTokenResponse Cookie refresh 成功時に返却される新しい accessToken と Product AccountSetting snapshot。refreshToken rotation は HttpOnly Set-Cookie だけで行い、response body には refreshToken 平文を含めない。AccountSetting snapshot は Auth が AccountID を確定した後に transport/application composition で読み込まれる。
+// RefreshTokenResponse Product context refresh の credential mode 別 success response。Cookie mode は Cookie command を表現でき、Bearer mode は refreshToken body を返す。
 type RefreshTokenResponse struct {
-	// AccessToken ローテーション後に発行された短命の JWT アクセストークン。
-	AccessToken string `json:"accessToken"`
-
-	// AccountSetting refresh token rotation 成功時点で Product Account から読み込んだ AccountSetting snapshot。
-	AccountSetting *AccountSettingSnapshot `json:"accountSetting,omitempty"`
+	union json.RawMessage
 }
 
 // SessionItem ログイン中のセッション（デバイス）を表すアイテム。各セッションは一意の sessionId を持つ。
@@ -528,9 +957,6 @@ type WebAuthnUserEntity struct {
 	Name string `json:"name"`
 }
 
-// RefreshTokenJSONBody defines parameters for RefreshToken.
-type RefreshTokenJSONBody = interface{}
-
 // SendDeviceLinkParams defines parameters for SendDeviceLink.
 type SendDeviceLinkParams struct {
 	XReauthSession string `json:"X-Reauth-Session"`
@@ -543,6 +969,9 @@ type DeletePasskeyParams struct {
 
 // UpdateAccountSettingsJSONRequestBody defines body for UpdateAccountSettings for application/json ContentType.
 type UpdateAccountSettingsJSONRequestBody = UpdateAccountSettingRequest
+
+// RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
+type RefreshTokenJSONRequestBody = BearerContextRefreshRequest
 
 // FinishPasskeyAuthenticationJSONRequestBody defines body for FinishPasskeyAuthentication for application/json ContentType.
 type FinishPasskeyAuthenticationJSONRequestBody = PasskeyFinishRequest
@@ -567,9 +996,6 @@ type RequestPasskeyRecoveryJSONRequestBody = RecoveryRequest
 
 // ConsumeRecoveryTokenJSONRequestBody defines body for ConsumeRecoveryToken for application/json ContentType.
 type ConsumeRecoveryTokenJSONRequestBody = RecoveryConsumeRequest
-
-// RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
-type RefreshTokenJSONRequestBody = RefreshTokenJSONBody
 
 // FinishPasskeyAdditionJSONRequestBody defines body for FinishPasskeyAddition for application/json ContentType.
 type FinishPasskeyAdditionJSONRequestBody = PasskeyAddFinishRequest
@@ -636,6 +1062,130 @@ func (t *PasskeyRegisterRequest) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsProductCookieAuthSessionResponse returns the union data inside the ProductAuthSessionResponse as a ProductCookieAuthSessionResponse
+func (t ProductAuthSessionResponse) AsProductCookieAuthSessionResponse() (ProductCookieAuthSessionResponse, error) {
+	var body ProductCookieAuthSessionResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProductCookieAuthSessionResponse overwrites any union data inside the ProductAuthSessionResponse as the provided ProductCookieAuthSessionResponse
+func (t *ProductAuthSessionResponse) FromProductCookieAuthSessionResponse(v ProductCookieAuthSessionResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProductCookieAuthSessionResponse performs a merge with any union data inside the ProductAuthSessionResponse, using the provided ProductCookieAuthSessionResponse
+func (t *ProductAuthSessionResponse) MergeProductCookieAuthSessionResponse(v ProductCookieAuthSessionResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsProductBearerAuthSessionResponse returns the union data inside the ProductAuthSessionResponse as a ProductBearerAuthSessionResponse
+func (t ProductAuthSessionResponse) AsProductBearerAuthSessionResponse() (ProductBearerAuthSessionResponse, error) {
+	var body ProductBearerAuthSessionResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProductBearerAuthSessionResponse overwrites any union data inside the ProductAuthSessionResponse as the provided ProductBearerAuthSessionResponse
+func (t *ProductAuthSessionResponse) FromProductBearerAuthSessionResponse(v ProductBearerAuthSessionResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProductBearerAuthSessionResponse performs a merge with any union data inside the ProductAuthSessionResponse, using the provided ProductBearerAuthSessionResponse
+func (t *ProductAuthSessionResponse) MergeProductBearerAuthSessionResponse(v ProductBearerAuthSessionResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ProductAuthSessionResponse) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ProductAuthSessionResponse) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsProductCookieContextRefreshResponse returns the union data inside the RefreshTokenResponse as a ProductCookieContextRefreshResponse
+func (t RefreshTokenResponse) AsProductCookieContextRefreshResponse() (ProductCookieContextRefreshResponse, error) {
+	var body ProductCookieContextRefreshResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProductCookieContextRefreshResponse overwrites any union data inside the RefreshTokenResponse as the provided ProductCookieContextRefreshResponse
+func (t *RefreshTokenResponse) FromProductCookieContextRefreshResponse(v ProductCookieContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProductCookieContextRefreshResponse performs a merge with any union data inside the RefreshTokenResponse, using the provided ProductCookieContextRefreshResponse
+func (t *RefreshTokenResponse) MergeProductCookieContextRefreshResponse(v ProductCookieContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsProductBearerContextRefreshResponse returns the union data inside the RefreshTokenResponse as a ProductBearerContextRefreshResponse
+func (t RefreshTokenResponse) AsProductBearerContextRefreshResponse() (ProductBearerContextRefreshResponse, error) {
+	var body ProductBearerContextRefreshResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProductBearerContextRefreshResponse overwrites any union data inside the RefreshTokenResponse as the provided ProductBearerContextRefreshResponse
+func (t *RefreshTokenResponse) FromProductBearerContextRefreshResponse(v ProductBearerContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProductBearerContextRefreshResponse performs a merge with any union data inside the RefreshTokenResponse, using the provided ProductBearerContextRefreshResponse
+func (t *RefreshTokenResponse) MergeProductBearerContextRefreshResponse(v ProductBearerContextRefreshResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RefreshTokenResponse) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *RefreshTokenResponse) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Gets the current account settings
@@ -644,10 +1194,13 @@ type ServerInterface interface {
 	// Updates the current account settings
 	// (PATCH /api/v1/account/settings)
 	UpdateAccountSettings(c *gin.Context)
+	// Refreshes an access token for one auth context
+	// (POST /api/v1/auth/contexts/{authContextId}/refresh)
+	RefreshToken(c *gin.Context, authContextId UlidId)
 	// Revokes the current bearer session
 	// (POST /api/v1/auth/logout)
 	Logout(c *gin.Context)
-	// Finishes passkey authentication and returns a bearer session
+	// Finishes passkey authentication and returns a credential-mode-specific session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(c *gin.Context)
 	// Finishes a passkey registration ceremony and issues a session
@@ -671,9 +1224,6 @@ type ServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(c *gin.Context)
-	// Refreshes an access token through the HttpOnly refresh cookie
-	// (POST /api/v1/auth/refresh)
-	RefreshToken(c *gin.Context)
 	// Lists registered passkeys for the current account
 	// (GET /api/v1/passkeys)
 	ListPasskeys(c *gin.Context)
@@ -740,6 +1290,30 @@ func (siw *ServerInterfaceWrapper) UpdateAccountSettings(c *gin.Context) {
 	}
 
 	siw.Handler.UpdateAccountSettings(c)
+}
+
+// RefreshToken operation middleware
+func (siw *ServerInterfaceWrapper) RefreshToken(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "authContextId" -------------
+	var authContextId UlidId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "authContextId", c.Param("authContextId"), &authContextId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter authContextId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RefreshToken(c, authContextId)
 }
 
 // Logout operation middleware
@@ -863,19 +1437,6 @@ func (siw *ServerInterfaceWrapper) ConsumeRecoveryToken(c *gin.Context) {
 	}
 
 	siw.Handler.ConsumeRecoveryToken(c)
-}
-
-// RefreshToken operation middleware
-func (siw *ServerInterfaceWrapper) RefreshToken(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.RefreshToken(c)
 }
 
 // ListPasskeys operation middleware
@@ -1118,6 +1679,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 
 	router.GET(options.BaseURL+"/api/v1/account/settings", wrapper.GetAccountSettings)
 	router.PATCH(options.BaseURL+"/api/v1/account/settings", wrapper.UpdateAccountSettings)
+	router.POST(options.BaseURL+"/api/v1/auth/contexts/:authContextId/refresh", wrapper.RefreshToken)
 	router.POST(options.BaseURL+"/api/v1/auth/logout", wrapper.Logout)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/finish", wrapper.FinishPasskeyAuthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/passkey/register", wrapper.RegisterPasskey)
@@ -1127,7 +1689,6 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/api/v1/auth/reauth/start", wrapper.StartReauthentication)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery", wrapper.RequestPasskeyRecovery)
 	router.POST(options.BaseURL+"/api/v1/auth/recovery/consume", wrapper.ConsumeRecoveryToken)
-	router.POST(options.BaseURL+"/api/v1/auth/refresh", wrapper.RefreshToken)
 	router.GET(options.BaseURL+"/api/v1/passkeys", wrapper.ListPasskeys)
 	router.POST(options.BaseURL+"/api/v1/passkeys/finish", wrapper.FinishPasskeyAddition)
 	router.POST(options.BaseURL+"/api/v1/passkeys/send-device-link", wrapper.SendDeviceLink)
@@ -1307,6 +1868,100 @@ func (response UpdateAccountSettings503JSONResponse) VisitUpdateAccountSettingsR
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RefreshTokenRequestObject struct {
+	AuthContextId UlidId `json:"authContextId"`
+	Body          *RefreshTokenJSONRequestBody
+}
+
+type RefreshTokenResponseObject interface {
+	VisitRefreshTokenResponse(w http.ResponseWriter) error
+}
+
+type RefreshToken200ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken200JSONResponse struct {
+	Body    RefreshTokenResponse
+	Headers RefreshToken200ResponseHeaders
+}
+
+func (response RefreshToken200JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken400ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken400JSONResponse struct {
+	Body    AuthOperationErrorResponse
+	Headers RefreshToken400ResponseHeaders
+}
+
+func (response RefreshToken400JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken401ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken401JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RefreshToken401ResponseHeaders
+}
+
+func (response RefreshToken401JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken403ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken403JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RefreshToken403ResponseHeaders
+}
+
+func (response RefreshToken403JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshToken503ResponseHeaders struct {
+	CacheControl string
+}
+
+type RefreshToken503JSONResponse struct {
+	Body    AuthFailureResponse
+	Headers RefreshToken503ResponseHeaders
+}
+
+func (response RefreshToken503JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type LogoutRequestObject struct {
 }
 
@@ -1395,7 +2050,7 @@ type FinishPasskeyAuthentication200ResponseHeaders struct {
 }
 
 type FinishPasskeyAuthentication200JSONResponse struct {
-	Body    AuthSessionResponse
+	Body    ProductAuthSessionResponse
 	Headers FinishPasskeyAuthentication200ResponseHeaders
 }
 
@@ -1471,7 +2126,7 @@ type RegisterPasskey200ResponseHeaders struct {
 }
 
 type RegisterPasskey200JSONResponse struct {
-	Body    AuthSessionResponse
+	Body    ProductAuthSessionResponse
 	Headers RegisterPasskey200ResponseHeaders
 }
 
@@ -1932,99 +2587,6 @@ type ConsumeRecoveryToken503JSONResponse struct {
 }
 
 func (response ConsumeRecoveryToken503JSONResponse) VisitConsumeRecoveryTokenResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(503)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshTokenRequestObject struct {
-	Body *RefreshTokenJSONRequestBody
-}
-
-type RefreshTokenResponseObject interface {
-	VisitRefreshTokenResponse(w http.ResponseWriter) error
-}
-
-type RefreshToken200ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshToken200JSONResponse struct {
-	Body    RefreshTokenResponse
-	Headers RefreshToken200ResponseHeaders
-}
-
-func (response RefreshToken200JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshToken400ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshToken400JSONResponse struct {
-	Body    AuthOperationErrorResponse
-	Headers RefreshToken400ResponseHeaders
-}
-
-func (response RefreshToken400JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshToken401ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshToken401JSONResponse struct {
-	Body    AuthFailureResponse
-	Headers RefreshToken401ResponseHeaders
-}
-
-func (response RefreshToken401JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshToken403ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshToken403JSONResponse struct {
-	Body    AuthFailureResponse
-	Headers RefreshToken403ResponseHeaders
-}
-
-func (response RefreshToken403JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type RefreshToken503ResponseHeaders struct {
-	CacheControl string
-}
-
-type RefreshToken503JSONResponse struct {
-	Body    AuthFailureResponse
-	Headers RefreshToken503ResponseHeaders
-}
-
-func (response RefreshToken503JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.WriteHeader(503)
@@ -2726,10 +3288,13 @@ type StrictServerInterface interface {
 	// Updates the current account settings
 	// (PATCH /api/v1/account/settings)
 	UpdateAccountSettings(ctx context.Context, request UpdateAccountSettingsRequestObject) (UpdateAccountSettingsResponseObject, error)
+	// Refreshes an access token for one auth context
+	// (POST /api/v1/auth/contexts/{authContextId}/refresh)
+	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
 	// Revokes the current bearer session
 	// (POST /api/v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
-	// Finishes passkey authentication and returns a bearer session
+	// Finishes passkey authentication and returns a credential-mode-specific session
 	// (POST /api/v1/auth/passkey/finish)
 	FinishPasskeyAuthentication(ctx context.Context, request FinishPasskeyAuthenticationRequestObject) (FinishPasskeyAuthenticationResponseObject, error)
 	// Finishes a passkey registration ceremony and issues a session
@@ -2753,9 +3318,6 @@ type StrictServerInterface interface {
 	// Consumes a recovery token and issues a recovery session
 	// (POST /api/v1/auth/recovery/consume)
 	ConsumeRecoveryToken(ctx context.Context, request ConsumeRecoveryTokenRequestObject) (ConsumeRecoveryTokenResponseObject, error)
-	// Refreshes an access token through the HttpOnly refresh cookie
-	// (POST /api/v1/auth/refresh)
-	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
 	// Lists registered passkeys for the current account
 	// (GET /api/v1/passkeys)
 	ListPasskeys(ctx context.Context, request ListPasskeysRequestObject) (ListPasskeysResponseObject, error)
@@ -2848,6 +3410,41 @@ func (sh *strictHandler) UpdateAccountSettings(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(UpdateAccountSettingsResponseObject); ok {
 		if err := validResponse.VisitUpdateAccountSettingsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshToken operation middleware
+func (sh *strictHandler) RefreshToken(ctx *gin.Context, authContextId UlidId) {
+	var request RefreshTokenRequestObject
+
+	request.AuthContextId = authContextId
+
+	var body RefreshTokenJSONRequestBody
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshToken(ctx, request.(RefreshTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshToken")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(RefreshTokenResponseObject); ok {
+		if err := validResponse.VisitRefreshTokenResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -3137,39 +3734,6 @@ func (sh *strictHandler) ConsumeRecoveryToken(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(ConsumeRecoveryTokenResponseObject); ok {
 		if err := validResponse.VisitConsumeRecoveryTokenResponse(ctx.Writer); err != nil {
-			ctx.Error(err)
-		}
-	} else if response != nil {
-		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// RefreshToken operation middleware
-func (sh *strictHandler) RefreshToken(ctx *gin.Context) {
-	var request RefreshTokenRequestObject
-
-	var body RefreshTokenJSONRequestBody
-	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.Status(http.StatusBadRequest)
-		ctx.Error(err)
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.RefreshToken(ctx, request.(RefreshTokenRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "RefreshToken")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		ctx.Error(err)
-		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(RefreshTokenResponseObject); ok {
-		if err := validResponse.VisitRefreshTokenResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

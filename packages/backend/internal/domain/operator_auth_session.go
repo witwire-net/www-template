@@ -4,7 +4,7 @@ import "time"
 
 // OperatorSessionID は Admin Operator refresh session を識別する canonical ULID 値オブジェクトである。
 //
-// Product Account session ID と別型にすることで、Admin OperatorAuth の refresh state や CSRF binding に
+// Product Account session ID と別型にすることで、Admin OperatorAuth の refresh state に
 // Product account auth の session ID が誤って流入することを防ぐ。
 type OperatorSessionID string
 
@@ -28,17 +28,16 @@ func NewOperatorSessionID(raw string) (OperatorSessionID, error) {
 // 戻り値は NewOperatorSessionID で検証済みの ULID 文字列であり、副作用はない。
 func (id OperatorSessionID) String() string { return string(id) }
 
-// OperatorAuthSession は Admin Operator refresh session state と CSRF binding を表す domain object である。
+// OperatorAuthSession は Admin Operator refresh session state を表す domain object である。
 //
 // 役割:
-//   - refresh token hash、CSRF token hash、role/active snapshot、有効期限、revoke state を保持する。
+//   - refresh token hash、role/active snapshot、有効期限、revoke state を保持する。
 //   - Product AccountAuth session とは別型にし、Admin Operator 固有の eligibility と RBAC だけを評価する。
-//   - refreshToken / csrfToken 平文は保持せず、中立 OpaqueTokenHash で照合する。
+//   - refreshToken 平文は保持せず、中立 OpaqueTokenHash で照合する。
 type OperatorAuthSession struct {
 	id               OperatorSessionID
 	operatorID       OperatorID
 	refreshTokenHash OpaqueTokenHash
-	csrfTokenHash    OpaqueTokenHash
 	roleSnapshot     OperatorRole
 	activeSnapshot   bool
 	issuedAt         time.Time
@@ -52,7 +51,6 @@ type OperatorAuthSession struct {
 //   - operator: session を所有する Admin Operator。inactive Operator は拒否する。
 //   - id: OperatorSessionID。未検証値は NewOperatorSessionID と同じ規則で拒否される。
 //   - refreshToken: HttpOnly Cookie に入る refresh token 平文。domain では hash 化して保持する。
-//   - csrfToken: Admin frontend が mutation で提示する CSRF token 平文。session に hash binding する。
 //   - ttl: server-side refresh session lifetime。0 以下は拒否される。
 //   - issuedAt: 外部 clock から渡された発行時刻。zero time は拒否される。
 //
@@ -63,7 +61,6 @@ func NewOperatorAuthSession(
 	operator Operator,
 	id OperatorSessionID,
 	refreshToken string,
-	csrfToken string,
 	ttl TokenTTL,
 	issuedAt time.Time,
 ) (OperatorAuthSession, error) {
@@ -72,8 +69,8 @@ func NewOperatorAuthSession(
 		return OperatorAuthSession{}, ErrOperatorAuthInactive
 	}
 
-	// Step 2: session ID、refresh token、CSRF token、時刻を共通 helper で検証し、平文 token は hash 化する。
-	session, err := buildOperatorAuthSession(operator, id, refreshToken, csrfToken, ttl, issuedAt, false)
+	// Step 2: session ID、refresh token、時刻を共通 helper で検証し、平文 token は hash 化する。
+	session, err := buildOperatorAuthSession(operator, id, refreshToken, ttl, issuedAt, false)
 	if err != nil {
 		return OperatorAuthSession{}, err
 	}
@@ -86,7 +83,7 @@ func NewOperatorAuthSession(
 //
 // 引数:
 //   - id/operatorID: Admin Operator session と所有者を表す canonical ID。
-//   - refreshTokenHash/csrfTokenHash: 保存済み hash。空値は拒否される。
+//   - refreshTokenHash: 保存済み hash。空値は拒否される。
 //   - roleSnapshot/activeSnapshot: session 発行時点の Operator snapshot。
 //   - issuedAt/expiresAt: 保存済み時刻。zero time や逆転した期限は拒否される。
 //   - revoked: logout/revoke 済みかどうか。
@@ -98,7 +95,6 @@ func ReconstituteOperatorAuthSession(
 	id OperatorSessionID,
 	operatorID OperatorID,
 	refreshTokenHash OpaqueTokenHash,
-	csrfTokenHash OpaqueTokenHash,
 	roleSnapshot OperatorRole,
 	activeSnapshot bool,
 	issuedAt time.Time,
@@ -110,7 +106,6 @@ func ReconstituteOperatorAuthSession(
 		id:               id,
 		operatorID:       operatorID,
 		refreshTokenHash: refreshTokenHash,
-		csrfTokenHash:    csrfTokenHash,
 		roleSnapshot:     roleSnapshot,
 		activeSnapshot:   activeSnapshot,
 		issuedAt:         issuedAt.UTC(),
@@ -141,11 +136,6 @@ func (s OperatorAuthSession) OperatorID() OperatorID { return s.operatorID }
 //
 // 戻り値は平文 token ではなく、永続化や rotation 照合に使う digest である。
 func (s OperatorAuthSession) RefreshTokenHash() OpaqueTokenHash { return s.refreshTokenHash }
-
-// CSRFTokenHash は session に binding された CSRF token hash を返す。
-//
-// 戻り値は Admin mutation の CSRF 照合に使う digest であり、平文 token は含まない。
-func (s OperatorAuthSession) CSRFTokenHash() OpaqueTokenHash { return s.csrfTokenHash }
 
 // RoleSnapshot は session 発行時点の Operator role を返す。
 //
@@ -202,35 +192,20 @@ func (s OperatorAuthSession) ValidateRefreshToken(refreshToken string, now time.
 	return nil
 }
 
-// ValidateCSRFToken は提示された CSRF token が session binding と一致することを検証する。
-//
-// Admin mutation では Cookie refresh/session と別経路で CSRF token を提示させ、この method で一致を確認する。
-func (s OperatorAuthSession) ValidateCSRFToken(csrfToken string) error {
-	// Step 1: CSRF token 平文を保存済み hash と照合し、session へ bind されていない token を拒否する。
-	if !s.csrfTokenHash.Matches(csrfToken) {
-		return ErrOperatorAuthCSRFMismatch
-	}
-
-	// Step 2: CSRF binding が一致したため成功とする。
-	return nil
-}
-
-// ValidateAccess は session、accessToken claims、CSRF、permission をまとめて検証する。
+// ValidateAccess は session、accessToken claims、permission をまとめて検証する。
 //
 // 引数:
 //   - operator: 現在の Admin Operator。active/role/passkey state の正として使う。
 //   - claims: Admin Operator accessToken claims。session ID と snapshot を照合する。
 //   - permission: 実行したい Admin mutation permission。
-//   - csrfToken: Admin frontend が提示した CSRF token 平文。
 //   - now: 外部 clock から渡された検証時刻。
 //
 // 戻り値:
-//   - error: 成功時 nil。inactive、viewer 権限不足、CSRF mismatch、session ID mismatch などを domain error で返す。
+//   - error: 成功時 nil。inactive、viewer 権限不足、session ID mismatch などを domain error で返す。
 func (s OperatorAuthSession) ValidateAccess(
 	operator Operator,
 	claims OperatorAccessTokenClaims,
 	permission OperatorAuthPermission,
-	csrfToken string,
 	now time.Time,
 ) error {
 	// Step 1: refresh session state が期限内かつ未失効であることを確認する。
@@ -258,12 +233,58 @@ func (s OperatorAuthSession) ValidateAccess(
 		return ErrOperatorAuthSnapshotMismatch
 	}
 
-	// Step 6: Admin mutation CSRF token が session binding と一致することを確認する。
-	if err := s.ValidateCSRFToken(csrfToken); err != nil {
+	// Step 6: OperatorAuth の全 eligibility 条件を満たしたため成功とする。
+	return nil
+}
+
+// ValidateCurrentAccess は current operator 参照用に session と accessToken claims の eligibility を検証する。
+//
+// 役割:
+//   - current endpoint のように mutation permission を要求しない読み取り境界でも、session 失効・期限切れ・snapshot mismatch を domain に集約する。
+//   - Product AccountAuth token と Admin OperatorAuth token を混同しないよう、OperatorAuthSession と OperatorAccessTokenClaims の型同士で照合する。
+//   - permission 判定は行わず、active かつ passkey 登録済みの現在 Operator だけを current context として受け入れる。
+//
+// 引数:
+//   - operator: 現在の Admin Operator snapshot。
+//   - claims: 署名済み accessToken から復元した Admin OperatorAuth claims。
+//   - now: 外部 clock から渡された検証時刻。
+//
+// 戻り値:
+//   - nil: current operator として有効な場合。
+//   - error: session mismatch、snapshot mismatch、期限切れ、inactive、未登録などの domain error。
+//
+// 使用例:
+//
+//	if err := session.ValidateCurrentAccess(operator, claims, now); err != nil {
+//		return err
+//	}
+func (s OperatorAuthSession) ValidateCurrentAccess(operator Operator, claims OperatorAccessTokenClaims, now time.Time) error {
+	// Step 1: refresh session state が期限内かつ未失効であることを確認する。
+	if err := s.validateUsable(now); err != nil {
 		return err
 	}
 
-	// Step 7: OperatorAuth の全 eligibility 条件を満たしたため成功とする。
+	// Step 2: claims の session ID が refresh session state と一致することを確認する。
+	if claims.SessionID() != s.id {
+		return ErrOperatorAuthSessionMismatch
+	}
+
+	// Step 3: 現在 Operator と session snapshot が一致することを確認する。
+	if err := s.validateOperatorSnapshot(operator); err != nil {
+		return err
+	}
+
+	// Step 4: accessToken 自体の期限と Operator snapshot を permission なしで検証する。
+	if err := claims.ValidateCurrentForOperator(operator, now); err != nil {
+		return err
+	}
+
+	// Step 5: claims と session の role/active snapshot が一致することを確認する。
+	if claims.RoleSnapshot() != s.roleSnapshot || claims.ActiveSnapshot() != s.activeSnapshot {
+		return ErrOperatorAuthSnapshotMismatch
+	}
+
+	// Step 6: current operator の全 eligibility 条件を満たしたため成功とする。
 	return nil
 }
 
@@ -271,7 +292,6 @@ func buildOperatorAuthSession(
 	operator Operator,
 	id OperatorSessionID,
 	refreshToken string,
-	csrfToken string,
 	ttl TokenTTL,
 	issuedAt time.Time,
 	revoked bool,
@@ -282,12 +302,8 @@ func buildOperatorAuthSession(
 		return OperatorAuthSession{}, err
 	}
 
-	// Step 2: refresh token と CSRF token は平文を保持せず hash 化する。
+	// Step 2: refresh token は平文を保持せず hash 化する。
 	refreshTokenHash, err := HashOpaqueToken(refreshToken)
-	if err != nil {
-		return OperatorAuthSession{}, err
-	}
-	csrfTokenHash, err := HashOpaqueToken(csrfToken)
 	if err != nil {
 		return OperatorAuthSession{}, err
 	}
@@ -303,7 +319,6 @@ func buildOperatorAuthSession(
 		id:               validatedID,
 		operatorID:       operator.ID(),
 		refreshTokenHash: refreshTokenHash,
-		csrfTokenHash:    csrfTokenHash,
 		roleSnapshot:     operator.Role(),
 		activeSnapshot:   operator.Active(),
 		issuedAt:         issuedAt.UTC(),
@@ -337,7 +352,7 @@ func validateOperatorAuthSessionState(session OperatorAuthSession) error {
 	}
 
 	// Step 4: token hash は空値を許さず、平文 token 不在の session を拒否する。
-	if session.refreshTokenHash == "" || session.csrfTokenHash == "" {
+	if session.refreshTokenHash == "" {
 		return ErrInvalidToken
 	}
 

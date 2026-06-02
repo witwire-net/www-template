@@ -5,92 +5,112 @@
  * OpenAPI spec version: 1.0.0
  */
 /**
- * Admin account 詳細 API の response。
+ * Admin operator の authorization concept を所有する marker model。RBAC の詳細は backend application が評価し、契約には role と operator profile だけを公開する。
  */
-export interface AdminAccountDetailResponse {
-  /** 詳細取得 request に対応する canonical ULID の追跡 ID。 */
-  requestId: WWWTemplateUlidId;
-  /** 対象 Product Account の Admin read model。 */
-  account: AdminAccountSummary;
+export interface AdminAuthorizationBoundary {
+  /** authorization 判定対象 operator の canonical ULID。 */
+  operatorId: WWWTemplateUlidId;
 }
 
 /**
- * Admin account 一覧 API の response。requestId は監査・追跡に使用し、accounts は Product route から独立した Admin read model として返す。
+ * external bearer mode で発行されたことを示す discriminator。
  */
-export interface AdminAccountListResponse {
-  /** 一覧取得 request に対応する canonical ULID の追跡 ID。 */
-  requestId: WWWTemplateUlidId;
-  /** 検索条件に一致した Product Account の要約一覧。 */
-  accounts: AdminAccountSummary[];
-  /** 次ページが存在するときだけ返す opaque cursor。 */
-  nextCursor?: string;
-}
-
-/**
- * Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。
- */
-export type AdminAccountStatus = (typeof AdminAccountStatus)[keyof typeof AdminAccountStatus];
+export type AdminBearerContextRefreshResponseCredentialMode =
+  (typeof AdminBearerContextRefreshResponseCredentialMode)[keyof typeof AdminBearerContextRefreshResponseCredentialMode];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const AdminAccountStatus = {
-  active: 'active',
-  suspended: 'suspended',
+export const AdminBearerContextRefreshResponseCredentialMode = {
+  bearer: 'bearer',
 } as const;
 
 /**
- * Admin account 一覧と詳細で返す Product Account の要約。Admin route から参照する read model であり、Product route namespace には所属しない。
+ * Admin automation client の Bearer mode context refresh 成功 response。Cookie command や browser context index hint を含めない。
  */
-export interface AdminAccountSummary {
-  /** 対象 Product Account の canonical ULID。 */
-  accountId: WWWTemplateUlidId;
-  /** Product Account の canonical email address。 */
-  email: string;
-  /** Admin API が観測した Product Account lifecycle state。 */
-  status: AdminAccountStatus;
-  /** Product Account が作成された日時。 */
-  createdAt: string;
-  /** 対象 Product Account に登録済みの passkey 数。 */
-  passkeyCount: number;
+export interface AdminBearerContextRefreshResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: WWWTemplateUlidId;
+  /** external bearer mode で発行されたことを示す discriminator。 */
+  credentialMode: AdminBearerContextRefreshResponseCredentialMode;
+  /** refreshToken と session metadata を束縛する auth context。 */
+  authContextId: WWWTemplateUlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: WWWTemplateUlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** external client が body で保持し、context refresh で rotation する opaque refreshToken。 */
+  refreshToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** 認証された Admin operator の profile。 */
+  operator: AdminOperatorProfile;
 }
 
 /**
- * Admin operator auth 成功時の response。refreshToken は HttpOnly Cookie で扱うため body には含めない。
+ * external bearer mode で発行されたことを示す discriminator。
  */
-export interface AdminAuthSessionResponse {
+export type AdminBearerOperatorSessionResponseCredentialMode =
+  (typeof AdminBearerOperatorSessionResponseCredentialMode)[keyof typeof AdminBearerOperatorSessionResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AdminBearerOperatorSessionResponseCredentialMode = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * Admin automation client の Bearer mode operator session response。Cookie command や browser context index hint を含めない。
+ */
+export interface AdminBearerOperatorSessionResponse {
   /** 認証 request に対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** external bearer mode で発行されたことを示す discriminator。 */
+  credentialMode: AdminBearerOperatorSessionResponseCredentialMode;
+  /** refreshToken と session metadata を束縛する auth context。 */
+  authContextId: WWWTemplateUlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: WWWTemplateUlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** external client が body で保持し、context refresh で rotation する opaque refreshToken。 */
+  refreshToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
   /** 認証された Admin operator の profile。 */
   operator: AdminOperatorProfile;
-  /** Admin operator session の canonical ULID。 */
+}
+
+/**
+ * browser cookie mode で発行されたことを示す discriminator。
+ */
+export type AdminContextRefreshResponseCredentialMode =
+  (typeof AdminContextRefreshResponseCredentialMode)[keyof typeof AdminContextRefreshResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AdminContextRefreshResponseCredentialMode = {
+  cookie: 'cookie',
+} as const;
+
+/**
+ * Admin Console context refresh 成功時の response。refreshToken 平文を body に含めず、path-scoped Cookie rotation を transport header に委ねる。
+ */
+export interface AdminContextRefreshResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: WWWTemplateUlidId;
+  /** browser cookie mode で発行されたことを示す discriminator。 */
+  credentialMode: AdminContextRefreshResponseCredentialMode;
+  /** refresh path と session metadata を束縛する auth context。 */
+  authContextId: WWWTemplateUlidId;
+  /** 対象 session の canonical ULID。 */
   sessionId: WWWTemplateUlidId;
-  /** 短命の Admin operator access token。 */
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
   accessToken: string;
   /** accessToken の失効日時。 */
   expiresAt: string;
-  /** mutation request で session と照合する CSRF token。 */
-  csrfToken: string;
-}
-
-/**
- * Admin operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。
- */
-export interface AdminCreateAccountRequest {
-  /** 作成対象 Product Account の email address。 */
-  email: string;
-  /** 作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。 */
-  locale?: WWWTemplateAccountLocale;
-}
-
-/**
- * Admin account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。
- */
-export interface AdminCreateAccountResponse {
-  /** 作成 request に対応する canonical ULID の追跡 ID。 */
-  requestId: WWWTemplateUlidId;
-  /** 作成された Product Account の Admin read model。 */
-  account: AdminAccountSummary;
-  /** Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。 */
-  auditEventId: WWWTemplateUlidId;
+  /** browser の origin-local context index を更新する非 secret hint。 */
+  contextIndexUpdateHints: WWWTemplateContextIndexUpdateHint[];
+  /** logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。 */
+  clearCookieCommands: WWWTemplateCookieClearCommand[];
+  /** 認証された Admin operator の profile。 */
+  operator: AdminOperatorProfile;
 }
 
 /**
@@ -139,6 +159,8 @@ export interface AdminInitialSetupFinishRequest {
   bootstrapSecret: string;
   /** start response と対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。 */
+  credentialMode: WWWTemplateCredentialMode;
   /** browser WebAuthn API から返された attestation credential。 */
   credential: WWWTemplateWebAuthnAttestationCredential;
 }
@@ -154,6 +176,20 @@ export interface AdminInitialSetupStartRequest {
   /** 初回 setup gate を通過するための bootstrap secret。 */
   bootstrapSecret: string;
 }
+
+/**
+ * Admin login / setup が返す credential mode 別 session response。Cookie mode と Bearer mode の body shape を shared auth envelope から構成する。
+ */
+export type AdminOperatorAuthSessionResponse =
+  | AdminOperatorSessionResponse
+  | AdminBearerOperatorSessionResponse;
+
+/**
+ * Admin context refresh の credential mode 別 success response。Cookie mode と Bearer mode は同じ auth envelope field 名を使う。
+ */
+export type AdminOperatorContextRefreshResponse =
+  | AdminContextRefreshResponse
+  | AdminBearerContextRefreshResponse;
 
 /**
  * Admin operator 自身が登録している passkey credential の表示用要約。credential handle や public key は秘匿し、管理操作に必要な識別子と時刻だけを返す。
@@ -204,6 +240,41 @@ export const AdminOperatorRole = {
 } as const;
 
 /**
+ * browser cookie mode で発行されたことを示す discriminator。
+ */
+export type AdminOperatorSessionResponseCredentialMode =
+  (typeof AdminOperatorSessionResponseCredentialMode)[keyof typeof AdminOperatorSessionResponseCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AdminOperatorSessionResponseCredentialMode = {
+  cookie: 'cookie',
+} as const;
+
+/**
+ * Admin Console の operator session response。operator refreshToken は HttpOnly Cookie だけで扱い、body には含めない。
+ */
+export interface AdminOperatorSessionResponse {
+  /** 認証 request に対応する canonical ULID の追跡 ID。 */
+  requestId: WWWTemplateUlidId;
+  /** browser cookie mode で発行されたことを示す discriminator。 */
+  credentialMode: AdminOperatorSessionResponseCredentialMode;
+  /** refresh path と session metadata を束縛する auth context。 */
+  authContextId: WWWTemplateUlidId;
+  /** 対象 session の canonical ULID。 */
+  sessionId: WWWTemplateUlidId;
+  /** protected API に Authorization Bearer として送信する短命 accessToken。 */
+  accessToken: string;
+  /** accessToken の失効日時。 */
+  expiresAt: string;
+  /** browser の origin-local context index を更新する非 secret hint。 */
+  contextIndexUpdateHints: WWWTemplateContextIndexUpdateHint[];
+  /** logout / revoke / suspend などで削除すべき旧 refresh Cookie がある場合の command。通常 login では空配列。 */
+  clearCookieCommands: WWWTemplateCookieClearCommand[];
+  /** 認証された Admin operator の profile。 */
+  operator: AdminOperatorProfile;
+}
+
+/**
  * Admin operator 初期設定 ceremony を完了する request。
  */
 export interface AdminOperatorSetupFinishRequest {
@@ -211,6 +282,8 @@ export interface AdminOperatorSetupFinishRequest {
   setupToken: string;
   /** start response と対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。 */
+  credentialMode: WWWTemplateCredentialMode;
   /** browser WebAuthn API から返された attestation credential。 */
   credential: WWWTemplateWebAuthnAttestationCredential;
 }
@@ -229,6 +302,8 @@ export interface AdminOperatorSetupStartRequest {
 export interface AdminPasskeyFinishRequest {
   /** start response と対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** session credential の発行方式。Admin Console は cookie、automation client は bearer を指定する。 */
+  credentialMode: WWWTemplateCredentialMode;
   /** browser WebAuthn API から返された assertion credential。 */
   credential: WWWTemplateWebAuthnAssertionCredential;
 }
@@ -253,6 +328,28 @@ export const AdminSetupTokenDeliveryStatus = {
 } as const;
 
 /**
+ * account 詳細 API の response。
+ */
+export interface WWWTemplateAccountDetailResponse {
+  /** 詳細取得 request に対応する canonical ULID の追跡 ID。 */
+  requestId: WWWTemplateUlidId;
+  /** 対象 Product Account の read model。 */
+  account: WWWTemplateAccountSummary;
+}
+
+/**
+ * account 一覧 API の response。requestId は監査・追跡に使用し、accounts は account concept read model として返す。
+ */
+export interface WWWTemplateAccountListResponse {
+  /** 一覧取得 request に対応する canonical ULID の追跡 ID。 */
+  requestId: WWWTemplateUlidId;
+  /** 検索条件に一致した Product Account の要約一覧。 */
+  accounts: WWWTemplateAccountSummary[];
+  /** 次ページが存在するときだけ返す opaque cursor。 */
+  nextCursor?: string;
+}
+
+/**
  * Product Account が表示と通知に使用する保存済みロケール。運用者向け設定や画面一時状態ではなく、AccountSetting.locale の値だけを表す。
  */
 export type WWWTemplateAccountLocale =
@@ -264,6 +361,37 @@ export const WWWTemplateAccountLocale = {
   en: 'en',
 } as const;
 
+/**
+ * Admin surface で表示・監査に使う Product Account の状態。Product domain の永続値を Admin API の read model として表すだけで、Admin 固有状態を混ぜない。
+ */
+export type WWWTemplateAccountStatus =
+  (typeof WWWTemplateAccountStatus)[keyof typeof WWWTemplateAccountStatus];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const WWWTemplateAccountStatus = {
+  active: 'active',
+  suspended: 'suspended',
+} as const;
+
+/**
+ * Account 一覧と詳細で返す Product Account の要約。Admin route から参照できる account concept model であり、Admin surface 固有の catch-all DTO ではない。
+ */
+export interface WWWTemplateAccountSummary {
+  /** 対象 Product Account の canonical ULID。 */
+  accountId: WWWTemplateUlidId;
+  /** Product Account の canonical email address。 */
+  email: string;
+  /** API が観測した Product Account lifecycle state。 */
+  status: WWWTemplateAccountStatus;
+  /** Product Account が作成された日時。 */
+  createdAt: string;
+  /** 対象 Product Account に登録済みの passkey 数。 */
+  passkeyCount: number;
+}
+
+/**
+ * 認証・認可 failure を Product/Admin の両 artifact で同じ語彙に正規化する分類。
+ */
 export type WWWTemplateAuthFailureClassification =
   (typeof WWWTemplateAuthFailureClassification)[keyof typeof WWWTemplateAuthFailureClassification];
 
@@ -272,22 +400,181 @@ export const WWWTemplateAuthFailureClassification = {
   unauthenticated: 'unauthenticated',
   'session-expired': 'session-expired',
   'account-suspended': 'account-suspended',
+  'credential-ambiguous': 'credential-ambiguous',
+  'invalid-refresh-credential': 'invalid-refresh-credential',
   'internal-error': 'internal-error',
 } as const;
 
+/**
+ * 認証・認可 failure の共通 response。requestId と normalized error だけを返し、token や Cookie 値は含めない。
+ */
 export interface WWWTemplateAuthFailureResponse {
+  /** request に対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** client が fail-close 処理を選ぶための normalized failure classification。 */
   error: WWWTemplateAuthFailureClassification;
 }
 
+/**
+ * 入力不正や操作競合など、認証 credential 検証以外の operation error response。
+ */
 export interface WWWTemplateAuthOperationErrorResponse {
+  /** request に対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** client が表示・分岐に使う error code。secret や token 値は含めない。 */
   error: string;
 }
 
-export interface WWWTemplateLogoutResponse {
+/**
+ * external bearer mode refresh であることを示す discriminator。
+ */
+export type WWWTemplateBearerContextRefreshRequestCredentialMode =
+  (typeof WWWTemplateBearerContextRefreshRequestCredentialMode)[keyof typeof WWWTemplateBearerContextRefreshRequestCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const WWWTemplateBearerContextRefreshRequestCredentialMode = {
+  bearer: 'bearer',
+} as const;
+
+/**
+ * Bearer client が context refresh で送る request body。Cookie mode では body を送らず、path-scoped HttpOnly Cookie だけを提示する。
+ */
+export interface WWWTemplateBearerContextRefreshRequest {
+  /** external bearer mode refresh であることを示す discriminator。 */
+  credentialMode: WWWTemplateBearerContextRefreshRequestCredentialMode;
+  /** rotation 対象の opaque refreshToken。Authorization header ではなく body だけで提示する。 */
+  refreshToken: string;
+}
+
+/**
+ * browser context index に保存してよい非 secret の表示 hint。accessToken、refreshToken、Cookie 値、setup token は含めない。
+ */
+export interface WWWTemplateContextIndexDisplayHint {
+  /** Account email や operator email など、UI 表示に使う非 secret label。 */
+  label: string;
+  /** 補助表示に使う任意の非 secret text。role や locale など、認可判断に使わない値だけを入れる。 */
+  secondaryLabel?: string;
+}
+
+/**
+ * browser 内の context index に対する更新種別。token や Cookie 値を含めず、UI と refresh bootstrap の hint だけを更新する。
+ */
+export type WWWTemplateContextIndexUpdateAction =
+  (typeof WWWTemplateContextIndexUpdateAction)[keyof typeof WWWTemplateContextIndexUpdateAction];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const WWWTemplateContextIndexUpdateAction = {
+  upsert: 'upsert',
+  remove: 'remove',
+  'clear-surface': 'clear-surface',
+} as const;
+
+/**
+ * browser context index を更新するための非 secret hint。service artifact が Product/Admin context を決定するため、payload discriminator は持たない。
+ */
+export interface WWWTemplateContextIndexUpdateHint {
+  /** context index に対して行う操作。 */
+  action: WWWTemplateContextIndexUpdateAction;
+  /** 操作対象の auth context。clear-surface では省略できる。 */
+  authContextId?: WWWTemplateUlidId;
+  /** 対象 session の canonical ULID。upsert 時だけ返す。 */
+  sessionId?: WWWTemplateUlidId;
+  /** token を含まない UI 表示用 hint。upsert 時だけ返す。 */
+  displayHint?: WWWTemplateContextIndexDisplayHint;
+  /** context が最後に server で確認された時刻。 */
+  lastSeenAt?: string;
+  /** context index entry を削除する目安時刻。認可可否は refresh response で再検証する。 */
+  expiresHintAt?: string;
+}
+
+/**
+ * Cookie 削除を表す Max-Age 値。
+ */
+export type WWWTemplateCookieClearCommandMaxAge =
+  (typeof WWWTemplateCookieClearCommandMaxAge)[keyof typeof WWWTemplateCookieClearCommandMaxAge];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const WWWTemplateCookieClearCommandMaxAge = {
+  NUMBER_0: 0,
+} as const;
+
+/**
+ * 削除対象 Cookie の SameSite 属性。
+ */
+export type WWWTemplateCookieClearCommandSameSite =
+  (typeof WWWTemplateCookieClearCommandSameSite)[keyof typeof WWWTemplateCookieClearCommandSameSite];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const WWWTemplateCookieClearCommandSameSite = {
+  Lax: 'Lax',
+} as const;
+
+/**
+ * HttpOnly refresh Cookie を削除するために backend が返す command。transport adapter はこの内容から Set-Cookie Max-Age=0 を組み立てる。
+ */
+export interface WWWTemplateCookieClearCommand {
+  /** 削除対象の Cookie 名。 */
+  name: string;
+  /** 削除対象 Cookie の exact Path。context-scoped refresh path `/api/v1/auth/contexts/{authContextId}/refresh` を返す。 */
+  path: string;
+  /** Cookie 削除を表す Max-Age 値。 */
+  maxAge: WWWTemplateCookieClearCommandMaxAge;
+  /** 削除対象 Cookie が HttpOnly 属性を持つこと。 */
+  httpOnly: boolean;
+  /** 削除対象 Cookie が Secure 属性を持つこと。 */
+  secure: boolean;
+  /** 削除対象 Cookie の SameSite 属性。 */
+  sameSite: WWWTemplateCookieClearCommandSameSite;
+  /** 削除対象 Cookie が束縛されていた auth context。 */
+  authContextId: WWWTemplateUlidId;
+}
+
+/**
+ * operator が customer account を作成するときの request body。email と初期 locale だけを受け取り、Account 不変条件は Go backend domain object が検証する。
+ */
+export interface WWWTemplateCreateAccountRequest {
+  /** 作成対象 Product Account の email address。 */
+  email: string;
+  /** 作成時に保存する Product AccountSetting locale。未指定時の default は backend application が決定する。 */
+  locale?: WWWTemplateAccountLocale;
+}
+
+/**
+ * account 作成 API の response。作成された Product Account と、対応する audit event の相関 ID だけを返す。
+ */
+export interface WWWTemplateCreateAccountResponse {
+  /** 作成 request に対応する canonical ULID の追跡 ID。 */
   requestId: WWWTemplateUlidId;
+  /** 作成された Product Account の read model。 */
+  account: WWWTemplateAccountSummary;
+  /** Account 作成 intent/outcome を記録する Admin audit event の canonical ULID。 */
+  auditEventId: WWWTemplateUlidId;
+}
+
+/**
+ * 認証 session credential の発行方式。browser は cookie mode を使い、external API / mobile / CLI / SDK は bearer mode を使う。
+ */
+export type WWWTemplateCredentialMode =
+  (typeof WWWTemplateCredentialMode)[keyof typeof WWWTemplateCredentialMode];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const WWWTemplateCredentialMode = {
+  cookie: 'cookie',
+  bearer: 'bearer',
+} as const;
+
+/**
+ * logout / revoke 処理の共通 response。accessToken claims で確定した context の Cookie clear と context index cleanup だけを返す。
+ */
+export interface WWWTemplateLogoutResponse {
+  /** logout / revoke request に対応する canonical ULID の追跡 ID。 */
+  requestId: WWWTemplateUlidId;
+  /** 対象 session または refresh family が失効されたことを示す。 */
   revoked: boolean;
+  /** revocation 対象 refresh Cookie を exact Path で削除する command 一覧。 */
+  clearCookieCommands: WWWTemplateCookieClearCommand[];
+  /** revocation 後に browser context index から対象 entry を削除するための hint。 */
+  contextIndexUpdateHints: WWWTemplateContextIndexUpdateHint[];
 }
 
 /**
@@ -448,7 +735,7 @@ export type ListAdminAccountsParams = {
  * @summary Lists customer accounts for Admin Console operators
  */
 export type listAdminAccountsResponse200 = {
-  data: AdminAccountListResponse;
+  data: WWWTemplateAccountListResponse;
   status: 200;
 };
 
@@ -523,7 +810,7 @@ export const listAdminAccounts = async (
  * @summary Creates a customer account through the Admin Console
  */
 export type createAdminAccountResponse201 = {
-  data: AdminCreateAccountResponse;
+  data: WWWTemplateCreateAccountResponse;
   status: 201;
 };
 
@@ -574,14 +861,14 @@ export const getCreateAdminAccountUrl = () => {
 };
 
 export const createAdminAccount = async (
-  adminCreateAccountRequest: AdminCreateAccountRequest,
+  wWWTemplateCreateAccountRequest: WWWTemplateCreateAccountRequest,
   options?: RequestInit
 ): Promise<createAdminAccountResponse> => {
   const res = await fetch(getCreateAdminAccountUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(adminCreateAccountRequest),
+    body: JSON.stringify(wWWTemplateCreateAccountRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -594,7 +881,7 @@ export const createAdminAccount = async (
  * @summary Gets one customer account for the Admin Console
  */
 export type getAdminAccountResponse200 = {
-  data: AdminAccountDetailResponse;
+  data: WWWTemplateAccountDetailResponse;
   status: 200;
 };
 
@@ -652,10 +939,70 @@ export const getAdminAccount = async (
 };
 
 /**
+ * @summary Refreshes the Admin operator access token for one auth context
+ */
+export type refreshAdminOperatorSessionResponse200 = {
+  data: AdminOperatorContextRefreshResponse;
+  status: 200;
+};
+
+export type refreshAdminOperatorSessionResponse401 = {
+  data: WWWTemplateAuthFailureResponse;
+  status: 401;
+};
+
+export type refreshAdminOperatorSessionResponse403 = {
+  data: WWWTemplateAuthFailureResponse;
+  status: 403;
+};
+
+export type refreshAdminOperatorSessionResponse503 = {
+  data: WWWTemplateAuthFailureResponse;
+  status: 503;
+};
+
+export type refreshAdminOperatorSessionResponseSuccess = refreshAdminOperatorSessionResponse200 & {
+  headers: Headers;
+};
+export type refreshAdminOperatorSessionResponseError = (
+  | refreshAdminOperatorSessionResponse401
+  | refreshAdminOperatorSessionResponse403
+  | refreshAdminOperatorSessionResponse503
+) & {
+  headers: Headers;
+};
+
+export type refreshAdminOperatorSessionResponse =
+  | refreshAdminOperatorSessionResponseSuccess
+  | refreshAdminOperatorSessionResponseError;
+
+export const getRefreshAdminOperatorSessionUrl = (authContextId: WWWTemplateUlidId) => {
+  return `/api/v1/auth/contexts/${authContextId}/refresh`;
+};
+
+export const refreshAdminOperatorSession = async (
+  authContextId: WWWTemplateUlidId,
+  wWWTemplateBearerContextRefreshRequest?: WWWTemplateBearerContextRefreshRequest,
+  options?: RequestInit
+): Promise<refreshAdminOperatorSessionResponse> => {
+  const res = await fetch(getRefreshAdminOperatorSessionUrl(authContextId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(wWWTemplateBearerContextRefreshRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshAdminOperatorSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as refreshAdminOperatorSessionResponse;
+};
+
+/**
  * @summary Finishes Admin operator setup and returns an operator session
  */
 export type finishAdminOperatorSetupResponse200 = {
-  data: AdminAuthSessionResponse;
+  data: AdminOperatorAuthSessionResponse;
   status: 200;
 };
 
@@ -882,62 +1229,6 @@ export const logoutAdminOperator = async (
 };
 
 /**
- * @summary Refreshes the Admin operator access token through an HttpOnly refresh cookie
- */
-export type refreshAdminOperatorSessionResponse200 = {
-  data: AdminAuthSessionResponse;
-  status: 200;
-};
-
-export type refreshAdminOperatorSessionResponse401 = {
-  data: WWWTemplateAuthFailureResponse;
-  status: 401;
-};
-
-export type refreshAdminOperatorSessionResponse403 = {
-  data: WWWTemplateAuthFailureResponse;
-  status: 403;
-};
-
-export type refreshAdminOperatorSessionResponse503 = {
-  data: WWWTemplateAuthFailureResponse;
-  status: 503;
-};
-
-export type refreshAdminOperatorSessionResponseSuccess = refreshAdminOperatorSessionResponse200 & {
-  headers: Headers;
-};
-export type refreshAdminOperatorSessionResponseError = (
-  | refreshAdminOperatorSessionResponse401
-  | refreshAdminOperatorSessionResponse403
-  | refreshAdminOperatorSessionResponse503
-) & {
-  headers: Headers;
-};
-
-export type refreshAdminOperatorSessionResponse =
-  | refreshAdminOperatorSessionResponseSuccess
-  | refreshAdminOperatorSessionResponseError;
-
-export const getRefreshAdminOperatorSessionUrl = () => {
-  return `/api/v1/auth/operator/refresh`;
-};
-
-export const refreshAdminOperatorSession = async (
-  options?: RequestInit
-): Promise<refreshAdminOperatorSessionResponse> => {
-  const res = await fetch(getRefreshAdminOperatorSessionUrl(), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: refreshAdminOperatorSessionResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as refreshAdminOperatorSessionResponse;
-};
-
-/**
  * @summary Creates an Admin operator and delivers a one-time setup token
  */
 export type createAdminOperatorResponse201 = {
@@ -1012,7 +1303,7 @@ export const createAdminOperator = async (
  * @summary Finishes Admin operator passkey authentication and returns an operator session
  */
 export type finishAdminPasskeyAuthenticationResponse200 = {
-  data: AdminAuthSessionResponse;
+  data: AdminOperatorAuthSessionResponse;
   status: 200;
 };
 
@@ -1259,7 +1550,7 @@ export const deleteAdminOperatorPasskey = async (
  * @summary Finishes initial Admin operator setup and returns an operator session
  */
 export type finishAdminInitialSetupResponse200 = {
-  data: AdminAuthSessionResponse;
+  data: AdminOperatorAuthSessionResponse;
   status: 200;
 };
 

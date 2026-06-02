@@ -434,12 +434,12 @@
 - NG例: Product router に `/api/v1/accounts` を登録する / Admin router に `/api/v1/status` を登録する
 - OK例: Product binary は Product router だけ、Admin binary は Admin router だけを compose する
 
-### Admin API は operator session / Origin / CSRF / security header を必須にする
+### Admin API は operator bearer / Origin / Fetch Metadata / security header を必須にする
 
-- required: Admin protected route は operator bearer session を要求し、Product bearer を Admin operator として扱わない。Admin mutation は許可済み `Origin` と session-bound CSRF を検証し、pre-auth passkey start でも許可済み `Origin` を要求する。Admin response は no-store と browser security header baseline を返す
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/admin/router_test.go` (`TestAdminProtectedRouteRequiresOperatorSession`, `TestAdminAPIRejectsProductBearerToken`, `TestAdminMutationRejectsDisallowedOriginBeforeSessionValidation`, `TestAdminMutationValidatesSessionAndCSRFBinding`, `TestAdminMutationRejectsCSRFMismatch`, `TestAdminPreAuthPasskeyStartRequiresOriginButNotSessionCSRF`, `TestAdminPreAuthPasskeyStartRejectsMissingOrigin`, `TestAdminAPISetsNoStoreAndSecurityHeaders`)
-- NG例: Admin mutation を `Origin` なしで通す / Product accessToken を Admin operator session として受理する / Admin response に cacheable header を残す
-- OK例: Admin mutation は `Authorization: Bearer ...`、許可済み `Origin`、CSRF token を検証してから application use case に進む
+- required: Admin protected route は operator `Authorization: Bearer ...` を要求し、Product bearer、Admin refresh Cookie、CSRF token、`X-Auth-Context-Id` を operator/session credential として扱わない。Admin mutation は CSRF token を要求せず、許可済み `Origin`、安全な `Sec-Fetch-Site`、operator session record、RBAC を検証する。pre-auth passkey/setup/refresh flow でも許可済み `Origin` と Fetch Metadata を要求する。Admin response は no-store と browser security header baseline を返す
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/admin/router_test.go` (`TestAdminProtectedRouteRequiresOperatorSession`, `TestAdminAPIRejectsProductBearerToken`, `TestAdminMutationRejectsDisallowedOriginBeforeSessionValidation`, `TestAdminMutationRejectsCrossSiteFetchMetadataBeforeSessionValidation`, `TestAdminMutationValidatesSessionAndPermissionWithoutCSRF`, `TestAdminPreAuthPasskeyStartRequiresOriginButNotSessionCSRF`, `TestAdminPreAuthPasskeyStartRejectsMissingOrigin`, `TestAdminAPISetsNoStoreAndSecurityHeaders`)
+- NG例: Admin mutation を `Origin` なしで通す / cross-site Fetch Metadata を許す / Product accessToken を Admin operator session として受理する / CSRF token を Admin protected route の credential として要求する / Admin response に cacheable header を残す
+- OK例: Admin mutation は `Authorization: Bearer ...`、許可済み `Origin`、安全な `Sec-Fetch-Site`、operator session record、RBAC を検証してから application use case に進む
 
 ### `APP_ENV!=development` では fail-close にする
 

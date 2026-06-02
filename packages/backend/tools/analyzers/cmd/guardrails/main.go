@@ -105,10 +105,10 @@ var allowedPackageNames = []struct {
 	{pathPattern: "internal/generated/openapi/", isRegex: false, packageName: "openapi"},
 	{pathPattern: "tools/analyzers/", isRegex: false, packageName: "main"},
 	{pathPattern: "internal/domain/", isRegex: false, packageName: "domain"},
-	{pathPattern: "internal/application/product/", isRegex: false, packageName: "application"},
-	{pathPattern: "internal/application/admin/", isRegex: false, packageName: "application"},
-	{pathPattern: "internal/application/shared/", isRegex: false, packageName: "application"},
-	{pathPattern: "internal/application/", isRegex: false, packageName: "application"},
+	{pathPattern: "internal/application/auth/", isRegex: false, packageName: "auth"},
+	{pathPattern: "internal/application/accounts/", isRegex: false, packageName: "accounts"},
+	{pathPattern: "internal/application/audit/", isRegex: false, packageName: "audit"},
+	{pathPattern: "internal/application/operators/", isRegex: false, packageName: "operators"},
 	// internal/adapter/http/ は Product/Admin/shared subtree を先に判定し、legacy flat package は最後に残す。
 	{pathPattern: "internal/adapter/http/product/", isRegex: false, packageName: "product"},
 	{pathPattern: "internal/adapter/http/admin/", isRegex: false, packageName: "admin"},
@@ -184,6 +184,7 @@ func collectViolations(root string) ([]string, error) {
 
 		if strings.HasSuffix(relativePath, ".go") {
 			violations = append(violations, verifyGoFilePlacement(relativePath)...)
+			violations = append(violations, verifyApplicationConceptOwnership(relativePath)...)
 
 			if strings.HasPrefix(relativePath, "internal/generated/") {
 				violations = append(violations, verifyGeneratedFile(relativePath)...)
@@ -247,6 +248,36 @@ func verifyGoFilePlacement(path string) []string {
 	}
 
 	return []string{fmt.Sprintf("%s: go files must live under cmd/api, cmd/admin-api, internal/app, internal/platform, internal/domain, internal/application, internal/adapter, or internal/generated", path)}
+}
+
+// verifyApplicationConceptOwnership は application 層に Product/Admin surface owner を復活させないための配置検査である。
+// Product/Admin は HTTP adapter、binary、generated artifact の境界用語に限定し、application owner は auth などの concept package に固定する。
+func verifyApplicationConceptOwnership(path string) []string {
+	// Step 1: production Go source だけを対象にし、既存のテスト fixture や削除済み directory の有無ではなく実装 owner の復活を検査する。
+	if isTestFile(path) {
+		return nil
+	}
+
+	// Step 2: internal/application 直下の flat owner は責務が曖昧な legacy bucket になるため、production source としての復活を拒否する。
+	applicationPrefix := "internal/application/"
+	if strings.HasPrefix(path, applicationPrefix) {
+		remainder := strings.TrimPrefix(path, applicationPrefix)
+		segment, _, hasNestedPath := strings.Cut(remainder, "/")
+		if !hasNestedPath {
+			return []string{fmt.Sprintf("%s: root internal/application production files are forbidden; application owners must be concept packages such as auth, accounts, operators, or audit", path)}
+		}
+
+		// Step 3: Product/Admin/shared/unknown application subtrees are not concept owners; binary, HTTP adapter, generated artifacts, and explicit concept packages own those responsibilities.
+		switch segment {
+		case "auth", "accounts", "operators", "audit":
+			return nil
+		default:
+			return []string{fmt.Sprintf("%s: application owners must be concept packages such as auth, accounts, operators, or audit; Product/Admin belong to binary, HTTP adapter, and generated artifact boundaries", path)}
+		}
+	}
+
+	// Step 4: application 層以外の production source はこの検査の対象外にする。
+	return nil
 }
 
 func verifyGeneratedFile(path string) []string {
@@ -345,7 +376,7 @@ func checkImports(path string, file *ast.File) []string {
 			}
 
 			// Product/Admin application subtree と persistence adapter は surface を越えた application import を禁止する。
-			// shared/tokenprimitive だけを Product/Admin から参照できる中立 helper として許可する。
+			// 認証 primitive は domain/application auth concept に集約し、shared wrapper への依存を canonical path にしない。
 			if targetLayer == "application" && !isAllowedApplicationBoundaryImport(path, importPath) {
 				violations = append(violations, fmt.Sprintf("%s: %s surface must not import %s", path, layer, importPath))
 				continue
@@ -419,11 +450,17 @@ func isAllowedApplicationBoundaryImport(sourcePath string, importPath string) bo
 
 	// Step 3: application source は Product/Admin/shared/legacy の相互境界を直接守る。
 	if sourceLayer == "application" {
-		return isAllowedSurfaceApplicationDependency(applicationSurfaceFromPath(sourcePath), targetSurface)
+		return isAllowedApplicationSourceDependency(sourcePath, importPath, targetSurface)
 	}
 
 	// Step 4: transport / persistence adapters は自身の surface に対応する application ports/use cases だけを参照できる。
 	if sourceLayer == "adapter-http" {
+		// Step 4-a: Admin hosted-service adapter は application owner を surface 名ではなく capability package として呼び出す。
+		// 許可対象を HTTP adapter に限定し、Admin auth application から account/operator owner へ逆流する抜け道を作らない。
+		if httpAdapterSurfaceFromPath(sourcePath) == "admin" && isAdminConceptApplicationSurface(targetSurface) {
+			return true
+		}
+
 		// Step 4-a: 既存 Product API の use case はまだ internal/application 直下に残っているため、Product HTTP adapter から legacy Product application への参照だけを移行互換として許可する。
 		if httpAdapterSurfaceFromPath(sourcePath) == "product" && targetSurface == "legacy" {
 			return true
@@ -431,6 +468,10 @@ func isAllowedApplicationBoundaryImport(sourcePath string, importPath string) bo
 		return isAllowedSurfaceApplicationDependency(httpAdapterSurfaceFromPath(sourcePath), targetSurface)
 	}
 	if sourceLayer == "adapter-postgres" {
+		// Step 4-b: 既存 Admin operator repository は Admin auth snapshot port と operator management port を同じ table 境界で実装するため、対象 file だけ operators concept port への依存を許可する。
+		if sourcePath == "internal/adapter/postgres/admin/operator_repository.go" && targetSurface == "operators" {
+			return true
+		}
 		return isAllowedSurfaceApplicationDependency(persistenceAdapterSurfaceFromPath(sourcePath, "postgres"), targetSurface)
 	}
 	if sourceLayer == "adapter-valkey" {
@@ -441,15 +482,62 @@ func isAllowedApplicationBoundaryImport(sourcePath string, importPath string) bo
 	return true
 }
 
+// isAllowedApplicationSourceDependency は application layer 内の concept/surface 間依存を source path 単位で判定する。
+// Admin auth surface から account/operator/audit owner へ依存する経路は許可せず、必要な setup session 発行だけを operators concept から Admin auth boundary へ通す。
+func isAllowedApplicationSourceDependency(sourcePath string, importPath string, targetSurface string) bool {
+	// Step 1: source surface を path から取り出し、concept package 追加時も surface 判定を一箇所に集約する。
+	sourceSurface := applicationSurfaceFromPath(sourcePath)
+
+	// Step 2: accounts concept は audit completion DTO だけを使い、Admin surface へ戻らず account mutation を完結させる。
+	if sourceSurface == "accounts" && targetSurface == "audit" {
+		return true
+	}
+
+	// Step 3: operators concept は account ID generator と audit completion を共有し、setup 完了後の session 発行だけ operator auth lifecycle concept へ委譲する。
+	if sourceSurface == "operators" && (targetSurface == "accounts" || targetSurface == "audit" || importPath == modulePath+"/internal/application/auth") {
+		return true
+	}
+
+	// Step 4: 上記以外は surface 共通規則へ委譲し、Admin auth から business capability owner へ依存できない状態を保つ。
+	return isAllowedSurfaceApplicationDependency(sourceSurface, targetSurface)
+}
+
+// isAdminConceptApplicationSurface は Admin HTTP adapter が呼び出す capability owner package だけを列挙する。
+// ここへ追加する package は Admin hosted-service 経由の use case owner であることを review 対象にする。
+func isAdminConceptApplicationSurface(targetSurface string) bool {
+	// Step 1: explicit allowlist にして未知 surface を legacy 扱いで偶然許可しない。
+	switch targetSurface {
+	case "accounts", "operators", "audit":
+		return true
+	default:
+		return false
+	}
+}
+
 // isAllowedSurfaceApplicationDependency は surface ごとの application 依存を判定する。
-// Product/Admin は shared/tokenprimitive を使えるが相互 import と legacy root application への逆流は拒否する。
+// Product/Admin は auth concept を使えるが相互 import と legacy root application への逆流は拒否する。
 func isAllowedSurfaceApplicationDependency(sourceSurface string, targetSurface string) bool {
 	// Step 1: 同一 surface は許可し、Product->Product や Admin->Admin の use case 分割を妨げない。
 	if sourceSurface == targetSurface {
 		return true
 	}
 
-	// Step 2: Product/Admin から shared への依存だけを許可し、中立 primitive の再利用を surface 境界内に収める。
+	// Step 2: Product HTTP surface から Product AccountSetting use case owner への依存を許可し、root application bucket へ DTO を戻さず accounts concept を直接呼ぶ。
+	if sourceSurface == "product" && targetSurface == "accounts" {
+		return true
+	}
+
+	// Step 3: Product/Admin から canonical auth concept への依存を許可し、surface 固有 use case が root legacy DTO へ戻らず explicit subject payload を使えるようにする。
+	if (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "auth" {
+		return true
+	}
+
+	// Step 4: root legacy application は移行中の facade として canonical auth concept だけを参照できるが、Product/Admin surface package へは逆流させない。
+	if sourceSurface == "legacy" && targetSurface == "auth" {
+		return true
+	}
+
+	// Step 5: Product/Admin から shared への依存だけを許可し、中立 DTO の再利用を surface 境界内に収める。
 	return (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "shared"
 }
 
@@ -496,7 +584,7 @@ func surfaceFromRelativePath(path string, base string) string {
 	remainder := strings.TrimPrefix(path, trimmedBase+"/")
 	segment, _, _ := strings.Cut(remainder, "/")
 	switch segment {
-	case "product", "admin", "shared":
+	case "product", "admin", "auth", "shared", "accounts", "audit", "operators":
 		return segment
 	default:
 		return "legacy"
@@ -1026,7 +1114,7 @@ func checkForbiddenHostUsage(path string, file *ast.File) []string {
 
 func checkAdminBackendSQLConstruction(path string, file *ast.File) []string {
 	// Step 1: Admin backend の Postgres repository 実装だけに限定し、Product repository や test fixture の安全な検証文字列へ scope を広げない。
-	if !strings.HasPrefix(path, "internal/adapter/postgres/admin/") || isTestFile(path) {
+	if !isAdminBackendPostgresRepositoryPath(path) || isTestFile(path) {
 		return nil
 	}
 
@@ -1059,6 +1147,22 @@ func checkAdminBackendSQLConstruction(path string, file *ast.File) []string {
 
 	// Step 5: 検出した violation を返し、pnpm lint 経由の guardrail で unsafe query を fail-closed にする。
 	return violations
+}
+
+func isAdminBackendPostgresRepositoryPath(path string) bool {
+	// Step 1: Admin schema/table を扱う legacy admin repository と、rehome 後の Admin capability repositories を明示列挙する。
+	for _, prefix := range []string{
+		"internal/adapter/postgres/admin/",
+		"internal/adapter/postgres/accounts/",
+		"internal/adapter/postgres/audit/",
+	} {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	// Step 2: Product repository は別境界なので Admin SQL guardrail へ巻き込まない。
+	return false
 }
 
 func isGormSQLFragmentMethod(methodName string) bool {

@@ -14,13 +14,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	application "www-template/packages/backend/internal/application"
+	application "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
+	"www-template/packages/backend/internal/platform/config"
 
 	"www-template/packages/backend/internal/platform/id"
 )
 
 var ulidRegex = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`)
+
+const productTestAllowedOrigin = "http://localhost:5173"
 
 func TestAuthPasskeyFinishIssuesSession(t *testing.T) {
 	t.Parallel()
@@ -32,8 +35,7 @@ func TestAuthPasskeyFinishIssuesSession(t *testing.T) {
 
 	var session map[string]any
 	decodeJSON(t, response, &session)
-	assertULIDField(t, session, "accountId")
-	assertULIDField(t, session, "passkeyCredentialId")
+	assertProductAccountSubject(t, session, true)
 	assertULIDField(t, session, "sessionId")
 
 	appResponse := performJSON(t, env.router, stdhttp.MethodPost, "/api/v1/auth/logout", nil, session["accessToken"].(string))
@@ -104,13 +106,9 @@ func TestAuthStoreOutageFailsClosed(t *testing.T) {
 	env := newAuthTestEnv(t)
 	token := loginWithPasskey(t, env.router, "member@example.com")
 
-	// セッションストア障害時の fail-closed を検証
-	// JWT 検証自体は成功するが、ストアへの GetSession で障害が発生する
-	failingStore := failingSessionStore{}
-	tokenService := application.NewTokenService(newStubRefreshTokenStore(), failingStore, nil, testConfig().AuthRuntime(), env.now, newSequentialPolicy())
-	auth := application.NewAuthService(newStubAuthStateRepository(env.now), stubAccountAuthRepositoryWithMember(), nil, nil, env.now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseTokenService(tokenService)
-	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService})
+	// セッションストア障害時の fail-closed を検証するため、canonical lifecycle が利用不能な Auth を構築する。
+	auth := mustNewProductAuthForTest(t, newStubAuthStateRepository(env.now), stubAccountAuthRepositoryWithMember(), nil, nil, unavailableProductAccountLifecycle{}, env.now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{})
+	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/logout", nil, token)
 	assertStatus(t, response, stdhttp.StatusServiceUnavailable)
@@ -136,8 +134,7 @@ func TestAuthPasskeyStartUsesConfiguredWebAuthnRPID(t *testing.T) {
 	accountRepo := stubAccountAuthRepositoryWithMember()
 	cfg := testConfig()
 	cfg.Auth.WebAuthnRPID = "www-template"
-	auth := application.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), cfg.AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, nil, clock.Now, cfg.AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
 	router := NewRouter(cfg, Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
@@ -299,8 +296,7 @@ func TestAuthRecoverySendFailurePersistsOriginalTokenExpiryAUTHBES011(t *testing
 	stateRepo := newStubAuthStateRepository(clock.Now)
 	accountRepo := stubAccountAuthRepositoryWithMember()
 	sender := advancingFailingAccountRecoverySender{advance: func() { clock.Advance(2 * time.Minute) }, err: errors.New("smtp delayed failure")}
-	auth := application.NewAuthService(stateRepo, accountRepo, sender, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, sender, &stubInvitationPasskeyRegistrar{}, nil, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 
 	response := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/recovery", map[string]string{"email": "member@example.com"}, "")
@@ -357,8 +353,7 @@ func TestAuthRecoveryRegisterExistingAccountOnly(t *testing.T) {
 	assertNoStore(t, response)
 	var body map[string]any
 	decodeJSON(t, response, &body)
-	assertULIDField(t, body, "accountId")
-	assertULIDField(t, body, "passkeyCredentialId")
+	assertProductAccountSubject(t, body, true)
 }
 
 func TestAuthInviteOnlyCannotRegisterRecovery(t *testing.T) {
@@ -406,26 +401,67 @@ func TestAuthRepeatedFailuresEnterTemporaryLock(t *testing.T) {
 	}
 }
 
-// injectTestTokenService は auth service に JWT 用の TokenService と SessionService を注入する。
-// カスタムルーターを組み立てるテストで使用する。
-func injectTestTokenService(auth *application.AuthService, clock func() time.Time) (*application.TokenService, *application.SessionService) {
-	refreshStore := newStubRefreshTokenStore()
-	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock, newSequentialPolicy())
-	auth.UseTokenService(tokenService)
-	sessionService := application.NewSessionService(sessionStore, refreshStore)
-	return tokenService, sessionService
+func mustNewProductAuthForTest(t *testing.T, stateRepo application.AuthStateRepository, accountRepo application.PasskeyAccountRepository, sender application.AccountRecoverySender, invite application.InvitationPasskeyRegistrar, lifecycle application.ProductAccountLifecycle, clock func() time.Time, cfg config.AuthConfig, optional application.AuthServiceOptionalPorts) *application.AuthService {
+	t.Helper()
+	// Step 1: テストで直接使わない配送 port も constructor 必須依存として明示し、production と同じ fail-close 構成を保つ。
+	if sender == nil {
+		sender = &capturingAccountRecoverySender{}
+	}
+	if invite == nil {
+		invite = &stubInvitationPasskeyRegistrar{}
+	}
+	// Step 2: caller が canonical lifecycle を指定しない場合だけ、テスト用 Product account lifecycle を構築する。
+	if lifecycle == nil {
+		createdLifecycle, _ := newTestProductAccountLifecycle(t, accountRepo, clock, cfg.RefreshTokenTTL)
+		lifecycle = createdLifecycle
+	}
+	// Step 3: constructor-time DI を使い、Use* mutator による後付け状態変更をテストにも残さない。
+	auth, err := application.NewAuthService(application.AuthServiceDependencies{StateRepo: stateRepo, AccountRepo: accountRepo, RecoverySender: sender, InvitationRegistrar: invite, AccountLifecycle: lifecycle, Clock: clock, Policy: newSequentialPolicy()}, optional, cfg)
+	if err != nil {
+		t.Fatalf("new auth service: %v", err)
+	}
+	return auth
+}
+
+type unavailableProductAccountLifecycle struct{}
+
+func (unavailableProductAccountLifecycle) IssueAccountSession(context.Context, application.IssueAccountSessionInput) (application.AccountSessionResult, error) {
+	return application.AccountSessionResult{}, application.ErrAccountAuthUnavailable
+}
+
+func (unavailableProductAccountLifecycle) AuthorizeAccountSession(context.Context, string) (application.ValidatedSession, error) {
+	return application.ValidatedSession{}, application.ErrAccountAuthUnavailable
+}
+
+func (unavailableProductAccountLifecycle) ListAccountSessions(context.Context, domain.AccountID) ([]application.SessionMetadata, error) {
+	return nil, application.ErrAccountAuthUnavailable
+}
+
+func (unavailableProductAccountLifecycle) RevokeAccountSession(context.Context, application.RevokeAccountSessionInput) error {
+	return application.ErrAccountAuthUnavailable
+}
+
+func (unavailableProductAccountLifecycle) RevokeOtherAccountSessions(context.Context, domain.AccountID, string) error {
+	return application.ErrAccountAuthUnavailable
+}
+
+func (unavailableProductAccountLifecycle) RevokeAllAccountSessions(context.Context, domain.AccountID) error {
+	return application.ErrAccountAuthUnavailable
+}
+
+func (unavailableProductAccountLifecycle) RefreshAccountSession(context.Context, application.RefreshAccountSessionInput) (application.AccountRefreshResult, error) {
+	return application.AccountRefreshResult{}, application.ErrAccountAuthUnavailable
 }
 
 type authTestEnv struct {
-	router       *gin.Engine
-	stateRepo    *stubAuthStateRepository
-	sender       *capturingAccountRecoverySender
-	invite       *stubInvitationPasskeyRegistrar
-	auth         *application.AuthService
-	now          func() time.Time
-	advance      func(time.Duration)
-	refreshStore *stubRefreshTokenStore
+	router              *gin.Engine
+	stateRepo           *stubAuthStateRepository
+	sender              *capturingAccountRecoverySender
+	invite              *stubInvitationPasskeyRegistrar
+	auth                *application.AuthService
+	now                 func() time.Time
+	advance             func(time.Duration)
+	productRefreshStore *testProductRefreshSessionStore
 }
 
 // saveTestReauthSession はテスト用の再認証セッションを stateRepo に保存する。
@@ -454,49 +490,20 @@ func newAuthTestEnvWithSender(t *testing.T, sender application.AccountRecoverySe
 	stateRepo := newStubAuthStateRepository(clock.Now)
 	accountRepo := stubAccountAuthRepositoryWithMember()
 	invite := &stubInvitationPasskeyRegistrar{}
-	auth := application.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
-
-	refreshStore := newStubRefreshTokenStore()
-	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock.Now, newSequentialPolicy())
-	auth.UseTokenService(tokenService)
-	sessionService := application.NewSessionService(sessionStore, refreshStore)
+	lifecycle, contextRefresh := newTestProductAccountLifecycle(t, accountRepo, clock.Now, testConfig().AuthRuntime().RefreshTokenTTL)
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, sender, invite, lifecycle, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
+	sessionService := application.NewProductSessionService(lifecycle)
 
 	capturingSender, _ := sender.(*capturingAccountRecoverySender)
 	return authTestEnv{
-		router:       NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService, SessionService: sessionService}),
-		stateRepo:    stateRepo,
-		sender:       capturingSender,
-		invite:       invite,
-		auth:         auth,
-		now:          clock.Now,
-		advance:      clock.Advance,
-		refreshStore: refreshStore,
+		router:    NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: contextRefresh, SessionService: sessionService}),
+		stateRepo: stateRepo,
+		sender:    capturingSender,
+		invite:    invite,
+		auth:      auth,
+		now:       clock.Now,
+		advance:   clock.Advance,
 	}
-}
-
-// failingSessionStore は常に store unavailable エラーを返す SessionStore。
-// JWT セッションストア障害時の fail-closed 動作を検証するために使用する。
-type failingSessionStore struct{}
-
-func (failingSessionStore) SaveSession(context.Context, string, domain.AccountID, application.SessionMetadata, time.Duration) error {
-	return domain.ErrAuthStoreUnavailable
-}
-func (failingSessionStore) GetSession(context.Context, string) (application.SessionMetadata, error) {
-	return application.SessionMetadata{}, domain.ErrAuthStoreUnavailable
-}
-func (failingSessionStore) ListSessions(context.Context, domain.AccountID) ([]application.SessionMetadata, error) {
-	return nil, domain.ErrAuthStoreUnavailable
-}
-func (failingSessionStore) RevokeSession(context.Context, domain.AccountID, string) error {
-	return domain.ErrAuthStoreUnavailable
-}
-func (failingSessionStore) RevokeOthers(context.Context, domain.AccountID, string) ([]string, error) {
-	return nil, domain.ErrAuthStoreUnavailable
-}
-func (failingSessionStore) RevokeAllForAccount(context.Context, domain.AccountID) error {
-	return domain.ErrAuthStoreUnavailable
 }
 
 type mutableClock struct{ current time.Time }
@@ -567,6 +574,8 @@ func consumeRecoverySession(t *testing.T, env authTestEnv) string {
 
 func performJSON(t *testing.T, router *gin.Engine, method string, path string, body any, bearer string) *httptest.ResponseRecorder {
 	t.Helper()
+	// Step 1: Product session 発行系の test request は現行 contract の credentialMode を明示し、Cookie mode の response shape を検証する。
+	body = withDefaultCookieCredentialMode(path, body)
 	var payload []byte
 	if body != nil {
 		var err error
@@ -582,6 +591,9 @@ func performJSON(t *testing.T, router *gin.Engine, method string, path string, b
 	request.RemoteAddr = "192.0.2.10:1234"
 	if bearer != "" {
 		request.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	if productTestRequestNeedsDefaultOrigin(method, path, body) {
+		request.Header.Set(productOriginHeader, productTestAllowedOrigin)
 	}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
@@ -590,6 +602,8 @@ func performJSON(t *testing.T, router *gin.Engine, method string, path string, b
 
 func performJSONWithHeaders(t *testing.T, router *gin.Engine, method string, path string, body any, bearer string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
+	// Step 1: header 付き helper でも session 発行系 request の credentialMode を固定し、generated DTO の必須 field 欠落で test intent が崩れないようにする。
+	body = withDefaultCookieCredentialMode(path, body)
 	var payload []byte
 	if body != nil {
 		var err error
@@ -606,12 +620,71 @@ func performJSONWithHeaders(t *testing.T, router *gin.Engine, method string, pat
 	if bearer != "" {
 		request.Header.Set("Authorization", "Bearer "+bearer)
 	}
+	if productTestRequestNeedsDefaultOrigin(method, path, body) && !productTestHeadersContainOrigin(headers) {
+		request.Header.Set(productOriginHeader, productTestAllowedOrigin)
+	}
 	for k, v := range headers {
 		request.Header.Set(k, v)
 	}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 	return recorder
+}
+
+func productTestHeadersContainOrigin(headers map[string]string) bool {
+	// Step 1: test が Origin の有無や値を明示的に検証する場合は、既定 Origin を補わず意図した header 状態を保つ。
+	for key := range headers {
+		if strings.EqualFold(key, productOriginHeader) {
+			return true
+		}
+	}
+	return false
+}
+
+func productTestRequestNeedsDefaultOrigin(method string, path string, body any) bool {
+	// Step 1: Cookie を設定・rotation する可能性がある POST だけに allowed Origin を補い、既存の non-browser / bearer-only test へ副作用を出さない。
+	if method != stdhttp.MethodPost {
+		return false
+	}
+	if path == "/api/v1/auth/passkey/finish" || path == "/api/v1/auth/passkey/register" {
+		return productTestBodyCredentialMode(body) == "cookie"
+	}
+	if isProductContextRefreshPath(path) {
+		return productTestBodyCredentialMode(body) != "bearer"
+	}
+	return false
+}
+
+func productTestBodyCredentialMode(body any) string {
+	// Step 1: helper が扱う map body だけから credentialMode を読み取り、未知 body 型では Cookie mode 補完済みとみなして安全側に倒す。
+	payload, ok := body.(map[string]any)
+	if !ok {
+		return ""
+	}
+	mode, _ := payload["credentialMode"].(string)
+	return mode
+}
+
+func withDefaultCookieCredentialMode(path string, body any) any {
+	// Step 1: passkey login/register finish 以外の body は変更せず、対象 test の入力だけを contract に合わせる。
+	if path != "/api/v1/auth/passkey/finish" && path != "/api/v1/auth/passkey/register" {
+		return body
+	}
+	payload, ok := body.(map[string]any)
+	if !ok {
+		return body
+	}
+	if _, ok := payload["credentialMode"]; ok {
+		return body
+	}
+
+	// Step 2: 元 map を破壊せず shallow copy へ cookie mode を追加し、他 test case の再利用 body に副作用を残さない。
+	copyPayload := make(map[string]any, len(payload)+1)
+	for key, value := range payload {
+		copyPayload[key] = value
+	}
+	copyPayload["credentialMode"] = "cookie"
+	return copyPayload
 }
 
 func performRawJSON(t *testing.T, router *gin.Engine, method string, path string, body []byte, bearer string) *httptest.ResponseRecorder {
@@ -641,6 +714,22 @@ func assertNoStore(t *testing.T, response *httptest.ResponseRecorder) {
 	}
 }
 
+func assertProductSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
+	t.Helper()
+	expected := map[string]string{
+		"Content-Security-Policy":   productSecurityCSP,
+		"Strict-Transport-Security": productSecurityHSTS,
+		"Referrer-Policy":           productSecurityReferrerPolicy,
+		"X-Content-Type-Options":    "nosniff",
+		"X-Frame-Options":           "DENY",
+	}
+	for name, value := range expected {
+		if actual := response.Header().Get(name); actual != value {
+			t.Fatalf("expected %s %q, got %q", name, value, actual)
+		}
+	}
+}
+
 func assertFailureCode(t *testing.T, response *httptest.ResponseRecorder, expected string) {
 	t.Helper()
 	var body map[string]any
@@ -665,6 +754,23 @@ func assertULIDField(t *testing.T, body map[string]any, field string) {
 	value, ok := body[field].(string)
 	if !ok || !ulidRegex.MatchString(value) {
 		t.Fatalf("expected %s to be ULID, got %#v", field, body[field])
+	}
+}
+
+func assertProductAccountSubject(t *testing.T, body map[string]any, requirePasskey bool) {
+	t.Helper()
+
+	// Step 1: Product auth response は account subject payload に accountId/passkeyCredentialId を集約するため、top-level に戻っていないことを確認する。
+	account, ok := body["account"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected account subject payload, got %#v", body["account"])
+	}
+	if _, ok := body["operator"]; ok {
+		t.Fatalf("expected Product response not to contain operator subject payload, got %#v", body["operator"])
+	}
+	assertULIDField(t, account, "accountId")
+	if requirePasskey {
+		assertULIDField(t, account, "passkeyCredentialId")
 	}
 }
 
@@ -1250,9 +1356,9 @@ func TestDeleteOneOfTwoPasskeysSucceeds(t *testing.T) {
 		"01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential",
 		"01ARZ3NDEKTSV4RRFFQ69G5FB1", "second-credential",
 	)
-	auth := application.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
-	tokenService, sessionService := injectTestTokenService(auth, clock.Now)
+	lifecycle, tokenService := newTestProductAccountLifecycle(t, accountRepo, clock.Now, testConfig().AuthRuntime().RefreshTokenTTL)
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, lifecycle, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
+	sessionService := application.NewProductSessionService(lifecycle)
 	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService, SessionService: sessionService})
 
 	token := loginWithPasskey(t, router, "member@example.com")
@@ -1293,9 +1399,9 @@ func TestDeleteOtherAccountPasskeyReturns403(t *testing.T) {
 	account2 := &stubAccountAuthRepository{account: account2Account}
 
 	accountRepo := newMultiAccountStubAccountAuthRepository(account1, account2)
-	auth := application.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
-	tokenService, sessionService := injectTestTokenService(auth, clock.Now)
+	lifecycle, tokenService := newTestProductAccountLifecycle(t, accountRepo, clock.Now, testConfig().AuthRuntime().RefreshTokenTTL)
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, lifecycle, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
+	sessionService := application.NewProductSessionService(lifecycle)
 	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService, SessionService: sessionService})
 
 	// account1 でログイン
@@ -1426,8 +1532,7 @@ func TestStartPasskeyRegistrationIncompleteOptionsReturns503(t *testing.T) {
 	accountRepo := stubAccountAuthRepositoryWithMember()
 	invite := &stubInvitationPasskeyRegistrar{}
 	sender := &capturingAccountRecoverySender{}
-	auth := application.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProviderWithIncompleteOptions())
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, sender, invite, nil, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProviderWithIncompleteOptions()})
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 	env := authTestEnv{router: router, stateRepo: stateRepo, sender: sender, invite: invite, now: clock.Now, advance: clock.Advance}
 
@@ -1462,8 +1567,7 @@ func newAuthEnvWithCustomProvider(t *testing.T, provider application.WebAuthnPro
 	accountRepo := stubAccountAuthRepositoryWithMember()
 	invite := &stubInvitationPasskeyRegistrar{}
 	sender := &capturingAccountRecoverySender{}
-	auth := application.NewAuthService(stateRepo, accountRepo, sender, invite, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(provider)
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, sender, invite, nil, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: provider})
 	router := NewRouter(testConfig(), Dependencies{Auth: auth})
 	return authTestEnv{router: router, stateRepo: stateRepo, sender: sender, invite: invite, now: clock.Now, advance: clock.Advance}
 }
@@ -1500,8 +1604,7 @@ func TestOversizedPublicAuthRequestRejectedBeforeStateMutation(t *testing.T) {
 	clock := &mutableClock{current: time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)}
 	stateRepo := newStubAuthStateRepository(clock.Now)
 	accountRepo := stubAccountAuthRepositoryWithMember()
-	auth := application.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, nil, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
 
 	cfg := testConfig()
 	cfg.Auth.AuthBodyLimitBytes = 10 // 10 バイト上限
@@ -1533,9 +1636,9 @@ func TestDeletePasskeyWithoutReauthSessionRejected(t *testing.T) {
 		"01ARZ3NDEKTSV4RRFFQ69G5FB0", "existing-credential",
 		"01ARZ3NDEKTSV4RRFFQ69G5FB1", "second-credential",
 	)
-	auth := application.NewAuthService(stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, clock.Now, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
-	tokenService, sessionService := injectTestTokenService(auth, clock.Now)
+	lifecycle, tokenService := newTestProductAccountLifecycle(t, accountRepo, clock.Now, testConfig().AuthRuntime().RefreshTokenTTL)
+	auth := mustNewProductAuthForTest(t, stateRepo, accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, lifecycle, clock.Now, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
+	sessionService := application.NewProductSessionService(lifecycle)
 	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService, SessionService: sessionService})
 
 	token := loginWithPasskey(t, router, "member@example.com")

@@ -68,7 +68,7 @@ function useAdminOperators(): { data: AdminOperatorsData; actions: AdminOperator
 
   const actions: AdminOperatorsActions = {
     submitCreateOperator: async () => {
-      // operator 作成は二重送信を止め、Admin API の CSRF/RBAC 検証へ一度だけ委譲する。
+      // operator 作成は二重送信を止め、Admin API の Bearer/RBAC 検証へ一度だけ委譲する。
       if (state.isCreating) return;
       state.isCreating = true;
       state.createError = null;

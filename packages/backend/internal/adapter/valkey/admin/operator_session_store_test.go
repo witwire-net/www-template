@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
+	adminauth "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
 
-func TestOperatorSessionStoreRotateConsumesOldRefreshSession(t *testing.T) {
+func TestOperatorRefreshSessionStoreRotateConsumesOldRefreshSession(t *testing.T) {
 	// Step 1: Valkey integration test はローカル service が無い環境でも server suite を止めないよう、接続不能時は skip する。
 	store, err := NewStore(config.ValkeyConfig{URL: "redis://valkey:6379/1"})
 	if err != nil {
@@ -25,35 +25,35 @@ func TestOperatorSessionStoreRotateConsumesOldRefreshSession(t *testing.T) {
 	}
 
 	// Step 2: 旧 session と置換後 session を固定値で用意し、同じ旧 refresh hash の再利用可否だけを検証する。
-	sessions := NewOperatorSessionStore(store)
+	sessions := NewOperatorRefreshSessionStore(store)
 	oldRecord := testOperatorSessionRecord("01ARZ3NDEKTSV4RRFFQ69G5FAV", "old-refresh-hash")
 	nextRecord := testOperatorSessionRecord("01ARZ3NDEKTSV4RRFFQ69G5FAW", "next-refresh-hash")
 	replayReplacement := testOperatorSessionRecord("01ARZ3NDEKTSV4RRFFQ69G5FAX", "replay-refresh-hash")
 	cleanupOperatorSessionKeys(ctx, sessions, oldRecord, nextRecord, replayReplacement)
 	defer cleanupOperatorSessionKeys(ctx, sessions, oldRecord, nextRecord, replayReplacement)
-	if err := sessions.SaveOperatorSession(ctx, oldRecord, time.Minute); err != nil {
-		t.Fatalf("SaveOperatorSession: %v", err)
+	if err := sessions.Save(ctx, oldRecord, time.Minute); err != nil {
+		t.Fatalf("Save operator session: %v", err)
 	}
 
 	// Step 3: 1 回目の rotation は成功し、旧 session key から次 session key へ置換される。
-	if err := sessions.RotateOperatorSession(ctx, oldRecord.SessionID, oldRecord.RefreshTokenHash, nextRecord, time.Minute); err != nil {
-		t.Fatalf("RotateOperatorSession first use: %v", err)
+	if err := sessions.Rotate(ctx, oldRecord.SessionID, oldRecord.RefreshTokenHash, nextRecord, time.Minute); err != nil {
+		t.Fatalf("Rotate operator session first use: %v", err)
 	}
-	if _, err := sessions.GetOperatorSession(ctx, oldRecord.SessionID); !errors.Is(err, domain.ErrSessionNotFound) {
+	if _, err := sessions.Get(ctx, oldRecord.SessionID); !errors.Is(err, domain.ErrSessionNotFound) {
 		t.Fatalf("old session must be consumed, got %v", err)
 	}
-	if _, err := sessions.GetOperatorSession(ctx, nextRecord.SessionID); err != nil {
+	if _, err := sessions.Get(ctx, nextRecord.SessionID); err != nil {
 		t.Fatalf("replacement session must exist: %v", err)
 	}
 
 	// Step 4: 同じ旧 refresh hash を再利用した 2 回目の rotation は拒否され、replay 防止境界を確認できる。
-	err = sessions.RotateOperatorSession(ctx, oldRecord.SessionID, oldRecord.RefreshTokenHash, replayReplacement, time.Minute)
+	err = sessions.Rotate(ctx, oldRecord.SessionID, oldRecord.RefreshTokenHash, replayReplacement, time.Minute)
 	if !errors.Is(err, domain.ErrSessionNotFound) {
 		t.Fatalf("old refresh session replay must fail with ErrSessionNotFound, got %v", err)
 	}
 }
 
-func cleanupOperatorSessionKeys(ctx context.Context, sessions *OperatorSessionStore, records ...adminauth.OperatorSessionRecord) {
+func cleanupOperatorSessionKeys(ctx context.Context, sessions *OperatorRefreshSessionStore, records ...adminauth.OperatorSessionRecord) {
 	// Step 1: 固定 ID の integration test が Admin logical DB に残した session と index を削除し、次回実行へ影響させない。
 	for _, record := range records {
 		_ = sessions.store.client.Del(ctx, sessions.sessionKey(record.SessionID), sessions.operatorIndexKey(record.OperatorID)).Err()
@@ -67,7 +67,6 @@ func testOperatorSessionRecord(sessionID string, refreshHash string) adminauth.O
 		SessionID:        sessionID,
 		OperatorID:       "01BRZ3NDEKTSV4RRFFQ69G5FAV",
 		RefreshTokenHash: refreshHash,
-		CSRFTokenHash:    "csrf-hash",
 		RoleSnapshot:     "admin",
 		ActiveSnapshot:   true,
 		IssuedAt:         now,

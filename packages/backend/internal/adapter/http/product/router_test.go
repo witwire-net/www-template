@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	application "www-template/packages/backend/internal/application"
+	application "www-template/packages/backend/internal/application/auth"
 	"www-template/packages/backend/internal/platform/config"
 )
 
@@ -89,19 +89,48 @@ func TestAppAuthEndpointSucceedsWithBearerToken(t *testing.T) {
 	}
 }
 
+func TestProductHostAdminAuthBoundaryScenarioTitles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("[ADMIN-AUTH-BE-S056] Product host keeps passkey auth on Product account flow", func(t *testing.T) {
+		// Step 1: Product router の同一 relative path で passkey start/finish を実行し、Admin operator auth handler を必要としない Product flow を作る。
+		router := newTestRouter(t)
+		challengeRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/start", map[string]string{"identifier": "member@example.com"}, "")
+		if challengeRecorder.Code != stdhttp.StatusOK {
+			t.Fatalf("expected Product passkey start status 200, got %d", challengeRecorder.Code)
+		}
+		challenge := decodeJSONBody(t, challengeRecorder)
+
+		// Step 2: finish response が Product account payload だけを持ち、Admin operator payload や Admin refresh Cookie 名を含まないことを確認する。
+		finishRecorder := performJSON(t, router, stdhttp.MethodPost, "/api/v1/auth/passkey/finish", map[string]any{"credential": assertionCredentialJSON("existing-credential", challengeValue(challenge))}, "")
+		if finishRecorder.Code != stdhttp.StatusOK {
+			t.Fatalf("expected Product passkey finish status 200, got %d body=%s", finishRecorder.Code, finishRecorder.Body.String())
+		}
+		finishBody := decodeJSONBody(t, finishRecorder)
+		if finishBody["account"] == nil || finishBody["operator"] != nil {
+			t.Fatalf("expected Product account payload without Admin operator payload, got %#v", finishBody)
+		}
+		for _, header := range finishRecorder.Header().Values("Set-Cookie") {
+			if strings.Contains(header, "admin_refresh_token") {
+				t.Fatalf("Product host must not set Admin refresh Cookie, got %q", header)
+			}
+		}
+	})
+}
+
 func TestRoutePolicy(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
 	allowedPublicRoutes := map[string]struct{}{
-		"GET /api/v1/status":                       {},
-		"POST /api/v1/auth/passkey/start":          {},
-		"POST /api/v1/auth/passkey/finish":         {},
-		"POST /api/v1/auth/passkey/register/start": {},
-		"POST /api/v1/auth/passkey/register":       {},
-		"POST /api/v1/auth/recovery":               {},
-		"POST /api/v1/auth/recovery/consume":       {},
-		"POST /api/v1/auth/refresh":                {},
+		"GET /api/v1/status":                                {},
+		"POST /api/v1/auth/passkey/start":                   {},
+		"POST /api/v1/auth/passkey/finish":                  {},
+		"POST /api/v1/auth/passkey/register/start":          {},
+		"POST /api/v1/auth/passkey/register":                {},
+		"POST /api/v1/auth/recovery":                        {},
+		"POST /api/v1/auth/recovery/consume":                {},
+		"POST /api/v1/auth/contexts/:authContextId/refresh": {},
 	}
 	seenPublicRoutes := map[string]struct{}{}
 
@@ -140,7 +169,7 @@ func TestRoutePolicy(t *testing.T) {
 	slices.Sort(publicRouteKeys)
 }
 
-// TestProductRuntimeDoesNotRegisterAdminOperations は Product runtime の router が Admin 専用 operation を公開しないことを検証する。
+// [ADMIN-CONSOLE-BE-S056] TestProductRuntimeDoesNotRegisterAdminOperations は Product runtime の router が Admin 専用 operation を公開しないことを検証する。
 // Product と Admin は同じ `/api/v1/*` path 空間を別 origin / 別 binary で使うため、Product 側で Admin 専用 path が 404 になることを route table 境界の証拠にする。
 func TestProductRuntimeDoesNotRegisterAdminOperations(t *testing.T) {
 	t.Parallel()
@@ -203,16 +232,12 @@ func newTestRouter(t *testing.T) *gin.Engine {
 	clock := func() time.Time {
 		return time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)
 	}
-	auth := application.NewAuthService(newStubAuthStateRepository(clock), stubAccountAuthRepositoryWithMember(), nil, nil, clock, newSequentialPolicy(), testConfig().AuthRuntime())
-	auth.UseWebAuthnProvider(newMockWebAuthnProvider())
+	accountRepo := stubAccountAuthRepositoryWithMember()
+	lifecycle, contextRefresh := newTestProductAccountLifecycle(t, accountRepo, clock, testConfig().AuthRuntime().RefreshTokenTTL)
+	auth := mustNewProductAuthForTest(t, newStubAuthStateRepository(clock), accountRepo, nil, nil, lifecycle, clock, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider()})
+	sessionService := application.NewProductSessionService(lifecycle)
 
-	refreshStore := newStubRefreshTokenStore()
-	sessionStore := newStubSessionStore()
-	tokenService := application.NewTokenService(refreshStore, sessionStore, nil, testConfig().AuthRuntime(), clock, newSequentialPolicy())
-	auth.UseTokenService(tokenService)
-	sessionService := application.NewSessionService(sessionStore, refreshStore)
-
-	return NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: tokenService, SessionService: sessionService})
+	return NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: contextRefresh, SessionService: sessionService})
 }
 
 func testConfig() config.Config {

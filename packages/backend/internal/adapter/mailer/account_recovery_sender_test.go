@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	application "www-template/packages/backend/internal/application"
+	productaccounts "www-template/packages/backend/internal/application/accounts"
+	application "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
@@ -71,7 +72,7 @@ func testMailerConfig() config.InfraConfig {
 func newTestSender(t *testing.T, accountID string, localeValue string) *AccountRecoverySender {
 	t.Helper()
 	repository := newStubMailerAccountSettingRepository(t, accountID, localeValue)
-	return NewAccountRecoverySender(nil, testMailerConfig(), application.NewAccountSettingSnapshotService(repository))
+	return NewAccountRecoverySender(nil, testMailerConfig(), productaccounts.NewAccountSettingSnapshotService(repository))
 }
 
 // [LOCALIZATION-BE-S006] 復旧メールは AccountSetting.locale の英語文面を選択する。

@@ -80,7 +80,7 @@ func newAccountAuthSessionTestFixture(t *testing.T) accountAuthSessionTestFixtur
 	t.Helper()
 
 	// Step 1: Product AccountAuth domain が扱う Account root と識別子をすべて constructor 経由で準備する。
-	account, err := NewAdminCreatedAccount(mustAccountLifecycleTestAccountID(t), mustAccountLifecycleTestEmail(t, "customer@example.com"))
+	account, err := NewCreatedAccount(mustAccountLifecycleTestAccountID(t), mustAccountLifecycleTestEmail(t, "customer@example.com"))
 	if err != nil {
 		t.Fatalf("new account: %v", err)
 	}

@@ -6,13 +6,17 @@ export type AuthFailureState =
   | 'unauthenticated'
   | 'session-expired'
   | 'account-suspended'
+  | 'credential-ambiguous'
+  | 'invalid-refresh-credential'
   | 'internal-error';
 
 /** in-memory bearer session の最小表現。 */
 export interface AuthSessionSummary {
   requestId: string;
+  authContextId: string;
   accountId: string;
-  passkeyCredentialId: string;
+  /** 認証に使われた passkey credential の ID。refresh response では省略されることがある。 */
+  passkeyCredentialId?: string;
   sessionId: string;
   accessToken: string;
   expiresAt: string;

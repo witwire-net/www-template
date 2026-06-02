@@ -21,10 +21,6 @@ var (
 	// ErrOperatorAuthSessionMismatch は access token claims と refresh session state の Operator session ID が一致しない場合に返すエラーである。
 	// Admin Operator session と Product Account session を混ぜないため、OperatorAuth 固有の session 照合エラーとして分離する。
 	ErrOperatorAuthSessionMismatch = errors.New("operator auth session mismatch")
-
-	// ErrOperatorAuthCSRFMismatch は提示された CSRF token が Operator refresh session の binding と一致しない場合に返すエラーである。
-	// Admin mutation の same-origin Cookie refresh 境界で CSRF token を session と結び付けるために使う。
-	ErrOperatorAuthCSRFMismatch = errors.New("operator auth csrf mismatch")
 )
 
 // OperatorAuthPermission は Admin OperatorAuth が評価する permission 名を表す値オブジェクトである。
@@ -45,7 +41,7 @@ const (
 	OperatorAuthPermissionOperatorsCreate OperatorAuthPermission = "operators:create"
 
 	// OperatorAuthPermissionOperatorsLogout は現在の Admin operator session を失効する permission である。
-	// logout は本人 session の破棄だけを行うため、登録済みの全 role に許可し、CSRF binding と併用する。
+	// logout は本人 session の破棄だけを行うため、登録済みの全 role に許可する。
 	OperatorAuthPermissionOperatorsLogout OperatorAuthPermission = "operators:logout"
 )
 
@@ -125,6 +121,80 @@ func NewOperatorAccessTokenClaims(
 	}, nil
 }
 
+// ReconstituteOperatorAccessTokenClaims は署名済み JSON payload から Admin OperatorAuth claims を復元する。
+//
+// 役割:
+//   - application 層で decode した primitive 値を domain claim snapshot に戻し、snapshot / expiry / permission 判定を OperatorAuthSession.ValidateAccess へ集約する。
+//   - JWT 署名や JSON field の必須性は application が担当し、この helper は Admin OperatorAuth として意味を持つ値だけを検証する。
+//   - Product Account claims と混在しないよう、OperatorID と OperatorSessionID の Admin 専用 constructor を必ず通す。
+//
+// 引数:
+//   - operatorID: accessToken `sub` から復元した Admin OperatorID。
+//   - sessionID: accessToken `sid` から復元した Admin OperatorSessionID。
+//   - tokenID: accessToken `jti` から復元した token ID。
+//   - roleSnapshot: accessToken 発行時点の Operator role snapshot。
+//   - activeSnapshot: accessToken 発行時点の Operator active snapshot。
+//   - issuedAt: accessToken `iat` の UTC 時刻。zero time は拒否される。
+//   - expiresAt: accessToken `exp` の UTC 時刻。issuedAt より後でなければならない。
+//
+// 戻り値:
+//   - OperatorAccessTokenClaims: 復元済み Admin OperatorAuth claims。
+//   - error: ID、role、時刻、TTL が不正な場合の domain error。
+//
+// 使用例:
+//
+//	claims, err := ReconstituteOperatorAccessTokenClaims(operatorID, sessionID, jti, role, active, issuedAt, expiresAt)
+//	if err != nil {
+//		return err
+//	}
+func ReconstituteOperatorAccessTokenClaims(
+	operatorID OperatorID,
+	sessionID OperatorSessionID,
+	tokenID TokenJTI,
+	roleSnapshot OperatorRole,
+	activeSnapshot bool,
+	issuedAt time.Time,
+	expiresAt time.Time,
+) (OperatorAccessTokenClaims, error) {
+	// Step 1: Admin OperatorID / session ID は専用 constructor で再検証し、Product ID や空値を拒否する。
+	validatedOperatorID, err := NewOperatorID(operatorID.String())
+	if err != nil {
+		return OperatorAccessTokenClaims{}, err
+	}
+	validatedSessionID, err := NewOperatorSessionID(sessionID.String())
+	if err != nil {
+		return OperatorAccessTokenClaims{}, err
+	}
+
+	// Step 2: JTI と role snapshot を domain value として検証し、未知 role の署名 payload を fail-closed にする。
+	validatedTokenID, err := NewTokenJTI(tokenID.String())
+	if err != nil {
+		return OperatorAccessTokenClaims{}, err
+	}
+	if err := roleSnapshot.Validate(); err != nil {
+		return OperatorAccessTokenClaims{}, err
+	}
+
+	// Step 3: iat/exp から TTL を検証し、期限が逆転した署名済み payload を拒否する。
+	if issuedAt.IsZero() || !expiresAt.UTC().After(issuedAt.UTC()) {
+		return OperatorAccessTokenClaims{}, ErrInvalidTokenTTL
+	}
+	if _, err := ValidateTokenTTL(expiresAt.UTC().Sub(issuedAt.UTC())); err != nil {
+		return OperatorAccessTokenClaims{}, err
+	}
+
+	// Step 4: 復元済み snapshot を返し、現在 Operator/session との照合は ValidateAccess に委譲する。
+	return OperatorAccessTokenClaims{
+		operatorID: validatedOperatorID,
+		sessionID:  validatedSessionID,
+		tokenID:    validatedTokenID,
+		role:       roleSnapshot,
+		active:     activeSnapshot,
+		issuedAt:   issuedAt.UTC(),
+		expiresAt:  expiresAt.UTC(),
+	}, nil
+}
+
 // OperatorID は claims の Admin Operator ID を返す。
 //
 // 戻り値は Product AccountID ではなく、Operator auth / audit にだけ使う OperatorID である。
@@ -196,6 +266,49 @@ func (c OperatorAccessTokenClaims) ValidateForOperator(operator Operator, permis
 	}
 
 	// Step 6: すべての Admin OperatorAuth claims 条件を満たしたため成功とする。
+	return nil
+}
+
+// ValidateCurrentForOperator は claims が現在 Operator の read/current context として有効かを検証する。
+//
+// 役割:
+//   - current endpoint のような permission 非依存の境界で、期限切れ・snapshot mismatch・inactive・未登録を domain error として判定する。
+//   - mutation permission の role matrix は ValidateForOperator に残し、この method は現在 Operator としての基本 eligibility だけを扱う。
+//
+// 引数:
+//   - operator: 現在の Operator snapshot。active/role/passkey state を検証する。
+//   - now: 外部 clock から渡された検証時刻。
+//
+// 戻り値:
+//   - error: 成功時 nil。期限切れ、snapshot mismatch、inactive、未登録の場合は domain error。
+//
+// 使用例:
+//
+//	if err := claims.ValidateCurrentForOperator(operator, now); err != nil {
+//		return err
+//	}
+func (c OperatorAccessTokenClaims) ValidateCurrentForOperator(operator Operator, now time.Time) error {
+	// Step 1: token の有効期限を検証し、期限切れ claims を current context へ進めない。
+	if !now.UTC().Before(c.expiresAt.UTC()) {
+		return ErrTokenExpired
+	}
+
+	// Step 2: claims の Operator ID が現在 Operator と一致することを検証する。
+	if c.operatorID != operator.ID() {
+		return ErrOperatorAuthSnapshotMismatch
+	}
+
+	// Step 3: claims の role/active snapshot が現在 Operator と一致することを検証する。
+	if c.role != operator.Role() || c.active != operator.Active() {
+		return ErrOperatorAuthSnapshotMismatch
+	}
+
+	// Step 4: inactive または passkey 未登録 Operator は current context としても受け入れない。
+	if !c.active || !operator.Active() || operator.PasskeyRegistrationState() != OperatorPasskeyRegistrationRegistered {
+		return ErrOperatorAuthInactive
+	}
+
+	// Step 5: current operator としての基本 eligibility を満たしたため成功とする。
 	return nil
 }
 

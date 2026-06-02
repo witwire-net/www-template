@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	adminapplication "www-template/packages/backend/internal/application/admin"
+	auditapplication "www-template/packages/backend/internal/application/audit"
 	"www-template/packages/backend/internal/platform/config"
 )
 
@@ -58,7 +58,7 @@ func TestAdminAuditProjectionWarningObserverLogsFailure(t *testing.T) {
 	}
 }
 
-func mustNewAdminAuditOpenSearchProjector(t *testing.T, serverURL string) adminapplication.AdminAuditProjector {
+func mustNewAdminAuditOpenSearchProjector(t *testing.T, serverURL string) auditapplication.Projector {
 	t.Helper()
 
 	// Step 1: constructor の namespace collision validation を通る最小設定を作り、テストごとに OpenSearch endpoint だけ差し替える。
@@ -69,9 +69,9 @@ func mustNewAdminAuditOpenSearchProjector(t *testing.T, serverURL string) admina
 	return projector
 }
 
-func adminAuditProjectionTestRecord() adminapplication.AdminAuditProjectionRecord {
+func adminAuditProjectionTestRecord() auditapplication.ProjectionRecord {
 	// Step 1: 月次 index 変換が deterministic になるよう UTC の固定日時を使う。
-	return adminapplication.AdminAuditProjectionRecord{AuditID: "audit-1", OperatorID: "operator-1", Action: "accounts:create", TargetType: "account", TargetID: "account-1", RequestID: "req-1", Outcome: "succeeded", OccurredAt: time.Date(2026, 5, 17, 10, 0, 0, 0, time.UTC)}
+	return auditapplication.ProjectionRecord{AuditID: "audit-1", OperatorID: "operator-1", Action: "accounts:create", TargetType: "account", TargetID: "account-1", RequestID: "req-1", Outcome: "succeeded", OccurredAt: time.Date(2026, 5, 17, 10, 0, 0, 0, time.UTC)}
 }
 
 func readProjectionRequestBody(t *testing.T, r *http.Request) string {

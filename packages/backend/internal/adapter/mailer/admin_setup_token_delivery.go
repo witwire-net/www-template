@@ -6,35 +6,35 @@ import (
 	"net/url"
 	"strings"
 
-	adminapplication "www-template/packages/backend/internal/application/admin"
+	operatorsapplication "www-template/packages/backend/internal/application/operators"
 	"www-template/packages/backend/internal/platform/config"
 )
 
-// AdminSetupTokenDelivery は追加 operator の setup token を secure mail transport で配送する adapter である。
+// SetupTokenDeliveryPort は追加 operator の setup token を secure mail transport で配送する adapter である。
 //
 // 役割:
 //   - setup token 平文を HTTP response body に返さず、backend-owned SMTP delivery に限定して届ける。
 //   - message 生成時にも token は本文 URL の query にだけ含め、error message、log、audit DTO へ混ぜない。
 //   - sender が nil の development 構成では配送済み扱いにせず、operator creation use case が fail-close できるよう error を返す。
-type AdminSetupTokenDelivery struct {
+type SetupTokenDeliveryPort struct {
 	sender      *SMTPSender
 	fromAddress string
 	productName string
 	adminDomain string
 }
 
-// NewAdminSetupTokenDelivery は Admin setup token delivery adapter を構築する。
-func NewAdminSetupTokenDelivery(sender *SMTPSender, cfg config.Config) *AdminSetupTokenDelivery {
+// NewSetupTokenDeliveryPort は Admin setup token delivery adapter を構築する。
+func NewSetupTokenDeliveryPort(sender *SMTPSender, cfg config.Config) *SetupTokenDeliveryPort {
 	// Step 1: config に固定された Admin origin だけを URL 作成に使い、request Host header 由来の URL composition を避ける。
 	productName := strings.TrimSpace(cfg.Infra.Mail.ProductName)
 	if productName == "" {
 		productName = "www-template"
 	}
-	return &AdminSetupTokenDelivery{sender: sender, fromAddress: strings.TrimSpace(cfg.Infra.Mail.FromAddress), productName: productName, adminDomain: strings.TrimSpace(cfg.Admin.Domain)}
+	return &SetupTokenDeliveryPort{sender: sender, fromAddress: strings.TrimSpace(cfg.Infra.Mail.FromAddress), productName: productName, adminDomain: strings.TrimSpace(cfg.Admin.Domain)}
 }
 
 // SendOperatorSetupToken は operator setup token を対象 operator の email へ送信する。
-func (d *AdminSetupTokenDelivery) SendOperatorSetupToken(ctx context.Context, delivery adminapplication.AdminOperatorSetupTokenDelivery) error {
+func (d *SetupTokenDeliveryPort) SendOperatorSetupToken(ctx context.Context, delivery operatorsapplication.SetupTokenDelivery) error {
 	// Step 1: SMTP sender がない構成では token を配送できないため、平文 token を返さず fail-close error にする。
 	if d == nil || d.sender == nil {
 		return fmt.Errorf("admin setup token delivery unavailable")
@@ -51,7 +51,7 @@ func (d *AdminSetupTokenDelivery) SendOperatorSetupToken(ctx context.Context, de
 	return d.sender.Send(ctx, []string{delivery.Email}, message)
 }
 
-func (d *AdminSetupTokenDelivery) setupURL(setupToken string) (string, error) {
+func (d *SetupTokenDeliveryPort) setupURL(setupToken string) (string, error) {
 	// Step 1: Admin origin 設定を URL として parse し、path/query/fragment は setup route 用に上書きする。
 	parsed, err := url.Parse(d.adminDomain)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -63,7 +63,7 @@ func (d *AdminSetupTokenDelivery) setupURL(setupToken string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (d *AdminSetupTokenDelivery) formatMessage(to string, setupURL string, expiresAt string, requestID string) string {
+func (d *SetupTokenDeliveryPort) formatMessage(to string, setupURL string, expiresAt string, requestID string) string {
 	// Step 1: RFC 5322 風の最小 message に整形し、SMTP sender に渡す。
 	body := strings.Join([]string{
 		"Admin Console operator setup was requested.",

@@ -51,6 +51,27 @@ func TestNewAdminRuntimeWithConfigFailsClosedWithoutAdminSurfaceConfig(t *testin
 	}
 }
 
+func TestAdminOperatorAuthRuntimeConfigUsesOperatorSemantics(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: Admin operator auth に渡す runtime TTL を作り、Product account config 名ではなく operator session config DTO へ変換する。
+	authRuntime := config.AuthConfig{
+		SessionIdleTTL:     15 * time.Minute,
+		RefreshTokenTTL:    30 * 24 * time.Hour,
+		SessionAbsoluteTTL: 60 * 24 * time.Hour,
+		WebAuthnRPID:       "admin.example.com",
+	}
+
+	// Step 2: 変換結果の field 名と値が operator access/refresh session semantics を表すことを [ADMIN-AUTH-BE-S087] として固定する。
+	operatorConfig := operatorAuthConfigFromRuntime(authRuntime)
+	if operatorConfig.OperatorAccessTokenTTL != 15*time.Minute || operatorConfig.OperatorRefreshSessionTTL != 30*24*time.Hour || operatorConfig.OperatorRefreshCookieLifetime != 30*24*time.Hour {
+		t.Fatalf("[ADMIN-AUTH-BE-S087] unexpected operator auth config: %+v", operatorConfig)
+	}
+	if operatorConfig.WebAuthnRPID != "admin.example.com" {
+		t.Fatalf("[ADMIN-AUTH-BE-S087] expected Admin operator RP ID, got %q", operatorConfig.WebAuthnRPID)
+	}
+}
+
 // fullyConfiguredDevelopmentConfig は開発環境で起動可能な最小限のインフラ設定を持つ Config を返す。
 // これにより、TTL 検証の前に infrastructure missing で落ちることを防ぐ。
 func fullyConfiguredDevelopmentConfig() config.Config {

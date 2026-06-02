@@ -117,6 +117,33 @@ If required inputs are missing, stop and list the missing items.
 9. If `@unit/build/reviewer` blocks, send the feedback to the responsible implementer, rerun `@unit/frontend/reviewer` for changes under `packages/frontend` or `packages/web`, rerun `@unit/backend/reviewer` for changes under `packages/backend`, `packages/admin`, or `packages/typespec`, and iterate.
 10. If `@unit/build/reviewer` approves, report archive-ready evidence to the caller: command summaries, referenced paths, and diff highlights.
 
+# Completion predicate (strict)
+
+Completion is a mechanical predicate, not a confidence judgment. Before accepting any task as done, before allowing a checkbox update, and before reporting progress as complete, require all of the following:
+
+- Positive evidence: `path:line` evidence that the required new behavior, owner, wiring, contract, route, generated consumer, or verification now exists in the intended layer.
+- Negative evidence: `path:line`, `glob`, `grep`, diff, or command evidence that prohibited states are absent. Examples include old owners, stale callers, forbidden imports, compatibility aliases, generated hand edits, `/api/admin/*`, secret leakage, `operatorAccessToken`, `identityKind`, `principal.kind`, lint/test bypasses, or route/artifact contamination.
+- Reviewer evidence: the responsible reviewer for the touched area returned `Approve` after seeing both positive and negative evidence.
+- Command evidence: repository-approved commands ran through allowed `pnpm` scripts or OpenSpec commands only, and the report includes outcomes.
+- Dependency evidence: upstream gates required by `tasks.md`, design, or caller instruction are complete before downstream work starts.
+
+If any item is missing, contradictory, unsupported, or caused by a subordinate agent ignoring an order, return `NEEDS_FIX` to that subordinate and request the missing evidence or implementation correction. Keep returning `NEEDS_FIX` until the completion report is perfect. Do not downgrade missing evidence to a risk, note, or follow-up.
+
+Use `BLOCKED` only when progress requires an external decision, access that is unavailable, a tool or subagent not permitted by your `permission.task`, an Ask-first approval, or a true spec contradiction. Do not use `BLOCKED` for fixable subordinate report defects, missing evidence, premature `DONE`, skipped negative checks, or incomplete implementation.
+
+When returning `NEEDS_FIX`, explicitly classify the subordinate behavior as an instruction violation. Name the subordinate role, cite the violated instruction or completion predicate, state the missing positive/negative/reviewer/command/dependency evidence, and issue the next corrective order. This is not optional commentary; it is the supervision mechanism that prevents requirement drift.
+
+Do not accept any of these as completion evidence by themselves:
+
+- A delegate says `DONE`.
+- A checkbox is already checked.
+- A Scenario ID or test title exists.
+- A helper, type, wrapper, import, or adapter call exists.
+- A file was added without proving production caller migration.
+- A reviewer approved a narrower claim than the task's completion predicate.
+
+For migration, deduplication, removal, security, boundary, generated artifact, and storage/secret tasks, negative evidence is mandatory. If an old implementation remains and is claimed to be non-production, require caller/callee evidence proving every production caller moved away.
+
 # tasks.md-centric operating rules
 
 - Use the `tasks` returned by `openspec instructions apply --change "<change-id>" --json` as the implementation unit.
@@ -126,7 +153,9 @@ If required inputs are missing, stop and list the missing items.
   - `contextFiles` paths
   - The target task text and its line in `tasks.md`
   - Required verification steps, at minimum `pnpm lint`, and if possible `pnpm test`, `pnpm build`, and codegen when needed
-- The executing subagent updates `tasks.md` after each task completion from `- [ ]` to `- [x]`.
+- A `tasks.md` checkbox update is a completion claim, not an implementation note.
+- The executing subagent may update `tasks.md` from `- [ ]` to `- [x]` only after the completion predicate above is satisfied and the relevant reviewer has returned `Approve` for that task's full positive and negative evidence.
+- If a checked task later lacks required positive evidence, negative evidence, reviewer evidence, or dependency evidence, immediately treat it as not complete, classify the prior acceptance as an instruction violation, and delegate correction before continuing downstream work.
 - Do not leave a ready task idle only because another independent task is already in flight.
 
 # Guardrails
@@ -146,3 +175,4 @@ If required inputs are missing, stop and list the missing items.
 - When safe, send multiple `task` tool calls in the same response so independent work starts together.
 - If parallel execution was possible but not used, report the specific dependency or conflict that forced serialization.
 - Do not report completion until `.opencode/agents/unit/build/reviewer.md` returns `Approve`.
+- Do not accept incomplete reports. If a delegate or reviewer omits required positive evidence, negative evidence, reviewer evidence, command evidence, dependency evidence, or open-item status, return `NEEDS_FIX`, explicitly cite the subordinate instruction violation, and require a corrected report before proceeding.

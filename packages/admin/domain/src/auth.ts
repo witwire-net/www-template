@@ -1,6 +1,8 @@
 import {
-  type AdminAuthSessionResponse,
+  type AdminOperatorAuthSessionResponse,
+  type AdminOperatorContextRefreshResponse,
   type AdminOperatorProfile,
+  type WWWTemplateContextIndexUpdateHint,
   requestCurrentAdminOperator,
   requestFinishInitialAdminSetup,
   requestFinishAdminLogin,
@@ -16,19 +18,34 @@ import {
   type WWWTemplateWebAuthnAttestationCredential,
 } from '@www-template/admin-api';
 
+import {
+  clearAdminContextIndex,
+  createEmptyAdminContextIndex,
+  readAdminContextIndex,
+  removeAdminContextEntry,
+  upsertAdminContextEntry,
+  writeAdminContextIndex,
+} from './context_index';
+
+import type { AdminContextIndexEntry } from './context_index';
+
+type AdminSessionResponseLike =
+  | AdminOperatorAuthSessionResponse
+  | AdminOperatorContextRefreshResponse;
+
 /**
  * Admin frontend domain が保持する browser-readable session state です。
  *
- * - accessToken / csrfToken は Admin backend から返る短命値だけを memory に保持します。
+ * - accessToken は Admin backend から返る短命値だけを memory に保持します。
  * - refreshToken は HttpOnly Cookie 専用のため、この型には存在しません。
  * - operator は UI 表示に使いますが、最終 authorization は常に Go Admin API が行います。
  */
 export interface AdminSessionState {
   operator: AdminOperatorProfile;
   sessionId: string;
+  authContextId: string;
   accessToken: string;
   expiresAt: string;
-  csrfToken: string;
 }
 
 /**
@@ -84,10 +101,72 @@ export type AdminInitialSetupStartResult =
 
 let currentSession: AdminSessionState | null = null;
 
+function toAdminContextIndexEntry(session: AdminSessionState): AdminContextIndexEntry {
+  // context index は reload 後の refresh 対象発見だけに使うため、token/secret を含めない。
+  return {
+    authContextId: session.authContextId,
+    operatorSessionId: session.sessionId,
+    displayHint: session.operator.email,
+    roleHint: session.operator.role,
+    lastSeenAt: new Date().toISOString(),
+    expiresHintAt: session.expiresAt,
+  };
+}
+
+function persistAdminSessionContext(session: AdminSessionState): void {
+  // login/setup/refresh 成功時は、server が返した session metadata だけを Admin 専用 index に反映する。
+  const index = readAdminContextIndex() ?? createEmptyAdminContextIndex();
+  upsertAdminContextEntry(index, toAdminContextIndexEntry(session), true);
+  writeAdminContextIndex(index);
+}
+
+function removeAdminSessionContext(authContextId: string): void {
+  // refresh failure / logout / inactive response では対象 context だけを index から削除する。
+  const index = readAdminContextIndex() ?? createEmptyAdminContextIndex();
+  removeAdminContextEntry(index, authContextId);
+  writeAdminContextIndex(index);
+}
+
+function applyAdminContextIndexHints(hints: WWWTemplateContextIndexUpdateHint[]): void {
+  // backend の logout/revoke hint を正として index を同期し、client 側の推測で Cookie 対象を決めない。
+  const index = readAdminContextIndex() ?? createEmptyAdminContextIndex();
+  for (const hint of hints) {
+    if (hint.action === 'clear-surface') {
+      clearAdminContextIndex();
+      return;
+    }
+    if (hint.action === 'remove' && hint.authContextId !== undefined) {
+      removeAdminContextEntry(index, hint.authContextId);
+    }
+    if (
+      hint.action === 'upsert' &&
+      hint.authContextId !== undefined &&
+      hint.sessionId !== undefined &&
+      hint.displayHint !== undefined &&
+      hint.lastSeenAt !== undefined &&
+      hint.expiresHintAt !== undefined
+    ) {
+      upsertAdminContextEntry(
+        index,
+        {
+          authContextId: hint.authContextId,
+          operatorSessionId: hint.sessionId,
+          displayHint: hint.displayHint.label,
+          roleHint: hint.displayHint.secondaryLabel ?? '',
+          lastSeenAt: hint.lastSeenAt,
+          expiresHintAt: hint.expiresHintAt,
+        },
+        true
+      );
+    }
+  }
+  writeAdminContextIndex(index);
+}
+
 /**
  * 現在 memory にある Admin session を読み取ります。
  *
- * @returns session がある場合は accessToken / csrfToken / operator を含む state、ない場合は null。
+ * @returns session がある場合は accessToken / operator を含む state、ない場合は null。
  */
 export function getAdminSession(): AdminSessionState | null {
   // refreshToken を読める storage から復元しないことで、Cookie-only refresh の不変条件を守る。
@@ -134,8 +213,12 @@ export async function finishAdminLogin(
   requestId: string,
   credential: WWWTemplateWebAuthnAssertionCredential
 ): Promise<AdminSessionState | null> {
-  // finish request では assertion credential と requestId だけを送信し、Product SDK を経由しない。
-  const response = await requestFinishAdminLogin({ requestId, credential });
+  // finish request では cookie credential mode を明示し、Admin backend の Cookie session 発行へ固定する。
+  const response = await requestFinishAdminLogin({
+    requestId,
+    credentialMode: 'cookie',
+    credential,
+  });
   if (response.status !== 200) {
     clearAdminSession();
     return null;
@@ -143,6 +226,8 @@ export async function finishAdminLogin(
 
   // Admin backend の session response から browser-readable 値だけを memory state に反映する。
   currentSession = toSessionState(response.data);
+  if (currentSession === null) return null;
+  persistAdminSessionContext(currentSession);
   return currentSession;
 }
 
@@ -184,6 +269,7 @@ export async function finishOperatorSetup(
   const response = await requestFinishOperatorSetup({
     setupToken: setupToken.trim(),
     requestId,
+    credentialMode: 'cookie',
     credential,
   });
   if (response.status !== 200) {
@@ -193,6 +279,8 @@ export async function finishOperatorSetup(
 
   // setup 成功時は login と同じ accessToken-only browser-readable state へ揃える。
   currentSession = toSessionState(response.data);
+  if (currentSession === null) return null;
+  persistAdminSessionContext(currentSession);
   return currentSession;
 }
 
@@ -238,6 +326,7 @@ export async function finishInitialAdminSetup(
     displayName: input.displayName.trim(),
     bootstrapSecret: input.bootstrapSecret.trim(),
     requestId,
+    credentialMode: 'cookie',
     credential,
   });
   if (response.status !== 200) {
@@ -247,6 +336,8 @@ export async function finishInitialAdminSetup(
 
   // login / operator setup と同じ accessToken-only browser-readable state に正規化する。
   currentSession = toSessionState(response.data);
+  if (currentSession === null) return null;
+  persistAdminSessionContext(currentSession);
   return currentSession;
 }
 
@@ -256,15 +347,34 @@ export async function finishInitialAdminSetup(
  * @returns 更新後の session。refresh できない場合は null。
  */
 export async function refreshAdminSession(): Promise<AdminSessionState | null> {
-  // refreshToken は JavaScript から読まず、same-origin Cookie として backend へだけ送る。
-  const response = await requestRefreshAdminSession();
-  if (response.status !== 200) {
+  // context-scoped refresh は Cookie Path と authContextId が一致する場合だけ有効なので、memory state が無い場合は安全側に login へ戻す。
+  const index = readAdminContextIndex();
+  const bootstrapEntry =
+    currentSession === null && index !== null && index.activeAuthContextId !== null
+      ? index.entries.find((entry) => entry.authContextId === index.activeAuthContextId)
+      : undefined;
+  const authContextId = currentSession?.authContextId ?? bootstrapEntry?.authContextId;
+  if (authContextId === undefined || authContextId === '') {
     clearAdminSession();
     return null;
   }
 
-  // backend が再発行した accessToken / csrfToken だけを memory state に保存する。
+  // refreshToken は JavaScript から読まず、same-origin Cookie として backend へだけ送る。
+  const response = await requestRefreshAdminSession(authContextId);
+  if (response.status !== 200) {
+    removeAdminSessionContext(authContextId);
+    clearAdminSession();
+    return null;
+  }
+
+  // backend が再発行した accessToken だけを memory state に保存する。
   currentSession = toSessionState(response.data);
+  if (currentSession?.authContextId !== authContextId) {
+    removeAdminSessionContext(authContextId);
+    clearAdminSession();
+    return null;
+  }
+  persistAdminSessionContext(currentSession);
   return currentSession;
 }
 
@@ -296,7 +406,7 @@ export async function verifyProtectedAdminRoute(): Promise<AdminProtectedRouteSt
  * @returns logout API が成功した場合 true、session が無い場合や失敗時は false。
  */
 export async function logoutAdminSession(): Promise<boolean> {
-  // logout に必要な accessToken / csrfToken が無い場合は、local state だけを安全側に破棄する。
+  // logout に必要な accessToken が無い場合は、local state だけを安全側に破棄する。
   const session = currentSession;
   if (session === null) {
     clearAdminSession();
@@ -305,18 +415,25 @@ export async function logoutAdminSession(): Promise<boolean> {
 
   // Go Admin API に Cookie revoke と session revoke を委譲し、結果に関わらず local token は破棄する。
   const response = await requestLogoutAdminOperator(session);
+  if (response.status === 200) {
+    applyAdminContextIndexHints(response.data.contextIndexUpdateHints);
+  } else {
+    removeAdminSessionContext(session.authContextId);
+  }
   clearAdminSession();
   return response.status === 200;
 }
 
-function toSessionState(response: AdminAuthSessionResponse): AdminSessionState {
-  // generated response から refreshToken を探さず、表示と header に必要な値だけへ写像する。
+function toSessionState(response: AdminSessionResponseLike): AdminSessionState | null {
+  // generated response から refreshToken を探さず、表示と bearer header に必要な値だけへ写像する。
+  // Cookie mode response だけを Admin Console の browser session として採用し、automation Bearer response は browser state に混ぜない。
+  if (response.credentialMode !== 'cookie') return null;
   return {
     operator: response.operator,
     sessionId: response.sessionId,
+    authContextId: response.authContextId,
     accessToken: response.accessToken,
     expiresAt: response.expiresAt,
-    csrfToken: response.csrfToken,
   };
 }
 

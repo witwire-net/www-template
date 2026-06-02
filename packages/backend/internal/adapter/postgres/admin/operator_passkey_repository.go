@@ -3,11 +3,12 @@ package admin
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
 
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
+	adminauth "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 )
 
@@ -19,6 +20,51 @@ import (
 //   - 削除時は operator_id と credential id の両方で絞り、最後の 1 件削除を repository 側でも防ぐ。
 type OperatorPasskeyRepository struct {
 	db *gorm.DB
+}
+
+// FindWebAuthnCredential は credentialHandle から Admin operator WebAuthn stored credential を復元する。
+//
+// credentialHandle は WebAuthn provider が raw ID から導出した base64url handle である。
+// 戻り値は署名検証に必要な public key / sign count / backup state だけを含み、HTTP response へは返さない。
+func (r *OperatorPasskeyRepository) FindWebAuthnCredential(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
+	// Step 1: Admin operator_passkeys だけを credential_handle で検索し、Product credential table を参照しない。
+	var record operatorPasskeyRecord
+	if err := r.db.WithContext(ctx).Where("credential_handle = ?", handle).First(&record).Error; err != nil {
+		return domain.ZeroWebAuthnStoredCredential(), domain.ErrAccountAuthNotFound
+	}
+
+	// Step 2: JSONB transports を provider 用 primitive slice へ戻し、壊れた保存値は store unavailable として fail-close にする。
+	transports, err := operatorPasskeyTransports(record.Transports)
+	if err != nil {
+		return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthStoreUnavailable
+	}
+	signCount, err := operatorPasskeySignCount(record.SignCount)
+	if err != nil {
+		return domain.ZeroWebAuthnStoredCredential(), domain.ErrAuthStoreUnavailable
+	}
+
+	// Step 3: WebAuthn provider が署名検証に使う domain DTO へ写像する。
+	return domain.ReconstitueWebAuthnStoredCredential(record.CredentialHandle, record.PublicKey, signCount, record.AAGUID, record.BackupEligible, record.BackupState, transports), nil
+}
+
+// UpdateWebAuthnCredentialState は passkey login 成功後の sign count と backup state を保存する。
+//
+// handle は検証済み credential handle、newSignCount / newBackupState は WebAuthn provider が assertion から返した最新状態である。
+// 保存失敗または対象不在の場合は認証 store 障害として扱い、古い replay 検出状態を残した成功応答を防ぐ。
+func (r *OperatorPasskeyRepository) UpdateWebAuthnCredentialState(ctx context.Context, handle string, newSignCount uint32, newBackupState bool) error {
+	// Step 1: credential_handle で対象 Admin passkey だけを更新し、operator owner は credential handle の一意性に委ねる。
+	result := r.db.WithContext(ctx).Model(&operatorPasskeyRecord{}).
+		Where("credential_handle = ?", handle).
+		Updates(map[string]any{"sign_count": newSignCount, "backup_state": newBackupState})
+	if result.Error != nil {
+		return domain.ErrAuthStoreUnavailable
+	}
+	if result.RowsAffected == 0 {
+		return domain.ErrAccountAuthNotFound
+	}
+
+	// Step 2: WebAuthn credential state の更新が完了したため成功とする。
+	return nil
 }
 
 type operatorPasskeyListRecord struct {
@@ -92,4 +138,28 @@ func (r *OperatorPasskeyRepository) listOperatorPasskeysForDeletion(ctx context.
 
 	// Step 2: transaction 内の credential 一覧を返し、呼び出し側が同じ isolation level で件数判定と削除を続けられるようにする。
 	return records, nil
+}
+
+func operatorPasskeyTransports(raw string) ([]string, error) {
+	// Step 1: 空 transports は保存時に未指定だった credential として扱い、nil slice を返す。
+	if raw == "" {
+		return nil, nil
+	}
+
+	// Step 2: JSONB 文字列を provider DTO 用の string slice に戻す。
+	var transports []string
+	if err := json.Unmarshal([]byte(raw), &transports); err != nil {
+		return nil, err
+	}
+	return transports, nil
+}
+
+func operatorPasskeySignCount(raw int64) (uint32, error) {
+	// Step 1: DB の int64 値を WebAuthn authenticator の uint32 sign count 範囲へ安全に収める。
+	if raw < 0 || raw > int64(^uint32(0)) {
+		return 0, domain.ErrAuthStoreUnavailable
+	}
+
+	// Step 2: 範囲検証済みの値だけを uint32 へ変換する。
+	return uint32(raw), nil
 }

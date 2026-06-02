@@ -34,7 +34,7 @@ Admin API は account lifecycle、operator management、audit など強権限 op
 
 ### Requirement: RBAC 権限チェックは Controller で強制される
 
-Admin API の Controller / handler は全 protected operation で operator accessToken、operator session record、operator active state を application DTO に変換し、`internal/application/admin` の authorization use case を呼び出さなければならない（SHALL）。Permission map と `accounts:create` 判定は application layer が所有し、HTTP handler、repository、generated bindings、runtime composition、frontend package に置かれてはならない（MUST NOT）。`accounts:create` 権限は admin ロールと operator ロールに許可し、viewer ロールには許可してはならない（MUST NOT）。Product bearer token、Product account role、Cookie credential、CSRF token、`X-Auth-Context-Id` は Admin RBAC の判定材料として使用してはならない（MUST NOT）。
+Admin API の Controller / handler は全 protected operation で operator accessToken、operator session record、operator active state を authorization application DTO に変換し、concept-based authorization use case を呼び出さなければならない（SHALL）。Permission map と `accounts:create` 判定は authorization application layer が所有し、HTTP handler、repository、generated bindings、runtime composition、frontend package に置かれてはならない（MUST NOT）。`accounts:create` 権限は admin ロールと operator ロールに許可し、viewer ロールには許可してはならない（MUST NOT）。Product bearer token、Product account role、Cookie credential、CSRF token、`X-Auth-Context-Id` は Admin RBAC の判定材料として使用してはならない（MUST NOT）。Account creation/search と audit の application use case / repository は account、audit、authorization capability 名で配置され、Admin surface 接頭辞は route adapter と generated artifact 境界に限定されなければならない（MUST）。
 
 **Customer Context**
 
@@ -58,3 +58,17 @@ Admin account 作成は顧客に直接影響する強権限操作である。UI 
 - **WHEN** Controller が authorization use case を呼び出す
 - **THEN** use case input は operator ID、role、active state、session ID、permission だけを含む
 - **AND** Product bearer token、Cookie value、CSRF token、`X-Auth-Context-Id` は permission 判定に含まれない
+
+#### Scenario: Generic account and audit application use cases use concept names (ADMIN-CONSOLE-BE-S096)
+
+- **GIVEN** account creation、account search、audit write/read の application package と exported type を検査する
+- **WHEN** use case が Admin route から呼び出されるが account または audit capability 自体は generic concept である
+- **THEN** package/type names は accounts、audit、authorization などの concept/capability 名で定義される
+- **AND** Admin surface 名は HTTP adapter、generated binding、runtime composition の境界名としてだけ現れる
+
+#### Scenario: Postgres repositories are organized by schema aggregate or capability (ADMIN-CONSOLE-BE-S097)
+
+- **GIVEN** Postgres adapter repositories が public accounts schema と admin audit records を扱っている
+- **WHEN** repository package path、type name、imports、queries を検査する
+- **THEN** accounts aggregate repository は account capability 配下に配置され、audit repository は audit capability 配下に配置される
+- **AND** Admin surface package name だけで public accounts と audit concepts を同じ repository owner に混在させない

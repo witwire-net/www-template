@@ -64,12 +64,12 @@ func (s AccountStatus) IsSuspended() bool {
 	return s == AccountStatusSuspended
 }
 
-// NewAdminCreatedAccount は Admin Console の account 作成操作から初期 Account root を生成する。
+// NewCreatedAccount は Admin Console の account 作成操作から初期 Account root を生成する。
 //
 // id は canonical ULID、email は正規化済み AccountEmail として検証される。
 // 作成直後の Account は active、DefaultAccountSetting、session revoke 境界なしで開始する。
 // invalid な id/email/setting が検出された場合は対応する domain error を返す。
-func NewAdminCreatedAccount(id AccountID, email AccountEmail) (Account, error) {
+func NewCreatedAccount(id AccountID, email AccountEmail) (Account, error) {
 	// Step 1: Admin 作成でも Product AccountID の canonical 規則を再検証し、境界外入力を拒否する。
 	if err := validateAccountID(id.String()); err != nil {
 		return Account{}, ErrInvalidAccountID

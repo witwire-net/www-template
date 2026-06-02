@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	application "www-template/packages/backend/internal/application"
+	productaccounts "www-template/packages/backend/internal/application/accounts"
+	application "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
 )
@@ -16,13 +17,13 @@ type AccountRecoverySender struct {
 	sender          *SMTPSender
 	productName     string
 	fromAddress     string
-	accountSnapshot *application.AccountSettingSnapshotService
+	accountSnapshot *productaccounts.AccountSettingSnapshotService
 }
 
 // NewAccountRecoverySender は AccountRecoverySender を生成する。
 // accountSnapshot が nil の場合は既定 locale（ja）で送信する。
-func NewAccountRecoverySender(sender *SMTPSender, cfg config.InfraConfig, accountSnapshot ...*application.AccountSettingSnapshotService) *AccountRecoverySender {
-	var snapshotService *application.AccountSettingSnapshotService
+func NewAccountRecoverySender(sender *SMTPSender, cfg config.InfraConfig, accountSnapshot ...*productaccounts.AccountSettingSnapshotService) *AccountRecoverySender {
+	var snapshotService *productaccounts.AccountSettingSnapshotService
 	if len(accountSnapshot) > 0 {
 		snapshotService = accountSnapshot[0]
 	}

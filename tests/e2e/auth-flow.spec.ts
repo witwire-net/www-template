@@ -9,6 +9,7 @@ const NO_STORE_HEADERS = {
 
 const TEST_ULID = {
   requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+  authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
   accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
   passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
   sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -37,12 +38,17 @@ const mockPasskeyLogin = async (page: Page) => {
   await page.route('**/api/v1/auth/passkey/finish', async (route) => {
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
-      accountId: TEST_ULID.accountId,
-      passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+      credentialMode: 'cookie',
+      authContextId: TEST_ULID.authContextId,
       sessionId: TEST_ULID.sessionId,
       accessToken: 'jwt-access-token',
-      refreshToken: 'jwt-refresh-token',
       expiresAt: '2026-04-04T00:00:00.000Z',
+      contextIndexUpdateHints: [],
+      clearCookieCommands: [],
+      account: {
+        accountId: TEST_ULID.accountId,
+        passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+      },
     });
   });
 };
@@ -171,12 +177,17 @@ test.describe('auth flow', () => {
     await page.route('**/api/v1/auth/passkey/register', async (route) => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
-        accountId: TEST_ULID.accountId,
-        passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+        credentialMode: 'cookie',
+        authContextId: TEST_ULID.authContextId,
         sessionId: TEST_ULID.sessionId,
         accessToken: 'jwt-access-token-recovery',
-        refreshToken: 'jwt-refresh-token-recovery',
         expiresAt: '2026-04-04T00:00:00.000Z',
+        contextIndexUpdateHints: [],
+        clearCookieCommands: [],
+        account: {
+          accountId: TEST_ULID.accountId,
+          passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+        },
       });
     });
 

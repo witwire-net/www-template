@@ -6,26 +6,26 @@ import (
 	"errors"
 	"time"
 
-	productauth "www-template/packages/backend/internal/application/product/auth"
+	productauth "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 )
 
-// RefreshSessionStore は Product refreshToken の server-side state を Valkey に保存する adapter である。
+// AccountRefreshSessionStore は Product Account refreshToken の server-side state を Valkey に保存する adapter である。
 //
 // 役割:
-//   - productauth.RefreshSessionStore port を実装し、Product AccountAuth use case だけへ公開する。
+//   - productauth.AccountRefreshSessionStore port を実装し、Product AccountAuth use case だけへ公開する。
 //   - key は `product:auth:refresh:*` と `product:auth:refresh_index:*` に限定し、Admin operator session と共有しない。
 //   - 平文 refreshToken は受け取らず、domain.OpaqueTokenHash だけを永続化 key として扱う。
-type RefreshSessionStore struct {
+type AccountRefreshSessionStore struct {
 	store *Store
 }
 
-// SessionMetadataStore は Product account session metadata を Valkey に保存する adapter である。
+// AccountSessionMetadataStore は Product account session metadata を Valkey に保存する adapter である。
 //
 // 役割:
-//   - productauth.SessionMetadataStore port を実装し、accessToken bearer validation 用の session selector を保持する。
+//   - productauth.AccountSessionMetadataStore port を実装し、accessToken bearer validation 用の session selector を保持する。
 //   - key は `product:auth:session:*` と `product:auth:account-sessions:*` に限定する。
-type SessionMetadataStore struct {
+type AccountSessionMetadataStore struct {
 	store *Store
 }
 
@@ -47,20 +47,20 @@ type sessionMetadataRecord struct {
 	IPHash       string    `json:"ipHash"`
 }
 
-// NewRefreshSessionStore は Product refresh session store を構築する。
-func NewRefreshSessionStore(store *Store) *RefreshSessionStore {
+// NewAccountRefreshSessionStore は Product Account refresh session store を構築する。
+func NewAccountRefreshSessionStore(store *Store) *AccountRefreshSessionStore {
 	// Step 1: store の nil 検査は呼び出し側の runtime validation に委譲し、constructor は port 実装の組み立てだけを担う。
-	return &RefreshSessionStore{store: store}
+	return &AccountRefreshSessionStore{store: store}
 }
 
-// NewSessionMetadataStore は Product session metadata store を構築する。
-func NewSessionMetadataStore(store *Store) *SessionMetadataStore {
+// NewAccountSessionMetadataStore は Product account session metadata store を構築する。
+func NewAccountSessionMetadataStore(store *Store) *AccountSessionMetadataStore {
 	// Step 1: Product metadata port と Valkey 接続を結びつけ、Admin metadata store と別 package に閉じ込める。
-	return &SessionMetadataStore{store: store}
+	return &AccountSessionMetadataStore{store: store}
 }
 
 // Save は Product refresh session を TTL 付きで保存する。
-func (s *RefreshSessionStore) Save(ctx context.Context, session domain.AccountRefreshSession, ttl time.Duration) error {
+func (s *AccountRefreshSessionStore) Save(ctx context.Context, session domain.AccountRefreshSession, ttl time.Duration) error {
 	// Step 1: domain object から保存用 record を作り、壊れた adapter DTO を application へ公開しない。
 	record := refreshRecordFromDomain(session)
 	payload, err := json.Marshal(record)
@@ -76,7 +76,7 @@ func (s *RefreshSessionStore) Save(ctx context.Context, session domain.AccountRe
 }
 
 // Rotate は旧 refresh session を消費し、callback が返した次 session を保存する。
-func (s *RefreshSessionStore) Rotate(ctx context.Context, tokenHash domain.OpaqueTokenHash, ttl time.Duration, build productauth.RefreshRotationBuilder) (domain.AccountRefreshSession, domain.AccountRefreshSession, error) {
+func (s *AccountRefreshSessionStore) Rotate(ctx context.Context, tokenHash domain.OpaqueTokenHash, ttl time.Duration, build productauth.RefreshRotationBuilder) (domain.AccountRefreshSession, domain.AccountRefreshSession, error) {
 	// Step 1: hash に対応する既存 refresh session を GETDEL で取得し、旧 token の二重利用を原子的に拒否できる状態にする。
 	current, err := s.consumeByHash(ctx, tokenHash)
 	if err != nil {
@@ -102,7 +102,7 @@ func (s *RefreshSessionStore) Rotate(ctx context.Context, tokenHash domain.Opaqu
 }
 
 // RevokeSession は対象 Product account session の refresh state を削除する。
-func (s *RefreshSessionStore) RevokeSession(ctx context.Context, accountID domain.AccountID, sessionID domain.AccountAuthSessionID, _ time.Time) error {
+func (s *AccountRefreshSessionStore) RevokeSession(ctx context.Context, accountID domain.AccountID, sessionID domain.AccountAuthSessionID, _ time.Time) error {
 	// Step 1: session index から refresh hash 一覧を取得し、対象 session の refresh token をすべて削除する。
 	idxKey := s.sessionIndexKey(accountID, sessionID)
 	hashes, err := s.store.client.SMembers(ctx, idxKey).Result()
@@ -126,7 +126,7 @@ func (s *RefreshSessionStore) RevokeSession(ctx context.Context, accountID domai
 }
 
 // RevokeAllForAccount は対象 Product account の全 refresh state を削除する。
-func (s *RefreshSessionStore) RevokeAllForAccount(ctx context.Context, accountID domain.AccountID, revokedAt time.Time) error {
+func (s *AccountRefreshSessionStore) RevokeAllForAccount(ctx context.Context, accountID domain.AccountID, revokedAt time.Time) error {
 	// Step 1: account index から session ID 一覧を取得し、各 session の refresh state 削除へ委譲する。
 	sessionIDs, err := s.store.client.SMembers(ctx, s.accountIndexKey(accountID)).Result()
 	if err != nil {
@@ -150,7 +150,7 @@ func (s *RefreshSessionStore) RevokeAllForAccount(ctx context.Context, accountID
 }
 
 // Save は Product session metadata を TTL 付きで保存する。
-func (s *SessionMetadataStore) Save(ctx context.Context, metadata productauth.SessionMetadata, ttl time.Duration) error {
+func (s *AccountSessionMetadataStore) Save(ctx context.Context, metadata productauth.SessionMetadata, ttl time.Duration) error {
 	// Step 1: application DTO を保存 DTO に写像し、Valkey JSON と application public API を分ける。
 	record := sessionMetadataRecordFromApplication(metadata)
 	payload, err := json.Marshal(record)
@@ -173,7 +173,7 @@ func (s *SessionMetadataStore) Save(ctx context.Context, metadata productauth.Se
 }
 
 // Get は Product session ID から metadata を取得する。
-func (s *SessionMetadataStore) Get(ctx context.Context, sessionID domain.AccountAuthSessionID) (productauth.SessionMetadata, error) {
+func (s *AccountSessionMetadataStore) Get(ctx context.Context, sessionID domain.AccountAuthSessionID) (productauth.SessionMetadata, error) {
 	// Step 1: Product namespace の session key を読み、存在しない場合は domain の session not found に畳み込む。
 	value, err := s.store.client.Get(ctx, s.sessionKey(sessionID.String())).Result()
 	if err != nil {
@@ -191,8 +191,41 @@ func (s *SessionMetadataStore) Get(ctx context.Context, sessionID domain.Account
 	return record.toApplication()
 }
 
+// List は Product account に紐づく session metadata を account index から復元する。
+func (s *AccountSessionMetadataStore) List(ctx context.Context, accountID domain.AccountID) ([]productauth.SessionMetadata, error) {
+	// Step 1: Product account 専用 index を読み、Admin operator session namespace と混ざらない一覧取得に限定する。
+	idxKey := s.store.key("auth", "account-sessions", accountID.String())
+	sessionIDs, err := s.store.client.SMembers(ctx, idxKey).Result()
+	if err != nil {
+		return nil, domain.ErrAuthStoreUnavailable
+	}
+
+	// Step 2: 各 session ID を domain value として検証し、壊れた index は fail-closed に store unavailable へ畳む。
+	sessions := make([]productauth.SessionMetadata, 0, len(sessionIDs))
+	for _, rawSessionID := range sessionIDs {
+		sessionID, err := domain.NewAccountAuthSessionID(rawSessionID)
+		if err != nil {
+			return nil, domain.ErrAuthStoreUnavailable
+		}
+		metadata, err := s.Get(ctx, sessionID)
+		if err != nil {
+			if errors.Is(err, domain.ErrSessionNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		if metadata.AccountID != accountID {
+			return nil, domain.ErrAuthStoreUnavailable
+		}
+		sessions = append(sessions, metadata)
+	}
+
+	// Step 3: 復元できた metadata だけを返し、期限切れで消えた session key は一覧から自然に除外する。
+	return sessions, nil
+}
+
 // Revoke は対象 Product session metadata を削除する。
-func (s *SessionMetadataStore) Revoke(ctx context.Context, accountID domain.AccountID, sessionID domain.AccountAuthSessionID) error {
+func (s *AccountSessionMetadataStore) Revoke(ctx context.Context, accountID domain.AccountID, sessionID domain.AccountAuthSessionID) error {
 	// Step 1: bearer validation 用 metadata を削除し、失効済み session の accessToken 継続利用を拒否できる状態にする。
 	if err := s.store.client.Del(ctx, s.sessionKey(sessionID.String())).Err(); err != nil {
 		return domain.ErrAuthStoreUnavailable
@@ -207,7 +240,7 @@ func (s *SessionMetadataStore) Revoke(ctx context.Context, accountID domain.Acco
 }
 
 // RevokeAllForAccount は対象 Product account の session metadata をすべて削除する。
-func (s *SessionMetadataStore) RevokeAllForAccount(ctx context.Context, accountID domain.AccountID) error {
+func (s *AccountSessionMetadataStore) RevokeAllForAccount(ctx context.Context, accountID domain.AccountID) error {
 	// Step 1: account index から session ID を列挙し、metadata key を個別に削除する。
 	idxKey := s.store.key("auth", "account-sessions", accountID.String())
 	sessionIDs, err := s.store.client.SMembers(ctx, idxKey).Result()
@@ -227,7 +260,7 @@ func (s *SessionMetadataStore) RevokeAllForAccount(ctx context.Context, accountI
 	return nil
 }
 
-func (s *RefreshSessionStore) consumeByHash(ctx context.Context, tokenHash domain.OpaqueTokenHash) (domain.AccountRefreshSession, error) {
+func (s *AccountRefreshSessionStore) consumeByHash(ctx context.Context, tokenHash domain.OpaqueTokenHash) (domain.AccountRefreshSession, error) {
 	// Step 1: GETDEL により refresh record の取得と削除を Valkey 上で原子的に実行する。
 	value, err := s.store.client.GetDel(ctx, s.refreshKey(tokenHash)).Result()
 	if err != nil {
@@ -245,7 +278,7 @@ func (s *RefreshSessionStore) consumeByHash(ctx context.Context, tokenHash domai
 	return record.toDomain()
 }
 
-func (s *RefreshSessionStore) indexSession(ctx context.Context, accountID domain.AccountID, sessionID domain.AccountAuthSessionID, tokenHash domain.OpaqueTokenHash, ttl time.Duration) error {
+func (s *AccountRefreshSessionStore) indexSession(ctx context.Context, accountID domain.AccountID, sessionID domain.AccountAuthSessionID, tokenHash domain.OpaqueTokenHash, ttl time.Duration) error {
 	// Step 1: session 単位と account 単位の index を更新し、revoke 操作が scan なしで対象を特定できるようにする。
 	if err := s.store.client.SAdd(ctx, s.sessionIndexKey(accountID, sessionID), tokenHash.String()).Err(); err != nil {
 		return domain.ErrAuthStoreUnavailable
@@ -262,7 +295,7 @@ func (s *RefreshSessionStore) indexSession(ctx context.Context, accountID domain
 	return nil
 }
 
-func (s *RefreshSessionStore) removeHashFromIndex(ctx context.Context, session domain.AccountRefreshSession) error {
+func (s *AccountRefreshSessionStore) removeHashFromIndex(ctx context.Context, session domain.AccountRefreshSession) error {
 	// Step 1: session index から旧 hash を除去し、同一 session の次 token だけが残るようにする。
 	if err := s.store.client.SRem(ctx, s.sessionIndexKey(session.AccountID(), session.SessionID()), session.TokenHash().String()).Err(); err != nil {
 		return domain.ErrAuthStoreUnavailable
@@ -270,19 +303,19 @@ func (s *RefreshSessionStore) removeHashFromIndex(ctx context.Context, session d
 	return nil
 }
 
-func (s *RefreshSessionStore) refreshKey(tokenHash domain.OpaqueTokenHash) string {
+func (s *AccountRefreshSessionStore) refreshKey(tokenHash domain.OpaqueTokenHash) string {
 	return s.store.key("auth", "refresh", tokenHash.String())
 }
 
-func (s *RefreshSessionStore) sessionIndexKey(accountID domain.AccountID, sessionID domain.AccountAuthSessionID) string {
+func (s *AccountRefreshSessionStore) sessionIndexKey(accountID domain.AccountID, sessionID domain.AccountAuthSessionID) string {
 	return s.store.key("auth", "refresh_index", accountID.String(), sessionID.String())
 }
 
-func (s *RefreshSessionStore) accountIndexKey(accountID domain.AccountID) string {
+func (s *AccountRefreshSessionStore) accountIndexKey(accountID domain.AccountID) string {
 	return s.store.key("auth", "refresh_accounts", accountID.String())
 }
 
-func (s *SessionMetadataStore) sessionKey(sessionID string) string {
+func (s *AccountSessionMetadataStore) sessionKey(sessionID string) string {
 	return s.store.key("auth", "session", sessionID)
 }
 

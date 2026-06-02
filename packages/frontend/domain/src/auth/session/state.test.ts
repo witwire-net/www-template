@@ -35,6 +35,7 @@ describe('authSessionState', () => {
   it('keeps auth-owned identifiers ULID-formatted', () => {
     const session = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -58,6 +59,7 @@ describe('authSessionState', () => {
       state,
       {
         requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
         accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
         passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
         sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -78,6 +80,7 @@ describe('authSessionState', () => {
     const state = createAuthSessionInitialState();
     const sessionA = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -91,6 +94,7 @@ describe('authSessionState', () => {
 
     const sessionB = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
@@ -108,6 +112,7 @@ describe('authSessionState', () => {
     const state = createAuthSessionInitialState();
     const sessionA = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -116,6 +121,7 @@ describe('authSessionState', () => {
     };
     const sessionB = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
@@ -139,6 +145,7 @@ describe('authSessionState', () => {
     const state = createAuthSessionInitialState();
     const sessionA = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -147,6 +154,7 @@ describe('authSessionState', () => {
     };
     const sessionB = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
@@ -169,6 +177,7 @@ describe('authSessionState', () => {
     const state = createAuthSessionInitialState();
     const sessionA = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -191,6 +200,7 @@ describe('authSessionState', () => {
       state,
       {
         requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
         accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
         passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
         sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -213,6 +223,7 @@ describe('authSessionState', () => {
       state,
       {
         requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
         accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
         passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
         sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -242,6 +253,7 @@ describe('authSessionState', () => {
     const state = createAuthSessionInitialState();
     const sessionA = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -250,6 +262,7 @@ describe('authSessionState', () => {
     };
     const sessionB = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
@@ -272,6 +285,7 @@ describe('authSessionState', () => {
     const state = createAuthSessionInitialState();
     const sessionA = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
@@ -280,6 +294,7 @@ describe('authSessionState', () => {
     };
     const sessionB = {
       requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
       accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
       passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
       sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',

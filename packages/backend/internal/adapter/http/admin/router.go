@@ -9,10 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	adminapplication "www-template/packages/backend/internal/application/admin"
-	adminauth "www-template/packages/backend/internal/application/admin/auth"
+	sharedhttp "www-template/packages/backend/internal/adapter/http/shared"
+	accountsapplication "www-template/packages/backend/internal/application/accounts"
+	adminauth "www-template/packages/backend/internal/application/auth"
+	conceptauth "www-template/packages/backend/internal/application/auth"
+	operatorsapplication "www-template/packages/backend/internal/application/operators"
 	"www-template/packages/backend/internal/generated/adminopenapi"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/id"
@@ -52,9 +56,19 @@ func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDepend
 	_ = router.SetTrustedProxies(cfg.TrustedProxyCIDRs)
 	router.Use(gin.Recovery())
 	router.Use(adminSecurityHeadersMiddleware())
+	if allowedOrigins := adminCORSAllowedOrigins(cfg); len(allowedOrigins) > 0 {
+		// Step 3: CORS は認証 middleware より前に配置し、Admin Cookie 発行・refresh 用の preflight を bearer/session 検証へ進ませない。
+		router.Use(cors.New(cors.Config{
+			AllowCredentials: true,
+			AllowHeaders:     []string{"Content-Type", "Authorization", "traceparent", "tracestate", "baggage"},
+			AllowMethods:     []string{"GET", "POST", "DELETE", "OPTIONS"},
+			AllowOrigins:     allowedOrigins,
+			MaxAge:           12 * time.Hour,
+		}))
+	}
 	router.Use(adminAuthMiddleware(cfg, dependencies.operatorSessions))
 
-	// Step 3: health check は Admin router 自身が所有し、Admin runtime が stdlib mux へ fallback しないようにする。
+	// Step 4: health check は Admin router 自身が所有し、Admin runtime が stdlib mux へ fallback しないようにする。
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(stdhttp.StatusOK, gin.H{
 			"status":    "ok",
@@ -62,11 +76,11 @@ func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDepend
 		})
 	})
 
-	// Step 4: Admin generated bindings だけから strict handler を作成し、Admin route registration をこの package に閉じる。
-	strictHandler := adminopenapi.NewStrictHandler(strictServer{operatorAuth: dependencies.operatorAuth, operatorSetup: dependencies.operatorSetup, operatorPasskeys: dependencies.operatorPasskeys, operatorPasskeyManagement: dependencies.operatorPasskeyManagement, accountCreation: dependencies.accountCreation, accountSearch: dependencies.accountSearch}, nil)
+	// Step 5: Admin generated bindings だけから strict handler を作成し、Admin route registration をこの package に閉じる。
+	strictHandler := adminopenapi.NewStrictHandler(strictServer{operatorAuth: dependencies.operatorAuth, operatorPasskeyAuth: dependencies.operatorPasskeyAuth, operatorSetup: dependencies.operatorSetup, operatorPasskeys: dependencies.operatorPasskeys, operatorPasskeyManagement: dependencies.operatorPasskeyManagement, accountCreation: dependencies.accountCreation, accountSearch: dependencies.accountSearch}, nil)
 	adminopenapi.RegisterHandlersWithOptions(router, strictHandler, adminopenapi.GinServerOptions{})
 
-	// Step 5: 未定義 path は 404 JSON に正規化し、Admin route table へ Product path が混入していないことを検査しやすくする。
+	// Step 6: 未定義 path は 404 JSON に正規化し、Admin route table へ Product path が混入していないことを検査しやすくする。
 	router.NoRoute(func(c *gin.Context) {
 		c.JSON(stdhttp.StatusNotFound, gin.H{
 			"error": "not found",
@@ -77,13 +91,25 @@ func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDepend
 	return router
 }
 
+func adminCORSAllowedOrigins(cfg config.Config) []string {
+	// Step 1: Admin CORS の許可元は Product の allowed_origins ではなく Admin runtime domain だけに限定する。
+	origin, ok := sharedhttp.NormalizeOrigin(cfg.Admin.Domain)
+	if !ok {
+		// Step 2: Admin domain が未設定または不正なテスト/未検証 config では CORS middleware を登録せず、runtime validation 側の fail-close に委ねる。
+		return nil
+	}
+
+	// Step 3: gin-contrib/cors へ canonical origin を渡し、path/query/fragment 付き Origin を許可しない比較規則と揃える。
+	return []string{origin}
+}
+
 type adminAccountCreator interface {
-	CreateAccount(ctx context.Context, input adminapplication.AdminCreateAccountInput) (adminapplication.AdminCreatedAccount, error)
+	CreateAccount(ctx context.Context, input accountsapplication.CreateAccountInput) (accountsapplication.CreatedAccount, error)
 }
 
 type adminAccountSearcher interface {
-	SearchAccounts(ctx context.Context, input adminapplication.AdminAccountSearchInput) (adminapplication.AdminAccountSearchResult, error)
-	GetAccount(ctx context.Context, input adminapplication.AdminAccountDetailInput) (adminapplication.AdminAccountDetailResult, error)
+	SearchAccounts(ctx context.Context, input accountsapplication.AccountSearchInput) (accountsapplication.AccountSearchResult, error)
+	GetAccount(ctx context.Context, input accountsapplication.AccountDetailInput) (accountsapplication.AccountDetailResult, error)
 }
 
 // AccountCreator は Admin account 作成 handler が呼び出す application 境界である。
@@ -107,12 +133,16 @@ type AccountSearcher = adminAccountSearcher
 // 役割:
 //   - Product router/container と共有せず、Admin binary 専用の application service だけを渡す。
 //   - OperatorSessions は middleware が protected route の accessToken/CSRF/session を検証するための dependency である。
+//   - OperatorPasskeyAuth は Admin passkey login の challenge/finish outer flow を扱う dependency である。
+//   - OperatorPasskeyVerifier は finish handler が WebAuthn assertion を検証済み credential handle へ変換する dependency である。
 //   - OperatorPasskeyManagement は Admin operator 自身の passkey 一覧・削除 use case を表す。
 //   - AccountCreation は audit projection を含む account mutation use case、AccountSearch は account read model use case を表す。
 //   - setup handler 用 dependency は後続 task で別 field として追加されるため、この DTO では setup token 登録 use case は公開しない。
 type Dependencies struct {
 	OperatorSessions          OperatorSessionValidator
 	OperatorAuth              OperatorAuthenticator
+	OperatorPasskeyAuth       OperatorPasskeyAuthenticator
+	OperatorPasskeyVerifier   OperatorPasskeyVerifier
 	OperatorSetup             OperatorSetupper
 	OperatorPasskeyManagement OperatorPasskeyManager
 	AccountCreation           AccountCreator
@@ -126,15 +156,18 @@ type Dependencies struct {
 // 戻り値は Admin generated bindings だけを登録した HTTP handler であり、Product generated bindings や Product handler は登録しない。
 func NewRouterWithDependencies(cfg config.Config, dependencies Dependencies) *gin.Engine {
 	// Step 1: exported DTO を既存の package-local dependency table へ変換し、未接続 route の fail-close 仕様は維持する。
-	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: dependencies.OperatorSessions, operatorAuth: dependencies.OperatorAuth, operatorSetup: dependencies.OperatorSetup, operatorPasskeyManagement: dependencies.OperatorPasskeyManagement, accountCreation: dependencies.AccountCreation, accountSearch: dependencies.AccountSearch})
+	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: dependencies.OperatorSessions, operatorAuth: dependencies.OperatorAuth, operatorPasskeyAuth: dependencies.OperatorPasskeyAuth, operatorPasskeys: dependencies.OperatorPasskeyVerifier, operatorSetup: dependencies.OperatorSetup, operatorPasskeyManagement: dependencies.OperatorPasskeyManagement, accountCreation: dependencies.AccountCreation, accountSearch: dependencies.AccountSearch})
 }
 
 type adminOperatorAuthenticator interface {
-	StartOperatorPasskey(ctx context.Context, input adminauth.StartOperatorPasskeyInput) (adminauth.OperatorPasskeyChallenge, error)
-	FinishOperatorPasskey(ctx context.Context, input adminauth.FinishOperatorPasskeyInput) (adminauth.OperatorSessionResult, error)
 	RefreshOperatorSession(ctx context.Context, input adminauth.RefreshOperatorSessionInput) (adminauth.OperatorSessionResult, error)
 	CurrentOperator(ctx context.Context, input adminauth.CurrentOperatorInput) (adminauth.OperatorDTO, error)
-	LogoutOperator(ctx context.Context, input adminauth.LogoutOperatorInput) (adminauth.RefreshCookieCommand, error)
+	LogoutOperator(ctx context.Context, input adminauth.LogoutOperatorInput) (adminauth.OperatorRefreshCookieCommand, error)
+}
+
+type adminOperatorPasskeyAuthenticator interface {
+	StartOperatorPasskey(ctx context.Context, input adminauth.StartOperatorPasskeyInput) (adminauth.OperatorPasskeyChallenge, error)
+	FinishOperatorPasskey(ctx context.Context, input adminauth.FinishOperatorPasskeyInput) (adminauth.OperatorSessionResult, error)
 }
 
 // OperatorAuthenticator は Admin auth handler が呼び出す application 境界である。
@@ -145,12 +178,20 @@ type adminOperatorAuthenticator interface {
 //   - nil の場合は該当 auth route を 503 で fail-close する。
 type OperatorAuthenticator = adminOperatorAuthenticator
 
+// OperatorPasskeyAuthenticator は Admin passkey login handler が呼び出す application 境界である。
+//
+// 役割:
+//   - WebAuthn challenge 開始と検証済み credential からの session 発行 outer flow を受け持つ。
+//   - session refresh/current/logout lifecycle と別 dependency にし、HTTP adapter が責務混在した service を要求しないようにする。
+//   - nil の場合は passkey login route を 503 で fail-close する。
+type OperatorPasskeyAuthenticator = adminOperatorPasskeyAuthenticator
+
 type adminOperatorSetupper interface {
-	StartInitialSetup(ctx context.Context, input adminapplication.AdminInitialSetupStartInput) (adminapplication.AdminOperatorSetupChallengeResult, error)
-	FinishInitialSetup(ctx context.Context, input adminapplication.AdminInitialSetupFinishInput) (adminauth.OperatorSessionResult, error)
-	StartOperatorSetup(ctx context.Context, input adminapplication.AdminOperatorSetupStartInput) (adminapplication.AdminOperatorSetupChallengeResult, error)
-	FinishOperatorSetup(ctx context.Context, input adminapplication.AdminOperatorSetupFinishInput) (adminauth.OperatorSessionResult, error)
-	CreateOperator(ctx context.Context, input adminapplication.AdminCreateOperatorInput) (adminapplication.AdminCreatedOperator, error)
+	StartInitialSetup(ctx context.Context, input operatorsapplication.InitialSetupStartInput) (operatorsapplication.SetupChallengeResult, error)
+	FinishInitialSetup(ctx context.Context, input operatorsapplication.InitialSetupFinishInput) (adminauth.OperatorSessionResult, error)
+	StartOperatorSetup(ctx context.Context, input operatorsapplication.SetupStartInput) (operatorsapplication.SetupChallengeResult, error)
+	FinishOperatorSetup(ctx context.Context, input operatorsapplication.SetupFinishInput) (adminauth.OperatorSessionResult, error)
+	CreateOperator(ctx context.Context, input operatorsapplication.CreateOperatorInput) (operatorsapplication.CreatedOperator, error)
 }
 
 // OperatorSetupper は Admin setup handler が呼び出す application 境界である。
@@ -162,8 +203,16 @@ type adminOperatorSetupper interface {
 type OperatorSetupper = adminOperatorSetupper
 
 type adminOperatorPasskeyVerifier interface {
-	VerifyOperatorPasskey(ctx context.Context, challengeID string, credential adminWebAuthnAssertionCredential) (string, error)
+	VerifyOperatorPasskey(ctx context.Context, challengeID string, credential adminauth.WebAuthnAssertionCredentialDTO) (string, error)
 }
+
+// OperatorPasskeyVerifier は Admin passkey finish handler が WebAuthn assertion を検証する境界である。
+//
+// 役割:
+//   - HTTP DTO から取り出した assertion を署名検証し、検証済み credential handle だけを passkey login service へ渡す。
+//   - handler が raw credential handle を信用して session 発行へ進むことを防ぐ。
+//   - nil の場合は passkey finish route を 503 で fail-close する。
+type OperatorPasskeyVerifier = adminOperatorPasskeyVerifier
 
 type adminOperatorPasskeyManager interface {
 	ListOperatorPasskeys(ctx context.Context, input adminauth.ListOperatorPasskeysInput) (adminauth.OperatorPasskeyListResult, error)
@@ -178,23 +227,9 @@ type adminOperatorPasskeyManager interface {
 //   - nil の場合は passkey 管理 route を 503 で fail-close する。
 type OperatorPasskeyManager = adminOperatorPasskeyManager
 
-type adminWebAuthnAssertionCredential struct {
-	ID                      string
-	RawID                   string
-	Type                    string
-	AuthenticatorAttachment string
-	Response                adminWebAuthnAssertionResponse
-}
-
-type adminWebAuthnAssertionResponse struct {
-	ClientDataJSON    string
-	AuthenticatorData string
-	Signature         string
-	UserHandle        string
-}
-
 type strictServer struct {
 	operatorAuth              adminOperatorAuthenticator
+	operatorPasskeyAuth       adminOperatorPasskeyAuthenticator
 	operatorSetup             adminOperatorSetupper
 	operatorPasskeys          adminOperatorPasskeyVerifier
 	operatorPasskeyManagement adminOperatorPasskeyManager
@@ -261,7 +296,7 @@ func (s strictServer) GetAdminAccount(ctx context.Context, request adminopenapi.
 	}
 
 	// Step 3: generated path parameter を application DTO へ詰め替え、永続化 query は application/repository へ委譲する。
-	result, err := s.accountSearch.GetAccount(ctx, adminapplication.AdminAccountDetailInput{AccountID: string(request.AccountId), RequestID: requestID})
+	result, err := s.accountSearch.GetAccount(ctx, accountsapplication.AccountDetailInput{AccountID: string(request.AccountId), RequestID: requestID})
 	if err != nil {
 		return getAdminAccountFailure(requestID, err), nil
 	}
@@ -283,15 +318,28 @@ func (s strictServer) FinishAdminInitialSetup(ctx context.Context, request admin
 		return adminopenapi.FinishAdminInitialSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminInitialSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 2: bootstrap secret と WebAuthn attestation は application use case に渡し、handler は token/hash/challenge 判定を行わない。
-	result, err := s.operatorSetup.FinishInitialSetup(ctx, adminapplication.AdminInitialSetupFinishInput{Email: string(request.Body.Email), DisplayName: request.Body.DisplayName, BootstrapSecret: request.Body.BootstrapSecret, RequestID: request.Body.RequestId, Credential: adminAttestationCredentialDTO(request.Body.Credential)})
+	// Step 2: credentialMode は handler で transport 出力境界だけに使い、session 発行 rule は application use case へ閉じる。
+	mode, ok := adminSessionCredentialMode(request.Body.CredentialMode)
+	if !ok {
+		return adminopenapi.FinishAdminInitialSetup400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.FinishAdminInitialSetup400ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	// Step 3: bootstrap secret と WebAuthn attestation は application use case に渡し、handler は token/hash/challenge 判定を行わない。
+	result, err := s.operatorSetup.FinishInitialSetup(ctx, operatorsapplication.InitialSetupFinishInput{Email: string(request.Body.Email), DisplayName: request.Body.DisplayName, BootstrapSecret: request.Body.BootstrapSecret, RequestID: request.Body.RequestId, Credential: adminAttestationCredentialDTO(request.Body.Credential)})
 	if err != nil {
 		return finishAdminInitialSetupFailure(requestID, err), nil
 	}
-	if !adminSessionResultHasSecrets(result) || !setAdminRefreshCookie(ctx, result.RefreshCookie) {
+	if !adminSessionResultHasSecrets(result) {
 		return adminopenapi.FinishAdminInitialSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminInitialSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
-	return adminopenapi.FinishAdminInitialSetup200JSONResponse{Body: adminAuthSessionResponse(result, requestID), Headers: adminopenapi.FinishAdminInitialSetup200ResponseHeaders{CacheControl: noStoreValue}}, nil
+	body, responseErr := adminAuthSessionUnionResponse(result, requestID, mode)
+	if responseErr != nil {
+		return adminopenapi.FinishAdminInitialSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminInitialSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	if !applyAdminRefreshCredential(ctx, result.RefreshCookie, mode) {
+		return adminopenapi.FinishAdminInitialSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminInitialSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	return adminopenapi.FinishAdminInitialSetup200JSONResponse{Body: body, Headers: adminopenapi.FinishAdminInitialSetup200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
 func (s strictServer) StartAdminInitialSetup(ctx context.Context, request adminopenapi.StartAdminInitialSetupRequestObject) (adminopenapi.StartAdminInitialSetupResponseObject, error) {
@@ -305,7 +353,7 @@ func (s strictServer) StartAdminInitialSetup(ctx context.Context, request admino
 	}
 
 	// Step 2: bootstrap 検証、operator 0 件確認、challenge 発行を application use case へ委譲する。
-	challenge, err := s.operatorSetup.StartInitialSetup(ctx, adminapplication.AdminInitialSetupStartInput{Email: string(request.Body.Email), DisplayName: request.Body.DisplayName, BootstrapSecret: request.Body.BootstrapSecret, RequestID: requestID})
+	challenge, err := s.operatorSetup.StartInitialSetup(ctx, operatorsapplication.InitialSetupStartInput{Email: string(request.Body.Email), DisplayName: request.Body.DisplayName, BootstrapSecret: request.Body.BootstrapSecret, RequestID: requestID})
 	if err != nil {
 		return startAdminInitialSetupFailure(requestID, err), nil
 	}
@@ -329,15 +377,28 @@ func (s strictServer) FinishAdminOperatorSetup(ctx context.Context, request admi
 		return adminopenapi.FinishAdminOperatorSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminOperatorSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 2: setup token consumption と attestation verification は application use case に集約する。
-	result, err := s.operatorSetup.FinishOperatorSetup(ctx, adminapplication.AdminOperatorSetupFinishInput{SetupToken: request.Body.SetupToken, RequestID: request.Body.RequestId, Credential: adminAttestationCredentialDTO(request.Body.Credential)})
+	// Step 2: credentialMode は handler で transport 出力境界だけに使い、session 発行 rule は application use case へ閉じる。
+	mode, ok := adminSessionCredentialMode(request.Body.CredentialMode)
+	if !ok {
+		return adminopenapi.FinishAdminOperatorSetup400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.FinishAdminOperatorSetup400ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	// Step 3: setup token consumption と attestation verification は application use case に集約する。
+	result, err := s.operatorSetup.FinishOperatorSetup(ctx, operatorsapplication.SetupFinishInput{SetupToken: request.Body.SetupToken, RequestID: request.Body.RequestId, Credential: adminAttestationCredentialDTO(request.Body.Credential)})
 	if err != nil {
 		return finishAdminOperatorSetupFailure(requestID, err), nil
 	}
-	if !adminSessionResultHasSecrets(result) || !setAdminRefreshCookie(ctx, result.RefreshCookie) {
+	if !adminSessionResultHasSecrets(result) {
 		return adminopenapi.FinishAdminOperatorSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminOperatorSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
-	return adminopenapi.FinishAdminOperatorSetup200JSONResponse{Body: adminAuthSessionResponse(result, requestID), Headers: adminopenapi.FinishAdminOperatorSetup200ResponseHeaders{CacheControl: noStoreValue}}, nil
+	body, responseErr := adminAuthSessionUnionResponse(result, requestID, mode)
+	if responseErr != nil {
+		return adminopenapi.FinishAdminOperatorSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminOperatorSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	if !applyAdminRefreshCredential(ctx, result.RefreshCookie, mode) {
+		return adminopenapi.FinishAdminOperatorSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminOperatorSetup503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	return adminopenapi.FinishAdminOperatorSetup200JSONResponse{Body: body, Headers: adminopenapi.FinishAdminOperatorSetup200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
 func (s strictServer) StartAdminOperatorSetup(ctx context.Context, request adminopenapi.StartAdminOperatorSetupRequestObject) (adminopenapi.StartAdminOperatorSetupResponseObject, error) {
@@ -351,7 +412,7 @@ func (s strictServer) StartAdminOperatorSetup(ctx context.Context, request admin
 	}
 
 	// Step 2: setup token 検証と challenge 発行を application use case に委譲し、handler は token 状態を区別しない。
-	challenge, err := s.operatorSetup.StartOperatorSetup(ctx, adminapplication.AdminOperatorSetupStartInput{SetupToken: request.Body.SetupToken, RequestID: requestID})
+	challenge, err := s.operatorSetup.StartOperatorSetup(ctx, operatorsapplication.SetupStartInput{SetupToken: request.Body.SetupToken, RequestID: requestID})
 	if err != nil {
 		return startAdminOperatorSetupFailure(requestID, err), nil
 	}
@@ -436,7 +497,7 @@ func (s strictServer) LogoutAdminOperator(ctx context.Context, _ adminopenapi.Lo
 }
 
 func (s strictServer) ListAdminOperatorPasskeys(ctx context.Context, _ adminopenapi.ListAdminOperatorPasskeysRequestObject) (adminopenapi.ListAdminOperatorPasskeysResponseObject, error) {
-	// Step 1: passkey 一覧 response と error response 用の追跡 ID を生成し、CSRF 検証済み request の監査性を保つ。
+	// Step 1: passkey 一覧 response と error response 用の追跡 ID を生成し、Bearer 検証済み request の監査性を保つ。
 	requestID := nextAdminRequestID()
 
 	// Step 2: passkey 管理 use case 未接続では credential metadata を公開せず、Admin auth boundary を fail-closed にする。
@@ -461,7 +522,7 @@ func (s strictServer) ListAdminOperatorPasskeys(ctx context.Context, _ adminopen
 }
 
 func (s strictServer) DeleteAdminOperatorPasskey(ctx context.Context, request adminopenapi.DeleteAdminOperatorPasskeyRequestObject) (adminopenapi.DeleteAdminOperatorPasskeyResponseObject, error) {
-	// Step 1: passkey 削除 response と error response 用の追跡 ID を生成し、CSRF 検証済み request の監査性を保つ。
+	// Step 1: passkey 削除 response と error response 用の追跡 ID を生成し、Bearer 検証済み request の監査性を保つ。
 	requestID := nextAdminRequestID()
 
 	// Step 2: passkey 管理 use case 未接続では credential を削除せず、Admin auth boundary を fail-closed にする。
@@ -484,7 +545,7 @@ func (s strictServer) DeleteAdminOperatorPasskey(ctx context.Context, request ad
 	return adminopenapi.DeleteAdminOperatorPasskey204Response{Headers: adminopenapi.DeleteAdminOperatorPasskey204ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
-func (s strictServer) RefreshAdminOperatorSession(ctx context.Context, _ adminopenapi.RefreshAdminOperatorSessionRequestObject) (adminopenapi.RefreshAdminOperatorSessionResponseObject, error) {
+func (s strictServer) RefreshAdminOperatorSession(ctx context.Context, request adminopenapi.RefreshAdminOperatorSessionRequestObject) (adminopenapi.RefreshAdminOperatorSessionResponseObject, error) {
 	// Step 1: refresh / CSRF 再発行用の request ID を生成し、Cookie 欠落時も non-secret response に限定する。
 	requestID := nextAdminRequestID()
 
@@ -493,21 +554,33 @@ func (s strictServer) RefreshAdminOperatorSession(ctx context.Context, _ adminop
 		return adminopenapi.RefreshAdminOperatorSession503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.RefreshAdminOperatorSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 3: refreshToken 平文は HttpOnly Cookie からだけ読み、body や JavaScript storage 由来の値を認証材料にしない。
-	refreshCookie, ok := adminRefreshCookieValue(ctx)
+	// Step 3: context refresh は accessToken Authorization header を refresh credential として扱わず、同時提示時も fail-close にする。
+	if adminAuthorizationHeaderPresent(ctx) {
+		return adminopenapi.RefreshAdminOperatorSession401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.RefreshAdminOperatorSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	// Step 4: Cookie mode と Bearer mode の refresh credential を exactly-one で抽出し、ambiguous request を rotation 前に拒否する。
+	refreshCredential, mode, ok := adminRefreshCredential(ctx, request.Body)
 	if !ok {
 		return adminopenapi.RefreshAdminOperatorSession401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.RefreshAdminOperatorSession401ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
-	result, err := s.operatorAuth.RefreshOperatorSession(ctx, adminauth.RefreshOperatorSessionInput{RefreshCookieValue: refreshCookie})
+	result, err := s.operatorAuth.RefreshOperatorSession(ctx, adminauth.RefreshOperatorSessionInput{AuthContextID: request.AuthContextId, RefreshTokenValue: refreshCredential})
 	if err != nil {
 		return refreshAdminOperatorSessionFailure(requestID, err), nil
 	}
-	if !adminSessionResultHasSecrets(result) || !setAdminRefreshCookie(ctx, result.RefreshCookie) {
+	if !adminSessionResultHasSecrets(result) {
 		return adminopenapi.RefreshAdminOperatorSession503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.RefreshAdminOperatorSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 4: accessToken と CSRF token だけを body に返し、refreshToken 平文は Set-Cookie header 専用に保つ。
-	return adminopenapi.RefreshAdminOperatorSession200JSONResponse{Body: adminAuthSessionResponse(result, requestID), Headers: adminopenapi.RefreshAdminOperatorSession200ResponseHeaders{CacheControl: noStoreValue}}, nil
+	// Step 5: credential mode ごとの body shape を生成し、Cookie mode だけ refreshToken 平文を body から除外する。
+	body, responseErr := adminContextRefreshUnionResponse(result, requestID, mode)
+	if responseErr != nil {
+		return adminopenapi.RefreshAdminOperatorSession503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.RefreshAdminOperatorSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	if !applyAdminRefreshCredential(ctx, result.RefreshCookie, mode) {
+		return adminopenapi.RefreshAdminOperatorSession503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.RefreshAdminOperatorSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	return adminopenapi.RefreshAdminOperatorSession200JSONResponse{Body: body, Headers: adminopenapi.RefreshAdminOperatorSession200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
 func (s strictServer) FinishAdminPasskeyAuthentication(ctx context.Context, request adminopenapi.FinishAdminPasskeyAuthenticationRequestObject) (adminopenapi.FinishAdminPasskeyAuthenticationResponseObject, error) {
@@ -522,28 +595,42 @@ func (s strictServer) FinishAdminPasskeyAuthentication(ctx context.Context, requ
 		return adminopenapi.FinishAdminPasskeyAuthentication400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.FinishAdminPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 3: Admin auth service または WebAuthn verifier 未接続では credential を処理せず、session/Cookie 発行を fail-closed にする。
-	if s.operatorAuth == nil || s.operatorPasskeys == nil {
+	// Step 3: Admin passkey login service または WebAuthn verifier 未接続では credential を処理せず、session/Cookie 発行を fail-closed にする。
+	if s.operatorPasskeyAuth == nil || s.operatorPasskeys == nil {
 		return adminopenapi.FinishAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	// Step 4: assertion credential は verifier に渡して署名/challenge/user verification を確認し、検証済み handle だけを auth service に渡す。
-	credentialHandle, err := s.operatorPasskeys.VerifyOperatorPasskey(ctx, request.Body.RequestId, adminAssertionCredentialDTO(request.Body.Credential))
+	// requestId は追跡 ID のため challenge lookup key としては使わず、provider が clientDataJSON 内の challenge から session selector を自己解決する。
+	credentialHandle, err := s.operatorPasskeys.VerifyOperatorPasskey(ctx, "", adminAssertionCredentialDTO(request.Body.Credential))
 	if err != nil {
 		return finishAdminPasskeyAuthenticationFailure(requestID, err), nil
 	}
 
-	// Step 5: 検証済み credential handle だけを application DTO へ写像し、operator/session rule は service に委譲する。
-	result, err := s.operatorAuth.FinishOperatorPasskey(ctx, adminauth.FinishOperatorPasskeyInput{ChallengeID: request.Body.RequestId, CredentialHandle: credentialHandle})
+	// Step 5: credentialMode は handler で transport 出力境界だけに使い、session 発行 rule は application use case へ閉じる。
+	mode, ok := adminSessionCredentialMode(request.Body.CredentialMode)
+	if !ok {
+		return adminopenapi.FinishAdminPasskeyAuthentication400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.FinishAdminPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+
+	// Step 6: 検証済み credential handle だけを application DTO へ写像し、operator/session rule は service に委譲する。
+	result, err := s.operatorPasskeyAuth.FinishOperatorPasskey(ctx, adminauth.FinishOperatorPasskeyInput{ChallengeID: request.Body.RequestId, CredentialHandle: credentialHandle})
 	if err != nil {
 		return finishAdminPasskeyAuthenticationFailure(requestID, err), nil
 	}
-	if !adminSessionResultHasSecrets(result) || !setAdminRefreshCookie(ctx, result.RefreshCookie) {
+	if !adminSessionResultHasSecrets(result) {
 		return adminopenapi.FinishAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 6: refreshToken 平文を body に含めず、accessToken/CSRF/operator profile だけを generated DTO へ変換する。
-	return adminopenapi.FinishAdminPasskeyAuthentication200JSONResponse{Body: adminAuthSessionResponse(result, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication200ResponseHeaders{CacheControl: noStoreValue}}, nil
+	// Step 7: credential mode ごとの body shape を生成し、Cookie mode だけ refreshToken 平文を body から除外する。
+	body, responseErr := adminAuthSessionUnionResponse(result, requestID, mode)
+	if responseErr != nil {
+		return adminopenapi.FinishAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	if !applyAdminRefreshCredential(ctx, result.RefreshCookie, mode) {
+		return adminopenapi.FinishAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
+	return adminopenapi.FinishAdminPasskeyAuthentication200JSONResponse{Body: body, Headers: adminopenapi.FinishAdminPasskeyAuthentication200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
 func (s strictServer) StartAdminPasskeyAuthentication(ctx context.Context, request adminopenapi.StartAdminPasskeyAuthenticationRequestObject) (adminopenapi.StartAdminPasskeyAuthenticationResponseObject, error) {
@@ -556,22 +643,23 @@ func (s strictServer) StartAdminPasskeyAuthentication(ctx context.Context, reque
 	}
 
 	// Step 3: challenge provider を持つ application service が未接続なら、認証 ceremony を開始せず fail-closed にする。
-	if s.operatorAuth == nil {
+	if s.operatorPasskeyAuth == nil {
 		return adminopenapi.StartAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.StartAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
 	// Step 4: handler は identifier を正規化せず application DTO へ渡し、存在確認や challenge 発行 rule を service/provider に委譲する。
-	challenge, err := s.operatorAuth.StartOperatorPasskey(ctx, adminauth.StartOperatorPasskeyInput{Identifier: request.Body.Identifier})
+	challenge, err := s.operatorPasskeyAuth.StartOperatorPasskey(ctx, adminauth.StartOperatorPasskeyInput{Identifier: request.Body.Identifier})
 	if err != nil {
 		return startAdminPasskeyAuthenticationFailure(requestID, err), nil
 	}
+	// Step 5: requestId は追跡 ID のまま返し、WebAuthn session selector は browser が返す clientDataJSON.challenge から verifier が復元する。
 	body := adminopenapi.WWWTemplatePasskeyStartResponse{RequestId: requestID, Challenge: challenge.Challenge, RpId: challenge.WebAuthnRPID, UserVerification: "required"}
 	applyAdminWebAuthnLoginOptions(&body, challenge.WebAuthnOptions)
-	if body.Challenge == "" || body.RpId == "" {
+	if body.RequestId == "" || body.Challenge == "" || body.RpId == "" {
 		return adminopenapi.StartAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.StartAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 
-	// Step 5: generated response DTO だけを返し、session secret は start response に含めない。
+	// Step 6: generated response DTO だけを返し、session secret は start response に含めない。
 	return adminopenapi.StartAdminPasskeyAuthentication200JSONResponse{Body: body, Headers: adminopenapi.StartAdminPasskeyAuthentication200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
@@ -617,7 +705,7 @@ type adminWebAuthnRegistrationOptionsJSON struct {
 	} `json:"publicKey"`
 }
 
-func adminPasskeyAddStartResponse(challenge adminapplication.AdminOperatorSetupChallengeResult) (adminopenapi.WWWTemplatePasskeyAddStartResponse, error) {
+func adminPasskeyAddStartResponse(challenge operatorsapplication.SetupChallengeResult) (adminopenapi.WWWTemplatePasskeyAddStartResponse, error) {
 	// Step 1: WebAuthn provider が生成した JSON options を response DTO へ fail-closed に写像する。
 	body := adminopenapi.WWWTemplatePasskeyAddStartResponse{RequestId: challenge.RequestID, Challenge: challenge.Challenge}
 	options, err := adminRegistrationOptionsFromChallenge(challenge.OptionsJSON)
@@ -738,7 +826,7 @@ func applyAdminWebAuthnLoginOptions(resp *adminopenapi.WWWTemplatePasskeyStartRe
 	}
 }
 
-func adminAssertionCredentialDTO(credential adminopenapi.WWWTemplateWebAuthnAssertionCredential) adminWebAuthnAssertionCredential {
+func adminAssertionCredentialDTO(credential adminopenapi.WWWTemplateWebAuthnAssertionCredential) adminauth.WebAuthnAssertionCredentialDTO {
 	// Step 1: optional userHandle / authenticatorAttachment を pointer から primitive string へ安全に写像し、nil を空値として扱う。
 	userHandle := ""
 	if credential.Response.UserHandle != nil {
@@ -750,12 +838,12 @@ func adminAssertionCredentialDTO(credential adminopenapi.WWWTemplateWebAuthnAsse
 	}
 
 	// Step 2: generated WebAuthn assertion DTO を verifier 用 application DTO に詰め替え、handler では署名検証結果を自前判定しない。
-	return adminWebAuthnAssertionCredential{
+	return adminauth.WebAuthnAssertionCredentialDTO{
 		ID:                      credential.Id,
 		RawID:                   credential.RawId,
 		Type:                    credential.Type,
 		AuthenticatorAttachment: authenticatorAttachment,
-		Response: adminWebAuthnAssertionResponse{
+		Response: adminauth.WebAuthnAssertionResponseDTO{
 			ClientDataJSON:    credential.Response.ClientDataJSON,
 			AuthenticatorData: credential.Response.AuthenticatorData,
 			Signature:         credential.Response.Signature,
@@ -789,31 +877,31 @@ func authOperationError(requestID string, message string) adminopenapi.WWWTempla
 	return adminopenapi.WWWTemplateAuthOperationErrorResponse{RequestId: requestID, Error: message}
 }
 
-func accountCreationInput(ctx context.Context, body adminopenapi.AdminCreateAccountRequest, requestID string) (adminapplication.AdminCreateAccountInput, bool) {
+func accountCreationInput(ctx context.Context, body adminopenapi.WWWTemplateCreateAccountRequest, requestID string) (accountsapplication.CreateAccountInput, bool) {
 	// Step 1: middleware が request.Context に保存した primitive 値だけを読み、handler 内に RBAC role map を置かない。
 	operatorID, ok := contextString(ctx, adminContextKeyOperatorID)
 	if !ok {
-		return adminapplication.AdminCreateAccountInput{}, false
+		return accountsapplication.CreateAccountInput{}, false
 	}
 	operatorEmail, ok := contextString(ctx, adminContextKeyOperatorEmail)
 	if !ok {
-		return adminapplication.AdminCreateAccountInput{}, false
+		return accountsapplication.CreateAccountInput{}, false
 	}
 	operatorRole, ok := contextString(ctx, adminContextKeyOperatorRole)
 	if !ok {
-		return adminapplication.AdminCreateAccountInput{}, false
+		return accountsapplication.CreateAccountInput{}, false
 	}
 	passkeyState, ok := contextString(ctx, adminContextKeyOperatorPasskeyRegistrationState)
 	if !ok {
-		return adminapplication.AdminCreateAccountInput{}, false
+		return accountsapplication.CreateAccountInput{}, false
 	}
 	operatorActive, ok := contextBool(ctx, adminContextKeyOperatorActive)
 	if !ok {
-		return adminapplication.AdminCreateAccountInput{}, false
+		return accountsapplication.CreateAccountInput{}, false
 	}
 
 	// Step 2: raw email は正規化せず application DTO へ渡し、AccountEmail domain object だけが入力 rule を所有する状態に保つ。
-	return adminapplication.AdminCreateAccountInput{
+	return accountsapplication.CreateAccountInput{
 		Email:                    string(body.Email),
 		RequestID:                requestID,
 		OperatorID:               operatorID,
@@ -824,36 +912,36 @@ func accountCreationInput(ctx context.Context, body adminopenapi.AdminCreateAcco
 	}, true
 }
 
-func operatorCreationInput(ctx context.Context, body adminopenapi.AdminCreateOperatorRequest, requestID string) (adminapplication.AdminCreateOperatorInput, bool) {
+func operatorCreationInput(ctx context.Context, body adminopenapi.AdminCreateOperatorRequest, requestID string) (operatorsapplication.CreateOperatorInput, bool) {
 	// Step 1: middleware が検証済み session から保存した acting operator snapshot を読み、Product account 情報を operator 管理に混入させない。
 	operatorID, ok := contextString(ctx, adminContextKeyOperatorID)
 	if !ok {
-		return adminapplication.AdminCreateOperatorInput{}, false
+		return operatorsapplication.CreateOperatorInput{}, false
 	}
 	operatorEmail, ok := contextString(ctx, adminContextKeyOperatorEmail)
 	if !ok {
-		return adminapplication.AdminCreateOperatorInput{}, false
+		return operatorsapplication.CreateOperatorInput{}, false
 	}
 	operatorRole, ok := contextString(ctx, adminContextKeyOperatorRole)
 	if !ok {
-		return adminapplication.AdminCreateOperatorInput{}, false
+		return operatorsapplication.CreateOperatorInput{}, false
 	}
 	passkeyState, ok := contextString(ctx, adminContextKeyOperatorPasskeyRegistrationState)
 	if !ok {
-		return adminapplication.AdminCreateOperatorInput{}, false
+		return operatorsapplication.CreateOperatorInput{}, false
 	}
 	operatorActive, ok := contextBool(ctx, adminContextKeyOperatorActive)
 	if !ok {
-		return adminapplication.AdminCreateOperatorInput{}, false
+		return operatorsapplication.CreateOperatorInput{}, false
 	}
 
 	// Step 2: 作成対象 email/role は raw DTO のまま application に渡し、domain.OperatorEmail/OperatorRole だけが validation rule を所有する状態に保つ。
-	return adminapplication.AdminCreateOperatorInput{Email: string(body.Email), Role: string(body.Role), RequestID: requestID, OperatorID: operatorID, OperatorEmail: operatorEmail, OperatorRole: operatorRole, OperatorActive: operatorActive, PasskeyRegistrationState: passkeyState}, true
+	return operatorsapplication.CreateOperatorInput{Email: string(body.Email), Role: string(body.Role), RequestID: requestID, OperatorID: operatorID, OperatorEmail: operatorEmail, OperatorRole: operatorRole, OperatorActive: operatorActive, PasskeyRegistrationState: passkeyState}, true
 }
 
-func accountSearchInput(params adminopenapi.ListAdminAccountsParams, requestID string) adminapplication.AdminAccountSearchInput {
+func accountSearchInput(params adminopenapi.ListAdminAccountsParams, requestID string) accountsapplication.AccountSearchInput {
 	// Step 1: optional query parameter は nil 安全に primitive DTO へ移し、handler では範囲や長さを判断しない。
-	input := adminapplication.AdminAccountSearchInput{Limit: params.Limit, RequestID: requestID}
+	input := accountsapplication.AccountSearchInput{Limit: params.Limit, RequestID: requestID}
 	if params.Email != nil {
 		input.Email = *params.Email
 	}
@@ -891,24 +979,18 @@ func contextBool(ctx context.Context, key string) (bool, bool) {
 
 func adminAccessTokenFromContext(ctx context.Context) (string, bool) {
 	// Step 1: generated strict handler が渡す Gin context だけを header source として扱い、外部 context value に token を置かない。
-	ginContext, ok := ctx.(*gin.Context)
-	if !ok {
-		return "", false
-	}
+	return sharedhttp.BearerTokenFromContext(ctx, adminAuthHeader)
+}
 
-	// Step 2: middleware と同じ Bearer 抽出 helper を使い、Product token や Basic header を Admin operator token と誤認しない。
-	accessToken := adminBearerToken(ginContext.GetHeader(adminAuthHeader))
-	return accessToken, accessToken != ""
+func adminAuthorizationHeaderPresent(ctx context.Context) bool {
+	// Step 1: generated strict handler が渡す Gin context だけを header source として扱い、refresh endpoint で bearer accessToken の混入を検出する。
+	return sharedhttp.AuthorizationHeaderPresent(ctx, adminAuthHeader)
 }
 
 func adminRefreshCookieValue(ctx context.Context) (string, bool) {
 	// Step 1: refreshToken は HttpOnly Cookie からだけ取り出し、request body や header 由来の値を rotation 材料にしない。
-	ginContext, ok := ctx.(*gin.Context)
+	value, ok := sharedhttp.CookieValueFromContext(ctx, adminRefreshCookieName)
 	if !ok {
-		return "", false
-	}
-	value, err := ginContext.Cookie(adminRefreshCookieName)
-	if err != nil || strings.TrimSpace(value) == "" {
 		return "", false
 	}
 
@@ -916,39 +998,83 @@ func adminRefreshCookieValue(ctx context.Context) (string, bool) {
 	return value, true
 }
 
-func setAdminRefreshCookie(ctx context.Context, command adminauth.RefreshCookieCommand) bool {
+type adminCredentialMode string
+
+const (
+	adminCredentialModeCookie adminCredentialMode = "cookie"
+	adminCredentialModeBearer adminCredentialMode = "bearer"
+)
+
+func adminSessionCredentialMode(mode adminopenapi.WWWTemplateCredentialMode) (adminCredentialMode, bool) {
+	// Step 1: generated enum の cookie / bearer だけを許可し、空値や未知値では session credential の露出先を決めない。
+	switch mode {
+	case adminopenapi.WWWTemplateCredentialModeCookie:
+		return adminCredentialModeCookie, true
+	case adminopenapi.WWWTemplateCredentialModeBearer:
+		return adminCredentialModeBearer, true
+	default:
+		return "", false
+	}
+}
+
+func adminRefreshCredential(ctx context.Context, body *adminopenapi.RefreshAdminOperatorSessionJSONRequestBody) (string, adminCredentialMode, bool) {
+	// Step 1: Cookie mode の HttpOnly refresh credential を先に読み取り、body credential との同時提示を検出できる状態にする。
+	cookieValue, hasCookie := adminRefreshCookieValue(ctx)
+
+	// Step 2: Bearer mode body は refreshToken が存在する場合だけ候補にし、Cookie mode の空 JSON body は Cookie credential の邪魔をさせない。
+	bodyValue := ""
+	if body != nil {
+		bodyValue = strings.TrimSpace(body.RefreshToken)
+		if bodyValue != "" && body.CredentialMode != adminopenapi.WWWTemplateBearerContextRefreshRequestCredentialModeBearer {
+			return "", "", false
+		}
+	}
+	hasBody := bodyValue != ""
+
+	// Step 3: Cookie と body の exactly-one を強制し、ambiguous / missing credential で rotation へ進まない。
+	if hasCookie == hasBody {
+		return "", "", false
+	}
+	if hasCookie {
+		return cookieValue, adminCredentialModeCookie, true
+	}
+	return bodyValue, adminCredentialModeBearer, true
+}
+
+func applyAdminRefreshCredential(ctx context.Context, command adminauth.OperatorRefreshCookieCommand, mode adminCredentialMode) bool {
+	// Step 1: Cookie mode は application が返した command を Set-Cookie header に反映し、body に refreshToken 平文を置かない。
+	if mode == adminCredentialModeCookie {
+		return setAdminRefreshCookie(ctx, command)
+	}
+
+	// Step 2: Bearer mode は refreshToken を response body にだけ返すため、Cookie command に必要な secret があることだけを確認する。
+	return mode == adminCredentialModeBearer && strings.TrimSpace(command.Value) != ""
+}
+
+func setAdminRefreshCookie(ctx context.Context, command adminauth.OperatorRefreshCookieCommand) bool {
 	// Step 1: generated strict handler から Gin context が渡らない場合は Set-Cookie を出せないため、session 発行を失敗扱いにする。
 	ginContext, ok := ctx.(*gin.Context)
 	if !ok {
 		return false
 	}
-	if command.Name == "" || command.Path == "" {
+
+	// Step 2: Admin refresh Cookie の Path は HTTP adapter が auth context selector から構築し、application 層から Cookie 属性を受け取らない。
+	path, err := sharedhttp.BuildRefreshPath(command.AuthContextID)
+	if err != nil {
 		return false
 	}
 
-	// Step 2: application service が返した Cookie command だけを header に反映し、refreshToken を body DTO へ置かない。
-	ginContext.SetSameSite(adminRefreshCookieSameSite(command.SameSite))
+	// Step 3: Admin refresh Cookie は強権限 operator session の長寿命 credential なので、SameSite=Lax / Secure / HttpOnly を adapter 境界で固定する。
+	ginContext.SetSameSite(stdhttp.SameSiteLaxMode)
 	value := command.Value
 	if command.Clear {
 		value = ""
 	}
-	ginContext.SetCookie(command.Name, value, adminRefreshCookieMaxAge(command), command.Path, "", command.Secure, command.HTTPOnly)
+	ginContext.SetCookie(adminRefreshCookieName, value, adminRefreshCookieMaxAge(command), path, "", true, true)
 	return true
 }
 
-func adminRefreshCookieSameSite(value string) stdhttp.SameSite {
-	// Step 1: application command の SameSite 文字列を net/http の定数へ写像し、未知値は Lax に倒して cross-site POST の送信余地を抑える。
-	switch value {
-	case "Strict":
-		return stdhttp.SameSiteStrictMode
-	case "None":
-		return stdhttp.SameSiteNoneMode
-	default:
-		return stdhttp.SameSiteLaxMode
-	}
-}
-
-func adminRefreshCookieMaxAge(command adminauth.RefreshCookieCommand) int {
+func adminRefreshCookieMaxAge(command adminauth.OperatorRefreshCookieCommand) int {
 	// Step 1: Clear command は発行時と同じ path/name で即時削除するため、Gin SetCookie の削除値 -1 に変換する。
 	if command.Clear {
 		return -1
@@ -966,20 +1092,137 @@ func adminRefreshCookieMaxAge(command adminauth.RefreshCookieCommand) int {
 }
 
 func adminSessionResultHasSecrets(result adminauth.OperatorSessionResult) bool {
-	// Step 1: body 用 access/CSRF と Cookie 用 refreshToken のいずれかが空なら、半端な session を browser へ返さず fail-closed にする。
-	return result.AccessToken != "" && result.CSRFToken != "" && result.SessionID != "" && result.RefreshCookie.Value != ""
+	// Step 1: body 用 access token と Cookie 用 refreshToken のいずれかが空なら、半端な session を browser へ返さず fail-closed にする。
+	return result.AccessToken != "" && result.SessionID != "" && result.RefreshCookie.AuthContextID != "" && result.RefreshCookie.Value != ""
 }
 
-func adminAuthSessionResponse(result adminauth.OperatorSessionResult, requestID string) adminopenapi.AdminAuthSessionResponse {
-	// Step 1: application session DTO から browser-readable な値だけを generated DTO へ写像し、RefreshCookie field は意図的に無視する。
-	return adminopenapi.AdminAuthSessionResponse{
-		RequestId:   requestID,
-		AccessToken: result.AccessToken,
-		CsrfToken:   result.CSRFToken,
-		SessionId:   result.SessionID,
-		ExpiresAt:   result.ExpiresAt,
-		Operator:    adminOperatorProfile(result.Operator),
+func adminAuthSessionUnionResponse(result adminauth.OperatorSessionResult, requestID string, mode adminCredentialMode) (adminopenapi.AdminOperatorAuthSessionResponse, error) {
+	// Step 1: credential mode に対応する具体 DTO を oneOf union に格納し、Cookie body と Bearer body の secret 境界を分ける。
+	var union adminopenapi.AdminOperatorAuthSessionResponse
+	if mode == adminCredentialModeBearer {
+		body, err := adminBearerAuthSessionResponse(result, requestID)
+		if err != nil {
+			return adminopenapi.AdminOperatorAuthSessionResponse{}, err
+		}
+		if err := union.FromAdminBearerOperatorSessionResponse(body); err != nil {
+			return adminopenapi.AdminOperatorAuthSessionResponse{}, err
+		}
+		return union, nil
 	}
+	body, err := adminAuthSessionResponse(result, requestID)
+	if err != nil {
+		return adminopenapi.AdminOperatorAuthSessionResponse{}, err
+	}
+	if err := union.FromAdminOperatorSessionResponse(body); err != nil {
+		return adminopenapi.AdminOperatorAuthSessionResponse{}, err
+	}
+	return union, nil
+}
+
+func adminContextRefreshUnionResponse(result adminauth.OperatorSessionResult, requestID string, mode adminCredentialMode) (adminopenapi.AdminOperatorContextRefreshResponse, error) {
+	// Step 1: credential mode に対応する context refresh DTO を oneOf union に格納し、Bearer automation response と Cookie response を混在させない。
+	var union adminopenapi.AdminOperatorContextRefreshResponse
+	if mode == adminCredentialModeBearer {
+		body, err := adminBearerContextRefreshResponse(result, requestID)
+		if err != nil {
+			return adminopenapi.AdminOperatorContextRefreshResponse{}, err
+		}
+		if err := union.FromAdminBearerContextRefreshResponse(body); err != nil {
+			return adminopenapi.AdminOperatorContextRefreshResponse{}, err
+		}
+		return union, nil
+	}
+	body, err := adminContextRefreshResponse(result, requestID)
+	if err != nil {
+		return adminopenapi.AdminOperatorContextRefreshResponse{}, err
+	}
+	if err := union.FromAdminContextRefreshResponse(body); err != nil {
+		return adminopenapi.AdminOperatorContextRefreshResponse{}, err
+	}
+	return union, nil
+}
+
+func adminBearerAuthSessionResponse(result adminauth.OperatorSessionResult, requestID string) (adminopenapi.AdminBearerOperatorSessionResponse, error) {
+	// Step 1: Bearer automation response 用にも Operator subject payload を明示生成し、Admin artifact の operator field だけへ写像する。
+	operatorProfile, err := adminOperatorProfileForSession(result.Operator, result.SessionID)
+	if err != nil {
+		return adminopenapi.AdminBearerOperatorSessionResponse{}, err
+	}
+
+	// Step 2: Bearer automation response は refreshToken を body に含め、Cookie command と context index hint は出さない。
+	return adminopenapi.AdminBearerOperatorSessionResponse{
+		RequestId:      requestID,
+		AccessToken:    result.AccessToken,
+		RefreshToken:   result.RefreshCookie.Value,
+		SessionId:      result.SessionID,
+		AuthContextId:  result.SessionID,
+		ExpiresAt:      result.ExpiresAt,
+		Operator:       operatorProfile,
+		CredentialMode: adminopenapi.AdminBearerOperatorSessionResponseCredentialModeBearer,
+	}, nil
+}
+
+func adminAuthSessionResponse(result adminauth.OperatorSessionResult, requestID string) (adminopenapi.AdminOperatorSessionResponse, error) {
+	// Step 1: application session DTO から Operator subject payload を構築し、response の operator field を Admin 専用 subject として固定する。
+	operatorProfile, err := adminOperatorProfileForSession(result.Operator, result.SessionID)
+	if err != nil {
+		return adminopenapi.AdminOperatorSessionResponse{}, err
+	}
+
+	// Step 2: browser-readable な値だけを generated DTO へ写像し、RefreshCookie field は意図的に body へ入れない。
+	// Admin operator session は同じ session selector を refresh context selector として使い、Cookie-only contract に合わせる。
+	return adminopenapi.AdminOperatorSessionResponse{
+		RequestId:               requestID,
+		AccessToken:             result.AccessToken,
+		SessionId:               result.SessionID,
+		AuthContextId:           result.SessionID,
+		ExpiresAt:               result.ExpiresAt,
+		Operator:                operatorProfile,
+		CredentialMode:          adminopenapi.AdminOperatorSessionResponseCredentialModeCookie,
+		ClearCookieCommands:     []adminopenapi.WWWTemplateCookieClearCommand{},
+		ContextIndexUpdateHints: []adminopenapi.WWWTemplateContextIndexUpdateHint{},
+	}, nil
+}
+
+func adminContextRefreshResponse(result adminauth.OperatorSessionResult, requestID string) (adminopenapi.AdminContextRefreshResponse, error) {
+	// Step 1: refresh 成功時も Operator subject payload を明示生成し、Cookie mode context refresh の operator field へだけ反映する。
+	operatorProfile, err := adminOperatorProfileForSession(result.Operator, result.SessionID)
+	if err != nil {
+		return adminopenapi.AdminContextRefreshResponse{}, err
+	}
+
+	// Step 2: operator refreshToken 平文は body に入れず、Cookie mode context refresh union として accessToken だけを返す。
+	return adminopenapi.AdminContextRefreshResponse{
+		RequestId:               requestID,
+		AccessToken:             result.AccessToken,
+		SessionId:               result.SessionID,
+		AuthContextId:           result.SessionID,
+		ExpiresAt:               result.ExpiresAt,
+		Operator:                operatorProfile,
+		CredentialMode:          adminopenapi.AdminContextRefreshResponseCredentialModeCookie,
+		ClearCookieCommands:     []adminopenapi.WWWTemplateCookieClearCommand{},
+		ContextIndexUpdateHints: []adminopenapi.WWWTemplateContextIndexUpdateHint{},
+	}, nil
+}
+
+func adminBearerContextRefreshResponse(result adminauth.OperatorSessionResult, requestID string) (adminopenapi.AdminBearerContextRefreshResponse, error) {
+	// Step 1: Bearer automation refresh response でも Operator subject payload を明示生成し、Product account payload と混同しない。
+	operatorProfile, err := adminOperatorProfileForSession(result.Operator, result.SessionID)
+	if err != nil {
+		return adminopenapi.AdminBearerContextRefreshResponse{}, err
+	}
+
+	// Step 2: Bearer automation refresh response は新しい refreshToken を body に返し、Set-Cookie には依存しない。
+	return adminopenapi.AdminBearerContextRefreshResponse{
+		RequestId:      requestID,
+		AccessToken:    result.AccessToken,
+		RefreshToken:   result.RefreshCookie.Value,
+		SessionId:      result.SessionID,
+		AuthContextId:  result.SessionID,
+		ExpiresAt:      result.ExpiresAt,
+		Operator:       operatorProfile,
+		CredentialMode: adminopenapi.AdminBearerContextRefreshResponseCredentialModeBearer,
+	}, nil
 }
 
 func adminCurrentOperatorResponse(operator adminauth.OperatorDTO, requestID string) adminopenapi.AdminCurrentOperatorResponse {
@@ -1020,9 +1263,21 @@ func adminOperatorProfile(operator adminauth.OperatorDTO) adminopenapi.AdminOper
 	}
 }
 
+func adminOperatorProfileForSession(operator adminauth.OperatorDTO, sessionID string) (adminopenapi.AdminOperatorProfile, error) {
+	// Step 1: application DTO の operator ID と session ID から Admin operator subject payload を作り、HTTP adapter 境界で主体種別を明示する。
+	subject, err := conceptauth.NewOperatorSubjectPayload(operator.ID, sessionID)
+	if err != nil {
+		return adminopenapi.AdminOperatorProfile{}, err
+	}
+
+	// Step 2: generated Admin response の operator field には検証済み subject ID を使い、email/role/active は application DTO から値コピーする。
+	operator.ID = subject.OperatorID().String()
+	return adminOperatorProfile(operator), nil
+}
+
 func startAdminPasskeyAuthenticationFailure(requestID string, err error) adminopenapi.StartAdminPasskeyAuthenticationResponseObject {
 	// Step 1: challenge 開始の application error を non-secret な HTTP response へ写像し、identifier の存在有無を漏らさない。
-	if errors.Is(err, adminauth.ErrAdminAuthInternal) {
+	if errors.Is(err, adminauth.ErrOperatorAuthUnavailable) {
 		return adminopenapi.StartAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.StartAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}
 	}
 	return adminopenapi.StartAdminPasskeyAuthentication400JSONResponse{Body: authOperationError(requestID, adminAuthInvalidRequestMessage), Headers: adminopenapi.StartAdminPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}
@@ -1031,9 +1286,9 @@ func startAdminPasskeyAuthenticationFailure(requestID string, err error) adminop
 func finishAdminPasskeyAuthenticationFailure(requestID string, err error) adminopenapi.FinishAdminPasskeyAuthenticationResponseObject {
 	// Step 1: passkey finish の application error を generated response 種別へ写像し、credential 検証の詳細は body に出さない。
 	switch {
-	case errors.Is(err, adminauth.ErrAdminAuthInternal):
+	case errors.Is(err, adminauth.ErrOperatorAuthUnavailable):
 		return adminopenapi.FinishAdminPasskeyAuthentication503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthForbidden):
+	case errors.Is(err, adminauth.ErrOperatorAuthForbidden):
 		return adminopenapi.FinishAdminPasskeyAuthentication403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.FinishAdminPasskeyAuthentication403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.FinishAdminPasskeyAuthentication400JSONResponse{Body: authOperationError(requestID, adminAuthInvalidRequestMessage), Headers: adminopenapi.FinishAdminPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}
@@ -1043,9 +1298,9 @@ func finishAdminPasskeyAuthenticationFailure(requestID string, err error) admino
 func refreshAdminOperatorSessionFailure(requestID string, err error) adminopenapi.RefreshAdminOperatorSessionResponseObject {
 	// Step 1: refresh rotation の application error を 401/403/503 に限定し、refreshToken selector や hash 状態を response に出さない。
 	switch {
-	case errors.Is(err, adminauth.ErrAdminAuthInternal):
+	case errors.Is(err, adminauth.ErrOperatorAuthUnavailable):
 		return adminopenapi.RefreshAdminOperatorSession503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.RefreshAdminOperatorSession503ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthForbidden):
+	case errors.Is(err, adminauth.ErrOperatorAuthForbidden):
 		return adminopenapi.RefreshAdminOperatorSession403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.RefreshAdminOperatorSession403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.RefreshAdminOperatorSession401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.RefreshAdminOperatorSession401ResponseHeaders{CacheControl: noStoreValue}}
@@ -1055,9 +1310,9 @@ func refreshAdminOperatorSessionFailure(requestID string, err error) adminopenap
 func currentAdminOperatorFailure(requestID string, err error) adminopenapi.GetCurrentAdminOperatorResponseObject {
 	// Step 1: current operator の application error を stable auth failure に畳み、token/session/snapshot の詳細を隠す。
 	switch {
-	case errors.Is(err, adminauth.ErrAdminAuthInternal):
+	case errors.Is(err, adminauth.ErrOperatorAuthUnavailable):
 		return adminopenapi.GetCurrentAdminOperator503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.GetCurrentAdminOperator503ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthForbidden):
+	case errors.Is(err, adminauth.ErrOperatorAuthForbidden):
 		return adminopenapi.GetCurrentAdminOperator403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.GetCurrentAdminOperator403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.GetCurrentAdminOperator401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.GetCurrentAdminOperator401ResponseHeaders{CacheControl: noStoreValue}}
@@ -1067,9 +1322,9 @@ func currentAdminOperatorFailure(requestID string, err error) adminopenapi.GetCu
 func logoutAdminOperatorFailure(requestID string, err error) adminopenapi.LogoutAdminOperatorResponseObject {
 	// Step 1: logout の application error を stable auth failure に写像し、対象 session の存在有無を露出しない。
 	switch {
-	case errors.Is(err, adminauth.ErrAdminAuthInternal):
+	case errors.Is(err, adminauth.ErrOperatorAuthUnavailable):
 		return adminopenapi.LogoutAdminOperator503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.LogoutAdminOperator503ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthForbidden):
+	case errors.Is(err, adminauth.ErrOperatorAuthForbidden):
 		return adminopenapi.LogoutAdminOperator403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.LogoutAdminOperator403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.LogoutAdminOperator401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.LogoutAdminOperator401ResponseHeaders{CacheControl: noStoreValue}}
@@ -1079,9 +1334,9 @@ func logoutAdminOperatorFailure(requestID string, err error) adminopenapi.Logout
 func listAdminOperatorPasskeysFailure(requestID string, err error) adminopenapi.ListAdminOperatorPasskeysResponseObject {
 	// Step 1: passkey 一覧の application error を stable auth failure に畳み、保存層の詳細を隠す。
 	switch {
-	case errors.Is(err, adminauth.ErrAdminAuthInternal):
+	case errors.Is(err, adminauth.ErrOperatorAuthUnavailable):
 		return adminopenapi.ListAdminOperatorPasskeys503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.ListAdminOperatorPasskeys503ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthForbidden):
+	case errors.Is(err, adminauth.ErrOperatorAuthForbidden):
 		return adminopenapi.ListAdminOperatorPasskeys403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.ListAdminOperatorPasskeys403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.ListAdminOperatorPasskeys401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.ListAdminOperatorPasskeys401ResponseHeaders{CacheControl: noStoreValue}}
@@ -1091,13 +1346,13 @@ func listAdminOperatorPasskeysFailure(requestID string, err error) adminopenapi.
 func deleteAdminOperatorPasskeyFailure(requestID string, err error) adminopenapi.DeleteAdminOperatorPasskeyResponseObject {
 	// Step 1: passkey 削除の application error を stable HTTP response へ写像し、credential の所有者や存在有無の詳細を隠す。
 	switch {
-	case errors.Is(err, adminauth.ErrAdminAuthLastPasskey):
+	case errors.Is(err, adminauth.ErrOperatorAuthLastPasskey):
 		return adminopenapi.DeleteAdminOperatorPasskey409JSONResponse{Body: authOperationError(requestID, adminMinimumAuthenticatorMessage), Headers: adminopenapi.DeleteAdminOperatorPasskey409ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthBadRequest) || errors.Is(err, adminauth.ErrAdminAuthPasskeyNotFound):
+	case errors.Is(err, adminauth.ErrOperatorAuthInvalidInput) || errors.Is(err, adminauth.ErrOperatorAuthPasskeyNotFound):
 		return adminopenapi.DeleteAdminOperatorPasskey400JSONResponse{Body: authOperationError(requestID, adminAuthInvalidRequestMessage), Headers: adminopenapi.DeleteAdminOperatorPasskey400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthForbidden):
+	case errors.Is(err, adminauth.ErrOperatorAuthForbidden):
 		return adminopenapi.DeleteAdminOperatorPasskey403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.DeleteAdminOperatorPasskey403ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminauth.ErrAdminAuthInternal):
+	case errors.Is(err, adminauth.ErrOperatorAuthUnavailable):
 		return adminopenapi.DeleteAdminOperatorPasskey503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.DeleteAdminOperatorPasskey503ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.DeleteAdminOperatorPasskey401JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.DeleteAdminOperatorPasskey401ResponseHeaders{CacheControl: noStoreValue}}
@@ -1107,11 +1362,11 @@ func deleteAdminOperatorPasskeyFailure(requestID string, err error) adminopenapi
 func startAdminInitialSetupFailure(requestID string, err error) adminopenapi.StartAdminInitialSetupResponseObject {
 	// Step 1: bootstrap state の詳細を秘匿しつつ、既存 operator ありだけは UI が setup 画面を閉じられる conflict として返す。
 	switch {
-	case errors.Is(err, adminapplication.ErrAdminOperatorConflict):
+	case errors.Is(err, operatorsapplication.ErrOperatorConflict):
 		return adminopenapi.StartAdminInitialSetup409JSONResponse{Body: authOperationError(requestID, adminSetupUnavailableMessage), Headers: adminopenapi.StartAdminInitialSetup409ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorInvalidInput):
+	case errors.Is(err, operatorsapplication.ErrOperatorInvalidInput):
 		return adminopenapi.StartAdminInitialSetup400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.StartAdminInitialSetup400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorForbidden):
+	case errors.Is(err, operatorsapplication.ErrOperatorForbidden):
 		return adminopenapi.StartAdminInitialSetup403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.StartAdminInitialSetup403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.StartAdminInitialSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.StartAdminInitialSetup503ResponseHeaders{CacheControl: noStoreValue}}
@@ -1121,11 +1376,11 @@ func startAdminInitialSetupFailure(requestID string, err error) adminopenapi.Sta
 func finishAdminInitialSetupFailure(requestID string, err error) adminopenapi.FinishAdminInitialSetupResponseObject {
 	// Step 1: finish でも bootstrap/token/challenge 詳細を response に出さず、stable HTTP response へ畳む。
 	switch {
-	case errors.Is(err, adminapplication.ErrAdminOperatorConflict):
+	case errors.Is(err, operatorsapplication.ErrOperatorConflict):
 		return adminopenapi.FinishAdminInitialSetup409JSONResponse{Body: authOperationError(requestID, adminSetupUnavailableMessage), Headers: adminopenapi.FinishAdminInitialSetup409ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorInvalidInput):
+	case errors.Is(err, operatorsapplication.ErrOperatorInvalidInput):
 		return adminopenapi.FinishAdminInitialSetup400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.FinishAdminInitialSetup400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorForbidden):
+	case errors.Is(err, operatorsapplication.ErrOperatorForbidden):
 		return adminopenapi.FinishAdminInitialSetup403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.FinishAdminInitialSetup403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.FinishAdminInitialSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminInitialSetup503ResponseHeaders{CacheControl: noStoreValue}}
@@ -1135,9 +1390,9 @@ func finishAdminInitialSetupFailure(requestID string, err error) adminopenapi.Fi
 func startAdminOperatorSetupFailure(requestID string, err error) adminopenapi.StartAdminOperatorSetupResponseObject {
 	// Step 1: setup token の invalid/expired/consumed/registered を区別せず、non-revealing response へ畳む。
 	switch {
-	case errors.Is(err, adminapplication.ErrAdminOperatorInvalidInput):
+	case errors.Is(err, operatorsapplication.ErrOperatorInvalidInput):
 		return adminopenapi.StartAdminOperatorSetup400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.StartAdminOperatorSetup400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorForbidden):
+	case errors.Is(err, operatorsapplication.ErrOperatorForbidden):
 		return adminopenapi.StartAdminOperatorSetup403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.StartAdminOperatorSetup403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.StartAdminOperatorSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.StartAdminOperatorSetup503ResponseHeaders{CacheControl: noStoreValue}}
@@ -1147,9 +1402,9 @@ func startAdminOperatorSetupFailure(requestID string, err error) adminopenapi.St
 func finishAdminOperatorSetupFailure(requestID string, err error) adminopenapi.FinishAdminOperatorSetupResponseObject {
 	// Step 1: setup finish の token/challenge/passkey 詳細を隠し、UI には安定分類だけを返す。
 	switch {
-	case errors.Is(err, adminapplication.ErrAdminOperatorInvalidInput):
+	case errors.Is(err, operatorsapplication.ErrOperatorInvalidInput):
 		return adminopenapi.FinishAdminOperatorSetup400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.FinishAdminOperatorSetup400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorForbidden):
+	case errors.Is(err, operatorsapplication.ErrOperatorForbidden):
 		return adminopenapi.FinishAdminOperatorSetup403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.FinishAdminOperatorSetup403ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.FinishAdminOperatorSetup503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.FinishAdminOperatorSetup503ResponseHeaders{CacheControl: noStoreValue}}
@@ -1159,11 +1414,11 @@ func finishAdminOperatorSetupFailure(requestID string, err error) adminopenapi.F
 func createAdminAccountFailure(requestID string, err error) adminopenapi.CreateAdminAccountResponseObject {
 	// Step 1: application account creation の abstract error を stable HTTP response へ写像し、domain/repository の詳細を body に出さない。
 	switch {
-	case errors.Is(err, adminapplication.ErrAdminAccountCreationInvalidInput):
+	case errors.Is(err, accountsapplication.ErrAccountCreationInvalidInput):
 		return adminopenapi.CreateAdminAccount400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.CreateAdminAccount400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminAccountCreationForbidden):
+	case errors.Is(err, accountsapplication.ErrAccountCreationForbidden):
 		return adminopenapi.CreateAdminAccount403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.CreateAdminAccount403ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminAccountDuplicateEmail):
+	case errors.Is(err, accountsapplication.ErrAccountDuplicateEmail):
 		return adminopenapi.CreateAdminAccount409JSONResponse{Body: authOperationError(requestID, adminDuplicateEmailMessage), Headers: adminopenapi.CreateAdminAccount409ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.CreateAdminAccount503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.CreateAdminAccount503ResponseHeaders{CacheControl: noStoreValue}}
@@ -1173,11 +1428,11 @@ func createAdminAccountFailure(requestID string, err error) adminopenapi.CreateA
 func createAdminOperatorFailure(requestID string, err error) adminopenapi.CreateAdminOperatorResponseObject {
 	// Step 1: operator 作成 use case の抽象 error を stable HTTP response に写像し、setup token や delivery 失敗詳細を body に出さない。
 	switch {
-	case errors.Is(err, adminapplication.ErrAdminOperatorInvalidInput):
+	case errors.Is(err, operatorsapplication.ErrOperatorInvalidInput):
 		return adminopenapi.CreateAdminOperator400JSONResponse{Body: authOperationError(requestID, adminInvalidRequestBodyMessage), Headers: adminopenapi.CreateAdminOperator400ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorForbidden):
+	case errors.Is(err, operatorsapplication.ErrOperatorForbidden):
 		return adminopenapi.CreateAdminOperator403JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.Unauthenticated, requestID), Headers: adminopenapi.CreateAdminOperator403ResponseHeaders{CacheControl: noStoreValue}}
-	case errors.Is(err, adminapplication.ErrAdminOperatorConflict):
+	case errors.Is(err, operatorsapplication.ErrOperatorConflict):
 		return adminopenapi.CreateAdminOperator409JSONResponse{Body: authOperationError(requestID, adminDuplicateEmailMessage), Headers: adminopenapi.CreateAdminOperator409ResponseHeaders{CacheControl: noStoreValue}}
 	default:
 		return adminopenapi.CreateAdminOperator503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.CreateAdminOperator503ResponseHeaders{CacheControl: noStoreValue}}
@@ -1186,7 +1441,7 @@ func createAdminOperatorFailure(requestID string, err error) adminopenapi.Create
 
 func listAdminAccountsFailure(requestID string, err error) adminopenapi.ListAdminAccountsResponseObject {
 	// Step 1: account search の pagination/input error を 400 stable validation error へ写像し、内部理由を body に含めない。
-	if errors.Is(err, adminapplication.ErrAdminAccountSearchInvalidInput) {
+	if errors.Is(err, accountsapplication.ErrAccountSearchInvalidInput) {
 		return adminopenapi.ListAdminAccounts400JSONResponse{Body: authOperationError(requestID, adminAccountSearchInvalidMessage), Headers: adminopenapi.ListAdminAccounts400ResponseHeaders{CacheControl: noStoreValue}}
 	}
 
@@ -1196,7 +1451,7 @@ func listAdminAccountsFailure(requestID string, err error) adminopenapi.ListAdmi
 
 func getAdminAccountFailure(requestID string, err error) adminopenapi.GetAdminAccountResponseObject {
 	// Step 1: 対象不在は stable 404 へ畳み、DB の record existence 以外の詳細は body に出さない。
-	if errors.Is(err, adminapplication.ErrAdminAccountSearchNotFound) {
+	if errors.Is(err, accountsapplication.ErrAccountSearchNotFound) {
 		return adminopenapi.GetAdminAccount404JSONResponse{Body: authOperationError(requestID, "account_not_found"), Headers: adminopenapi.GetAdminAccount404ResponseHeaders{CacheControl: noStoreValue}}
 	}
 
@@ -1204,34 +1459,34 @@ func getAdminAccountFailure(requestID string, err error) adminopenapi.GetAdminAc
 	return adminopenapi.GetAdminAccount503JSONResponse{Body: authFailureResponseWithRequestID(adminopenapi.InternalError, requestID), Headers: adminopenapi.GetAdminAccount503ResponseHeaders{CacheControl: noStoreValue}}
 }
 
-func adminCreateAccountResponse(created adminapplication.AdminCreatedAccount) adminopenapi.AdminCreateAccountResponse {
+func adminCreateAccountResponse(created accountsapplication.CreatedAccount) adminopenapi.WWWTemplateCreateAccountResponse {
 	// Step 1: application が返した primitive snapshot だけを OpenAPI DTO に詰め替え、status などの業務値はここで再判定しない。
-	return adminopenapi.AdminCreateAccountResponse{
+	return adminopenapi.WWWTemplateCreateAccountResponse{
 		RequestId:    created.RequestID,
 		AuditEventId: created.AuditID,
-		Account: adminopenapi.AdminAccountSummary{
+		Account: adminopenapi.WWWTemplateAccountSummary{
 			AccountId:    created.AccountID,
 			Email:        created.Email,
-			Status:       adminopenapi.AdminAccountStatus(created.Status),
+			Status:       adminopenapi.WWWTemplateAccountStatus(created.Status),
 			CreatedAt:    created.CreatedAt,
 			PasskeyCount: created.PasskeyCount,
 		},
 	}
 }
 
-func adminCreateOperatorResponse(created adminapplication.AdminCreatedOperator) adminopenapi.AdminCreateOperatorResponse {
+func adminCreateOperatorResponse(created operatorsapplication.CreatedOperator) adminopenapi.AdminCreateOperatorResponse {
 	// Step 1: application DTO を generated response DTO へ詰め替え、setup token 平文や delivery 先の詳細は返さない。
 	return adminopenapi.AdminCreateOperatorResponse{RequestId: created.RequestID, AuditEventId: created.AuditID, DeliveryStatus: adminopenapi.AdminSetupTokenDeliveryStatus(created.DeliveryStatus), Operator: adminOperatorProfile(created.Operator)}
 }
 
-func adminAccountListResponse(result adminapplication.AdminAccountSearchResult) adminopenapi.AdminAccountListResponse {
+func adminAccountListResponse(result accountsapplication.AccountSearchResult) adminopenapi.WWWTemplateAccountListResponse {
 	// Step 1: application DTO の件数に合わせて response slice を確保し、値コピーだけで OpenAPI DTO へ変換する。
-	accounts := make([]adminopenapi.AdminAccountSummary, 0, len(result.Accounts))
+	accounts := make([]adminopenapi.WWWTemplateAccountSummary, 0, len(result.Accounts))
 	for _, account := range result.Accounts {
-		accounts = append(accounts, adminopenapi.AdminAccountSummary{
+		accounts = append(accounts, adminopenapi.WWWTemplateAccountSummary{
 			AccountId:    account.AccountID,
 			Email:        account.Email,
-			Status:       adminopenapi.AdminAccountStatus(account.Status),
+			Status:       adminopenapi.WWWTemplateAccountStatus(account.Status),
 			PasskeyCount: account.PasskeyCount,
 			CreatedAt:    account.CreatedAt,
 		})
@@ -1244,12 +1499,12 @@ func adminAccountListResponse(result adminapplication.AdminAccountSearchResult) 
 	}
 
 	// Step 3: requestId と read model だけを返し、検索条件や内部 query を response body に含めない。
-	return adminopenapi.AdminAccountListResponse{Accounts: accounts, NextCursor: nextCursor, RequestId: result.RequestID}
+	return adminopenapi.WWWTemplateAccountListResponse{Accounts: accounts, NextCursor: nextCursor, RequestId: result.RequestID}
 }
 
-func adminAccountDetailResponse(result adminapplication.AdminAccountDetailResult) adminopenapi.AdminAccountDetailResponse {
+func adminAccountDetailResponse(result accountsapplication.AccountDetailResult) adminopenapi.WWWTemplateAccountDetailResponse {
 	// Step 1: detail でも一覧と同じ account summary DTO を使い、画面間で表示値の意味を揃える。
-	return adminopenapi.AdminAccountDetailResponse{RequestId: result.RequestID, Account: adminopenapi.AdminAccountSummary{AccountId: result.Account.AccountID, Email: result.Account.Email, Status: adminopenapi.AdminAccountStatus(result.Account.Status), PasskeyCount: result.Account.PasskeyCount, CreatedAt: result.Account.CreatedAt}}
+	return adminopenapi.WWWTemplateAccountDetailResponse{RequestId: result.RequestID, Account: adminopenapi.WWWTemplateAccountSummary{AccountId: result.Account.AccountID, Email: result.Account.Email, Status: adminopenapi.WWWTemplateAccountStatus(result.Account.Status), PasskeyCount: result.Account.PasskeyCount, CreatedAt: result.Account.CreatedAt}}
 }
 
 func nextAdminRequestID() string {
