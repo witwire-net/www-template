@@ -68,23 +68,50 @@ packages
 │  └─ internal
 │     ├─ application
 │     │  ├─ auth
-│     │  │  ├─ lifecycle.go
+│     │  │  ├─ account_session_service.go
+│     │  │  ├─ account_session_refresh.go
+│     │  │  ├─ account_dto.go
+│     │  │  ├─ operator_session_service.go
+│     │  │  ├─ operator_passkey_login_service.go
+│     │  │  ├─ operator_passkey_verifier_service.go
+│     │  │  ├─ operator_credential_service.go
+│     │  │  ├─ operator_dto.go
+│     │  │  ├─ facade_service.go
+│     │  │  ├─ account_facade_contracts.go
+│     │  │  ├─ product_facade_contracts.go
+│     │  │  ├─ signer.go
+│     │  │  ├─ refresh.go
 │     │  │  ├─ subject.go
-│     │  │  └─ refresh_family.go
+│     │  │  ├─ token_codec.go
+│     │  │  └─ opaque_generator.go
 │     │  ├─ accounts
+│     │  │  ├─ creation_service.go
+│     │  │  ├─ search_service.go
+│     │  │  ├─ setting_service.go
+│     │  │  └─ repository.go
 │     │  ├─ operators
-│     │  ├─ sessions
-│     │  ├─ authorization
-│     │  ├─ audit
-│     │  └─ shared/authprimitive
+│     │  │  ├─ creation_service.go
+│     │  │  ├─ repository.go
+│     │  │  ├─ ports.go
+│     │  │  ├─ dto.go
+│     │  │  └─ errors.go
+│     │  └─ audit
+│     │     └─ service.go
 │     ├─ adapter/http
 │     │  ├─ product/router.go
 │     │  ├─ admin/router.go
-│     │  └─ shared/security_headers.go
+│     │  └─ shared/auth_helpers.go
 │     ├─ adapter/postgres
-│     │  ├─ accounts
-│     │  └─ audit
-│     ├─ adapter/valkey/session_store.go
+│     │  ├─ database.go
+│     │  ├─ account_auth_repository.go
+│     │  ├─ account_setting_repository.go
+│     │  ├─ account_management_repository.go
+│     │  ├─ operator_repository.go
+│     │  ├─ operator_passkey_repository.go
+│     │  └─ operator_audit_repository.go
+│     ├─ adapter/valkey
+│     │  ├─ product/account_session_store.go
+│     │  └─ admin/operator_session_store.go
 │     └─ generated
 │        ├─ openapi/openapi.gen.go
 │        └─ adminopenapi/openapi.gen.go
@@ -106,38 +133,36 @@ packages
 
 ## New / Changed Files
 
-| Type       | File                                                              | Change                                                                                                                                                                                                           |
-| ---------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Update     | `packages/typespec/main.tsp`                                      | Product/Admin service 分離を維持したまま context refresh と credential mode を定義する。                                                                                                                         |
-| Add/Update | `packages/typespec/src/models/auth/**`                            | 認証 primitive、WebAuthn、session、refresh、logout、recovery、shared auth envelope を概念単位で定義し、`AuthContextIdentityKind` / `identityKind` と surface DTO duplication を削除する。                        |
-| Add/Update | `packages/typespec/src/models/accounts/**`                        | Admin 接頭辞の Account read/create DTO を account concept として定義し、Product/Admin route DTO から参照する。                                                                                                   |
-| Add/Update | `packages/typespec/src/models/operators/**`                       | Admin operator profile、setup、authorization model を概念単位で定義する。                                                                                                                                        |
-| Add/Update | `packages/typespec/src/routes/v1/product/**`                      | Product login/register/logout/context refresh の path と BearerAuth を service route として定義する。                                                                                                            |
-| Add/Update | `packages/typespec/src/routes/v1/admin/**`                        | Admin login/setup/operator-setup/logout/context refresh の path と BearerAuth を service route として定義する。                                                                                                  |
-| Update     | `packages/typespec/openapi/openapi.json`                          | `pnpm gen` により Product artifact を同期する。                                                                                                                                                                  |
-| Update     | `packages/typespec/openapi/admin.openapi.json`                    | `pnpm gen` により Admin artifact を同期する。                                                                                                                                                                    |
-| Update     | `packages/backend/internal/generated/openapi/openapi.gen.go`      | `pnpm gen` により Product Go bindings を同期する。                                                                                                                                                               |
-| Update     | `packages/backend/internal/generated/adminopenapi/openapi.gen.go` | `pnpm gen` により Admin Go bindings を同期する。                                                                                                                                                                 |
-| Add/Update | `packages/backend/internal/application/auth/**`                   | Product/Admin 共通の auth context、service-specific subject payload、refresh family use case を概念単位で扱い、`product/auth`・`admin/auth` use case と root legacy auth DTO を canonical lifecycle へ置換する。 |
-| Add/Update | `packages/backend/internal/application/sessions/**`               | session validation、logout、revoke、context cleanup を概念単位で扱う。                                                                                                                                           |
-| Add/Update | `packages/backend/internal/application/operators/**`              | Admin operator eligibility と setup use case を operator 概念として扱う。                                                                                                                                        |
-| Add/Update | `packages/backend/internal/application/accounts/**`               | account eligibility、creation、search を account 概念として扱い、Admin 接頭辞の generic account use case 名を concept 名へ整理する。                                                                             |
-| Add/Update | `packages/backend/internal/application/audit/**`                  | audit use case を Admin surface 名ではなく audit capability として扱い、operator session input で認可する。                                                                                                      |
-| Add/Update | `packages/backend/internal/application/shared/authprimitive/*`    | 中立 primitive と Cookie path / clear command / TTL validation を共有する。                                                                                                                                      |
-| Update     | `packages/backend/internal/adapter/http/product/router.go`        | Product HTTP response、Set-Cookie、clear Cookie、Bearer-only protected route を実装する。                                                                                                                        |
-| Update     | `packages/backend/internal/adapter/http/admin/router.go`          | Admin HTTP response、Set-Cookie、clear Cookie、Bearer-only protected route を実装する。                                                                                                                          |
-| Add/Update | `packages/backend/internal/adapter/http/shared/**`                | security headers、no-store、Origin / Fetch Metadata、subject context extraction helper を共有し、route registration と generated binding は Product/Admin adapter に残す。                                       |
-| Add/Update | `packages/backend/internal/adapter/postgres/accounts/**`          | public accounts aggregate repository を schema / aggregate / capability 名で配置する。                                                                                                                           |
-| Add/Update | `packages/backend/internal/adapter/postgres/audit/**`             | audit repository を Admin surface 名ではなく audit capability 名で配置する。                                                                                                                                     |
-| Update     | `packages/backend/internal/adapter/valkey/session_store.go`       | refresh token family、authContextId、context index metadata を保存する。                                                                                                                                         |
-| Update     | `packages/backend/internal/app/admin_runtime.go`                  | Admin auth runtime config の型名・field 名・コメントを Admin/operator/auth concept に揃える。                                                                                                                    |
-| Update     | `packages/frontend/domain/src/auth/types.ts`                      | Product session item に authContextId と accessToken を持たせ、refreshToken を持たせない。                                                                                                                       |
-| Update     | `packages/frontend/domain/src/auth/session/state.ts`              | active accessToken Authorization helper と context refresh URL builder を分離する。                                                                                                                              |
-| Update     | `packages/frontend/domain/src/auth/session/hook.svelte.ts`        | refresh-once retry、multi-session switching、context index bootstrap を扱う。                                                                                                                                    |
-| Update     | `packages/frontend/app/src/lib/components/AccountSwitcher.svelte` | active session item selection と表示 metadata を authContextId 対応にする。                                                                                                                                      |
-| Update     | `packages/admin/api/src/client.ts`                                | Admin Console wrapper と Admin automation Bearer wrapper を分離する。                                                                                                                                            |
-| Update     | `packages/admin/domain/src/auth.ts`                               | Admin operator session item を accessToken + authContextId + metadata の memory-only state にする。                                                                                                              |
-| Update     | `packages/admin/domain/src/hooks/useAdminSession.svelte.ts`       | Admin current/refresh/logout と context index bootstrap を実装する。                                                                                                                                             |
+| Type       | File                                                              | Change                                                                                                                                                                                                                                                                                       |
+| ---------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Update     | `packages/typespec/main.tsp`                                      | Product/Admin service 分離を維持したまま context refresh と credential mode を定義する。                                                                                                                                                                                                     |
+| Add/Update | `packages/typespec/src/models/auth/**`                            | 認証 primitive、WebAuthn、session、refresh、logout、recovery、shared auth envelope を概念単位で定義し、`AuthContextIdentityKind` / `identityKind` と surface DTO duplication を削除する。                                                                                                    |
+| Add/Update | `packages/typespec/src/models/accounts/**`                        | Admin 接頭辞の Account read/create DTO を account concept として定義し、Product/Admin route DTO から参照する。                                                                                                                                                                               |
+| Add/Update | `packages/typespec/src/models/operators/**`                       | Admin operator profile、setup、authorization model を概念単位で定義する。                                                                                                                                                                                                                    |
+| Add/Update | `packages/typespec/src/routes/v1/product/**`                      | Product login/register/logout/context refresh の path と BearerAuth を service route として定義する。                                                                                                                                                                                        |
+| Add/Update | `packages/typespec/src/routes/v1/admin/**`                        | Admin login/setup/operator-setup/logout/context refresh の path と BearerAuth を service route として定義する。                                                                                                                                                                              |
+| Update     | `packages/typespec/openapi/openapi.json`                          | `pnpm gen` により Product artifact を同期する。                                                                                                                                                                                                                                              |
+| Update     | `packages/typespec/openapi/admin.openapi.json`                    | `pnpm gen` により Admin artifact を同期する。                                                                                                                                                                                                                                                |
+| Update     | `packages/backend/internal/generated/openapi/openapi.gen.go`      | `pnpm gen` により Product Go bindings を同期する。                                                                                                                                                                                                                                           |
+| Update     | `packages/backend/internal/generated/adminopenapi/openapi.gen.go` | `pnpm gen` により Admin Go bindings を同期する。                                                                                                                                                                                                                                             |
+| Add/Update | `packages/backend/internal/application/auth/**`                   | Product/Admin 共通の auth context、service-specific subject payload、refresh family use case、中立 primitive（signer、refresh hash、token codec、opaque token generator）を概念単位で扱い、`product/auth`・`admin/auth` use case と root legacy auth DTO を canonical lifecycle へ置換する。 |
+| Add/Update | `packages/backend/internal/application/operators/**`              | Admin operator eligibility と setup use case を operator 概念として扱い、`creation_service.go` / `repository.go` / `ports.go` / `dto.go` / `errors.go` に責務分割する。                                                                                                                      |
+| Add/Update | `packages/backend/internal/application/accounts/**`               | account eligibility、creation、search を account 概念として扱い、Admin 接頭辞の generic account use case 名を concept 名へ整理する。                                                                                                                                                         |
+| Add/Update | `packages/backend/internal/application/audit/**`                  | audit use case を Admin surface 名ではなく audit capability として扱い、operator session input で認可する。                                                                                                                                                                                  |
+| Update     | `packages/backend/internal/adapter/http/product/router.go`        | Product HTTP response、Set-Cookie、clear Cookie、Bearer-only protected route を実装する。                                                                                                                                                                                                    |
+| Update     | `packages/backend/internal/adapter/http/admin/router.go`          | Admin HTTP response、Set-Cookie、clear Cookie、Bearer-only protected route を実装する。                                                                                                                                                                                                      |
+| Add/Update | `packages/backend/internal/adapter/http/shared/**`                | security headers、no-store、Origin / Fetch Metadata、subject context extraction helper を共有し、route registration と generated binding は Product/Admin adapter に残す。                                                                                                                   |
+| Update     | `packages/backend/internal/adapter/postgres/**`                   | Product/Admin surface 分離を廃止し単一 `postgres` package に統一。repository は Account/Operator/Audit 責務別の flat file で命名し、DB 境界は schema/table/role/grant で守る。                                                                                                               |
+| Update     | `packages/backend/internal/adapter/valkey/product/**`             | Product Account refresh/session store を Product Valkey namespace に保存する。                                                                                                                                                                                                               |
+| Update     | `packages/backend/internal/adapter/valkey/admin/**`               | Admin Operator refresh/session store を Admin Valkey namespace に保存する。                                                                                                                                                                                                                  |
+| Update     | `packages/backend/internal/app/admin_runtime.go`                  | Admin auth runtime config の型名・field 名・コメントを Admin/operator/auth concept に揃える。                                                                                                                                                                                                |
+| Update     | `packages/frontend/domain/src/auth/types.ts`                      | Product session item に authContextId と accessToken を持たせ、refreshToken を持たせない。                                                                                                                                                                                                   |
+| Update     | `packages/frontend/domain/src/auth/session/state.ts`              | active accessToken Authorization helper と context refresh URL builder を分離する。                                                                                                                                                                                                          |
+| Update     | `packages/frontend/domain/src/auth/session/hook.svelte.ts`        | refresh-once retry、multi-session switching、context index bootstrap を扱う。                                                                                                                                                                                                                |
+| Update     | `packages/frontend/app/src/lib/components/AccountSwitcher.svelte` | active session item selection と表示 metadata を authContextId 対応にする。                                                                                                                                                                                                                  |
+| Update     | `packages/admin/api/src/client.ts`                                | Admin Console wrapper と Admin automation Bearer wrapper を分離する。                                                                                                                                                                                                                        |
+| Update     | `packages/admin/domain/src/auth.ts`                               | Admin operator session item を accessToken + authContextId + metadata の memory-only state にする。                                                                                                                                                                                          |
+| Update     | `packages/admin/domain/src/hooks/useAdminSession.svelte.ts`       | Admin current/refresh/logout と context index bootstrap を実装する。                                                                                                                                                                                                                         |
 
 ## System Diagram
 
@@ -165,7 +190,6 @@ flowchart TB
   TS --> AO[Admin OpenAPI / SDK / Go bindings]
   PH[backend adapter/http/product] --> AU[backend application/auth]
   AH[backend adapter/http/admin] --> AU
-  AU --> SP[shared authprimitive]
   AU --> ACCT[backend domain account]
   AU --> OPER[backend domain operator]
   FD[frontend/domain] --> FSDK[frontend/api]
@@ -219,15 +243,8 @@ classDiagram
     +cookiePath: string
     +expiresAt: time
   }
-  class SharedAuthPrimitive {
-    +CookiePathBuilder
-    +CookieClearCommand
-    +TTLValidation
-    +TokenHash
-  }
   AuthContext --> RefreshTokenFamily
   BrowserSessionItem --> AuthContext
-SharedAuthPrimitive --> RefreshTokenFamily
 ```
 
 ## Context Index Contract
@@ -270,17 +287,20 @@ N/A。永続 RDB table の追加は前提にせず、refresh token family と au
 
 ### Package List
 
-| Package                                                      | Purpose / Responsibility                                                                              | Public API                                        | Dependencies                                             |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- |
-| `packages/typespec`                                          | concept-based API 契約と generated artifact 分離を所有する。                                          | `packages/typespec/main.tsp`, `pnpm gen`          | TypeSpec emitter                                         |
-| `packages/backend/internal/application/shared/authprimitive` | 認証 service 非依存の token / Cookie / TTL primitive を所有する。                                     | Cookie path builder、clear command、TTL validator | `internal/domain` の中立値、stdlib                       |
-| `packages/backend/internal/application/auth`                 | auth context、refresh family、service-specific subject payload、credential mode use case を所有する。 | Auth context use cases                            | account/operator domain、ports                           |
-| `packages/backend/internal/application/accounts`             | Product account eligibility と lifecycle use case を所有する。                                        | Account use cases                                 | account domain、ports                                    |
-| `packages/backend/internal/application/operators`            | Admin operator eligibility、setup、operator session metadata を所有する。                             | Operator use cases                                | operator domain、ports                                   |
-| `packages/backend/internal/adapter/http/product`             | Product HTTP DTO / Cookie / Bearer boundary を扱う。                                                  | Product strict handlers                           | Product generated bindings、concept application packages |
-| `packages/backend/internal/adapter/http/admin`               | Admin HTTP DTO / Cookie / Bearer boundary を扱う。                                                    | Admin strict handlers                             | Admin generated bindings、concept application packages   |
-| `packages/frontend/domain`                                   | Product browser session state と active accessToken request orchestration を所有する。                | `useAuthSession`                                  | `packages/frontend/api`                                  |
-| `packages/admin/domain`                                      | Admin browser session state と active operator accessToken request orchestration を所有する。         | `useAdminSession`                                 | `packages/admin/api`                                     |
+| Package                                            | Purpose / Responsibility                                                                                                               | Public API                                                               | Dependencies                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `packages/typespec`                                | concept-based API 契約と generated artifact 分離を所有する。                                                                           | `packages/typespec/main.tsp`, `pnpm gen`                                 | TypeSpec emitter                                         |
+| `packages/backend/internal/application/auth`       | auth context、refresh family、credential mode、中立 primitive（signer、refresh hash、token codec、opaque token generator）を所有する。 | Auth context use cases、Account/Operator session service                 | account/operator domain、ports                           |
+| `packages/backend/internal/application/accounts`   | Account eligibility、creation、search、setting use case を所有する。                                                                   | Account use cases                                                        | account domain、ports                                    |
+| `packages/backend/internal/application/operators`  | Operator eligibility、setup、creation use case を所有する。                                                                            | Operator use cases                                                       | operator domain、ports                                   |
+| `packages/backend/internal/application/audit`      | Admin mutation audit intent/outcome を所有する。                                                                                       | Audit use cases                                                          | operator domain、ports                                   |
+| `packages/backend/internal/adapter/http/product`   | Product HTTP DTO / Cookie / Bearer boundary を扱う。                                                                                   | Product strict handlers                                                  | Product generated bindings、concept application packages |
+| `packages/backend/internal/adapter/http/admin`     | Admin HTTP DTO / Cookie / Bearer boundary を扱う。                                                                                     | Admin strict handlers                                                    | Admin generated bindings、concept application packages   |
+| `packages/backend/internal/adapter/postgres`       | 全 DB repository を単一 package で所有し schema/table/role で境界を守る。                                                              | Account Auth / Setting / Management、Operator、Operator Audit repository | GORM、`admin.*` / `public.*` schema                      |
+| `packages/backend/internal/adapter/valkey/product` | Product Account refresh/session state を所有する。                                                                                     | Product Valkey store                                                     | Valkey client                                            |
+| `packages/backend/internal/adapter/valkey/admin`   | Admin Operator refresh/session state を所有する。                                                                                      | Admin Valkey store                                                       | Valkey client                                            |
+| `packages/frontend/domain`                         | Product browser session state と active accessToken request orchestration を所有する。                                                 | `useAuthSession`                                                         | `packages/frontend/api`                                  |
+| `packages/admin/domain`                            | Admin browser session state と active operator accessToken request orchestration を所有する。                                          | `useAdminSession`                                                        | `packages/admin/api`                                     |
 
 ### Details
 
@@ -297,18 +317,16 @@ N/A。永続 RDB table の追加は前提にせず、refresh token family と au
 - Performance: N/A。契約生成の performance は runtime path に影響しない。
 - Security: Product/Admin operation/tag/export contamination と `/api/admin/*` を検出する。
 
-#### packages/backend/internal/application/shared/authprimitive
+#### packages/backend/internal/application/auth
 
-- Purpose / Responsibility: Product/Admin の意味を持たない primitive だけを共有する。
-- Public API: `BuildRefreshCookiePath(authContextId)`, `BuildRefreshCookieClearCommand`, `ValidateTokenTTL`, `HashOpaqueToken`。
-- Key Data Structures: Cookie command、TokenTTL、OpaqueTokenHash、AuthFailure classification。
-- Key Flows: 各 surface application から primitive を呼び、domain decision は呼び元が実行する。
-- Dependencies: stdlib と中立 domain value object。
-- Error Handling: invalid TTL、invalid authContextId、invalid Cookie path は fail-close error にする。
-- Testing Strategy: `AUTH-BE-S068` と `AUTH-BE-S065` を unit test で検証する。
-- Non-Functional: Product/Admin 相互 import を避ける。
-- Performance: path/TTL/hash は request 単位で軽量に実行する。
-- Security: primitive に account/operator switch、RBAC、status 判定を入れない。
+- Purpose / Responsibility: auth context、refresh family、credential mode、中立 primitive（signer、refresh hash、token codec、opaque token generator）を concept package として所有する。Account/Operator の service-specific subject payload を受け取り、hosted service adapter からは `ProductAccountLifecycle` / `OperatorSessionService` として呼び出される。Product/Admin surface 軸を directory に持たず、principal 軸で分化しない中立 capability は `signer.go`、`refresh.go`、`token_codec.go`、`opaque_generator.go` に共有する。
+- Public API: `AccountSessionService`、`OperatorSessionService`、`OperatorPasskeyLoginService`、`OperatorCredentialService`、`ProductAccountLifecycle`、`AccountSessionResult`、`OperatorSessionResult`。
+- Key Data Structures: `AccountSessionDependencies`、`OperatorSessionDependencies`、`AccountSessionResult`、`OperatorSessionResult`、`AccountRefreshResult`、`AccountRefreshCookieCommand`、`OperatorRefreshCookieCommand`、`AccountExtendedSession`、`JSONSigner`、`OpaqueTokenGenerator`。
+- Key Flows: login/setup -> accessToken body + path-scoped refresh Cookie、protected request -> Bearer-only validation、refresh -> path/body exactly-one rotation、logout -> access claims から revoke + Cookie clear。
+- Dependencies: account/operator domain、ports、HTTP adapter shared helpers。
+- Error Handling: `ErrAccountAuthUnauthorized`、`ErrOperatorAuthUnauthenticated`、`ErrAccountAuthIneligible` 等を no-store response へ正規化する。
+- Testing Strategy: `AUTH-BE-S060`、`AUTH-BE-S080`、`AUTH-BE-S093`〜`AUTH-BE-S100` などを endpoint / application / import-boundary tests で検証する。
+- Security: Authorization-on-refresh rejection、Cookie/body ambiguity rejection、Origin / Fetch Metadata validation、secret logging 禁止を徹底する。
 
 #### Concept-based application and Product / Admin HTTP adapters
 
@@ -341,7 +359,7 @@ N/A。永続 RDB table の追加は前提にせず、refresh token family と au
 ```mermaid
 flowchart TD
   T1[1. TypeSpec concept modules と route split を更新] --> T2[2. pnpm gen と generated artifact 確認]
-  T2 --> T3[3. backend concept packages と shared primitive を実装]
+  T2 -->   T3[3. backend concept packages を実装（中立 primitive 含む）]
   T3 --> T4[4. Product HTTP adapter を更新]
   T3 --> T5[5. Admin HTTP adapter を更新]
   T4 --> T6[6. Product frontend state/API を更新]
