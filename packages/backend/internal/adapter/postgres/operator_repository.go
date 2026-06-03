@@ -1,4 +1,4 @@
-package admin
+package postgres
 
 import (
 	"context"
@@ -22,6 +22,7 @@ var _ operatorsapplication.OperatorRepository = (*OperatorRepository)(nil)
 //   - admin.operators と admin.operator_passkeys だけを読み、Product account repository へ依存しない。
 //   - adminauth.OperatorRepository port を実装し、Admin application DTO だけを返す。
 //   - GORM record 型を package 内に閉じ込め、application/domain へ adapter 型を公開しない。
+//   - schema/table/role/grant 境界で security を守り、package path による Product/Admin 分離は行わない。
 //
 // 引数:
 //   - NewOperatorRepository の db: Admin schema へ接続可能な GORM DB handle。
@@ -34,7 +35,7 @@ var _ operatorsapplication.OperatorRepository = (*OperatorRepository)(nil)
 //
 // 使用例:
 //
-//	repo := admin.NewOperatorRepository(db)
+//	repo := postgres.NewOperatorRepository(db)
 //	snapshot, err := repo.FindOperatorByID(ctx, operatorID)
 type OperatorRepository struct {
 	db *gorm.DB
@@ -115,8 +116,8 @@ func (r *OperatorRepository) CountOperators(ctx context.Context) (int64, error) 
 	return count, nil
 }
 
-// CreateInitialAdminOperatorWithPasskey は初回 admin operator と passkey credential を同一 transaction で作成する。
-func (r *OperatorRepository) CreateInitialAdminOperatorWithPasskey(ctx context.Context, record operatorsapplication.InitialOperatorRecord) (operatorsapplication.OperatorRecord, error) {
+// CreateInitialOperatorWithPasskey は初回 operator と passkey credential を同一 transaction で作成する。
+func (r *OperatorRepository) CreateInitialOperatorWithPasskey(ctx context.Context, record operatorsapplication.InitialOperatorRecord) (operatorsapplication.OperatorRecord, error) {
 	// Step 1: SERIALIZABLE transaction で operator 0 件確認、operator 作成、passkey 保存を一括し、並行 bootstrap を拒否する。
 	var created operatorRecord
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

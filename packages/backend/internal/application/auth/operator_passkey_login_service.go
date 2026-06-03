@@ -2,12 +2,12 @@ package auth
 
 import "context"
 
-// OperatorPasskeyLoginService は Admin operator passkey login の外側 WebAuthn flow を扱う application service である。
+// OperatorPasskeyLoginService は Operator passkey login の外側 WebAuthn flow を扱う application service である。
 //
 // 役割:
 //   - passkey challenge の開始と、WebAuthn adapter が検証済みにした credential handle からの session 発行を担当する。
 //   - OperatorSessionService には session lifecycle だけを委譲し、challenge provider や credential lookup を session service へ漏らさない。
-//   - Product Account の passkey flow や repository を使わず、Admin Operator 専用 DTO と port だけを扱う。
+//   - Account の passkey flow や repository を使わず、Operator 専用 DTO と port だけを扱う。
 //
 // 使用例:
 //
@@ -32,7 +32,7 @@ type OperatorSessionIssuer interface {
 	IssueOperatorSession(ctx context.Context, input IssueOperatorSessionInput) (OperatorSessionResult, error)
 }
 
-// OperatorPasskeyLoginDependencies は Admin passkey login outer flow に必要な port をまとめる DTO である。
+// OperatorPasskeyLoginDependencies は passkey login outer flow に必要な port をまとめる DTO である。
 //
 // 役割:
 //   - repository、challenge provider、session issuer を constructor 時点で必須検証する。
@@ -43,11 +43,11 @@ type OperatorPasskeyLoginDependencies struct {
 	Sessions   OperatorSessionIssuer
 }
 
-// NewOperatorPasskeyLoginService は Admin operator passkey login 用 service を生成する。
+// NewOperatorPasskeyLoginService は Operator passkey login 用 service を生成する。
 //
 // 引数:
 //   - deps: Operator repository、challenge provider、session issuer の必須依存。
-//   - config: WebAuthn RP ID を含む Admin operator auth 設定。
+//   - config: WebAuthn RP ID を含む Operator auth 設定。
 //
 // 戻り値:
 //   - *OperatorPasskeyLoginService: 検証済み依存を保持する passkey login service。
@@ -62,7 +62,7 @@ func NewOperatorPasskeyLoginService(deps OperatorPasskeyLoginDependencies, confi
 	return &OperatorPasskeyLoginService{operators: deps.Operators, challenges: deps.Challenges, sessions: deps.Sessions, rpID: config.WebAuthnRPID}, nil
 }
 
-// StartOperatorPasskey は Admin operator passkey login challenge を開始する。
+// StartOperatorPasskey は Operator passkey login challenge を開始する。
 //
 // 引数:
 //   - ctx: challenge provider 呼び出しに使う cancellation context。
@@ -72,7 +72,7 @@ func NewOperatorPasskeyLoginService(deps OperatorPasskeyLoginDependencies, confi
 //   - OperatorPasskeyChallenge: WebAuthn ceremony に必要な公開 challenge 情報。
 //   - error: challenge provider 失敗時の stable internal error。
 func (s *OperatorPasskeyLoginService) StartOperatorPasskey(ctx context.Context, input StartOperatorPasskeyInput) (OperatorPasskeyChallenge, error) {
-	// Step 1: WebAuthn challenge 発行は Admin 専用 provider port へ委譲し、session secret はまだ発行しない。
+	// Step 1: WebAuthn challenge 発行は専用 provider port へ委譲し、session secret はまだ発行しない。
 	challengeKey, optionsJSON, err := s.challenges.BeginOperatorLogin(ctx, input.Identifier)
 	if err != nil {
 		return OperatorPasskeyChallenge{}, ErrOperatorAuthUnavailable
@@ -82,7 +82,7 @@ func (s *OperatorPasskeyLoginService) StartOperatorPasskey(ctx context.Context, 
 	return OperatorPasskeyChallenge{ChallengeID: challengeKey, Challenge: challengeKey, WebAuthnRPID: s.rpID, WebAuthnOptions: optionsJSON}, nil
 }
 
-// FinishOperatorPasskey は WebAuthn 検証済み credential から Admin operator session を発行する。
+// FinishOperatorPasskey は WebAuthn 検証済み credential から Operator session を発行する。
 //
 // 引数:
 //   - ctx: repository/session issuer 呼び出しに使う cancellation context。
@@ -92,10 +92,10 @@ func (s *OperatorPasskeyLoginService) StartOperatorPasskey(ctx context.Context, 
 //   - OperatorSessionResult: accessToken と refresh Cookie command を分離した session DTO。
 //   - error: credential 不一致、Operator 不適格、session 保存失敗などの stable application error。
 func (s *OperatorPasskeyLoginService) FinishOperatorPasskey(ctx context.Context, input FinishOperatorPasskeyInput) (OperatorSessionResult, error) {
-	// Step 1: credential handle から現在の Admin Operator snapshot を取得し、Product account repository を使わない。
+	// Step 1: credential handle から現在の Operator snapshot を取得し、account repository を使わない。
 	snapshot, err := s.operators.FindOperatorByCredential(ctx, input.CredentialHandle)
 	if err != nil {
-		return OperatorSessionResult{}, mapAdminStoreError(err)
+		return OperatorSessionResult{}, mapOperatorStoreError(err)
 	}
 
 	// Step 2: snapshot を domain object へ復元し、壊れた role/state を session issuer へ渡さない。

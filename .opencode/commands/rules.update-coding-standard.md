@@ -95,9 +95,10 @@ If a section has no enforceable rules beyond a short scope note, keep it brief a
    - `scripts/hooks/verify-staged-migrations.sh`
 3. Read custom analyzers and tests when they are part of actual enforcement:
    - `packages/backend/tools/analyzers/cmd/guardrails/main.go`
-   - `packages/backend/internal/adapters/http/router_test.go`
-   - `packages/backend/internal/adapters/http/openapi_contract_test.go`
-   - `packages/backend/internal/app/runtime_test.go`
+   - `packages/backend/internal/adapter/http/product/router_test.go`
+   - `packages/backend/internal/adapter/http/admin/router_test.go`
+   - `packages/backend/internal/adapter/http/openapi_contract_test.go`
+   - `packages/backend/internal/app/product_runtime_test.go`
 4. Extract only rules that actually fail in this repo, including repo-specific ones such as:
    - TypeSpec is the source of truth; generated OpenAPI / frontend SDK / Go bindings are not hand-edited; codegen drift fails.
    - Spectral enforces path policy and bearer security declarations for app endpoints.

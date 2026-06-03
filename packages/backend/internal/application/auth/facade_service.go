@@ -586,19 +586,19 @@ func (s *AuthService) Logout(ctx context.Context, token string) (string, error) 
 	}
 
 	// Step 1: Product account lifecycle owner だけに bearer validation と revoke を委譲し、root legacy TokenService fallback へ戻らない。
-	return s.logoutWithProductAccountLifecycle(ctx, token, requestID)
+	return s.logoutWithAccountLifecycle(ctx, token, requestID)
 }
 
-func (s *AuthService) logoutWithProductAccountLifecycle(ctx context.Context, token string, requestID string) (string, error) {
+func (s *AuthService) logoutWithAccountLifecycle(ctx context.Context, token string, requestID string) (string, error) {
 	// Step 1: production では Product account lifecycle owner に bearer validation を委譲し、root TokenService の sessionStore 直参照へ戻らない。
 	session, authErr := s.accountLifecycle.AuthorizeAccountSession(ctx, token)
 	if authErr != nil {
-		return "", mapProductAccountLifecycleError(authErr)
+		return "", mapAccountLifecycleError(authErr)
 	}
 
 	// Step 2: accessToken claims と server-side session metadata で確定した session だけを revoke し、Cookie や client hint で対象を選ばない。
 	if revokeErr := s.accountLifecycle.RevokeAccountSession(ctx, RevokeAccountSessionInput{AccountID: session.AccountID, SessionID: session.SessionID}); revokeErr != nil {
-		return "", mapProductAccountLifecycleError(revokeErr)
+		return "", mapAccountLifecycleError(revokeErr)
 	}
 
 	// Step 3: root facade は requestID を返すだけに留め、lifecycle side effect は canonical owner で完了済みにする。
@@ -618,7 +618,7 @@ func (s *AuthService) AuthorizeSession(ctx context.Context, token string) (AuthS
 	// Step 2: canonical Product account lifecycle owner に bearer validation を委譲し、root TokenService の検証ロジック重複を通らない。
 	session, err := s.accountLifecycle.AuthorizeAccountSession(ctx, token)
 	if err != nil {
-		return AuthSession{}, mapProductAccountLifecycleError(err)
+		return AuthSession{}, mapAccountLifecycleError(err)
 	}
 	return AuthSession{AccountID: session.AccountID, SessionID: session.SessionID, AuthContextID: session.SessionID}, nil
 }
@@ -682,7 +682,7 @@ func (s *AuthService) issueAuthSession(ctx context.Context, authSession AuthSess
 	// Step 2: 確定済み AccountID を canonical Product account lifecycle owner へ渡し、session issuance と refresh family 保存を root facade から分離する。
 	result, err := s.accountLifecycle.IssueAccountSession(ctx, IssueAccountSessionInput{AccountID: accountID, ClientIP: clientIP, UserAgent: userAgent})
 	if err != nil {
-		return AuthSession{}, mapProductAccountLifecycleError(err)
+		return AuthSession{}, mapAccountLifecycleError(err)
 	}
 	if result.Session.AccessToken == "" || result.RefreshCookie.Value == "" {
 		return AuthSession{}, ErrInternalError
@@ -850,7 +850,7 @@ func toPasskeyCredentialDTOs(creds []domain.PasskeyCredential) []PasskeyCredenti
 	return dtos
 }
 
-func mapProductAccountLifecycleError(err error) error {
+func mapAccountLifecycleError(err error) error {
 	// Step 1: nil error はそのまま返し、caller が成功 path を単純に扱えるようにする。
 	if err == nil {
 		return nil

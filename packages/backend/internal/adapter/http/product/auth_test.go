@@ -1064,7 +1064,7 @@ func (r *stubAccountAuthRepository) DeletePasskeyByID(_ context.Context, account
 func (r *stubAccountAuthRepository) FindWebAuthnCredential(_ context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
 	for _, c := range r.account.Credentials() {
 		if c.CredentialHandle() == handle {
-			return domain.ReconstitueWebAuthnStoredCredential(handle, nil, 0, nil, false, false, nil), nil
+			return domain.ReconstituteWebAuthnStoredCredential(handle, nil, 0, nil, false, false, nil), nil
 		}
 	}
 	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAccountAuthNotFound

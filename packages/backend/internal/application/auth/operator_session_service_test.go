@@ -13,11 +13,11 @@ import (
 	domain "www-template/packages/backend/internal/domain"
 )
 
-// [AUTH-BE-S061] Admin operator login は Admin operator auth domain を使う。
-func TestAuthBES061FinishOperatorPasskeyUsesAdminOperatorAuthDomain(t *testing.T) {
+// [AUTH-BE-S061] Operator login は OperatorAuth domain を使う。
+func TestAuthBES061FinishOperatorPasskeyUsesOperatorAuthDomain(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: Admin Operator repository と Admin Operator session store だけを用意し、Product account auth state を持たない login 経路に固定する。
+	// Step 1: Operator repository と Operator session store だけを用意し、account auth state を持たない login 経路に固定する。
 	ctx := context.Background()
 	now := time.Unix(1_700_000_000, 0).UTC()
 	operator := testOperatorSnapshot()
@@ -26,13 +26,13 @@ func TestAuthBES061FinishOperatorPasskeyUsesAdminOperatorAuthDomain(t *testing.T
 	service := mustTestAdminAuthService(t, repo, store, now)
 	loginService := mustTestAdminPasskeyLoginService(t, repo, service)
 
-	// Step 2: Admin passkey login 完了 use case を実行し、OperatorAuth domain が発行した session/access/CSRF を受け取る。
+	// Step 2: passkey login 完了 use case を実行し、OperatorAuth domain が発行した session/access/CSRF を受け取る。
 	result, err := loginService.FinishOperatorPasskey(ctx, FinishOperatorPasskeyInput{CredentialHandle: "credential-a"})
 	if err != nil {
 		t.Fatalf("finish operator passkey: %v", err)
 	}
 
-	// Step 3: accessToken、refresh state、response body の Admin-only 境界を小さい検証 helper で固定する。
+	// Step 3: accessToken、refresh state、response body の Operator-only 境界を小さい検証 helper で固定する。
 	assertAdminAccessTokenPayload(t, service, result, operator)
 	assertAdminOperatorSessionRecord(t, store, result, operator)
 	assertAdminLoginCookieAndBody(t, result)
@@ -41,7 +41,7 @@ func TestAuthBES061FinishOperatorPasskeyUsesAdminOperatorAuthDomain(t *testing.T
 func assertAdminAccessTokenPayload(t *testing.T, service *OperatorSessionService, result OperatorSessionResult, operator OperatorSnapshot) {
 	t.Helper()
 
-	// Step 1: accessToken payload は Admin operator claim として署名検証できることを確認する。
+	// Step 1: accessToken payload は Operator claim として署名検証できることを確認する。
 	payloadBytes, err := service.signer.VerifyJSON(result.AccessToken)
 	if err != nil {
 		t.Fatalf("verify admin access token: %v", err)
@@ -54,7 +54,7 @@ func assertAdminAccessTokenPayload(t *testing.T, service *OperatorSessionService
 		t.Fatalf("expected operator access token payload, got %+v", payload)
 	}
 
-	// Step 2: Product account claim が Admin token に混入していないことを raw field map で確認する。
+	// Step 2: account claim が token に混入していないことを raw field map で確認する。
 	var payloadFields map[string]json.RawMessage
 	if err := json.Unmarshal(payloadBytes, &payloadFields); err != nil {
 		t.Fatalf("decode admin access token fields: %v", err)
@@ -69,7 +69,7 @@ func assertAdminAccessTokenPayload(t *testing.T, service *OperatorSessionService
 func assertAdminOperatorSessionRecord(t *testing.T, store *testOperatorSessionStore, result OperatorSessionResult, operator OperatorSnapshot) {
 	t.Helper()
 
-	// Step 1: Admin refresh state は OperatorSessionRecord として保存され、operator owner/snapshot/hash だけを保持することを確認する。
+	// Step 1: refresh state は OperatorSessionRecord として保存され、operator owner/snapshot/hash だけを保持することを確認する。
 	record, ok := store.records[result.SessionID]
 	if !ok {
 		t.Fatalf("expected admin operator session record for %q", result.SessionID)
@@ -78,7 +78,7 @@ func assertAdminOperatorSessionRecord(t *testing.T, store *testOperatorSessionSt
 		t.Fatalf("expected operator refresh state, got %+v", record)
 	}
 
-	// Step 2: Product account auth state と混在しないことを record field 名の検査で固定する。
+	// Step 2: account auth state と混在しないことを record field 名の検査で固定する。
 	recordType := reflect.TypeOf(record)
 	for _, forbiddenField := range []string{"AccountID", "AccountStatus", "AccountSessionID"} {
 		if _, ok := recordType.FieldByName(forbiddenField); ok {
@@ -114,7 +114,7 @@ func assertAdminLoginCookieAndBody(t *testing.T, result OperatorSessionResult) {
 func TestRefreshOperatorSessionRotatesCookieAndOmitsRefreshTokenFromBody(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: passkey login 済みの Admin Operator session を作り、refresh rotation の旧 Cookie 入力を得る。
+	// Step 1: passkey login 済みの Operator session を作り、refresh rotation の旧 Cookie 入力を得る。
 	ctx := context.Background()
 	now := time.Unix(1_700_000_000, 0).UTC()
 	operator := testOperatorSnapshot()
@@ -258,13 +258,13 @@ type testOperatorSessionStore struct {
 }
 
 func (s *testOperatorSessionStore) Save(_ context.Context, record OperatorSessionRecord, _ time.Duration) error {
-	// Step 1: Admin Operator session ID を key として保存し、refresh Cookie selector で取得できるようにする。
+	// Step 1: Operator session ID を key として保存し、refresh Cookie selector で取得できるようにする。
 	s.records[record.SessionID] = record
 	return nil
 }
 
 func (s *testOperatorSessionStore) Get(_ context.Context, sessionID string) (OperatorSessionRecord, error) {
-	// Step 1: session selector に対応する Admin refresh session record を取得する。
+	// Step 1: session selector に対応する refresh session record を取得する。
 	record, ok := s.records[sessionID]
 	if !ok {
 		return OperatorSessionRecord{}, domain.ErrSessionNotFound
@@ -358,12 +358,12 @@ func mustTestAdminAuthService(t *testing.T, repo OperatorRepository, store Opera
 	}
 	service, err := NewOperatorSessionService(
 		OperatorSessionDependencies{
-			Operators: repo,
-			Sessions:  store,
-			Signer:    signer,
-			Secrets:   &testAdminSecretGenerator{tokens: []string{"old-admin-refresh-secret", "new-admin-refresh-secret"}},
-			IDs:       &testAdminIDGenerator{ids: []string{"01ARZ3NDEKTSV4RRFFQ69G5FB1", "01ARZ3NDEKTSV4RRFFQ69G5FB2", "01ARZ3NDEKTSV4RRFFQ69G5FB3", "01ARZ3NDEKTSV4RRFFQ69G5FB4"}},
-			Clock:     func() time.Time { return now },
+			Operators:       repo,
+			RefreshSessions: store,
+			Signer:          signer,
+			TokenGenerator:  &testAdminSecretGenerator{tokens: []string{"old-admin-refresh-secret", "new-admin-refresh-secret"}},
+			IDGenerator:     &testAdminIDGenerator{ids: []string{"01ARZ3NDEKTSV4RRFFQ69G5FB1", "01ARZ3NDEKTSV4RRFFQ69G5FB2", "01ARZ3NDEKTSV4RRFFQ69G5FB3", "01ARZ3NDEKTSV4RRFFQ69G5FB4"}},
+			Clock:           func() time.Time { return now },
 		},
 		OperatorSessionConfig{OperatorAccessTokenTTL: 15 * time.Minute, OperatorRefreshSessionTTL: time.Hour, OperatorRefreshCookieLifetime: 30 * time.Minute, WebAuthnRPID: "admin.example.com"},
 	)

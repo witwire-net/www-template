@@ -32,17 +32,20 @@ const adminMinimumAuthenticatorMessage = "minimum_authenticator_required"
 const adminRefreshCookieName = "admin_refresh_token"
 const adminSetupUnavailableMessage = "setup_unavailable"
 
-// NewRouter は Admin API 専用の Gin router を構築する。
+// NewRouter は Admin API 専用の Gin router を依存注入済みの状態で構築する。
 //
-// cfg は trusted proxy と production mode の判定に使う設定値である。
-// 戻り値は Admin generated bindings だけを登録した HTTP handler であり、Product generated bindings や Product handler は登録しない。
-// account creation use case と operator session validator が runtime composition から注入されるまでは、protected route は fail-close の 503 を返す。
-// 利用例:
+// 役割:
+//   - Product router の NewRouter(cfg, deps) と同じ constructor 形式に統一し、依存必須の design policy を Admin にも適用する。
+//   - cfg は trusted proxy と production mode の判定に使う設定値である。
+//   - dependencies は runtime composition が構築した Admin application service 群であり、nil field は該当 route を fail-close にする。
+//   - 戻り値は Admin generated bindings だけを登録した HTTP handler であり、Product generated bindings や Product handler は登録しない。
 //
-//	server := &http.Server{Handler: admin.NewRouter(cfg)}
-func NewRouter(cfg config.Config) *gin.Engine {
-	// Step 1: production runtime では validator/use case 未接続のまま fail-close させ、app composition が明示的に依存を注入するまで protected route を通さない。
-	return newRouterWithDependencies(cfg, adminRouterDependencies{})
+// 使用例:
+//
+//	router := admin.NewRouter(cfg, admin.Dependencies{...})
+func NewRouter(cfg config.Config, dependencies Dependencies) *gin.Engine {
+	// Step 1: exported DTO を既存の package-local dependency table へ変換し、未接続 route の fail-close 仕様は維持する。
+	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: dependencies.OperatorSessions, operatorAuth: dependencies.OperatorAuth, operatorPasskeyAuth: dependencies.OperatorPasskeyAuth, operatorPasskeys: dependencies.OperatorPasskeyVerifier, operatorSetup: dependencies.OperatorSetup, operatorPasskeyManagement: dependencies.OperatorPasskeyManagement, accountCreation: dependencies.AccountCreation, accountSearch: dependencies.AccountSearch})
 }
 
 func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDependencies) *gin.Engine {
@@ -66,6 +69,9 @@ func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDepend
 			MaxAge:           12 * time.Hour,
 		}))
 	}
+	// Step 3.5: OTel middleware は認証 middleware より前に配置し、Admin API の全 route で tracing を有効にする。
+	// Product router と同じ構造で OTel を適用し、Admin/Product の observability 非対称を解消する。
+	router.Use(otelMiddleware())
 	router.Use(adminAuthMiddleware(cfg, dependencies.operatorSessions))
 
 	// Step 4: health check は Admin router 自身が所有し、Admin runtime が stdlib mux へ fallback しないようにする。
@@ -147,16 +153,6 @@ type Dependencies struct {
 	OperatorPasskeyManagement OperatorPasskeyManager
 	AccountCreation           AccountCreator
 	AccountSearch             AccountSearcher
-}
-
-// NewRouterWithDependencies は Admin API 専用 Gin router を注入済み dependencies で構築する。
-//
-// cfg は trusted proxy と production mode の判定に使う設定値である。
-// dependencies は runtime composition が構築した Admin application service 群であり、nil field は該当 route を fail-close にする。
-// 戻り値は Admin generated bindings だけを登録した HTTP handler であり、Product generated bindings や Product handler は登録しない。
-func NewRouterWithDependencies(cfg config.Config, dependencies Dependencies) *gin.Engine {
-	// Step 1: exported DTO を既存の package-local dependency table へ変換し、未接続 route の fail-close 仕様は維持する。
-	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: dependencies.OperatorSessions, operatorAuth: dependencies.OperatorAuth, operatorPasskeyAuth: dependencies.OperatorPasskeyAuth, operatorPasskeys: dependencies.OperatorPasskeyVerifier, operatorSetup: dependencies.OperatorSetup, operatorPasskeyManagement: dependencies.OperatorPasskeyManagement, accountCreation: dependencies.AccountCreation, accountSearch: dependencies.AccountSearch})
 }
 
 type adminOperatorAuthenticator interface {

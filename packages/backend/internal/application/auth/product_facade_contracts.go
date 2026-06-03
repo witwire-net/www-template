@@ -126,7 +126,7 @@ func (adapter productSessionLifecycleAdapter) List(ctx context.Context, accountI
 	// Step 2: canonical Product account auth metadata を root facade DTO へ写像し、HTTP adapter の既存 contract を保つ。
 	sessions, err := adapter.lifecycle.ListAccountSessions(ctx, accountID)
 	if err != nil {
-		return nil, mapProductAccountLifecycleError(err)
+		return nil, mapAccountLifecycleError(err)
 	}
 	return productSessionMetadataListToRoot(sessions), nil
 }
@@ -142,7 +142,7 @@ func (adapter productSessionLifecycleAdapter) Revoke(ctx context.Context, accoun
 		if errors.Is(err, ErrAccountAuthUnauthorized) {
 			return ErrBadRequest
 		}
-		return mapProductAccountLifecycleError(err)
+		return mapAccountLifecycleError(err)
 	}
 	return nil
 }
@@ -155,7 +155,7 @@ func (adapter productSessionLifecycleAdapter) RevokeOthers(ctx context.Context, 
 
 	// Step 2: 現在 session 以外の失効を canonical lifecycle に委譲し、refresh state と metadata を同期して消す。
 	if err := adapter.lifecycle.RevokeOtherAccountSessions(ctx, accountID, currentSessionID); err != nil {
-		return mapProductAccountLifecycleError(err)
+		return mapAccountLifecycleError(err)
 	}
 	return nil
 }
@@ -179,7 +179,7 @@ func (adapter productContextRefreshLifecycleAdapter) RefreshContextWithAccountID
 	// Step 2: Product の authContextID は現行 session selector と同じ ULID なので、canonical refresh input の SessionID として渡す。
 	result, err := adapter.lifecycle.RefreshAccountSession(ctx, RefreshAccountSessionInput{RefreshToken: refreshToken, SessionID: authContextID, ClientIP: clientIP, UserAgent: userAgent})
 	if err != nil {
-		return ContextRefreshSession{}, mapProductAccountLifecycleError(err)
+		return ContextRefreshSession{}, mapAccountLifecycleError(err)
 	}
 
 	// Step 3: 既存 HTTP adapter が期待する root DTO へ写像するが、refresh rotation と token 発行の実処理は canonical lifecycle owner で完了済みとする。

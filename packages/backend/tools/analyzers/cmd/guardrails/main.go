@@ -114,9 +114,7 @@ var allowedPackageNames = []struct {
 	{pathPattern: "internal/adapter/http/admin/", isRegex: false, packageName: "admin"},
 	{pathPattern: "internal/adapter/http/shared/", isRegex: false, packageName: "shared"},
 	{pathPattern: "internal/adapter/http/", isRegex: false, packageName: "http"},
-	// internal/adapter/postgres/ は surface subtree を許可しつつ、既存 flat adapter も移行前互換として検査する。
-	{pathPattern: "internal/adapter/postgres/product/", isRegex: false, packageName: "product"},
-	{pathPattern: "internal/adapter/postgres/admin/", isRegex: false, packageName: "admin"},
+	// internal/adapter/postgres/ は単一 package で Product/Admin surface 分離を持たない。
 	{pathPattern: "internal/adapter/postgres/", isRegex: false, packageName: "postgres"},
 	// internal/adapter/valkey/ は Product/Admin の session namespace 分離を package 名でも固定する。
 	{pathPattern: "internal/adapter/valkey/product/", isRegex: false, packageName: "product"},
@@ -184,6 +182,7 @@ func collectViolations(root string) ([]string, error) {
 
 		if strings.HasSuffix(relativePath, ".go") {
 			violations = append(violations, verifyGoFilePlacement(relativePath)...)
+			violations = append(violations, verifyPostgresAdapterFlatLayout(relativePath)...)
 			violations = append(violations, verifyApplicationConceptOwnership(relativePath)...)
 
 			if strings.HasPrefix(relativePath, "internal/generated/") {
@@ -204,7 +203,7 @@ func collectViolations(root string) ([]string, error) {
 			violations = append(violations, checkErrorStringMatching(relativePath, file)...)
 			violations = append(violations, checkForbiddenCalls(relativePath, file)...)
 			violations = append(violations, checkForbiddenHostUsage(relativePath, file)...)
-			violations = append(violations, checkAdminBackendSQLConstruction(relativePath, file)...)
+			violations = append(violations, checkPostgresRepositorySQLConstruction(relativePath, file)...)
 			violations = append(violations, checkHTTPDomainBoundary(relativePath, file)...)
 			violations = append(violations, checkPortPurity(relativePath, file)...)
 			violations = append(violations, checkRoutePolicy(relativePath, file)...)
@@ -248,6 +247,22 @@ func verifyGoFilePlacement(path string) []string {
 	}
 
 	return []string{fmt.Sprintf("%s: go files must live under cmd/api, cmd/admin-api, internal/app, internal/platform, internal/domain, internal/application, internal/adapter, or internal/generated", path)}
+}
+
+// verifyPostgresAdapterFlatLayout は Postgres adapter の Product/Admin surface subtree の再発を検査する。
+// 単一 postgres package 化後、postgres/product/ や postgres/admin/ の再作成を拒否し、
+// DB 境界は schema/table/role/grant で守ることを強制する。
+func verifyPostgresAdapterFlatLayout(path string) []string {
+	forbiddenPrefixes := []string{
+		"internal/adapter/postgres/product/",
+		"internal/adapter/postgres/admin/",
+	}
+	for _, prefix := range forbiddenPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return []string{fmt.Sprintf("%s: Postgres adapter must be a single flat package; use schema/table/role/grant for DB boundaries instead of %s", path, prefix)}
+		}
+	}
+	return nil
 }
 
 // verifyApplicationConceptOwnership は application 層に Product/Admin surface owner を復活させないための配置検査である。
@@ -468,8 +483,14 @@ func isAllowedApplicationBoundaryImport(sourcePath string, importPath string) bo
 		return isAllowedSurfaceApplicationDependency(httpAdapterSurfaceFromPath(sourcePath), targetSurface)
 	}
 	if sourceLayer == "adapter-postgres" {
-		// Step 4-b: 既存 Admin operator repository は Admin auth snapshot port と operator management port を同じ table 境界で実装するため、対象 file だけ operators concept port への依存を許可する。
-		if sourcePath == "internal/adapter/postgres/admin/operator_repository.go" && targetSurface == "operators" {
+		// Step 4-b: 単一 postgres package 内の operator repository は operators concept port への依存を許可する。
+		if sourcePath == "internal/adapter/postgres/operator_repository.go" && targetSurface == "operators" {
+			return true
+		}
+		// Step 4-c: 単一 postgres package は Product/Admin surface subtree を持たないため、
+		// surface ではなく application concept への直接依存を許可する。
+		// schema/table/role/grant 境界で security を守り、package path による Product/Admin 分離は行わない。
+		if isAllowedPostgresAdapterApplicationDependency(targetSurface) {
 			return true
 		}
 		return isAllowedSurfaceApplicationDependency(persistenceAdapterSurfaceFromPath(sourcePath, "postgres"), targetSurface)
@@ -522,12 +543,18 @@ func isAllowedSurfaceApplicationDependency(sourceSurface string, targetSurface s
 		return true
 	}
 
-	// Step 2: Product HTTP surface から Product AccountSetting use case owner への依存を許可し、root application bucket へ DTO を戻さず accounts concept を直接呼ぶ。
+	// Step 2: Product HTTP surface から Product AccountSetting use case owner への依存を許可し、root application bucket へ DTO を戻らず accounts concept を直接呼ぶ。
 	if sourceSurface == "product" && targetSurface == "accounts" {
 		return true
 	}
 
-	// Step 3: Product/Admin から canonical auth concept への依存を許可し、surface 固有 use case が root legacy DTO へ戻らず explicit subject payload を使えるようにする。
+	// Step 3: Admin persistence adapter は accounts/audit application DTO を直接参照する。
+	// 単一 postgres package 内の account_management_repository と operator_audit_repository が Admin-owned として application DTO を import する経路を許可する。
+	if sourceSurface == "admin" && (targetSurface == "accounts" || targetSurface == "audit") {
+		return true
+	}
+
+	// Step 4: Product/Admin から canonical auth concept への依存を許可し、surface 固有 use case が root legacy DTO へ戻らず explicit subject payload を使えるようにする。
 	if (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "auth" {
 		return true
 	}
@@ -539,6 +566,17 @@ func isAllowedSurfaceApplicationDependency(sourceSurface string, targetSurface s
 
 	// Step 5: Product/Admin から shared への依存だけを許可し、中立 DTO の再利用を surface 境界内に収める。
 	return (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "shared"
+}
+
+// isAllowedPostgresAdapterApplicationDependency は単一 postgres package が参照できる application concept を判定する。
+// 単一 postgres package は Product/Admin surface subtree を持たないため、schema/table/role/grant 境界で守られる application concept への直接依存を許可する。
+func isAllowedPostgresAdapterApplicationDependency(targetSurface string) bool {
+	switch targetSurface {
+	case "accounts", "operators", "audit", "auth":
+		return true
+	default:
+		return false
+	}
 }
 
 // applicationSurfaceFromPath は application 配下のファイル配置から surface 名を返す。
@@ -1112,9 +1150,11 @@ func checkForbiddenHostUsage(path string, file *ast.File) []string {
 	return violations
 }
 
-func checkAdminBackendSQLConstruction(path string, file *ast.File) []string {
-	// Step 1: Admin backend の Postgres repository 実装だけに限定し、Product repository や test fixture の安全な検証文字列へ scope を広げない。
-	if !isAdminBackendPostgresRepositoryPath(path) || isTestFile(path) {
+// checkPostgresRepositorySQLConstruction は Postgres adapter の repository 実装における unsafe SQL construction を検査する。
+// 単一 postgres package 化後も Product/Admin repository 全体に対して Raw/Exec と動的 SQL fragment を拒否する。
+func checkPostgresRepositorySQLConstruction(path string, file *ast.File) []string {
+	// Step 1: Postgres adapter の repository 実装だけに限定し、database.go など DB open/ping のみの file は対象外にする。
+	if !isPostgresRepositoryPath(path) || isTestFile(path) {
 		return nil
 	}
 
@@ -1131,15 +1171,15 @@ func checkAdminBackendSQLConstruction(path string, file *ast.File) []string {
 			return true
 		}
 
-		// Step 3: Raw/Exec は query 全体を文字列で受けるため、Admin backend repository では使用自体を禁止する。
+		// Step 3: Raw/Exec は query 全体を文字列で受けるため、Postgres repository では使用自体を禁止する。
 		if selector.Sel.Name == "Raw" || selector.Sel.Name == "Exec" {
-			violations = append(violations, fmt.Sprintf("%s: unsafe SQL construction is banned in Admin backend repositories; use GORM parameter binding instead of %s", path, selector.Sel.Name))
+			violations = append(violations, fmt.Sprintf("%s: unsafe SQL construction is banned in Postgres repositories; use GORM parameter binding instead of %s", path, selector.Sel.Name))
 			return true
 		}
 
 		// Step 4: Where/Order などの SQL fragment 引数は静的文字列だけに限定し、変数経由の動的 SQL も拒否する。
 		if isGormSQLFragmentMethod(selector.Sel.Name) && len(callExpr.Args) > 0 && !isStaticStringLiteral(callExpr.Args[0]) {
-			violations = append(violations, fmt.Sprintf("%s: unsafe SQL construction is banned in Admin backend repositories; SQL fragments must be static string literals with bound parameters", path))
+			violations = append(violations, fmt.Sprintf("%s: unsafe SQL construction is banned in Postgres repositories; SQL fragments must be static string literals with bound parameters", path))
 		}
 
 		return true
@@ -1149,20 +1189,22 @@ func checkAdminBackendSQLConstruction(path string, file *ast.File) []string {
 	return violations
 }
 
-func isAdminBackendPostgresRepositoryPath(path string) bool {
-	// Step 1: Admin schema/table を扱う legacy admin repository と、rehome 後の Admin capability repositories を明示列挙する。
-	for _, prefix := range []string{
-		"internal/adapter/postgres/admin/",
-		"internal/adapter/postgres/accounts/",
-		"internal/adapter/postgres/audit/",
-	} {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
+// isPostgresRepositoryPath は Postgres adapter の repository file かどうかを判定する。
+// internal/adapter/postgres/ 配下の production Go file を広く対象とし、database.go など DB open/ping のみの file は除外する。
+// 将来の repository 追加でも SQL construction guardrail の対象外にならないよう、明示列挙ではなく prefix + 除外パターンで判定する。
+func isPostgresRepositoryPath(path string) bool {
+	// Step 1: internal/adapter/postgres/ 配下でない file は対象外。
+	if !strings.HasPrefix(path, "internal/adapter/postgres/") {
+		return false
 	}
 
-	// Step 2: Product repository は別境界なので Admin SQL guardrail へ巻き込まない。
-	return false
+	// Step 2: database.go は DB open/ping のみで SQL construction を行わないため除外する。
+	if path == "internal/adapter/postgres/database.go" {
+		return false
+	}
+
+	// Step 3: production Go file だけを対象にし、test file は checkPostgresRepositorySQLConstruction 側で除外する。
+	return strings.HasSuffix(path, ".go")
 }
 
 func isGormSQLFragmentMethod(methodName string) bool {

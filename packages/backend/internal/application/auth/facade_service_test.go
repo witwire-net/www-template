@@ -188,7 +188,7 @@ func (r *stubAccountRepo) FindWebAuthnCredential(_ context.Context, handle strin
 	for _, a := range r.accounts {
 		for _, c := range a.Credentials() {
 			if c.CredentialHandle() == handle {
-				return domain.ReconstitueWebAuthnStoredCredential(handle, nil, 0, nil, false, false, nil), nil
+				return domain.ReconstituteWebAuthnStoredCredential(handle, nil, 0, nil, false, false, nil), nil
 			}
 		}
 	}

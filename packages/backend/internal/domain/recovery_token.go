@@ -26,6 +26,9 @@ func ValidateTokenKind(kind TokenKind) error {
 	}
 }
 
+// RecoveryToken はアカウント復旧用のトークンを表現する。
+// パスキー紛失時のアカウント復旧や新規デバイス登録に使用される。
+// secret は暗号学的に安全なランダム値、kind は用途種別（recovery または device-link）。
 type RecoveryToken struct {
 	id         string
 	accountID  AccountID
@@ -35,6 +38,8 @@ type RecoveryToken struct {
 	consumedAt *time.Time
 }
 
+// RecoverySession はアカウント復旧用のセッションを表現する。
+// RecoveryToken の検証後に発行され、パスキー登録等の後続操作に使用される。
 type RecoverySession struct {
 	id         string
 	accountID  AccountID
@@ -78,6 +83,8 @@ func ReconstituteRecoveryToken(id string, accountID AccountID, secret string, ki
 	return token, nil
 }
 
+// EnsureConsumable はトークンが消費可能（未消費かつ有効期限内）であることを確認する。
+// 既に消費済みの場合は ErrRecoveryTokenConsumed を、有効期限切れの場合は ErrRecoveryTokenExpired を返す。
 func (t RecoveryToken) EnsureConsumable(now time.Time) error {
 	if t.consumedAt != nil {
 		return ErrRecoveryTokenConsumed
@@ -89,19 +96,31 @@ func (t RecoveryToken) EnsureConsumable(now time.Time) error {
 	return nil
 }
 
+// Consume はトークンを消費済みとしてマークする。消費時刻は UTC で記録される。
 func (t RecoveryToken) Consume(at time.Time) RecoveryToken {
 	consumedAt := at.UTC()
 	t.consumedAt = &consumedAt
 	return t
 }
 
+// ID はトークンの一意識別子（ULID）を返す。
 func (t RecoveryToken) ID() string { return t.id }
+
+// AccountID はトークンが紐づくアカウントの ULID を返す。
 func (t RecoveryToken) AccountID() AccountID {
 	return t.accountID
 }
-func (t RecoveryToken) Secret() string         { return t.secret }
-func (t RecoveryToken) Kind() TokenKind        { return t.kind }
-func (t RecoveryToken) ExpiresAt() time.Time   { return t.expiresAt }
+
+// Secret はトークンの秘密値（暗号学的に安全なランダム文字列）を返す。
+func (t RecoveryToken) Secret() string { return t.secret }
+
+// Kind はトークンの用途種別（recovery または device-link）を返す。
+func (t RecoveryToken) Kind() TokenKind { return t.kind }
+
+// ExpiresAt はトークンの有効期限を返す。
+func (t RecoveryToken) ExpiresAt() time.Time { return t.expiresAt }
+
+// ConsumedAt はトークンの消費時刻を返す。未消費の場合は nil を返す。
 func (t RecoveryToken) ConsumedAt() *time.Time { return t.consumedAt }
 
 // NewRecoverySession は新しい RecoverySession を生成する。
@@ -136,6 +155,8 @@ func ReconstituteRecoverySession(id string, accountID AccountID, kind TokenKind,
 	return session, nil
 }
 
+// EnsureAvailable はセッションが利用可能（未消費かつ有効期限内）であることを確認する。
+// 既に消費済みの場合は ErrRecoverySessionConsumed を、有効期限切れの場合は ErrRecoverySessionExpired を返す。
 func (s RecoverySession) EnsureAvailable(now time.Time) error {
 	if s.consumedAt != nil {
 		return ErrRecoverySessionConsumed
@@ -147,16 +168,26 @@ func (s RecoverySession) EnsureAvailable(now time.Time) error {
 	return nil
 }
 
+// Consume はセッションを消費済みとしてマークする。消費時刻は UTC で記録される。
 func (s RecoverySession) Consume(at time.Time) RecoverySession {
 	consumedAt := at.UTC()
 	s.consumedAt = &consumedAt
 	return s
 }
 
+// ID はセッションの一意識別子（ULID）を返す。
 func (s RecoverySession) ID() string { return s.id }
+
+// AccountID はセッションが紐づくアカウントの ULID を返す。
 func (s RecoverySession) AccountID() AccountID {
 	return s.accountID
 }
-func (s RecoverySession) Kind() TokenKind        { return s.kind }
-func (s RecoverySession) ExpiresAt() time.Time   { return s.expiresAt }
+
+// Kind はセッションの用途種別（recovery または device-link）を返す。
+func (s RecoverySession) Kind() TokenKind { return s.kind }
+
+// ExpiresAt はセッションの有効期限を返す。
+func (s RecoverySession) ExpiresAt() time.Time { return s.expiresAt }
+
+// ConsumedAt はセッションの消費時刻を返す。未消費の場合は nil を返す。
 func (s RecoverySession) ConsumedAt() *time.Time { return s.consumedAt }

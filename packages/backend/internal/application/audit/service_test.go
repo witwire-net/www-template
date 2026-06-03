@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-var adminAuditUseCaseNow = time.Date(2026, 5, 26, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
+var operatorAuditUseCaseNow = time.Date(2026, 5, 26, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
 
-func TestAdminAuditUseCaseRecordsPendingIntentBeforeMutation(t *testing.T) {
+func TestOperatorAuditUseCaseRecordsPendingIntentBeforeMutation(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: repository fake と注入 clock だけで audit use case を作り、DB 実装なしで application boundary を検証する。
@@ -29,7 +29,7 @@ func TestAdminAuditUseCaseRecordsPendingIntentBeforeMutation(t *testing.T) {
 		t.Fatalf("record mutation intent: %v", err)
 	}
 
-	// Step 3: domain.NewAdminAuditEvent 由来の pending outcome が repository port へ渡り、後続 mutation 用の audit ID が返ることを確認する。
+	// Step 3: domain.NewOperatorAuditEvent 由来の pending outcome が repository port へ渡り、後続 mutation 用の audit ID が返ることを確認する。
 	if stored.AuditID == "" {
 		t.Fatal("expected stored audit ID")
 	}
@@ -39,13 +39,13 @@ func TestAdminAuditUseCaseRecordsPendingIntentBeforeMutation(t *testing.T) {
 	if repository.recordedIntent.StableErrorCode != "" || repository.recordedIntent.CompletedAt != nil {
 		t.Fatalf("pending intent must not have error/completedAt: %+v", repository.recordedIntent)
 	}
-	if !repository.recordedIntent.OccurredAt.Equal(adminAuditUseCaseNow.UTC()) {
-		t.Fatalf("occurredAt = %v, want %v", repository.recordedIntent.OccurredAt, adminAuditUseCaseNow.UTC())
+	if !repository.recordedIntent.OccurredAt.Equal(operatorAuditUseCaseNow.UTC()) {
+		t.Fatalf("occurredAt = %v, want %v", repository.recordedIntent.OccurredAt, operatorAuditUseCaseNow.UTC())
 	}
 }
 
 // [ADMIN-CONSOLE-BE-S066] account 作成失敗は failed outcome として監査される。
-func TestAdminAuditUseCaseCompletesFailedOutcomeThroughDomainEvent(t *testing.T) {
+func TestOperatorAuditUseCaseCompletesFailedOutcomeThroughDomainEvent(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: pending intent の snapshot を fake repository に置き、failure completion が既存 intent を復元する流れを作る。
@@ -53,7 +53,7 @@ func TestAdminAuditUseCaseCompletesFailedOutcomeThroughDomainEvent(t *testing.T)
 	repository.current = Record{AuditID: "audit-1", Outcome: "pending"}
 	service := mustNewAuditService(t, repository)
 
-	// Step 2: mixed-case の stable error code を渡し、canonical 化と failed transition を domain.AdminAuditEvent.MarkFailed に委譲する。
+	// Step 2: mixed-case の stable error code を渡し、canonical 化と failed transition を domain.OperatorAuditEvent.MarkFailed に委譲する。
 	stored, err := service.CompleteMutationFailed(context.Background(), FailureInput{
 		AuditID:         "audit-1",
 		StableErrorCode: "DUPLICATE_EMAIL",
@@ -67,7 +67,7 @@ func TestAdminAuditUseCaseCompletesFailedOutcomeThroughDomainEvent(t *testing.T)
 	assertCompletedAuditCommand(t, repository.completed, "audit-1", "failed", "duplicate_email")
 }
 
-func TestAdminAuditUseCaseCompletesSucceededOutcomeThroughDomainEvent(t *testing.T) {
+func TestOperatorAuditUseCaseCompletesSucceededOutcomeThroughDomainEvent(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: pending intent の snapshot を fake repository に置き、success completion が既存 intent を復元する流れを作る。
@@ -75,7 +75,7 @@ func TestAdminAuditUseCaseCompletesSucceededOutcomeThroughDomainEvent(t *testing
 	repository.current = Record{AuditID: "audit-2", Outcome: "pending"}
 	service := mustNewAuditService(t, repository)
 
-	// Step 2: success 用 API を呼び、domain.AdminAuditEvent.MarkSucceeded が completed timestamp を必須にする境界を通す。
+	// Step 2: success 用 API を呼び、domain.OperatorAuditEvent.MarkSucceeded が completed timestamp を必須にする境界を通す。
 	stored, err := service.CompleteMutationSucceeded(context.Background(), CompletionInput{AuditID: "audit-2"})
 	if err != nil {
 		t.Fatalf("complete succeeded audit: %v", err)
@@ -87,7 +87,7 @@ func TestAdminAuditUseCaseCompletesSucceededOutcomeThroughDomainEvent(t *testing
 }
 
 // [ADMIN-CONSOLE-BE-S065] audit intent 作成失敗時は mutation を開始しない。
-func TestAdminAuditUseCaseFailsClosedWhenIntentCannotBeRecorded(t *testing.T) {
+func TestOperatorAuditUseCaseFailsClosedWhenIntentCannotBeRecorded(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: intent 保存だけを失敗させ、account mutation use case がこの error で停止できる fail-close 境界を検証する。
@@ -102,11 +102,11 @@ func TestAdminAuditUseCaseFailsClosedWhenIntentCannotBeRecorded(t *testing.T) {
 	}
 }
 
-func TestAdminAuditUseCaseRejectsAlreadyCompletedAudit(t *testing.T) {
+func TestOperatorAuditUseCaseRejectsAlreadyCompletedAudit(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: 既に succeeded の snapshot を配置し、二重完了拒否を application ではなく domain.Reconstitute/MarkSucceeded 経由で発生させる。
-	completedAt := adminAuditUseCaseNow.UTC()
+	completedAt := operatorAuditUseCaseNow.UTC()
 	repository := newFakeRepository()
 	repository.current = Record{AuditID: "audit-3", Outcome: "succeeded", CompletedAt: &completedAt}
 	service := mustNewAuditService(t, repository)
@@ -121,7 +121,7 @@ func TestAdminAuditUseCaseRejectsAlreadyCompletedAudit(t *testing.T) {
 	}
 }
 
-func TestAdminAuditUseCaseRejectsFailedOutcomeWithoutStableErrorCode(t *testing.T) {
+func TestOperatorAuditUseCaseRejectsFailedOutcomeWithoutStableErrorCode(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: pending intent の snapshot を配置し、failure API が空 stable code を success と誤判定しないことを検証する。
@@ -129,7 +129,7 @@ func TestAdminAuditUseCaseRejectsFailedOutcomeWithoutStableErrorCode(t *testing.
 	repository.current = Record{AuditID: "audit-4", Outcome: "pending"}
 	service := mustNewAuditService(t, repository)
 
-	// Step 2: failed outcome に必須の stable error code を空にし、domain.AdminAuditEvent.MarkFailed による拒否へ委譲されることを確認する。
+	// Step 2: failed outcome に必須の stable error code を空にし、domain.OperatorAuditEvent.MarkFailed による拒否へ委譲されることを確認する。
 	_, err := service.CompleteMutationFailed(context.Background(), FailureInput{AuditID: "audit-4"})
 	if !errors.Is(err, ErrAuditBadRequest) {
 		t.Fatalf("expected ErrAuditBadRequest, got %v", err)
@@ -143,9 +143,9 @@ func mustNewAuditService(t *testing.T, repository *fakeRepository) *AuditService
 	t.Helper()
 
 	// Step 1: test 用 clock は固定し、application code が time.Now に依存しないことを検証可能にする。
-	service, err := NewAuditService(repository, func() time.Time { return adminAuditUseCaseNow })
+	service, err := NewAuditService(repository, func() time.Time { return operatorAuditUseCaseNow })
 	if err != nil {
-		t.Fatalf("new admin audit service: %v", err)
+		t.Fatalf("new operator audit service: %v", err)
 	}
 	return service
 }
@@ -160,8 +160,8 @@ func assertCompletedAuditRecord(t *testing.T, record Record, outcome string, sta
 	if record.StableErrorCode != stableErrorCode {
 		t.Fatalf("stable error code = %q, want %q", record.StableErrorCode, stableErrorCode)
 	}
-	if record.CompletedAt == nil || !record.CompletedAt.Equal(adminAuditUseCaseNow.UTC()) {
-		t.Fatalf("completedAt = %v, want %v", record.CompletedAt, adminAuditUseCaseNow.UTC())
+	if record.CompletedAt == nil || !record.CompletedAt.Equal(operatorAuditUseCaseNow.UTC()) {
+		t.Fatalf("completedAt = %v, want %v", record.CompletedAt, operatorAuditUseCaseNow.UTC())
 	}
 }
 
@@ -184,8 +184,8 @@ func assertCompletedAuditCommand(
 	if command.StableErrorCode != stableErrorCode {
 		t.Fatalf("command stable error code = %q, want %q", command.StableErrorCode, stableErrorCode)
 	}
-	if !command.CompletedAt.Equal(adminAuditUseCaseNow.UTC()) {
-		t.Fatalf("command completedAt = %v, want %v", command.CompletedAt, adminAuditUseCaseNow.UTC())
+	if !command.CompletedAt.Equal(operatorAuditUseCaseNow.UTC()) {
+		t.Fatalf("command completedAt = %v, want %v", command.CompletedAt, operatorAuditUseCaseNow.UTC())
 	}
 }
 

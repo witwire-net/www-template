@@ -9,21 +9,21 @@ import (
 )
 
 var (
-	// ErrAuditInternal は Admin audit 境界で repository、clock、または復元済み state が不正な場合に返す application error である。
+	// ErrAuditInternal は Operator audit 境界で repository、clock、または復元済み state が不正な場合に返す application error である。
 	// adapter は内部詳細や永続化 error を露出せず、fail-close な 5xx 系応答へ変換する。
-	ErrAuditInternal = errors.New("admin audit internal")
+	ErrAuditInternal = errors.New("operator audit internal")
 
 	// ErrAuditBadRequest は audit outcome を domain rule で完了できない入力または状態に対して返す application error である。
 	// 二重完了、不正 outcome、不正 stable error code などを handler に domain 型を露出せず伝えるために使う。
-	ErrAuditBadRequest = errors.New("admin audit bad request")
+	ErrAuditBadRequest = errors.New("operator audit bad request")
 )
 
-// Repository は Admin mutation audit の intent 記録と outcome 完了を永続化 adapter へ委譲する port である。
+// Repository は Operator mutation audit の intent 記録と outcome 完了を永続化 adapter へ委譲する port である。
 //
 // 役割:
 //   - application use case が concrete DB/GORM/generated 型に依存しないよう、primitive DTO だけを境界に置く。
 //   - RecordAuditIntent は mutation 前に pending intent を永続化し、失敗時に後続 mutation を開始させない。
-//   - CompleteAudit は domain.AdminAuditEvent で確定した succeeded/failed outcome だけを保存する。
+//   - CompleteAudit は domain.OperatorAuditEvent で確定した succeeded/failed outcome だけを保存する。
 //
 // 引数:
 //   - ctx: request deadline と cancellation を repository adapter へ伝播する。
@@ -38,14 +38,14 @@ type Repository interface {
 	CompleteAudit(ctx context.Context, record CompletionRecord) (Record, error)
 }
 
-// Projector は完了済み Admin audit event を検索基盤へ投影する port である。
+// Projector は完了済み Operator audit event を検索基盤へ投影する port である。
 //
 // 役割:
-//   - Go backend から Admin audit event を OpenSearch などの read/search index へ送る。
+//   - Go backend から Operator audit event を OpenSearch などの read/search index へ送る。
 //   - projection failure は mutation の commit 後に扱われるため、呼び出し元 use case は成功済み mutation を取り消さない。
-//   - 実装は Admin audit namespace だけを使い、Product domain namespace へ書き込んではならない。
+//   - 実装は Operator audit namespace だけを使い、Product domain namespace へ書き込んではならない。
 type Projector interface {
-	ProjectAdminAuditEvent(ctx context.Context, record ProjectionRecord) error
+	ProjectOperatorAuditEvent(ctx context.Context, record ProjectionRecord) error
 }
 
 // ProjectionFailureObserver は audit projection の失敗を観測可能にする port である。
@@ -55,13 +55,13 @@ type Projector interface {
 //   - projection failure の error を受け取るが、その error を mutation response の失敗には変換しない。
 //   - constructor で必須依存として扱い、failure が沈黙しない構成を保証する。
 type ProjectionFailureObserver interface {
-	ObserveAdminAuditProjectionFailure(ctx context.Context, auditID string, err error)
+	ObserveOperatorAuditProjectionFailure(ctx context.Context, auditID string, err error)
 }
 
-// AuditService は Admin mutation の intent 作成と success/failed outcome 完了を集約する application use case である。
+// AuditService は Operator mutation の intent 作成と success/failed outcome 完了を集約する application use case である。
 //
 // 役割:
-//   - handler や account creation use case が AdminAuditEvent の transition rule を重複実装しないようにする。
+//   - handler や account creation use case が OperatorAuditEvent の transition rule を重複実装しないようにする。
 //   - mutation 前の pending intent 記録と、mutation 後の succeeded/failed 完了を同じ境界にまとめる。
 //   - Product audit や Product auth application を import せず、Admin 専用 audit path を維持する。
 //
@@ -81,18 +81,18 @@ type AuditService struct {
 	clock  func() time.Time
 }
 
-type adminAuditCompletionKind string
+type operatorAuditCompletionKind string
 
 const (
-	adminAuditCompletionSucceeded adminAuditCompletionKind = "succeeded"
-	adminAuditCompletionFailed    adminAuditCompletionKind = "failed"
+	operatorAuditCompletionSucceeded operatorAuditCompletionKind = "succeeded"
+	operatorAuditCompletionFailed    operatorAuditCompletionKind = "failed"
 )
 
 // IntentInput は mutation 開始前に記録する audit intent の入力 DTO である。
 //
 // 役割:
 //   - operator、action、target、request correlation を application 境界の primitive として受け取る。
-//   - handler や後続 account creation use case が domain.AdminAuditEvent を直接組み立てないようにする。
+//   - handler や後続 account creation use case が domain.OperatorAuditEvent を直接組み立てないようにする。
 //   - DetailsJSON は adapter が検証済み JSON 文字列を渡すための将来拡張フィールドであり、空文字を許容する。
 type IntentInput struct {
 	OperatorID  string
@@ -106,7 +106,7 @@ type IntentInput struct {
 // IntentRecord は repository へ渡す pending audit intent の保存 DTO である。
 //
 // 役割:
-//   - domain.NewAdminAuditEvent が決めた pending outcome を primitive 文字列として永続化境界へ渡す。
+//   - domain.NewOperatorAuditEvent が決めた pending outcome を primitive 文字列として永続化境界へ渡す。
 //   - OccurredAt は注入 clock 由来の UTC 時刻で、mutation intent の発生時刻として保存される。
 //   - StableErrorCode と CompletedAt は intent 時点では空にし、outcome 完了時だけ設定する。
 type IntentRecord struct {
@@ -142,7 +142,7 @@ type FailureInput struct {
 // CompletionRecord は repository へ渡す completed audit outcome の保存 DTO である。
 //
 // 役割:
-//   - domain.AdminAuditEvent の MarkSucceeded/MarkFailed が返した最終 outcome だけを保存境界へ渡す。
+//   - domain.OperatorAuditEvent の MarkSucceeded/MarkFailed が返した最終 outcome だけを保存境界へ渡す。
 //   - succeeded では StableErrorCode が空、failed では canonical stable error code が入る。
 //   - CompletedAt は必ず non-nil で、domain method が UTC 正規化した完了時刻を保持する。
 type CompletionRecord struct {
@@ -156,7 +156,7 @@ type CompletionRecord struct {
 //
 // 役割:
 //   - audit ID と現在 outcome を primitive として保持し、domain entity を public API に露出しない。
-//   - FindAudit の戻り値として ReconstituteAdminAuditEvent に必要な outcome/error/completedAt を提供する。
+//   - FindAudit の戻り値として ReconstituteOperatorAuditEvent に必要な outcome/error/completedAt を提供する。
 //   - account creation use case はこの DTO の AuditID を mutation correlation に利用できる。
 type Record struct {
 	AuditID         string
@@ -172,11 +172,11 @@ type Record struct {
 	CompletedAt     *time.Time
 }
 
-// ProjectionRecord は Admin audit event を検索 index へ投影するための application DTO である。
+// ProjectionRecord は Operator audit event を検索 index へ投影するための application DTO である。
 //
 // 役割:
 //   - repository や HTTP/generated 型を含めず、OpenSearch document に必要な primitive だけを保持する。
-//   - AuditID/OperatorID/Action/Target/Outcome/OccurredAt は Admin audit の検索・調査に必要な安定属性である。
+//   - AuditID/OperatorID/Action/Target/Outcome/OccurredAt は Operator audit の検索・調査に必要な安定属性である。
 //   - DetailsJSON は保存済み JSON 文字列をそのまま渡し、projector 実装が必要に応じて document 化する。
 type ProjectionRecord struct {
 	AuditID         string
@@ -192,7 +192,7 @@ type ProjectionRecord struct {
 	CompletedAt     *time.Time
 }
 
-// NewAuditService は Admin audit use case を生成する。
+// NewAuditService は Operator audit use case を生成する。
 //
 // 引数:
 //   - audits: audit intent/outcome を保存する repository port。nil は fail-close のため拒否する。
@@ -207,11 +207,11 @@ func NewAuditService(audits Repository, clock func() time.Time) (*AuditService, 
 		return nil, ErrAuditInternal
 	}
 
-	// Step 2: 検証済み依存だけを保持し、以後の use case method が同じ Admin audit 境界を共有する。
+	// Step 2: 検証済み依存だけを保持し、以後の use case method が同じ Operator audit 境界を共有する。
 	return &AuditService{audits: audits, clock: clock}, nil
 }
 
-// RecordMutationIntent は Admin mutation 開始前に pending audit intent を記録する。
+// RecordMutationIntent は Operator mutation 開始前に pending audit intent を記録する。
 //
 // ctx は repository へ deadline/cancellation を伝播する。
 // input は operator/action/target/request correlation の primitive DTO で、Product audit 情報を混入させない。
@@ -223,7 +223,7 @@ func (s *AuditService) RecordMutationIntent(ctx context.Context, input IntentInp
 	}
 
 	// Step 2: intent の初期 outcome は concrete domain object に委譲し、handler/application 側で pending 文字列を手組みしない。
-	event := domain.NewAdminAuditEvent()
+	event := domain.NewOperatorAuditEvent()
 
 	// Step 3: 注入 clock の時刻を UTC にそろえ、監査時系列の保存 DTO を組み立てる。
 	intent := IntentRecord{
@@ -253,20 +253,20 @@ func (s *AuditService) RecordMutationIntent(ctx context.Context, input IntentInp
 // input.AuditID は RecordMutationIntent が返した audit event を指定する。
 // 戻り値は更新後の Record で、二重完了や不正な復元 state は ErrAuditBadRequest、保存失敗は ErrAuditInternal を返す。
 func (s *AuditService) CompleteMutationSucceeded(ctx context.Context, input CompletionInput) (Record, error) {
-	// Step 1: 共通 completion path に succeeded marker を渡し、transition 自体は domain.AdminAuditEvent.MarkSucceeded に委譲する。
-	return s.completeAudit(ctx, input.AuditID, adminAuditCompletionSucceeded, "")
+	// Step 1: 共通 completion path に succeeded marker を渡し、transition 自体は domain.OperatorAuditEvent.MarkSucceeded に委譲する。
+	return s.completeAudit(ctx, input.AuditID, operatorAuditCompletionSucceeded, "")
 }
 
 // BuildMutationSucceededCompletion は外側の transaction 境界で保存する succeeded audit completion DTO を生成する。
 //
 // ctx を持つ CompleteMutationSucceeded と異なり、この method は repository I/O を実行しない。
 // Account 作成 repository のように mutation 本体と audit outcome を同一 DB transaction へ含める場合に使う。
-// outcome transition と completed timestamp 検証は domain.AdminAuditEvent.MarkSucceeded に委譲する。
+// outcome transition と completed timestamp 検証は domain.OperatorAuditEvent.MarkSucceeded に委譲する。
 func (s *AuditService) BuildMutationSucceededCompletion(input CompletionInput) (CompletionRecord, error) {
 	// Step 1: 新規 intent と同じ pending domain event を作り、成功 outcome の構築を domain rule に委譲する。
-	completed, err := domain.NewAdminAuditEvent().MarkSucceeded(s.clock().UTC())
+	completed, err := domain.NewOperatorAuditEvent().MarkSucceeded(s.clock().UTC())
 	if err != nil {
-		return CompletionRecord{}, mapAdminAuditDomainError(err)
+		return CompletionRecord{}, mapOperatorAuditDomainError(err)
 	}
 
 	// Step 2: repository transaction が保存できる primitive completion DTO へ変換する。
@@ -276,17 +276,17 @@ func (s *AuditService) BuildMutationSucceededCompletion(input CompletionInput) (
 // CompleteMutationFailed は pending audit event を failed outcome へ完了する。
 //
 // ctx は repository へ deadline/cancellation を伝播する。
-// input.StableErrorCode は domain.AdminAuditEvent.MarkFailed が検証し、canonical code として保存される。
+// input.StableErrorCode は domain.OperatorAuditEvent.MarkFailed が検証し、canonical code として保存される。
 // 戻り値は更新後の Record で、stable error code が不正な場合は ErrAuditBadRequest を返す。
 func (s *AuditService) CompleteMutationFailed(ctx context.Context, input FailureInput) (Record, error) {
 	// Step 1: 共通 completion path に raw stable error code を渡し、failed transition と code 検証は domain method に委譲する。
-	return s.completeAudit(ctx, input.AuditID, adminAuditCompletionFailed, input.StableErrorCode)
+	return s.completeAudit(ctx, input.AuditID, operatorAuditCompletionFailed, input.StableErrorCode)
 }
 
 func (s *AuditService) completeAudit(
 	ctx context.Context,
 	auditID string,
-	kind adminAuditCompletionKind,
+	kind operatorAuditCompletionKind,
 	stableErrorCode string,
 ) (Record, error) {
 	// Step 1: 呼び出し元 context が中断済みなら、完了更新を開始せず抽象 application error を返す。
@@ -299,13 +299,13 @@ func (s *AuditService) completeAudit(
 	if err != nil {
 		return Record{}, ErrAuditInternal
 	}
-	event, err := reconstituteAdminAuditEvent(current)
+	event, err := reconstituteOperatorAuditEvent(current)
 	if err != nil {
 		return Record{}, err
 	}
 
 	// Step 3: 呼び出し元 method が指定した completion 種別で success/failure を選び、transition rule は domain method へ委譲する。
-	completed, err := completeAdminAuditEvent(event, kind, stableErrorCode, s.clock().UTC())
+	completed, err := completeOperatorAuditEvent(event, kind, stableErrorCode, s.clock().UTC())
 	if err != nil {
 		return Record{}, err
 	}
@@ -325,31 +325,31 @@ func (s *AuditService) completeAudit(
 	return stored, nil
 }
 
-func reconstituteAdminAuditEvent(record Record) (domain.AdminAuditEvent, error) {
+func reconstituteOperatorAuditEvent(record Record) (domain.OperatorAuditEvent, error) {
 	// Step 1: repository snapshot の primitive outcome を domain enum に戻し、unknown outcome を fail-closed にする。
-	event, err := domain.ReconstituteAdminAuditEvent(
-		domain.AdminAuditOutcome(record.Outcome),
+	event, err := domain.ReconstituteOperatorAuditEvent(
+		domain.OperatorAuditOutcome(record.Outcome),
 		domain.StableErrorCode(record.StableErrorCode),
 		record.CompletedAt,
 	)
 	if err != nil {
-		return emptyAdminAuditEvent(), mapAdminAuditDomainError(err)
+		return emptyOperatorAuditEvent(), mapOperatorAuditDomainError(err)
 	}
 
 	return event, nil
 }
 
-func completeAdminAuditEvent(
-	event domain.AdminAuditEvent,
-	kind adminAuditCompletionKind,
+func completeOperatorAuditEvent(
+	event domain.OperatorAuditEvent,
+	kind operatorAuditCompletionKind,
 	stableErrorCode string,
 	completedAt time.Time,
-) (domain.AdminAuditEvent, error) {
+) (domain.OperatorAuditEvent, error) {
 	// Step 1: failure API から来た completion は、stable error code が空でも必ず MarkFailed に通して domain rule で拒否させる。
-	if kind == adminAuditCompletionFailed {
+	if kind == operatorAuditCompletionFailed {
 		completed, err := event.MarkFailed(domain.StableErrorCode(stableErrorCode), completedAt)
 		if err != nil {
-			return emptyAdminAuditEvent(), mapAdminAuditDomainError(err)
+			return emptyOperatorAuditEvent(), mapOperatorAuditDomainError(err)
 		}
 		return completed, nil
 	}
@@ -357,18 +357,18 @@ func completeAdminAuditEvent(
 	// Step 2: success API から来た completion だけを succeeded outcome として扱い、二重完了拒否は MarkSucceeded に任せる。
 	completed, err := event.MarkSucceeded(completedAt)
 	if err != nil {
-		return emptyAdminAuditEvent(), mapAdminAuditDomainError(err)
+		return emptyOperatorAuditEvent(), mapOperatorAuditDomainError(err)
 	}
 	return completed, nil
 }
 
-func emptyAdminAuditEvent() domain.AdminAuditEvent {
+func emptyOperatorAuditEvent() domain.OperatorAuditEvent {
 	// Step 1: guardrail が禁止する domain composite literal を使わず、error return 用のゼロ値を作る。
-	var event domain.AdminAuditEvent
+	var event domain.OperatorAuditEvent
 	return event
 }
 
-func completionRecordFromEvent(auditID string, event domain.AdminAuditEvent) (CompletionRecord, error) {
+func completionRecordFromEvent(auditID string, event domain.OperatorAuditEvent) (CompletionRecord, error) {
 	// Step 1: domain method 完了後の completedAt を取得し、nil は不整合として内部 error にする。
 	completedAt := event.CompletedAt()
 	if completedAt == nil {
@@ -384,12 +384,12 @@ func completionRecordFromEvent(auditID string, event domain.AdminAuditEvent) (Co
 	}, nil
 }
 
-func mapAdminAuditDomainError(err error) error {
+func mapOperatorAuditDomainError(err error) error {
 	// Step 1: domain が拒否した outcome/code/timestamp/transition は、呼び出し側入力または永続化 state の不正として bad request に集約する。
-	if errors.Is(err, domain.ErrInvalidAdminAuditOutcome) ||
-		errors.Is(err, domain.ErrAdminAuditAlreadyCompleted) ||
-		errors.Is(err, domain.ErrInvalidAdminAuditCompletedAt) ||
-		errors.Is(err, domain.ErrInvalidAdminAuditStableErrorCode) {
+	if errors.Is(err, domain.ErrInvalidOperatorAuditOutcome) ||
+		errors.Is(err, domain.ErrOperatorAuditAlreadyCompleted) ||
+		errors.Is(err, domain.ErrInvalidOperatorAuditCompletedAt) ||
+		errors.Is(err, domain.ErrInvalidOperatorAuditStableErrorCode) {
 		return ErrAuditBadRequest
 	}
 

@@ -18,17 +18,17 @@ func (testBcryptSecretHashVerifier) MatchesSecret(hash string, secretValue strin
 	return secrethash.MatchesBcryptSecret(hash, secretValue)
 }
 
-func TestAdminSecretHashUsesBcrypt(t *testing.T) {
+func TestOperatorSecretHashUsesBcrypt(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: setup token / bootstrap secret として使う平文を bcrypt hash 化し、保存値が平文と一致しないことを確認する。
 	verifier := testBcryptSecretHashVerifier{}
 	service := &OperatorService{secretHasher: verifier, secretVerifier: verifier}
-	hash, err := service.hashAdminSecret("dev-admin-bootstrap-secret")
+	hash, err := service.hashOperatorSecret("dev-operator-bootstrap-secret")
 	if err != nil {
-		t.Fatalf("hash admin secret: %v", err)
+		t.Fatalf("hash operator secret: %v", err)
 	}
-	if hash == "" || hash == "dev-admin-bootstrap-secret" {
+	if hash == "" || hash == "dev-operator-bootstrap-secret" {
 		t.Fatalf("expected non-empty bcrypt hash, got %q", hash)
 	}
 
@@ -38,17 +38,17 @@ func TestAdminSecretHashUsesBcrypt(t *testing.T) {
 	}
 
 	// Step 3: 照合は bcrypt.CompareHashAndPassword 経由で成功し、前後空白だけは copy/paste 揺れとして吸収する。
-	if !verifier.MatchesSecret(hash, "  dev-admin-bootstrap-secret  ") {
+	if !verifier.MatchesSecret(hash, "  dev-operator-bootstrap-secret  ") {
 		t.Fatal("expected bcrypt hash to match trimmed secret")
 	}
 }
 
-func TestAdminSecretMatchRejectsFastDigestHash(t *testing.T) {
+func TestOperatorSecretMatchRejectsFastDigestHash(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: 以前誤って使った Base64URL SHA-256 digest は bcrypt 形式ではないため、同じ平文でも必ず拒否する。
 	fastDigestHash := "cGFIBQC2yFy4n7fRpQS_RGruxzrq5UwXJpkxlyLj1QQ"
-	if (testBcryptSecretHashVerifier{}).MatchesSecret(fastDigestHash, "dev-admin-bootstrap-secret") {
+	if (testBcryptSecretHashVerifier{}).MatchesSecret(fastDigestHash, "dev-operator-bootstrap-secret") {
 		t.Fatal("expected non-bcrypt digest hash to be rejected")
 	}
 }

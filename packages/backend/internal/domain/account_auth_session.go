@@ -274,10 +274,11 @@ func (c AccountAccessTokenClaims) SessionID() AccountAuthSessionID {
 	return c.sessionID
 }
 
-// JTI は accessToken claim の JWT ID を返す。
+// TokenID は accessToken claim の JWT ID（jti）を返す。
 //
 // 戻り値は TokenJTI として ULID 形式だけを検証済みであり、権限や利用者種別の意味は持たない。
-func (c AccountAccessTokenClaims) JTI() TokenJTI {
+// OperatorAccessTokenClaims.TokenID と命名を揃え、Account/Operator で同種 concept が読み取りやすくなる。
+func (c AccountAccessTokenClaims) TokenID() TokenJTI {
 	// Step 1: claim snapshot が保持する jti を返す。
 	return c.jti
 }

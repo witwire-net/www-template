@@ -9,7 +9,7 @@ import (
 // authApplicationSourceFiles は Auth application の production source を test binary に固定して埋め込む。
 // 実行時 path を受け取らないことで、source boundary guard が任意 file 読み込みにならないことを保証する。
 //
-//go:embed facade_contracts.go product_facade_contracts.go facade_service.go
+//go:embed account_facade_contracts.go product_facade_contracts.go facade_service.go
 var authApplicationSourceFiles embed.FS
 
 // TestAuthApplicationSourceBoundary は Auth application が AccountSetting や Account 代替モデルを所有しないことを検証する。
@@ -29,7 +29,7 @@ func TestAuthApplicationSourceBoundary(t *testing.T) {
 func fixedAuthBoundaryFiles() []string {
 	// gosec G304 を避けるため、検査対象は Auth domain/application の固定 production file に限定する。
 	return []string{
-		"facade_contracts.go",
+		"account_facade_contracts.go",
 		"product_facade_contracts.go",
 		"facade_service.go",
 	}

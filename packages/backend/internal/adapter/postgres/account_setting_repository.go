@@ -1,4 +1,4 @@
-package product
+package postgres
 
 import (
 	"context"
@@ -15,21 +15,27 @@ type gormAccountSettingRecord struct {
 }
 
 func (gormAccountSettingRecord) TableName() string {
-	return "account_settings"
+	// public schema を明示し、search_path 依存を避ける。
+	return "public.account_settings"
 }
 
-// GormAccountSettingRepository は Product AccountSetting を PostgreSQL に保存する repository adapter である。
-type GormAccountSettingRepository struct {
+// AccountSettingRepository は AccountSetting を PostgreSQL に保存する repository adapter である。
+//
+// 役割:
+//   - public.account_settings だけを扱い、schema/table/role/grant 境界で security を守る。
+//   - Product/Admin surface 分離は package path ではなく schema/table/role で行う。
+//   - 将来的に Admin account management からも操作し得る Account 設定 repository である。
+type AccountSettingRepository struct {
 	db *gorm.DB
 }
 
-// NewGormAccountSettingRepository は GormAccountSettingRepository を構築する。
-func NewGormAccountSettingRepository(db *gorm.DB) *GormAccountSettingRepository {
-	return &GormAccountSettingRepository{db: db}
+// NewAccountSettingRepository は AccountSettingRepository を構築する。
+func NewAccountSettingRepository(db *gorm.DB) *AccountSettingRepository {
+	return &AccountSettingRepository{db: db}
 }
 
 // Get は account_settings から AccountID に紐づく AccountSetting を読み込む。
-func (r *GormAccountSettingRepository) Get(ctx context.Context, accountID domain.AccountID) (domain.AccountSetting, error) {
+func (r *AccountSettingRepository) Get(ctx context.Context, accountID domain.AccountID) (domain.AccountSetting, error) {
 	var record gormAccountSettingRecord
 	if err := r.db.WithContext(ctx).Where("account_id = ?", accountID.String()).First(&record).Error; err != nil {
 		return emptyAccountSetting(), mapAccountSettingError(err)
@@ -38,7 +44,7 @@ func (r *GormAccountSettingRepository) Get(ctx context.Context, accountID domain
 }
 
 // CreateDefault は Account 作成時に同じ Account の必須 child として既定 AccountSetting を作成する。
-func (r *GormAccountSettingRepository) CreateDefault(ctx context.Context, accountID domain.AccountID) (domain.AccountSetting, error) {
+func (r *AccountSettingRepository) CreateDefault(ctx context.Context, accountID domain.AccountID) (domain.AccountSetting, error) {
 	setting, err := domain.NewDefaultAccountSetting(accountID)
 	if err != nil {
 		return emptyAccountSetting(), err
@@ -51,7 +57,7 @@ func (r *GormAccountSettingRepository) CreateDefault(ctx context.Context, accoun
 }
 
 // UpdateLocale は AccountSetting.locale を対応済み locale に更新し、更新後の値を返す。
-func (r *GormAccountSettingRepository) UpdateLocale(ctx context.Context, accountID domain.AccountID, locale domain.AccountLocale) (domain.AccountSetting, error) {
+func (r *AccountSettingRepository) UpdateLocale(ctx context.Context, accountID domain.AccountID, locale domain.AccountLocale) (domain.AccountSetting, error) {
 	result := r.db.WithContext(ctx).Model(&gormAccountSettingRecord{}).
 		Where("account_id = ?", accountID.String()).
 		Update("locale", locale.String())

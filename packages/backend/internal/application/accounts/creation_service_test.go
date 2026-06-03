@@ -202,7 +202,7 @@ func mustNewAccountCreationServiceWithProjector(
 ) *AccountCreationService {
 	t.Helper()
 
-	// Step 1: audit service は既存 use case constructor を通し、account creation test でも AdminAuditEvent transition を共有する。
+	// Step 1: audit service は既存 use case constructor を通し、account creation test でも OperatorAuditEvent transition を共有する。
 	auditService := mustNewAuditService(t, audits)
 	service, err := NewAccountCreationService(accounts, auditService, ids, projector, projector)
 	if err != nil {
@@ -227,7 +227,7 @@ func newFakeProjector() *fakeProjector {
 	return &fakeProjector{}
 }
 
-func (p *fakeProjector) ProjectAdminAuditEvent(ctx context.Context, record audit.ProjectionRecord) error {
+func (p *fakeProjector) ProjectOperatorAuditEvent(ctx context.Context, record audit.ProjectionRecord) error {
 	// Step 1: context cancellation は production projector と同じ入口条件として扱い、projection の呼び出し可否を検証可能にする。
 	if err := ctx.Err(); err != nil {
 		return err
@@ -239,7 +239,7 @@ func (p *fakeProjector) ProjectAdminAuditEvent(ctx context.Context, record audit
 	return p.projectError
 }
 
-func (p *fakeProjector) ObserveAdminAuditProjectionFailure(_ context.Context, auditID string, err error) {
+func (p *fakeProjector) ObserveOperatorAuditProjectionFailure(_ context.Context, auditID string, err error) {
 	// Step 1: warning log / metric adapter の代わりに失敗情報を保持し、projection failure が沈黙しないことを検証する。
 	p.failureCalls++
 	p.failureAuditID = auditID
@@ -282,12 +282,12 @@ func assertAdminCreateAuditIntent(t *testing.T, record audit.IntentRecord) {
 func assertAdminAccountCreationSuccessCompletion(t *testing.T, record audit.CompletionRecord) {
 	t.Helper()
 
-	// Step 1: Account repository transaction に渡す success completion は domain.AdminAuditEvent.MarkSucceeded 済みの値だけを含む。
+	// Step 1: Account repository transaction に渡す success completion は domain.OperatorAuditEvent.MarkSucceeded 済みの値だけを含む。
 	if record.AuditID != "audit-1" || record.Outcome != "succeeded" || record.StableErrorCode != "" {
 		t.Fatalf("unexpected success completion: %+v", record)
 	}
-	if record.CompletedAt.IsZero() || !record.CompletedAt.Equal(adminAuditUseCaseNow.UTC()) {
-		t.Fatalf("completion time = %v, want %v", record.CompletedAt, adminAuditUseCaseNow.UTC())
+	if record.CompletedAt.IsZero() || !record.CompletedAt.Equal(operatorAuditUseCaseNow.UTC()) {
+		t.Fatalf("completion time = %v, want %v", record.CompletedAt, operatorAuditUseCaseNow.UTC())
 	}
 }
 
@@ -345,7 +345,7 @@ type testAccountIDGenerator struct {
 	err   error
 }
 
-var adminAuditUseCaseNow = time.Date(2026, 5, 26, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
+var operatorAuditUseCaseNow = time.Date(2026, 5, 26, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
 
 type fakeRepository struct {
 	current        audit.Record
@@ -366,7 +366,7 @@ func mustNewAuditService(t *testing.T, repository *fakeRepository) *audit.AuditS
 	t.Helper()
 
 	// Step 1: account creation use case から見る audit capability を固定 clock 付きで生成し、時刻依存を deterministic にする。
-	service, err := audit.NewAuditService(repository, func() time.Time { return adminAuditUseCaseNow })
+	service, err := audit.NewAuditService(repository, func() time.Time { return operatorAuditUseCaseNow })
 	if err != nil {
 		t.Fatalf("new audit service: %v", err)
 	}
@@ -426,8 +426,8 @@ func assertCompletedAuditCommand(t *testing.T, command audit.CompletionRecord, a
 	if command.AuditID != auditID || command.Outcome != outcome || command.StableErrorCode != stableErrorCode {
 		t.Fatalf("unexpected audit completion command: %+v", command)
 	}
-	if !command.CompletedAt.Equal(adminAuditUseCaseNow.UTC()) {
-		t.Fatalf("command completedAt = %v, want %v", command.CompletedAt, adminAuditUseCaseNow.UTC())
+	if !command.CompletedAt.Equal(operatorAuditUseCaseNow.UTC()) {
+		t.Fatalf("command completedAt = %v, want %v", command.CompletedAt, operatorAuditUseCaseNow.UTC())
 	}
 }
 

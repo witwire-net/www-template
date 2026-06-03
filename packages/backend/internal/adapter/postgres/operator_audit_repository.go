@@ -12,15 +12,16 @@ import (
 	"www-template/packages/backend/internal/platform/id"
 )
 
-var _ auditapplication.Repository = (*AuditRepository)(nil)
+var _ auditapplication.Repository = (*OperatorAuditRepository)(nil)
 
-// AuditRepository は Admin audit intent/outcome を admin.audit_events に保存する PostgreSQL adapter である。
+// OperatorAuditRepository は Admin audit intent/outcome を admin.audit_events に保存する PostgreSQL adapter である。
 //
 // 役割:
 //   - application 層の Repository port を実装し、GORM record や SQL detail を外へ出さない。
 //   - intent 作成時に audit ID を ULID として発行し、mutation correlation を Admin schema 内へ閉じる。
 //   - outcome 完了では succeeded/failed の primitive DTO だけを保存し、domain transition rule は application/domain 側へ残す。
-type AuditRepository struct {
+//   - schema/table/role/grant 境界で security を守り、package path による Product/Admin 分離は行わない。
+type OperatorAuditRepository struct {
 	db *gorm.DB
 }
 
@@ -43,17 +44,17 @@ func (auditEventRecord) TableName() string {
 	return "admin.audit_events"
 }
 
-// NewRepository は Admin audit repository を構築する。
+// NewOperatorAuditRepository は Admin audit repository を構築する。
 //
 // db は runtime composition で接続・ping 済みの GORM handle を渡す。
 // nil handle は各 method で fail-closed に検出し、構築時には外部 I/O を行わない。
-func NewRepository(db *gorm.DB) *AuditRepository {
+func NewOperatorAuditRepository(db *gorm.DB) *OperatorAuditRepository {
 	// Step 1: DB handle を保持し、connection lifecycle は Admin runtime container が所有する。
-	return &AuditRepository{db: db}
+	return &OperatorAuditRepository{db: db}
 }
 
 // RecordAuditIntent は pending audit intent を admin.audit_events に保存する。
-func (r *AuditRepository) RecordAuditIntent(ctx context.Context, record auditapplication.IntentRecord) (auditapplication.Record, error) {
+func (r *OperatorAuditRepository) RecordAuditIntent(ctx context.Context, record auditapplication.IntentRecord) (auditapplication.Record, error) {
 	// Step 1: repository または DB handle が欠ける場合は監査なし mutation を防ぐため内部 error に畳む。
 	if r == nil || r.db == nil {
 		return auditapplication.Record{}, auditapplication.ErrAuditInternal
@@ -72,7 +73,7 @@ func (r *AuditRepository) RecordAuditIntent(ctx context.Context, record auditapp
 }
 
 // FindAudit は audit ID に対応する Admin audit snapshot を返す。
-func (r *AuditRepository) FindAudit(ctx context.Context, auditID string) (auditapplication.Record, error) {
+func (r *OperatorAuditRepository) FindAudit(ctx context.Context, auditID string) (auditapplication.Record, error) {
 	// Step 1: repository または DB handle が欠ける場合は復元不能として内部 error に畳む。
 	if r == nil || r.db == nil {
 		return auditapplication.Record{}, auditapplication.ErrAuditInternal
@@ -87,8 +88,8 @@ func (r *AuditRepository) FindAudit(ctx context.Context, auditID string) (audita
 }
 
 // CompleteAudit は pending audit event を succeeded または failed outcome へ更新する。
-func (r *AuditRepository) CompleteAudit(ctx context.Context, record auditapplication.CompletionRecord) (auditapplication.Record, error) {
-	// Step 1: repository または DB handle が欠ける場合は outcome 保存不能として内部 error に畳む。
+func (r *OperatorAuditRepository) CompleteAudit(ctx context.Context, record auditapplication.CompletionRecord) (auditapplication.Record, error) {
+	// Step 1: repository または DB handle が欠ける場合は outcome 保存不能として internal error に畳む。
 	if r == nil || r.db == nil {
 		return auditapplication.Record{}, auditapplication.ErrAuditInternal
 	}

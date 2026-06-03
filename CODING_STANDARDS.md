@@ -430,7 +430,7 @@
 ### Product/Admin runtime route surface を binary ごとに分離する
 
 - required: Product router は Admin 専用 operation を 404 にし、Admin router は Product 専用 operation を 404 にする。同じ `/api/v1/*` path 空間を使っても、origin / binary / router table を混ぜない
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/product/router_test.go` (`TestProductRuntimeDoesNotRegisterAdminOperations`), `packages/backend/internal/adapter/http/admin/router_test.go` (`TestAdminRuntimeDoesNotRegisterProductOperations`), `packages/backend/internal/app/runtime_test.go` (`TestAdminHTTPAdapterDoesNotRegisterProductOperations`)
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/adapter/http/product/router_test.go` (`TestProductRuntimeDoesNotRegisterAdminOperations`), `packages/backend/internal/adapter/http/admin/router_test.go` (`TestAdminRuntimeDoesNotRegisterProductOperations`), `packages/backend/internal/app/product_runtime_test.go` (`TestAdminHTTPAdapterDoesNotRegisterProductOperations`)
 - NG例: Product router に `/api/v1/accounts` を登録する / Admin router に `/api/v1/status` を登録する
 - OK例: Product binary は Product router だけ、Admin binary は Admin router だけを compose する
 
@@ -444,7 +444,7 @@
 ### `APP_ENV!=development` では fail-close にする
 
 - required: `APP_ENV!=development` では `APP_BEARER_TOKEN` 未設定の Product runtime 生成を許さず、Admin runtime は Admin surface 専用設定不足で起動させない
-- Enforcement point: `pnpm test:run` -> `packages/backend/internal/app/runtime_test.go` (`TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment`, `TestNewAdminRuntimeWithConfigFailsClosedWithoutAdminSurfaceConfig`)
+- Enforcement point: `pnpm test:run` -> `packages/backend/internal/app/product_runtime_test.go` (`TestNewProductRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment`, `TestNewAdminRuntimeWithConfigFailsClosedWithoutAdminSurfaceConfig`)
 - NG例: `APP_ENV=production` なのに token 空で起動を許す / Admin domain や session 設定が空でも Admin runtime を起動する
 - OK例: production / staging では `APP_BEARER_TOKEN` と Admin surface runtime config を必須にする
 
@@ -455,10 +455,11 @@
 - NG例: `internal/application/service.go` で GORM を import する
 - OK例: DB 実装は `internal/adapter/postgres` に置く
 
-### Admin backend repository で unsafe SQL construction をしない
+### Postgres repository で unsafe SQL construction をしない
 
-- forbidden: `internal/adapter/postgres/admin/**` では `Raw` / `Exec` を使わず、`Where` / `Or` / `Not` / `Order` / `Joins` / `Having` / `Select` / `Table` / `Group` の SQL fragment 第1引数は static string literal だけにする
-- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkAdminBackendSQLConstruction`)
+- forbidden: `internal/adapter/postgres/` 配下の repository file では `Raw` / `Exec` を使わず、`Where` / `Or` / `Not` / `Order` / `Joins` / `Having` / `Select` / `Table` / `Group` の SQL fragment 第1引数は static string literal だけにする
+- forbidden: `internal/adapter/postgres/product/` や `internal/adapter/postgres/admin/` の surface subtree を再び作らない。Postgres adapter は単一 `postgres` package で、DB 境界は schema/table/role/grant で守る
+- Enforcement point: `pnpm lint` -> `scripts/go/lint.sh` -> `scripts/go/guardrails.sh` -> `packages/backend/tools/analyzers/cmd/guardrails/main.go` (`checkPostgresRepositorySQLConstruction`)
 - NG例: `db.Raw(query)` / `db.Where(whereClause, value)` / `db.Order(sortColumn)`
 - OK例: `db.Where("email = ?", email)` のように静的 fragment と bound parameter を使う
 
@@ -552,7 +553,7 @@
 
 ### CI verify job の順番を前提にする
 
-- required: CI は `Checkout -> Setup pnpm (11.5.0) -> Setup Node (24) -> Setup Go (1.26.3) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
+- required: CI は `Checkout -> Setup pnpm (11.5.0) -> Setup Node (24) -> Setup Go (1.26.4) -> pnpm install --frozen-lockfile -> pnpm format:check -> pnpm gen -> pnpm lint -> pnpm check -> pnpm test:run -> pnpm check:codegen -> pnpm build` をこの順番で通す
 - Enforcement point: `.github/workflows/ci.yml`
 - NG例: ローカルで `pnpm test:run` だけ通して `pnpm gen` や `pnpm check:codegen` を飛ばす
 - OK例: 変更に応じて少なくとも CI と同じ順番で確認する
@@ -591,5 +592,5 @@ Note: `.husky/pre-commit` の実体は `pnpm lint-staged` の後に `pnpm check:
 - root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`, `stylelint.config.js`
 - TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
 - frontend CSS: `packages/frontend/ui/src/styles/base/global.css`, `packages/frontend/ui/src/styles/tokens.css`, `packages/frontend/ui/src/styles/theme.css`, `packages/frontend/ui/src/styles/base-styles.css`, `packages/frontend/ui/src/styles/components/*.css`, `packages/frontend/ui/src/styles/utilities.css`
-- backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/product/router_test.go`, `packages/backend/internal/adapter/http/admin/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/runtime_test.go`
+- backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/product/router_test.go`, `packages/backend/internal/adapter/http/admin/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/product_runtime_test.go`
 - helper scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`, `scripts/codegen/check.sh`, `scripts/hooks/format-staged-go.sh`, `scripts/hooks/verify-staged-migrations.sh`

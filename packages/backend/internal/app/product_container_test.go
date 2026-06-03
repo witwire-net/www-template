@@ -14,11 +14,11 @@ import (
 	"www-template/packages/backend/internal/platform/config"
 )
 
-func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
+func TestBuildProductContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	t.Parallel()
 	called := false
 	fakeRepo := fakeAuthStateRepository{}
-	_, err := buildContainer(
+	_, err := buildProductContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
 		func(context.Context, string) (application.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
@@ -38,9 +38,9 @@ func TestBuildContainerUsesValkeyRepositoryWhenConfigured(t *testing.T) {
 	}
 }
 
-func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) {
+func TestBuildProductContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) {
 	t.Parallel()
-	container, err := buildContainer(
+	container, err := buildProductContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}, Auth: config.AuthConfig{WebAuthnRPID: "example.com"}},
 		func(context.Context, string) (application.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
@@ -55,7 +55,7 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 		t.Fatalf("build container: %v", err)
 	}
 
-	challenge, err := container.Auth.StartPasskeyAuthentication(context.Background(), application.StartPasskeyAuthenticationInput{Identifier: "member@example.com", ClientIP: "192.0.2.10"})
+	challenge, err := container.AccountAuth.StartPasskeyAuthentication(context.Background(), application.StartPasskeyAuthenticationInput{Identifier: "member@example.com", ClientIP: "192.0.2.10"})
 	if err != nil {
 		t.Fatalf("start passkey authentication: %v", err)
 	}
@@ -64,11 +64,11 @@ func TestBuildContainerWiresConfiguredWebAuthnRPIDIntoAuthRuntime(t *testing.T) 
 	}
 }
 
-func TestBuildContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testing.T) {
+func TestBuildProductContainerClosesAccountRepositoryWhenStateRepositoryFails(t *testing.T) {
 	t.Parallel()
 
 	closed := false
-	_, err := buildContainer(
+	_, err := buildProductContainer(
 		context.Background(),
 		config.Config{AppBearerToken: "dev-app-auth", Infra: config.InfraConfig{Database: config.DatabaseConfig{URL: "postgres://example"}, Valkey: config.ValkeyConfig{URL: "redis://localhost:6379/0"}}},
 		func(context.Context, string) (application.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {

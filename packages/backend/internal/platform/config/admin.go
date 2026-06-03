@@ -164,9 +164,9 @@ func (c Config) validateAdminBootstrap(errs []string) []string {
 // validateAdminOpenSearch は Admin audit projection 用 OpenSearch namespace が Product namespace と衝突しないことを検証する。
 func (c Config) validateAdminOpenSearch(errs []string) []string {
 	// Step 1: Admin audit projection は index prefix で namespace を固定するため、空値は誤った wildcard 書き込みを避ける目的で拒否する。
-	adminPrefix := strings.TrimSpace(c.Infra.OpenSearch.AdminAuditIndexPrefix)
+	adminPrefix := strings.TrimSpace(c.Infra.OpenSearch.OperatorAuditIndexPrefix)
 	if adminPrefix == "" {
-		errs = append(errs, "opensearch.admin_audit_index_prefix is required")
+		errs = append(errs, "opensearch.operator_audit_index_prefix is required")
 	}
 
 	// Step 2: Product domain prefix も衝突検査の比較対象として必須にし、Admin runtime が Product namespace を知らない状態で起動しないようにする。
@@ -182,7 +182,7 @@ func (c Config) validateAdminOpenSearch(errs []string) []string {
 	adminComparable := strings.ToLower(adminPrefix)
 	productComparable := strings.ToLower(productPrefix)
 	if adminComparable == productComparable || strings.Contains(adminComparable, productComparable) || strings.Contains(productComparable, adminComparable) {
-		return append(errs, "opensearch.admin_audit_index_prefix must not collide with opensearch.product_index_prefix")
+		return append(errs, "opensearch.operator_audit_index_prefix must not collide with opensearch.product_index_prefix")
 	}
 	return errs
 }

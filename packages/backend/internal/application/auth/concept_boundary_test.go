@@ -172,13 +172,13 @@ func TestProductAdminAuthEligibilityOwnershipBoundary(t *testing.T) {
 	})
 
 	// Step 2: Operator auth は OperatorAuth domain constructor と method で operator eligibility / permission を検証することを固定する。
-	t.Run("[AUTH-BE-S070] admin operator auth domain owns operator token eligibility", func(t *testing.T) {
+	t.Run("[AUTH-BE-S070] operator auth domain owns operator token eligibility", func(t *testing.T) {
 		t.Parallel()
 		assertEmbeddedSourceContains(t, "operator_session_service.go", []string{"NewOperatorAuthSession", "NewOperatorAccessTokenClaims", "ValidateAccess"})
 	})
 
 	// Step 3: Operator session lifecycle は passkey outer flow を保持せず、login ceremony は専用 service に分離されることを固定する。
-	t.Run("[AUTH-BE-S070] admin operator session lifecycle does not own passkey login outer flow", func(t *testing.T) {
+	t.Run("[AUTH-BE-S070] operator session lifecycle does not own passkey login outer flow", func(t *testing.T) {
 		t.Parallel()
 		assertEmbeddedSourceDoesNotContain(t, "operator_session_service.go", []string{"StartOperatorPasskey", "FinishOperatorPasskey", "OperatorPasskeyChallengeProvider", "Challenges"})
 		assertEmbeddedSourceContains(t, "operator_passkey_login_service.go", []string{"OperatorPasskeyLoginService", "StartOperatorPasskey", "FinishOperatorPasskey", "OperatorSessionIssuer"})
@@ -208,16 +208,16 @@ func TestAuthConceptCanonicalPrimitiveOwnershipBoundary(t *testing.T) {
 		assertEmbeddedSourceContains(t, "refresh.go", []string{"domain.HashOpaqueToken"})
 	})
 
-	// Step 3: Admin concept package の refresh Cookie path は application/auth DTO helper へ委譲せず、HTTP adapter が transport path を所有することを固定する。
-	t.Run("[ADMIN-AUTH-BE-S081] admin refresh lifecycle leaves context path construction to HTTP adapter", func(t *testing.T) {
+	// Step 3: Operator concept package の refresh Cookie path は application/auth DTO helper へ委譲せず、HTTP adapter が transport path を所有することを固定する。
+	t.Run("[ADMIN-AUTH-BE-S081] operator refresh lifecycle leaves context path construction to HTTP adapter", func(t *testing.T) {
 		t.Parallel()
 		assertEmbeddedSourceContains(t, "operator_session_service.go", []string{"domain.EnsureRefreshContext"})
 		assertEmbeddedSourceDoesNotContain(t, "operator_session_service.go", []string{"BuildRefreshPath", "NewRefreshCookieClearCommand", "SameSite", "HTTPOnly", "Secure"})
 		assertEmbeddedSourceDoesNotContain(t, "operator_session_service.go", []string{"\"/api/v1/auth/contexts/\" +"})
 	})
 
-	// Step 4: Admin logout の Cookie clear command が transport 属性を持たず、auth context selector と削除意図だけを返すことを固定する。
-	t.Run("[AUTH-BE-S095] admin logout returns selector-only clear command", func(t *testing.T) {
+	// Step 4: Operator logout の Cookie clear command が transport 属性を持たず、auth context selector と削除意図だけを返すことを固定する。
+	t.Run("[AUTH-BE-S095] operator logout returns selector-only clear command", func(t *testing.T) {
 		t.Parallel()
 		assertEmbeddedSourceContains(t, "operator_session_service.go", []string{"AuthContextID", "Clear"})
 	})
@@ -322,16 +322,16 @@ func assertContainerSourceContains(t *testing.T, requiredTerms []string) {
 	t.Helper()
 
 	// Step 1: production caller migration は runtime composition file そのものを証跡にするため、固定相対 path の source を読む。
-	source, err := os.ReadFile("../../app/container.go")
+	source, err := os.ReadFile("../../app/product_container.go")
 	if err != nil {
-		t.Fatalf("read production source ../../app/container.go: %v", err)
+		t.Fatalf("read production source ../../app/product_container.go: %v", err)
 	}
 	sourceText := string(source)
 
 	// Step 2: canonical lifecycle wiring に必要な語彙が欠けた場合、helper/type-only evidence として失敗させる。
 	for _, term := range requiredTerms {
 		if !strings.Contains(sourceText, term) {
-			t.Fatalf("../../app/container.go must contain %q to prove production caller migration to canonical lifecycle", term)
+			t.Fatalf("../../app/product_container.go must contain %q to prove production caller migration to canonical lifecycle", term)
 		}
 	}
 }
@@ -340,16 +340,16 @@ func assertContainerSourceDoesNotContain(t *testing.T, forbiddenTerms []string) 
 	t.Helper()
 
 	// Step 1: old owner/caller absence はコメントではなく production source 文字列から検出し、container の直接 caller 復活を拒否する。
-	source, err := os.ReadFile("../../app/container.go")
+	source, err := os.ReadFile("../../app/product_container.go")
 	if err != nil {
-		t.Fatalf("read production source ../../app/container.go: %v", err)
+		t.Fatalf("read production source ../../app/product_container.go: %v", err)
 	}
 	sourceText := string(source)
 
 	// Step 2: root TokenService caller が container に残る場合は 10.2 の caller migration 未完了として失敗させる。
 	for _, term := range forbiddenTerms {
 		if strings.Contains(sourceText, term) {
-			t.Fatalf("../../app/container.go must not contain %q because production caller must use canonical auth lifecycle", term)
+			t.Fatalf("../../app/product_container.go must not contain %q because production caller must use canonical auth lifecycle", term)
 		}
 	}
 }

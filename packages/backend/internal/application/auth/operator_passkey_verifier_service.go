@@ -6,12 +6,12 @@ import (
 	domain "www-template/packages/backend/internal/domain"
 )
 
-// OperatorWebAuthnCredentialStore は Admin WebAuthn assertion 検証に必要な credential state を扱う port である。
+// OperatorWebAuthnCredentialStore は WebAuthn assertion 検証に必要な credential state を扱う port である。
 //
 // 役割:
 //   - credential handle から public key / sign count / backup state を復元する。
-//   - 検証成功後の sign count / backup state 更新を同じ Admin credential repository へ閉じる。
-//   - Product account passkey repository を Admin finish route から参照しない境界を作る。
+//   - 検証成功後の sign count / backup state 更新を同じ credential repository へ閉じる。
+//   - account passkey repository を finish route から参照しない境界を作る。
 type OperatorWebAuthnCredentialStore interface {
 	// FindWebAuthnCredential は credential handle から WebAuthn 署名検証用の保存済み credential state を復元する。
 	FindWebAuthnCredential(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error)
@@ -19,7 +19,7 @@ type OperatorWebAuthnCredentialStore interface {
 	UpdateWebAuthnCredentialState(ctx context.Context, handle string, newSignCount uint32, newBackupState bool) error
 }
 
-// OperatorPasskeyVerifier は Admin passkey finish が WebAuthn assertion を検証済み credential handle へ変換する port である。
+// OperatorPasskeyVerifier は passkey finish が WebAuthn assertion を検証済み credential handle へ変換する port である。
 //
 // 役割:
 //   - HTTP adapter が raw credential handle を信用して session 発行へ進むことを防ぐ。
@@ -29,11 +29,11 @@ type OperatorPasskeyVerifier interface {
 	VerifyOperatorPasskey(ctx context.Context, challengeID string, credential WebAuthnAssertionCredentialDTO) (string, error)
 }
 
-// NewOperatorPasskeyVerifier は Admin passkey finish 用の WebAuthn verifier を生成する。
+// NewOperatorPasskeyVerifier は passkey finish 用の WebAuthn verifier を生成する。
 //
 // 引数:
 //   - provider: challenge session 消費と assertion 署名検証を行う WebAuthn provider。
-//   - credentials: Admin operator passkey credential state repository。
+//   - credentials: Operator passkey credential state repository。
 //
 // 戻り値:
 //   - OperatorPasskeyVerifier: HTTP handler が検証済み credential handle を得るための verifier。
@@ -60,7 +60,7 @@ func (v operatorPasskeyVerifier) VerifyOperatorPasskey(ctx context.Context, chal
 		return "", ErrOperatorAuthForbidden
 	}
 
-	// Step 2: provider が sign count 更新値を返した場合だけ Admin credential state を更新し、replay 検出用状態を進める。
+	// Step 2: provider が sign count 更新値を返した場合だけ credential state を更新し、replay 検出用状態を進める。
 	if signCountUpdated {
 		if err := v.credentials.UpdateWebAuthnCredentialState(ctx, credentialHandle, newSignCount, newBackupState); err != nil {
 			return "", ErrOperatorAuthUnavailable

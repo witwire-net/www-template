@@ -1,4 +1,4 @@
-package valkey
+package product
 
 import (
 	"context"
@@ -7,20 +7,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	domain "www-template/packages/backend/internal/domain"
 )
 
 type AuthStateRepository struct {
-	store         *ValkeyStore
+	store         *Store
 	secretHashKey string
 }
 
 // NewAuthStateRepository は AuthStateRepository を生成する。
 // store と secretHashKey は必須。secretHashKey は recovery token secret の HMAC-SHA256 に使用する。
-func NewAuthStateRepository(store *ValkeyStore, secretHashKey string) (*AuthStateRepository, error) {
+func NewAuthStateRepository(store *Store, secretHashKey string) (*AuthStateRepository, error) {
 	if store == nil {
 		return nil, errors.New("valkey store is required")
 	}
@@ -56,7 +55,7 @@ func (r *AuthStateRepository) SaveReauthenticationSession(ctx context.Context, s
 func (r *AuthStateRepository) ConsumeReauthenticationSession(ctx context.Context, reauthID string) (domain.ReauthenticationSession, error) {
 	result, err := r.store.GetDel(ctx, r.key("auth", "reauth-session", reauthID))
 	if err != nil {
-		if errors.Is(err, errRESPNil) {
+		if errors.Is(err, errKeyNotFound) {
 			return emptyReauthenticationSession(), domain.ErrReauthSessionNotFound
 		}
 		return emptyReauthenticationSession(), domain.ErrAuthStoreUnavailable
@@ -75,7 +74,7 @@ func (r *AuthStateRepository) SaveChallenge(ctx context.Context, challenge domai
 func (r *AuthStateRepository) ConsumeChallenge(ctx context.Context, secret string) (domain.AuthChallenge, error) {
 	result, err := r.store.GetDel(ctx, r.key("auth", "challenge", secret))
 	if err != nil {
-		if errors.Is(err, errRESPNil) {
+		if errors.Is(err, errKeyNotFound) {
 			return emptyChallenge(), domain.ErrChallengeNotFound
 		}
 		return emptyChallenge(), domain.ErrAuthStoreUnavailable
@@ -111,9 +110,11 @@ func (r *AuthStateRepository) SaveRecoveryDeliveryFailure(ctx context.Context, f
 //  1. GET でトークンレコード（JSON）を取得
 //  2. JSON をデコードし、保存済み SecretHash を抽出
 //  3. 与えられた expected_hash と比較
-//  4. 一致した場合のみ DEL でトークンを削除し、JSON を返す
+//  4. 一致した場合のみ DEL でトークンを削除し、JSON payload を返す
 //
-// キー不在時は redis.error_reply('NOTFOUND')、ハッシュ不一致時は redis.error_reply('MISMATCH') を返す。
+// err.Error() の文字列分岐（CODING_STANDARDS.md 禁止パターン）を避けるため、
+// エラーケースも structured JSON（status: "not_found"/"mismatch"/"invalid"）を返し、
+// Go 側で JSON unmarshal + status field 判定を行う。
 // このスクリプトは Valkey サーバー内で単一のアトミック操作として実行されるため、
 // GET→比較→DEL の間に別のリクエストが割り込む TOCTOU race condition を防止する。
 //
@@ -121,17 +122,17 @@ func (r *AuthStateRepository) SaveRecoveryDeliveryFailure(ctx context.Context, f
 const atomicConsumeRecoveryTokenScript = `
 local value = redis.call('GET', KEYS[1])
 if not value then
-    return redis.error_reply('NOTFOUND')
+    return cjson.encode({status="not_found"})
 end
 local ok, decoded = pcall(cjson.decode, value)
 if not ok then
-    return redis.error_reply('INVALID')
+    return cjson.encode({status="invalid"})
 end
 if decoded['secretHash'] ~= ARGV[1] then
-    return redis.error_reply('MISMATCH')
+    return cjson.encode({status="mismatch"})
 end
 redis.call('DEL', KEYS[1])
-return value
+return cjson.encode({status="ok", payload=decoded})
 `
 
 // ConsumeRecoveryTokenAtomic は recovery token を tokenID で取得し、
@@ -148,26 +149,35 @@ func (r *AuthStateRepository) ConsumeRecoveryTokenAtomic(ctx context.Context, to
 
 	result, err := r.store.Eval(ctx, atomicConsumeRecoveryTokenScript, []string{key}, expectedHash).Result()
 	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "NOTFOUND") || strings.Contains(errStr, "MISMATCH") {
-			return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
-		}
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
 
-	value, ok := result.(string)
+	// Step 1: Lua スクリプトが返す structured JSON（status + payload）をパースし、err.Error() 文字列分岐を避ける。
+	resultStr, ok := result.(string)
 	if !ok {
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
-	var record recoveryTokenRecord
-	if err := json.Unmarshal([]byte(value), &record); err != nil {
+	var luaResult struct {
+		Status  string              `json:"status"`
+		Payload recoveryTokenRecord `json:"payload"`
+	}
+	if err := json.Unmarshal([]byte(resultStr), &luaResult); err != nil {
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
-	token, err := record.toDomain(secret)
-	if err != nil {
+
+	// Step 2: not_found / mismatch / invalid は token 消費失敗として扱い、ok だけが成功経路。
+	switch luaResult.Status {
+	case "not_found", "mismatch", "invalid":
+		return emptyRecoveryToken(), domain.ErrRecoveryTokenNotFound
+	case "ok":
+		token, err := luaResult.Payload.toDomain(secret)
+		if err != nil {
+			return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
+		}
+		return token, nil
+	default:
 		return emptyRecoveryToken(), domain.ErrAuthStoreUnavailable
 	}
-	return token, nil
 }
 
 func (r *AuthStateRepository) SaveRecoverySession(ctx context.Context, session domain.RecoverySession, ttl time.Duration) error {
@@ -177,7 +187,7 @@ func (r *AuthStateRepository) SaveRecoverySession(ctx context.Context, session d
 func (r *AuthStateRepository) GetRecoverySession(ctx context.Context, id string) (domain.RecoverySession, error) {
 	var record recoverySessionRecord
 	if err := r.getJSON(ctx, r.key("auth", "recovery-session", id), &record); err != nil {
-		if errors.Is(err, errRESPNil) {
+		if errors.Is(err, errKeyNotFound) {
 			return emptyRecoverySession(), domain.ErrRecoverySessionNotFound
 		}
 		return emptyRecoverySession(), domain.ErrAuthStoreUnavailable
@@ -210,7 +220,7 @@ func (r *AuthStateRepository) SetLock(ctx context.Context, key string, until tim
 func (r *AuthStateRepository) GetLock(ctx context.Context, key string) (domain.AuthLock, bool, error) {
 	var record lockRecord
 	if err := r.getJSON(ctx, r.key("auth", "lock", key), &record); err != nil {
-		if errors.Is(err, errRESPNil) {
+		if errors.Is(err, errKeyNotFound) {
 			return domain.NewAuthLock(time.Time{}), false, nil
 		}
 		return domain.NewAuthLock(time.Time{}), false, domain.ErrAuthStoreUnavailable
@@ -236,7 +246,7 @@ func (r *AuthStateRepository) getJSON(ctx context.Context, key string, target an
 		return err
 	}
 	if result == "" {
-		return errRESPNil
+		return errKeyNotFound
 	}
 	return json.Unmarshal([]byte(result), target)
 }

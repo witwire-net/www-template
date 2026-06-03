@@ -5,11 +5,11 @@ import (
 	"time"
 )
 
-// OperatorSnapshot は Admin auth application が repository port から受け取る Operator 復元 DTO である。
+// OperatorSnapshot は auth application が repository port から受け取る Operator 復元 DTO である。
 //
 // 役割:
 //   - domain.Operator を application public API に直接露出させず、復元に必要な primitive だけを保持する。
-//   - Product AccountAuth の account ID、status、session 情報を含めないことで Admin 専用境界を維持する。
+//   - AccountAuth の account ID、status、session 情報を含めないことで Operator 専用境界を維持する。
 //   - repository adapter はこの DTO を返し、use case が domain.NewOperator で不変条件を検証する。
 //
 // 使用例:
@@ -26,12 +26,12 @@ type OperatorSnapshot struct {
 	PasskeyRegistrationState string
 }
 
-// OperatorSessionRecord は Admin refresh session store が保存・復元する application DTO である。
+// OperatorSessionRecord は refresh session store が保存・復元する application DTO である。
 //
 // 役割:
 //   - refreshToken 平文ではなく hash と snapshot だけを store 境界へ渡す。
 //   - rotation 時に同一 Operator session の置換対象を session ID と refresh hash で特定できるようにする。
-//   - domain.OperatorAuthSession の復元に必要な値だけを持ち、Product account session state を混入させない。
+//   - domain.OperatorAuthSession の復元に必要な値だけを持ち、account session state を混入させない。
 type OperatorSessionRecord struct {
 	SessionID        string
 	OperatorID       string
@@ -43,7 +43,7 @@ type OperatorSessionRecord struct {
 	Revoked          bool
 }
 
-// OperatorRefreshSessionStore は Admin Operator refresh session state を保存・取得・rotation・revoke する port である。
+// OperatorRefreshSessionStore は Operator refresh session state を保存・取得・rotation・revoke する port である。
 //
 // 役割:
 //   - Valkey などの保存実装を application 境界から隠蔽する。
@@ -56,22 +56,22 @@ type OperatorRefreshSessionStore interface {
 	Revoke(ctx context.Context, operatorID string, sessionID string) error
 }
 
-// OperatorRepository は Admin OperatorAuth use case が Operator snapshot を取得する port である。
+// OperatorRepository は OperatorAuth use case が Operator snapshot を取得する port である。
 //
 // 役割:
-//   - passkey credential handle または OperatorID から Admin Operator の現在状態を取得する。
-//   - Product account repository を import せず、Admin operator auth に必要な snapshot だけを返す。
+//   - passkey credential handle または OperatorID から Operator の現在状態を取得する。
+//   - account repository を import せず、operator auth に必要な snapshot だけを返す。
 //   - adapter は永続化エラーをこの port の error として返し、use case が fail-closed に写像する。
 type OperatorRepository interface {
 	FindOperatorByCredential(ctx context.Context, credentialHandle string) (OperatorSnapshot, error)
 	FindOperatorByID(ctx context.Context, operatorID string) (OperatorSnapshot, error)
 }
 
-// OperatorPasskeyCredential は Admin operator passkey 一覧に返す application DTO である。
+// OperatorPasskeyCredential は Operator passkey 一覧に返す application DTO である。
 //
 // 役割:
 //   - credential_handle、public_key、sign_count など認証検証用の秘匿値を含めない。
-//   - Product account passkey DTO を再利用せず、Admin operator credential の表示・削除識別子だけを保持する。
+//   - account passkey DTO を再利用せず、Operator credential の表示・削除識別子だけを保持する。
 //   - LastUsedAt は未使用 credential では nil になり、transport layer が optional field として扱う。
 type OperatorPasskeyCredential struct {
 	ID         string
@@ -79,7 +79,7 @@ type OperatorPasskeyCredential struct {
 	LastUsedAt *time.Time
 }
 
-// OperatorPasskeyRepository は Admin operator passkey credential の一覧取得と削除を扱う port である。
+// OperatorPasskeyRepository は Operator passkey credential の一覧取得と削除を扱う port である。
 //
 // 役割:
 //   - admin.operator_passkeys などの保存実装を application 境界から隠蔽する。
@@ -90,17 +90,17 @@ type OperatorPasskeyRepository interface {
 	DeleteOperatorPasskey(ctx context.Context, operatorID string, passkeyID string) error
 }
 
-// OperatorPasskeyChallengeProvider は Admin passkey login の challenge 発行を抽象化する port である。
+// OperatorPasskeyChallengeProvider は passkey login の challenge 発行を抽象化する port である。
 //
 // 役割:
 //   - WebAuthn provider や challenge store の具体実装を application から分離する。
-//   - StartOperatorPasskey が Admin 専用 RP 設定と challenge JSON を返すための入力を提供する。
-//   - Product passkey provider と共有せず、Admin operator credential だけを対象にする。
+//   - StartOperatorPasskey が専用 RP 設定と challenge JSON を返すための入力を提供する。
+//   - passkey provider と共有せず、Operator credential だけを対象にする。
 type OperatorPasskeyChallengeProvider interface {
 	BeginOperatorLogin(ctx context.Context, identifier string) (challengeKey string, optionsJSON []byte, err error)
 }
 
-// OperatorWebAuthnAttestationResponse は Admin operator passkey 登録 ceremony の attestation response DTO である。
+// OperatorWebAuthnAttestationResponse は Operator passkey 登録 ceremony の attestation response DTO である。
 //
 // 役割:
 //   - HTTP generated DTO と WebAuthn adapter の間で必要な primitive だけを運ぶ。
@@ -112,11 +112,11 @@ type OperatorWebAuthnAttestationResponse struct {
 	Transports        []string
 }
 
-// OperatorWebAuthnAttestationCredential は Admin operator passkey 登録 ceremony の credential DTO である。
+// OperatorWebAuthnAttestationCredential は Operator passkey 登録 ceremony の credential DTO である。
 //
 // 役割:
 //   - browser WebAuthn API の PublicKeyCredential を application 境界の primitive に変換した値である。
-//   - Product account registration DTO を import せず、Admin operator setup 専用の型として扱う。
+//   - account registration DTO を import せず、Operator setup 専用の型として扱う。
 //   - AuthenticatorAttachment は任意値であり、provider が検証に必要な場合だけ参照する。
 type OperatorWebAuthnAttestationCredential struct {
 	ID                      string
@@ -126,7 +126,7 @@ type OperatorWebAuthnAttestationCredential struct {
 	AuthenticatorAttachment string
 }
 
-// OperatorRegistrationChallengeInput は Admin operator passkey 登録 challenge 開始入力である。
+// OperatorRegistrationChallengeInput は Operator passkey 登録 challenge 開始入力である。
 //
 // OperatorID は初回 setup では作成予定 ID、追加 operator setup では既存 OperatorID を渡す。
 // RequestID は HTTP response と WebAuthn session lookup を一致させるための canonical ULID である。
@@ -138,7 +138,7 @@ type OperatorRegistrationChallengeInput struct {
 	ExcludeCredentials []string
 }
 
-// OperatorRegistrationChallenge は Admin operator passkey 登録 challenge の provider 結果である。
+// OperatorRegistrationChallenge は Operator passkey 登録 challenge の provider 結果である。
 //
 // OptionsJSON は go-webauthn 等の provider が生成した PublicKeyCredentialCreationOptions JSON である。
 // Challenge は browser response の challenge と照合される base64url 値であり、secret ではない。
@@ -148,7 +148,7 @@ type OperatorRegistrationChallenge struct {
 	OptionsJSON []byte
 }
 
-// OperatorPasskeyRegistration は検証済み Admin operator passkey credential の保存 DTO である。
+// OperatorPasskeyRegistration は検証済み Operator passkey credential の保存 DTO である。
 //
 // 役割:
 //   - WebAuthn provider が challenge、origin、RP ID、user verification を検証した後の値だけを保持する。
@@ -163,7 +163,7 @@ type OperatorPasskeyRegistration struct {
 	Transports       []string
 }
 
-// OperatorPasskeyRegistrationProvider は Admin operator passkey 登録 WebAuthn ceremony を実行する port である。
+// OperatorPasskeyRegistrationProvider は Operator passkey 登録 WebAuthn ceremony を実行する port である。
 //
 // 役割:
 //   - application service が go-webauthn 等の adapter に直接依存しないようにする。
@@ -174,12 +174,12 @@ type OperatorPasskeyRegistrationProvider interface {
 	FinishOperatorRegistration(ctx context.Context, requestID string, operatorID string, credential OperatorWebAuthnAttestationCredential) (OperatorPasskeyRegistration, error)
 }
 
-// OperatorSessionConfig は Admin operator auth use case の token/session lifetime と RP 表示情報を保持する。
+// OperatorSessionConfig は Operator auth use case の token/session lifetime と RP 表示情報を保持する。
 //
 // 役割:
 //   - accessToken TTL、refresh session TTL、Cookie lifetime を application 起動時に検証できる単位にまとめる。
 //   - refresh Cookie lifetime が server-side TTL を超えないよう shared token primitive で検証する。
-//   - WebAuthn RP ID は challenge response DTO に渡すだけで、Product RP 設定とは混在させない。
+//   - WebAuthn RP ID は challenge response DTO に渡すだけで、RP 設定とは混在させない。
 type OperatorSessionConfig struct {
 	OperatorAccessTokenTTL        time.Duration
 	OperatorRefreshSessionTTL     time.Duration
@@ -187,14 +187,14 @@ type OperatorSessionConfig struct {
 	WebAuthnRPID                  string
 }
 
-// StartOperatorPasskeyInput は Admin operator passkey login challenge 開始入力である。
+// StartOperatorPasskeyInput は Operator passkey login challenge 開始入力である。
 //
 // Identifier は operator email など adapter が受け取った識別子であり、正規化や存在有無の詳細は provider 側へ委譲する。
 type StartOperatorPasskeyInput struct {
 	Identifier string
 }
 
-// OperatorPasskeyChallenge は Admin passkey login challenge 開始結果である。
+// OperatorPasskeyChallenge は passkey login challenge 開始結果である。
 //
 // refreshToken や session secret は含まず、browser WebAuthn ceremony に必要な challenge 情報だけを返す。
 type OperatorPasskeyChallenge struct {
@@ -204,16 +204,16 @@ type OperatorPasskeyChallenge struct {
 	WebAuthnOptions []byte
 }
 
-// FinishOperatorPasskeyInput は WebAuthn 検証済み credential から Admin session を発行する入力である。
+// FinishOperatorPasskeyInput は WebAuthn 検証済み credential から session を発行する入力である。
 //
-// CredentialHandle は adapter/provider が署名検証後に確定した Admin operator credential handle である。
+// CredentialHandle は adapter/provider が署名検証後に確定した Operator credential handle である。
 // ChallengeID は将来の challenge 消費監査に使えるが、この use case は credential handle から Operator を復元する。
 type FinishOperatorPasskeyInput struct {
 	ChallengeID      string
 	CredentialHandle string
 }
 
-// RefreshOperatorSessionInput は Admin refresh credential と path auth context から accessToken と refresh credential rotation を行う入力である。
+// RefreshOperatorSessionInput は refresh credential と path auth context から accessToken と refresh credential rotation を行う入力である。
 //
 // AuthContextID は refresh route path から受け取った canonical context selector であり、refresh credential 内 session selector と一致する場合だけ rotation を許可する。
 // RefreshTokenValue は Cookie mode では HttpOnly Cookie、Bearer mode では request body から adapter が読み取った opaque 値であり、検証後は新しい credential へ rotation される。
@@ -222,21 +222,21 @@ type RefreshOperatorSessionInput struct {
 	RefreshTokenValue string
 }
 
-// CurrentOperatorInput は bearer accessToken から現在の Admin Operator を取得する入力である。
+// CurrentOperatorInput は bearer accessToken から現在の Operator を取得する入力である。
 //
-// AccessToken は Authorization header から抽出された compact token で、Product bearer token と共有しない。
+// AccessToken は Authorization header から抽出された compact token で、bearer token と共有しない。
 type CurrentOperatorInput struct {
 	AccessToken string
 }
 
-// LogoutOperatorInput は Admin operator session revoke の入力である。
+// LogoutOperatorInput は Operator session revoke の入力である。
 //
 // AccessToken は対象 session selector と OperatorID を特定するために使い、refreshToken 平文は不要である。
 type LogoutOperatorInput struct {
 	AccessToken string
 }
 
-// AuthorizeOperatorSessionInput は Admin mutation route の bearer/session/snapshot/RBAC 検証入力である。
+// AuthorizeOperatorSessionInput は mutation route の bearer/session/snapshot/RBAC 検証入力である。
 //
 // 役割:
 //   - HTTP adapter が持つ Authorization header 由来の accessToken と route permission だけを application auth 境界へ渡す。
@@ -246,7 +246,7 @@ type AuthorizeOperatorSessionInput struct {
 	Permission  string
 }
 
-// OperatorAuthorizationDecision は Admin mutation route が許可された結果を表す DTO である。
+// OperatorAuthorizationDecision は mutation route が許可された結果を表す DTO である。
 //
 // 役割:
 //   - bearer/session/snapshot/permission がすべて検証済みであることを handler context へ伝える。
@@ -266,21 +266,21 @@ type IssueOperatorSessionInput struct {
 	OperatorID string
 }
 
-// ListOperatorPasskeysInput は Admin operator 自身の passkey 一覧取得入力である。
+// ListOperatorPasskeysInput は Operator 自身の passkey 一覧取得入力である。
 //
-// OperatorID は middleware が Admin accessToken/session を検証した後に context へ束縛した値だけを渡す。
+// OperatorID は middleware が accessToken/session を検証した後に context へ束縛した値だけを渡す。
 type ListOperatorPasskeysInput struct {
 	OperatorID string
 }
 
-// OperatorPasskeyListResult は Admin operator passkey 一覧取得結果である。
+// OperatorPasskeyListResult は Operator passkey 一覧取得結果である。
 //
 // Passkeys は response body に出せる非秘匿 DTO だけで構成し、credential handle や public key は含めない。
 type OperatorPasskeyListResult struct {
 	Passkeys []OperatorPasskeyCredential
 }
 
-// DeleteOperatorPasskeyInput は Admin operator 自身の passkey 削除入力である。
+// DeleteOperatorPasskeyInput は Operator 自身の passkey 削除入力である。
 //
 // OperatorID は検証済み session context 由来の所有者 ID、PasskeyID は path parameter 由来の削除対象 credential ID である。
 type DeleteOperatorPasskeyInput struct {
@@ -299,7 +299,7 @@ type OperatorRefreshCookieCommand struct {
 	Clear         bool
 }
 
-// OperatorSessionResult は login/refresh 成功時に Admin frontend へ返す browser-readable session DTO である。
+// OperatorSessionResult は login/refresh 成功時に frontend へ返す browser-readable session DTO である。
 //
 // AccessToken は response body に含めるが、refreshToken 平文は Cookie mode の Set-Cookie または Bearer mode body へ写像する直前まで RefreshCookie command の Value にだけ保持される。
 type OperatorSessionResult struct {
@@ -310,9 +310,9 @@ type OperatorSessionResult struct {
 	RefreshCookie OperatorRefreshCookieCommand `json:"-"`
 }
 
-// OperatorDTO は Admin frontend と adapter に返す現在 Operator の application DTO である。
+// OperatorDTO は frontend と adapter に返す現在 Operator の application DTO である。
 //
-// Product Account DTO を再利用せず、operator ID/email/role/active/passkey state と、検証済み session selector だけを保持する。
+// Account DTO を再利用せず、operator ID/email/role/active/passkey state と、検証済み session selector だけを保持する。
 type OperatorDTO struct {
 	ID                       string
 	Email                    string

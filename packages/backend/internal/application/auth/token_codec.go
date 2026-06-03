@@ -7,9 +7,9 @@ import (
 	domain "www-template/packages/backend/internal/domain"
 )
 
-// operatorAccessPayload は Admin operator accessToken の署名 payload を表す内部 DTO である。
+// operatorAccessPayload は Operator accessToken の署名 payload を表す内部 DTO である。
 //
-// Product AccountAuth claim と混同しないよう、operator ID、operator session ID、role/active snapshot だけを保持する。
+// AccountAuth claim と混同しないよう、operator ID、operator session ID、role/active snapshot だけを保持する。
 type operatorAccessPayload struct {
 	OperatorID string `json:"sub"`
 	SessionID  string `json:"sid"`
@@ -21,7 +21,7 @@ type operatorAccessPayload struct {
 }
 
 func (p operatorAccessPayload) validate() error {
-	// Step 1: 各 ID と role は domain constructor へ戻し、Admin OperatorAuth の型として検証する。
+	// Step 1: 各 ID と role は domain constructor へ戻し、OperatorAuth の型として検証する。
 	if _, err := domain.NewOperatorID(p.OperatorID); err != nil {
 		return err
 	}
@@ -45,12 +45,12 @@ func (p operatorAccessPayload) validate() error {
 		return domain.ErrInvalidToken
 	}
 
-	// Step 4: payload が Admin accessToken として復元可能であるため成功とする。
+	// Step 4: payload が accessToken として復元可能であるため成功とする。
 	return nil
 }
 
 func (p operatorAccessPayload) domainClaims() (domain.OperatorAccessTokenClaims, error) {
-	// Step 1: payload の各 primitive を Admin OperatorAuth 専用 value object へ復元する。
+	// Step 1: payload の各 primitive を OperatorAuth 専用 value object へ復元する。
 	operatorID, err := domain.NewOperatorID(p.OperatorID)
 	if err != nil {
 		return zeroOperatorAccessTokenClaims(), err
@@ -85,7 +85,7 @@ func parseRefreshCookieSessionID(cookieValue string) (domain.OperatorSessionID, 
 		return "", ErrOperatorAuthInvalidInput
 	}
 
-	// Step 2: 取り出した selector を Admin Operator session ID として検証する。
+	// Step 2: 取り出した selector を Operator session ID として検証する。
 	sessionID, err := domain.NewOperatorSessionID(cookieValue[:dotIndex])
 	if err != nil {
 		return "", ErrOperatorAuthInvalidInput
@@ -99,10 +99,10 @@ func validateCurrentOperatorPayload(operator domain.Operator, session domain.Ope
 	// Step 1: JSON payload DTO を domain claims へ復元し、snapshot/expiry/current eligibility は domain に委譲する。
 	claims, err := payload.domainClaims()
 	if err != nil {
-		return mapAdminDomainAuthError(err)
+		return mapOperatorDomainAuthError(err)
 	}
 	if err := session.ValidateCurrentAccess(operator, claims, now); err != nil {
-		return mapAdminDomainAuthError(err)
+		return mapOperatorDomainAuthError(err)
 	}
 
 	// Step 2: current operator として有効なため成功とする。
@@ -110,15 +110,15 @@ func validateCurrentOperatorPayload(operator domain.Operator, session domain.Ope
 }
 
 func validateOperatorAccessPayload(operator domain.Operator, session domain.OperatorAuthSession, payload operatorAccessPayload, permission domain.OperatorAuthPermission, now time.Time) error {
-	// Step 1: payload の primitive claim を Admin OperatorAuth claims へ復元する。
+	// Step 1: payload の primitive claim を OperatorAuth claims へ復元する。
 	claims, err := payload.domainClaims()
 	if err != nil {
-		return mapAdminDomainAuthError(err)
+		return mapOperatorDomainAuthError(err)
 	}
 
 	// Step 2: session.ValidateAccess に snapshot、expiry、permission 判定をすべて委譲する。
 	if err := session.ValidateAccess(operator, claims, permission, now); err != nil {
-		return mapAdminDomainAuthError(err)
+		return mapOperatorDomainAuthError(err)
 	}
 
 	// Step 3: OperatorAuth domain が対象 permission を許可したため成功とする。

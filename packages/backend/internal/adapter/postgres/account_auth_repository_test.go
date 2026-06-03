@@ -1,4 +1,4 @@
-package product
+package postgres
 
 import (
 	"os"
@@ -314,11 +314,24 @@ func TestAccountAuthRepositoryBoundary(t *testing.T) {
 	assertContainsAll(t, source, "account_passkey_credentials", "AccountAuth")
 }
 
+func TestAccountAuthRepositoryUsesExplicitPublicSchema(t *testing.T) {
+	t.Parallel()
+
+	// 単一 postgres package 化後、AccountAuthRepository の TableName が public schema を明示していることを確認する。
+	if got := (gormAccountRecord{}).TableName(); got != "public.accounts" {
+		t.Fatalf("account table must be public.accounts, got %q", got)
+	}
+	if got := (gormPasskeyCredentialRecord{}).TableName(); got != "public.account_passkey_credentials" {
+		t.Fatalf("passkey credential table must be public.account_passkey_credentials, got %q", got)
+	}
+}
+
 func readMigrationFiles(t *testing.T) map[string]string {
 	t.Helper()
 
 	// テストを package directory から実行しても migration directory を安定して解決できるよう相対 path を固定する。
-	migrationDir := filepath.Join("..", "..", "..", "..", "db", "migrations")
+	// 単一 postgres package は internal/adapter/postgres/ にあるため、backend root へは 3 段上がる。
+	migrationDir := filepath.Join("..", "..", "..", "db", "migrations")
 	entries, err := os.ReadDir(migrationDir)
 	if err != nil {
 		t.Fatalf("read migration directory: %v", err)
@@ -344,28 +357,28 @@ func readMigrationFile(t *testing.T, fileName string) string {
 	// gosec G304 を避けるため、読み込み対象を backend-owned の固定 migration 名だけに限定する。
 	switch fileName {
 	case "000001_create_accounts.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000001_create_accounts.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000001_create_accounts.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000001_create_accounts.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000001_create_accounts.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000001_create_accounts.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000002_create_account_settings.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000002_create_account_settings.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000002_create_account_settings.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000002_create_account_settings.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000002_create_account_settings.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000002_create_account_settings.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000003_create_account_passkey_credentials.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000003_create_account_passkey_credentials.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000003_create_account_passkey_credentials.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000003_create_account_passkey_credentials.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000003_create_account_passkey_credentials.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000003_create_account_passkey_credentials.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000004_add_account_status.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000004_add_account_status.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000004_add_account_status.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000004_add_account_status.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000004_add_account_status.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000004_add_account_status.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	default:
 		return readAdminMigrationFile(t, fileName)
@@ -378,22 +391,22 @@ func readAdminMigrationFile(t *testing.T, fileName string) string {
 	// Admin 系 migration は Product root migration と分けて列挙し、readMigrationFile の複雑度を抑えつつ固定 path だけを許可する。
 	switch fileName {
 	case "000005_create_admin_views.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000005_create_admin_views.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000005_create_admin_views.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000005_create_admin_views.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000005_create_admin_views.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000005_create_admin_views.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000006_create_admin_functions.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000006_create_admin_functions.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000006_create_admin_functions.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000006_create_admin_functions.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000006_create_admin_functions.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000006_create_admin_functions.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000007_create_admin_schema.up.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000007_create_admin_schema.up.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000007_create_admin_schema.up.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	case "000007_create_admin_schema.down.sql":
-		content, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "db", "migrations", "000007_create_admin_schema.down.sql"))
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "db", "migrations", "000007_create_admin_schema.down.sql"))
 		return migrationContentOrFail(t, fileName, content, err)
 	default:
 		t.Fatalf("unexpected migration file %q", fileName)
@@ -482,7 +495,7 @@ func assertNoAdminPrismaMigrationSystem(t *testing.T) {
 func readRepositoryFile(t *testing.T, pathParts ...string) string {
 	t.Helper()
 
-	// repository root からの固定 path だけを読み、Admin package の command policy を静的証跡として検査する。
+	// repository root からの固定 path だけを読み、Admin package の command policy を静的を静的証跡として検査する。
 	content, err := os.ReadFile(repositoryPath(pathParts...))
 	if err != nil {
 		t.Fatalf("read repository file %s: %v", filepath.Join(pathParts...), err)
@@ -493,7 +506,8 @@ func readRepositoryFile(t *testing.T, pathParts ...string) string {
 
 func repositoryPath(pathParts ...string) string {
 	// package test の作業 directory から repository root へ戻し、backend と admin の境界証跡を同じ test で参照する。
-	parts := append([]string{"..", "..", "..", "..", "..", ".."}, pathParts...)
+	// 単一 postgres package は internal/adapter/postgres/ にあるため、backend root へは 3 段上がる。
+	parts := append([]string{"..", "..", "..", "..", ".."}, pathParts...)
 	return filepath.Join(parts...)
 }
 

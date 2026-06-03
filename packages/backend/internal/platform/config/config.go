@@ -76,9 +76,9 @@ type tomlConfig struct {
 		SameSite string `toml:"same_site"`
 	} `toml:"cookie"`
 	OpenSearch struct {
-		URL                   string `toml:"url"`
-		AdminAuditIndexPrefix string `toml:"admin_audit_index_prefix"`
-		ProductIndexPrefix    string `toml:"product_index_prefix"`
+		URL                      string `toml:"url"`
+		OperatorAuditIndexPrefix string `toml:"operator_audit_index_prefix"`
+		ProductIndexPrefix       string `toml:"product_index_prefix"`
 	} `toml:"opensearch"`
 	ObjectStorage struct {
 		Endpoint        string `toml:"endpoint"`
@@ -260,9 +260,9 @@ func buildConfig(raw tomlConfig) Config {
 				UsePathStyle:    raw.ObjectStorage.UsePathStyle,
 			},
 			OpenSearch: OpenSearchConfig{
-				URL:                   strings.TrimSpace(raw.OpenSearch.URL),
-				AdminAuditIndexPrefix: strings.TrimSpace(raw.OpenSearch.AdminAuditIndexPrefix),
-				ProductIndexPrefix:    strings.TrimSpace(raw.OpenSearch.ProductIndexPrefix),
+				URL:                      strings.TrimSpace(raw.OpenSearch.URL),
+				OperatorAuditIndexPrefix: strings.TrimSpace(raw.OpenSearch.OperatorAuditIndexPrefix),
+				ProductIndexPrefix:       strings.TrimSpace(raw.OpenSearch.ProductIndexPrefix),
 			},
 			Valkey: ValkeyConfig{
 				URL:       strings.TrimSpace(raw.Valkey.URL),

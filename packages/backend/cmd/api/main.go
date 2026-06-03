@@ -24,7 +24,7 @@ func main() {
 func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
-	runtime, err := app.NewRuntime(ctx)
+	runtime, err := app.NewProductRuntime(ctx)
 	if err != nil {
 		stop()
 		return fmt.Errorf("build runtime: %w", err)

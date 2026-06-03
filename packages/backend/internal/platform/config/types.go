@@ -46,12 +46,12 @@ type DatabaseConfig struct {
 //
 // 役割:
 //   - URL は cluster への接続先として health check と Admin audit projection で利用する。
-//   - AdminAuditIndexPrefix は Admin audit event だけを書き込む月次 index の prefix である。
+//   - OperatorAuditIndexPrefix は Operator audit event だけを書き込む月次 index の prefix である。
 //   - ProductIndexPrefix は Product domain document 用 index の prefix であり、Admin audit prefix との衝突検査に使う。
 type OpenSearchConfig struct {
-	URL                   string
-	AdminAuditIndexPrefix string
-	ProductIndexPrefix    string
+	URL                      string
+	OperatorAuditIndexPrefix string
+	ProductIndexPrefix       string
 }
 
 type ObjectStorageConfig struct {

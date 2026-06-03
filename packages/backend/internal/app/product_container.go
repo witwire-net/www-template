@@ -8,8 +8,6 @@ import (
 
 	"www-template/packages/backend/internal/adapter/mailer"
 	"www-template/packages/backend/internal/adapter/postgres"
-	productpostgres "www-template/packages/backend/internal/adapter/postgres/product"
-	"www-template/packages/backend/internal/adapter/valkey"
 	productvalkey "www-template/packages/backend/internal/adapter/valkey/product"
 	"www-template/packages/backend/internal/adapter/webauthn"
 	productaccounts "www-template/packages/backend/internal/application/accounts"
@@ -19,15 +17,37 @@ import (
 	"www-template/packages/backend/internal/platform/observability"
 )
 
-const defaultReadHeaderTimeout = 5 * time.Second
-
-type Container struct {
-	Auth            productauth.ProductAuthService
-	AccountSetting  *productaccounts.AccountSettingService
-	AccountSnapshot *productaccounts.AccountSettingSnapshotService
-	TokenService    productauth.ProductContextRefreshService
-	SessionService  productauth.ProductSessionService
-	close           func(context.Context) error
+// ProductContainer は Product Account 向けの application service と adapter 接続を束ねる DI container である。
+//
+// 役割:
+//   - Account の passkey 認証、アカウント設定、token コンテキスト refresh、session lifecycle の各 service を保持する。
+//   - Admin Container とは別型にし、Product Account credentials と Admin Operator credentials の混在を防ぐ。
+//   - Valkey/DB 接続の close 関数を内部に保持し、ProductRuntime.Close から委譲されてリソース解放を行う。
+//
+// フィールド（公開）:
+//   - AccountAuth: passkey 登録・認証・recovery・device-link を扱う認証 facade。
+//   - AccountSetting: account locale 等の設定取得。
+//   - AccountSnapshot: account setting の snapshot 取得。
+//   - AccountContextRefresh: refresh token rotation と account context 提供。
+//   - AccountSessions: session 一覧・失効。
+//
+// フィールド（非公開）:
+//   - close: Valkey store、DB 接続などをまとめて閉じる関数。
+//
+// 使用例:
+//
+//	container, err := BuildProductContainer(ctx, cfg)
+//	if err != nil {
+//		return err
+//	}
+//	defer container.Close(ctx)
+type ProductContainer struct {
+	AccountAuth           productauth.ProductAuthService
+	AccountSetting        *productaccounts.AccountSettingService
+	AccountSnapshot       *productaccounts.AccountSettingSnapshotService
+	AccountContextRefresh productauth.ProductContextRefreshService
+	AccountSessions       productauth.ProductSessionService
+	close                 func(context.Context) error
 }
 
 type accountAuthRepositoryFactory func(context.Context, string) (productauth.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error)
@@ -92,11 +112,31 @@ func (n *slogAuditNotifier) EmitDeviceLinkCompleteDeliveryFailure(ctx context.Co
 	)
 }
 
-func BuildContainer(ctx context.Context, cfg config.Config) (*Container, error) {
-	return buildContainer(ctx, cfg, newGormAccountAuthRepository, newValkeyAuthStateRepository, newValkeyChallengeStore)
+// BuildProductContainer は Product Account 向けの全依存を解決し、ProductContainer を生成する。
+//
+// 内部で production factory を使って DB repository、Valkey store、WebAuthn provider を構築する。
+// テストでは buildProductContainer に test factory を注入して検証する。
+//
+// 引数:
+//   - ctx: DB 接続や Valkey ping に使う context。
+//   - cfg: 検証済みの Product runtime 設定。
+//
+// 戻り値:
+//   - *ProductContainer: Account auth、setting、token refresh、session lifecycle の全 service を保持する container。
+//   - error: DB/Valkey 接続失敗、WebAuthn RPID 未設定、service 構築失敗のいずれか。
+//     エラー時は内部で構築済みの resource を close してから返す（fail-closed）。
+//
+// 使用例:
+//
+//	container, err := BuildProductContainer(ctx, cfg)
+//	if err != nil {
+//		return fmt.Errorf("build product container: %w", err)
+//	}
+func BuildProductContainer(ctx context.Context, cfg config.Config) (*ProductContainer, error) {
+	return buildProductContainer(ctx, cfg, newAccountAuthRepository, newValkeyAuthStateRepository, newValkeyChallengeStore)
 }
 
-func buildContainer(ctx context.Context, cfg config.Config, newAccountAuthRepository accountAuthRepositoryFactory, newAuthStateRepository authStateRepositoryFactory, newChallengeStore challengeStoreFactory) (*Container, error) {
+func buildProductContainer(ctx context.Context, cfg config.Config, newAccountAuthRepository accountAuthRepositoryFactory, newAuthStateRepository authStateRepositoryFactory, newChallengeStore challengeStoreFactory) (*ProductContainer, error) {
 	authConfig := cfg.AuthRuntime()
 	idPolicy := newAuthIDPolicy()
 
@@ -152,8 +192,8 @@ func buildContainer(ctx context.Context, cfg config.Config, newAccountAuthReposi
 		_ = composeClosers(func(context.Context) error { return productAuthStore.Close() }, closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
 		return nil, fmt.Errorf("product auth lifecycle init: %w", err)
 	}
-	tokenService := productauth.NewProductContextRefreshService(productLifecycle)
-	sessionService := productauth.NewProductSessionService(productLifecycle)
+	accountContextRefresh := productauth.NewProductContextRefreshService(productLifecycle)
+	accountSessions := productauth.NewProductSessionService(productLifecycle)
 	// RPID が未設定の場合は起動を拒否する（fail-closed）。
 	if authConfig.WebAuthnRPID == "" {
 		_ = composeClosers(func(context.Context) error { return productAuthStore.Close() }, closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
@@ -173,26 +213,26 @@ func buildContainer(ctx context.Context, cfg config.Config, newAccountAuthReposi
 		return nil, fmt.Errorf("product auth facade init: %w", err)
 	}
 
-	return &Container{
-		Auth:            authSvc,
-		AccountSetting:  accountSettingService,
-		AccountSnapshot: accountSnapshotService,
-		TokenService:    tokenService,
-		SessionService:  sessionService,
-		close:           composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo, func(context.Context) error { return productAuthStore.Close() }),
+	return &ProductContainer{
+		AccountAuth:           authSvc,
+		AccountSetting:        accountSettingService,
+		AccountSnapshot:       accountSnapshotService,
+		AccountContextRefresh: accountContextRefresh,
+		AccountSessions:       accountSessions,
+		close:                 composeClosers(closeChallengeStore, closeStateRepo, closeAccountRepo, func(context.Context) error { return productAuthStore.Close() }),
 	}, nil
 }
 
 // newValkeyChallengeStore は production 用の Valkey challengeStore を構築する。
 func newValkeyChallengeStore(_ context.Context, config config.ValkeyConfig) (webauthn.ChallengeStore, func(context.Context) error, error) {
-	store, err := valkey.NewStore(config)
+	store, err := productvalkey.NewStore(config)
 	if err != nil {
 		return nil, nil, err
 	}
 	return store, func(context.Context) error { return store.Close() }, nil
 }
 
-func newGormAccountAuthRepository(ctx context.Context, databaseURL string) (productauth.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
+func newAccountAuthRepository(ctx context.Context, databaseURL string) (productauth.PasskeyAccountRepository, productaccounts.AccountSettingRepository, func(context.Context) error, error) {
 	db, err := postgres.OpenDatabase(databaseURL)
 	if err != nil {
 		return nil, nil, nil, err
@@ -210,13 +250,13 @@ func newGormAccountAuthRepository(ctx context.Context, databaseURL string) (prod
 		return nil, nil, nil, err
 	}
 
-	return productpostgres.NewGormAccountAuthRepository(db), productpostgres.NewGormAccountSettingRepository(db), func(context.Context) error {
+	return postgres.NewAccountAuthRepository(db), postgres.NewAccountSettingRepository(db), func(context.Context) error {
 		return sqlDB.Close()
 	}, nil
 }
 
 func newValkeyAuthStateRepository(ctx context.Context, cfg config.ValkeyConfig, authConfig config.AuthConfig) (productauth.AuthStateRepository, func(context.Context) error, error) {
-	store, err := valkey.NewStore(cfg)
+	store, err := productvalkey.NewStore(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,7 +265,7 @@ func newValkeyAuthStateRepository(ctx context.Context, cfg config.ValkeyConfig, 
 		return nil, nil, err
 	}
 
-	repo, err := valkey.NewAuthStateRepository(store, authConfig.SecretHashKey)
+	repo, err := productvalkey.NewAuthStateRepository(store, authConfig.SecretHashKey)
 	if err != nil {
 		_ = store.Close()
 		return nil, nil, err
@@ -236,20 +276,21 @@ func newValkeyAuthStateRepository(ctx context.Context, cfg config.ValkeyConfig, 
 	}, nil
 }
 
-func composeClosers(closers ...func(context.Context) error) func(context.Context) error {
-	return func(ctx context.Context) error {
-		for _, closeFn := range closers {
-			if closeFn == nil {
-				continue
-			}
-			if err := closeFn(ctx); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-}
-
-func (c *Container) Close(ctx context.Context) error {
+// Close は Product container が保持する Valkey store と DB 接続を解放する。
+//
+// BuildProductContainer 内で composeClosers により構築された close 関数を呼び出す。
+// c が nil の場合は nil pointer dereference を起こし得るため、呼び出し側が nil guard すること。
+//
+// 引数:
+//   - ctx: close 処理の deadline を制御する context。
+//
+// 戻り値:
+//   - error: close 処理中に発生した最初のエラー。composeClosers は fail-fast であるため、
+//     エラー発生以降の closer は実行されない。エラーがなければ nil を返す。
+//
+// 使用例:
+//
+//	defer container.Close(ctx)
+func (c *ProductContainer) Close(ctx context.Context) error {
 	return c.close(ctx)
 }

@@ -457,7 +457,7 @@ func (s *AccountSessionService) accessTTLValue() domain.TokenTTL {
 	// Step 1: Service 構築時に検証済みの TTL を domain constructor へ渡すため、同じ duration から再構成する。
 	ttl, err := domain.ValidateTokenTTL(s.accessTTL.Duration())
 	if err != nil {
-		return zeroProductTokenTTL()
+		return zeroTokenTTL()
 	}
 
 	// Step 2: 検証済み TTL を返す。NewService で検証済みのため通常 error path には入らない。
@@ -503,7 +503,7 @@ func (s *AccountSessionService) signAccessToken(claims domain.AccountAccessToken
 	payload := accessTokenPayload{
 		Subject:         claims.AccountID().String(),
 		SessionID:       claims.SessionID().String(),
-		TokenID:         claims.JTI().String(),
+		TokenID:         claims.TokenID().String(),
 		Status:          claims.Status().String(),
 		IssuedAt:        claims.IssuedAt().Unix(),
 		ExpiresAt:       claims.ExpiresAt().Unix(),
@@ -563,56 +563,56 @@ func accountRootFromAuth(accountAuth domain.AccountAuth) (domain.Account, error)
 	// Step 1: AccountAuth projection の email を Product AccountEmail として再検証し、壊れた永続化値を拒否する。
 	email, err := domain.NewAccountEmail(accountAuth.Email())
 	if err != nil {
-		return zeroProductAccount(), err
+		return zeroAccount(), err
 	}
 
 	// Step 2: AccountAuth projection の status を Product lifecycle status として再検証する。
 	status, err := domain.NewAccountStatus(accountAuth.Status())
 	if err != nil {
-		return zeroProductAccount(), err
+		return zeroAccount(), err
 	}
 
 	// Step 3: Account root の必須 child である AccountSetting は Product 既定値で再構成し、認証可否判断には使わない。
 	setting, err := domain.NewDefaultAccountSetting(accountAuth.AccountID())
 	if err != nil {
-		return zeroProductAccount(), err
+		return zeroAccount(), err
 	}
 
 	// Step 4: status と sessionRevokedAfter を反映した Product Account root を domain constructor で生成する。
 	return domain.NewAccount(accountAuth.AccountID(), email, status, setting, accountAuth.SessionRevokedAfter())
 }
 
-func zeroProductAccount() domain.Account {
+func zeroAccount() domain.Account {
 	// Step 1: error return 専用の zero value を var 経由で作り、domain entity の composite literal を application 層に置かない。
 	var account domain.Account
 	return account
 }
 
-func zeroProductRefreshSession() domain.AccountRefreshSession {
+func zeroAccountRefreshSession() domain.AccountRefreshSession {
 	// Step 1: error return 専用の zero value を var 経由で作り、refresh session 生成は通常 path の constructor に限定する。
 	var session domain.AccountRefreshSession
 	return session
 }
 
-func zeroProductAccessTokenClaims() domain.AccountAccessTokenClaims {
+func zeroAccountAccessTokenClaims() domain.AccountAccessTokenClaims {
 	// Step 1: error return 専用の zero value を var 経由で作り、claim 生成は domain constructor/reconstitution helper に限定する。
 	var claims domain.AccountAccessTokenClaims
 	return claims
 }
 
-func zeroProductTokenTTL() domain.TokenTTL {
+func zeroTokenTTL() domain.TokenTTL {
 	// Step 1: error return 専用の zero value を var 経由で作り、成功 path では domain TTL constructor の結果だけを使う。
 	var ttl domain.TokenTTL
 	return ttl
 }
 
-var productAuthUnavailableErrors = []error{
+var accountAuthUnavailableErrors = []error{
 	ErrAccountAuthUnavailable,
 	domain.ErrAuthStoreUnavailable,
 	domain.ErrInvalidSecret,
 }
 
-var productAuthUnauthorizedErrors = []error{
+var accountAuthUnauthorizedErrors = []error{
 	ErrAccountAuthUnauthorized,
 	domain.ErrAccountAuthNotFound,
 	domain.ErrSessionNotFound,
@@ -623,7 +623,7 @@ var productAuthUnauthorizedErrors = []error{
 	domain.ErrMalformedToken,
 }
 
-var productAuthInvalidInputErrors = []error{
+var accountAuthInvalidInputErrors = []error{
 	ErrAccountAuthInvalidInput,
 	domain.ErrInvalidAccountID,
 	domain.ErrInvalidToken,
@@ -642,7 +642,7 @@ func mapAccountAuthError(err error) error {
 	}
 
 	// Step 2: 保存層障害や署名境界の不備は Product auth unavailable に畳む。
-	if matchesProductAuthError(err, productAuthUnavailableErrors) {
+	if matchesAccountAuthError(err, accountAuthUnavailableErrors) {
 		return ErrAccountAuthUnavailable
 	}
 
@@ -657,12 +657,12 @@ func mapAccountAuthError(err error) error {
 	}
 
 	// Step 5: 認証不可を表す domain error は詳細を漏らさない unauthorized に畳む。
-	if matchesProductAuthError(err, productAuthUnauthorizedErrors) {
+	if matchesAccountAuthError(err, accountAuthUnauthorizedErrors) {
 		return ErrAccountAuthUnauthorized
 	}
 
 	// Step 6: domain constructor の入力不備は invalid input として扱う。
-	if matchesProductAuthError(err, productAuthInvalidInputErrors) {
+	if matchesAccountAuthError(err, accountAuthInvalidInputErrors) {
 		return ErrAccountAuthInvalidInput
 	}
 
@@ -670,7 +670,7 @@ func mapAccountAuthError(err error) error {
 	return ErrAccountAuthUnavailable
 }
 
-func matchesProductAuthError(err error, candidates []error) bool {
+func matchesAccountAuthError(err error, candidates []error) bool {
 	// Step 1: application error の分類表を順に確認し、errors.Is による wrapping 互換の照合だけを許可する。
 	for _, candidate := range candidates {
 		if errors.Is(err, candidate) {

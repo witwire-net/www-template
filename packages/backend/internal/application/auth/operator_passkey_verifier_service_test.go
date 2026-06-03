@@ -85,7 +85,7 @@ type stubOperatorWebAuthnCredentialStore struct {
 
 func (s *stubOperatorWebAuthnCredentialStore) FindWebAuthnCredential(context.Context, string) (domain.WebAuthnStoredCredential, error) {
 	// Step 1: provider へ public key 相当の非空 credential を返し、lookup callback が使われたことを verifier test で観測可能にする。
-	return domain.ReconstitueWebAuthnStoredCredential("verified-credential-handle", []byte("public-key"), 1, nil, false, false, nil), nil
+	return domain.ReconstituteWebAuthnStoredCredential("verified-credential-handle", []byte("public-key"), 1, nil, false, false, nil), nil
 }
 
 func (s *stubOperatorWebAuthnCredentialStore) UpdateWebAuthnCredentialState(_ context.Context, handle string, newSignCount uint32, newBackupState bool) error {

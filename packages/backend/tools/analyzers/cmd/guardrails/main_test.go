@@ -154,7 +154,7 @@ import _ "`+modulePath+`/internal/generated/openapi"
 
 	forbiddenPaths := []string{
 		"cmd/api/main.go",
-		"internal/app/runtime.go",
+		"internal/app/product_runtime.go",
 		"internal/application/account_service.go",
 		"internal/domain/account.go",
 		"internal/adapter/http/router.go",
@@ -191,7 +191,7 @@ import _ "`+modulePath+`/internal/generated/adminopenapi"
 
 	forbiddenPaths := []string{
 		"cmd/api/main.go",
-		"internal/app/runtime.go",
+		"internal/app/product_runtime.go",
 		"internal/application/account_service.go",
 		"internal/domain/account.go",
 		"internal/adapter/http/router.go",
@@ -224,7 +224,7 @@ func TestAdminConsoleBES072AdminHTTPAdapterRejectsPersistenceAdapters(t *testing
 		name       string
 		importPath string
 	}{
-		{name: "admin http imports postgres", importPath: modulePath + "/internal/adapter/postgres/admin"},
+		{name: "admin http imports postgres", importPath: modulePath + "/internal/adapter/postgres"},
 		{name: "admin http imports valkey", importPath: modulePath + "/internal/adapter/valkey/admin"},
 	}
 
@@ -254,7 +254,7 @@ func TestAdminConsoleBES073ApplicationPortRejectsAdapterAndGeneratedTypes(t *tes
 		typeName   string
 	}{
 		{name: "generated binding request", importPath: modulePath + "/internal/generated/adminopenapi", typeName: "CreateAdminAccountRequestObject"},
-		{name: "adapter repository record", importPath: modulePath + "/internal/adapter/postgres/admin", typeName: "AccountRecord"},
+		{name: "adapter repository record", importPath: modulePath + "/internal/adapter/postgres", typeName: "AccountRecord"},
 	}
 
 	for _, forbiddenCase := range forbiddenCases {
@@ -293,10 +293,10 @@ func TestAdminConsoleBES072BackendSurfacePlacementsAreAllowed(t *testing.T) {
 		{path: "internal/application/auth/account_session_service.go", packageName: "auth"},
 		{path: "internal/application/auth/operator_session_service.go", packageName: "auth"},
 		{path: "internal/application/accounts/creation_service.go", packageName: "accounts"},
-		{path: "internal/application/operators/service.go", packageName: "operators"},
+		{path: "internal/application/operators/creation_service.go", packageName: "operators"},
 		{path: "internal/application/audit/service.go", packageName: "audit"},
-		{path: "internal/adapter/postgres/product/account_repository.go", packageName: "product"},
-		{path: "internal/adapter/postgres/admin/account_repository.go", packageName: "admin"},
+		{path: "internal/adapter/postgres/account_auth_repository.go", packageName: "postgres"},
+		{path: "internal/adapter/postgres/account_management_repository.go", packageName: "postgres"},
 		{path: "internal/adapter/valkey/product/account_session_store.go", packageName: "product"},
 		{path: "internal/adapter/valkey/admin/operator_session_store.go", packageName: "admin"},
 	}
@@ -319,10 +319,10 @@ func TestAdminConsoleBES072BackendSurfacePlacementsAreAllowed(t *testing.T) {
 	}
 
 	forbiddenApplicationConceptPackages := []string{
-		"internal/application/auth/facade_contracts.go",
+		"internal/application/auth/account_facade_contracts.go",
 		"internal/application/accounts/creation_service.go",
 		"internal/application/audit/service.go",
-		"internal/application/operators/service.go",
+		"internal/application/operators/creation_service.go",
 	}
 	for _, forbiddenPath := range forbiddenApplicationConceptPackages {
 		forbiddenPath := forbiddenPath
@@ -331,6 +331,50 @@ func TestAdminConsoleBES072BackendSurfacePlacementsAreAllowed(t *testing.T) {
 			t.Parallel()
 			file := parseGuardrailTestFile(t, "package application\n")
 			assertGuardrailViolationContains(t, checkPackageName(forbiddenPath, file), "package name")
+		})
+	}
+}
+
+// Postgres adapter の Product/Admin surface subtree 再発を拒否することを検証する。
+func TestPostgresAdapterRejectsSurfaceSubtreeRecreation(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: 単一 postgres package の flat 配置は許可し、正常系を固定する。
+	allowedPaths := []string{
+		"internal/adapter/postgres/database.go",
+		"internal/adapter/postgres/account_auth_repository.go",
+		"internal/adapter/postgres/account_setting_repository.go",
+		"internal/adapter/postgres/account_management_repository.go",
+		"internal/adapter/postgres/operator_repository.go",
+		"internal/adapter/postgres/operator_passkey_repository.go",
+		"internal/adapter/postgres/operator_audit_repository.go",
+	}
+	for _, allowedPath := range allowedPaths {
+		allowedPath := allowedPath
+		t.Run("allow "+allowedPath, func(t *testing.T) {
+			t.Parallel()
+			if violations := verifyPostgresAdapterFlatLayout(allowedPath); len(violations) != 0 {
+				t.Fatalf("expected flat postgres path to pass, got violations: %v", violations)
+			}
+		})
+	}
+
+	// Step 2: postgres/product/ や postgres/admin/ の surface subtree 再作成を拒否する。
+	forbiddenPaths := []struct {
+		path    string
+		subtree string
+	}{
+		{path: "internal/adapter/postgres/product/account_repository.go", subtree: "internal/adapter/postgres/product/"},
+		{path: "internal/adapter/postgres/admin/operator_repository.go", subtree: "internal/adapter/postgres/admin/"},
+		{path: "internal/adapter/postgres/admin/accounts/account_repository.go", subtree: "internal/adapter/postgres/admin/"},
+		{path: "internal/adapter/postgres/admin/audit/repository.go", subtree: "internal/adapter/postgres/admin/"},
+	}
+	for _, forbiddenPath := range forbiddenPaths {
+		forbiddenPath := forbiddenPath
+		t.Run("reject "+forbiddenPath.path, func(t *testing.T) {
+			t.Parallel()
+			violations := verifyPostgresAdapterFlatLayout(forbiddenPath.path)
+			assertGuardrailViolationContains(t, violations, "single flat package")
 		})
 	}
 }
@@ -345,7 +389,7 @@ func TestAuthBES096ApplicationConceptOwnerPlacement(t *testing.T) {
 		"internal/application/auth/account_session_service.go",
 		"internal/application/auth/operator_session_service.go",
 		"internal/application/accounts/creation_service.go",
-		"internal/application/operators/service.go",
+		"internal/application/operators/creation_service.go",
 		"internal/application/audit/service.go",
 	}
 	for _, allowedPath := range allowedConceptOwnerPaths {
@@ -394,7 +438,7 @@ import _ "`+modulePath+`/internal/domain"
 
 import _ "`+modulePath+`/internal/application/auth"
 `)
-	if violations := checkImports("internal/application/operators/service.go", operatorsImportsAdminAuth); len(violations) != 0 {
+	if violations := checkImports("internal/application/operators/creation_service.go", operatorsImportsAdminAuth); len(violations) != 0 {
 		t.Fatalf("expected operators concept to import operator auth session boundary, got violations: %v", violations)
 	}
 	productHTTPImportsAccountSettings := parseGuardrailTestFile(t, `package product
@@ -532,11 +576,11 @@ func TestAdminConsoleBES076PersistenceSurfaceImportBoundary(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: Product persistence が account auth lifecycle port を参照する正常系を固定し、concept package 移行後の repository 実装を許可する。
-	productImportsProductApplication := parseGuardrailTestFile(t, `package product
+	productImportsProductApplication := parseGuardrailTestFile(t, `package postgres
 
 import _ "`+modulePath+`/internal/application/auth"
 `)
-	if violations := checkImports("internal/adapter/postgres/product/account_repository.go", productImportsProductApplication); len(violations) != 0 {
+	if violations := checkImports("internal/adapter/postgres/account_auth_repository.go", productImportsProductApplication); len(violations) != 0 {
 		t.Fatalf("expected Product Postgres adapter to import account auth application, got violations: %v", violations)
 	}
 
@@ -546,8 +590,8 @@ import _ "`+modulePath+`/internal/application/auth"
 		sourcePath string
 		importPath string
 	}{
-		{name: "product postgres imports admin", sourcePath: "internal/adapter/postgres/product/account_repository.go", importPath: modulePath + "/internal/application/admin/auth"},
-		{name: "admin account postgres imports product", sourcePath: "internal/adapter/postgres/accounts/account_repository.go", importPath: modulePath + "/internal/application/product/auth"},
+		{name: "product postgres imports admin", sourcePath: "internal/adapter/postgres/account_auth_repository.go", importPath: modulePath + "/internal/application/admin/auth"},
+		{name: "admin account postgres imports product", sourcePath: "internal/adapter/postgres/account_management_repository.go", importPath: modulePath + "/internal/application/product/auth"},
 		{name: "product valkey imports admin", sourcePath: "internal/adapter/valkey/product/account_session_store.go", importPath: modulePath + "/internal/application/admin/auth"},
 		{name: "admin valkey imports product", sourcePath: "internal/adapter/valkey/admin/operator_session_store.go", importPath: modulePath + "/internal/application/product/auth"},
 	}
@@ -572,13 +616,13 @@ func TestAdminConsoleBES084AccountRepositoryRejectsUnsafeSQLConstruction(t *test
 	t.Parallel()
 
 	// Step 1: GORM parameter binding を使う clean fixture を確認し、静的 SQL fragment と bound parameter の正常系を固定する。
-	cleanRepository := parseGuardrailTestFile(t, `package admin
+	cleanRepository := parseGuardrailTestFile(t, `package postgres
 
 func search(queryBuilder query, email string) query {
 	return queryBuilder.Where("email ILIKE ?", email).Order("created_at DESC, id DESC")
 }
 `)
-	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/accounts/account_repository.go", cleanRepository); len(violations) != 0 {
+	if violations := checkPostgresRepositorySQLConstruction("internal/adapter/postgres/account_management_repository.go", cleanRepository); len(violations) != 0 {
 		t.Fatalf("expected parameterized query fixture to pass, got violations: %v", violations)
 	}
 
@@ -587,19 +631,19 @@ func search(queryBuilder query, email string) query {
 		name   string
 		source string
 	}{
-		{name: "raw", source: `package admin
+		{name: "raw", source: `package postgres
 
 func search(db query, email string) query {
 	return db.Raw("SELECT * FROM public.accounts WHERE email = " + email)
 }
 `},
-		{name: "where concatenation", source: `package admin
+		{name: "where concatenation", source: `package postgres
 
 func search(db query, email string) query {
 	return db.Where("email = '" + email + "'")
 }
 `},
-		{name: "fmt sprintf", source: `package admin
+		{name: "fmt sprintf", source: `package postgres
 
 import "fmt"
 
@@ -607,7 +651,7 @@ func search(db query, email string) query {
 	return db.Where(fmt.Sprintf("email = %q", email))
 }
 `},
-		{name: "variable condition", source: `package admin
+		{name: "variable condition", source: `package postgres
 
 func search(db query, email string) query {
 	condition := "email = '" + email + "'"
@@ -622,61 +666,61 @@ func search(db query, email string) query {
 		t.Run(unsafeCase.name, func(t *testing.T) {
 			t.Parallel()
 			file := parseGuardrailTestFile(t, unsafeCase.source)
-			violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/accounts/account_repository.go", file)
+			violations := checkPostgresRepositorySQLConstruction("internal/adapter/postgres/account_management_repository.go", file)
 			assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
 		})
 	}
 }
 
-// [ADMIN-CONSOLE-BE-S090] Admin backend repository 全体の unsafe SQL construction を guardrail が拒否することを検証する。
+// [ADMIN-CONSOLE-BE-S090] Postgres repository 全体の unsafe SQL construction を guardrail が拒否することを検証する。
 func TestAdminConsoleBES090AdminBackendRepositoriesRejectUnsafeSQLConstruction(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: Admin operator repository でも静的 SQL fragment と bound parameter は許可し、4.59 の guardrail が安全な GORM 利用を妨げないことを固定する。
-	cleanRepository := parseGuardrailTestFile(t, `package admin
+	// Step 1: operator repository でも静的 SQL fragment と bound parameter は許可し、guardrail が安全な GORM 利用を妨げないことを固定する。
+	cleanRepository := parseGuardrailTestFile(t, `package postgres
 
 func find(db query, operatorID string) query {
 	return db.Where("id = ?", operatorID).Order("created_at DESC")
 }
 `)
-	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/admin/operator_repository.go", cleanRepository); len(violations) != 0 {
+	if violations := checkPostgresRepositorySQLConstruction("internal/adapter/postgres/operator_repository.go", cleanRepository); len(violations) != 0 {
 		t.Fatalf("expected parameterized Admin backend query fixture to pass, got violations: %v", violations)
 	}
-	auditCleanRepository := parseGuardrailTestFile(t, `package audit
+	auditCleanRepository := parseGuardrailTestFile(t, `package postgres
 
 func complete(db query, auditID string) query {
 	return db.Where("id = ?", auditID).Select("id, outcome, completed_at")
 }
 `)
-	if violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/audit/repository.go", auditCleanRepository); len(violations) != 0 {
+	if violations := checkPostgresRepositorySQLConstruction("internal/adapter/postgres/operator_audit_repository.go", auditCleanRepository); len(violations) != 0 {
 		t.Fatalf("expected parameterized Admin audit query fixture to pass, got violations: %v", violations)
 	}
 
-	// Step 2: account search 以外の Admin backend repository でも Raw/Exec と動的 SQL fragment を拒否し、将来の repository 追加で抜け道ができないようにする。
+	// Step 2: account search 以外の repository でも Raw/Exec と動的 SQL fragment を拒否し、将来の repository 追加で抜け道ができないようにする。
 	unsafeCases := []struct {
 		name   string
 		source string
 	}{
-		{name: "raw", source: `package admin
+		{name: "raw", source: `package postgres
 
 func find(db query, email string) query {
 	return db.Raw("SELECT * FROM admin.operators WHERE email = " + email)
 }
 `},
-		{name: "exec", source: `package admin
+		{name: "exec", source: `package postgres
 
 func delete(db query, operatorID string) query {
 	return db.Exec("DELETE FROM admin.operators WHERE id = " + operatorID)
 }
 `},
-		{name: "dynamic where", source: `package admin
+		{name: "dynamic where", source: `package postgres
 
 func find(db query, email string) query {
 	condition := "email = '" + email + "'"
 	return db.Where(condition)
 }
 `},
-		{name: "dynamic group", source: `package admin
+		{name: "dynamic group", source: `package postgres
 
 func summarize(db query, groupColumn string) query {
 	return db.Group(groupColumn)
@@ -690,26 +734,54 @@ func summarize(db query, groupColumn string) query {
 		t.Run(unsafeCase.name, func(t *testing.T) {
 			t.Parallel()
 			file := parseGuardrailTestFile(t, unsafeCase.source)
-			violations := checkAdminBackendSQLConstruction("internal/adapter/postgres/admin/operator_repository.go", file)
+			violations := checkPostgresRepositorySQLConstruction("internal/adapter/postgres/operator_repository.go", file)
 			assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
 		})
 	}
 
-	// Step 4: rehome 後の accounts/audit repository path でも unsafe SQL を拒否し、旧 admin path だけを検査する退行を防ぐ。
-	for _, repositoryPath := range []string{"internal/adapter/postgres/accounts/account_repository.go", "internal/adapter/postgres/audit/repository.go"} {
+	// Step 4: account_management_repository と operator_audit_repository でも unsafe SQL を拒否し、旧 admin path だけを検査する退行を防ぐ。
+	for _, repositoryPath := range []string{"internal/adapter/postgres/account_management_repository.go", "internal/adapter/postgres/operator_audit_repository.go"} {
 		repositoryPath := repositoryPath
 		t.Run(repositoryPath, func(t *testing.T) {
 			t.Parallel()
-			file := parseGuardrailTestFile(t, `package application
+			file := parseGuardrailTestFile(t, `package postgres
 
 func find(db query, email string) query {
 	condition := "email = '" + email + "'"
 	return db.Where(condition)
 }
 `)
-			violations := checkAdminBackendSQLConstruction(repositoryPath, file)
+			violations := checkPostgresRepositorySQLConstruction(repositoryPath, file)
 			assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
 		})
+	}
+}
+
+// 将来追加される repository file も SQL construction guardrail の対象になることを検証する。
+func TestPostgresRepositorySQLConstructionCoversFutureFiles(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: 未知の *_repository.go file が internal/adapter/postgres/ に追加されても guardrail の対象になることを確認する。
+	// isPostgresRepositoryPath は prefix ベースなので、明示列挙にない新しい file も自動的に検査される。
+	futureRepositoryPath := "internal/adapter/postgres/session_repository.go"
+	if !isPostgresRepositoryPath(futureRepositoryPath) {
+		t.Fatalf("expected future repository path %q to be covered by SQL construction guardrail", futureRepositoryPath)
+	}
+
+	// Step 2: 未知の repository file でも dynamic Where が拒否されることを確認する。
+	unsafeFixture := parseGuardrailTestFile(t, `package postgres
+
+func find(db query, sessionID string) query {
+	condition := "session_id = '" + sessionID + "'"
+	return db.Where(condition)
+}
+`)
+	violations := checkPostgresRepositorySQLConstruction(futureRepositoryPath, unsafeFixture)
+	assertGuardrailViolationContains(t, violations, "unsafe SQL construction")
+
+	// Step 3: database.go は SQL construction guardrail の対象外であることを確認する。
+	if isPostgresRepositoryPath("internal/adapter/postgres/database.go") {
+		t.Fatalf("database.go must not be covered by SQL construction guardrail")
 	}
 }
 

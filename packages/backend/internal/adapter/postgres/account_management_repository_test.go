@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestAccountRepositoryUsesExplicitProductAndAdminSchemas(t *testing.T) {
+func TestAccountManagementRepositoryUsesExplicitProductAndAdminSchemas(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: GORM record の TableName を直接検査し、search_path 依存ではなく schema 名を明示していることを確認する。
@@ -24,14 +24,14 @@ func TestAccountRepositoryUsesExplicitProductAndAdminSchemas(t *testing.T) {
 	}
 }
 
-func TestAccountRepositoryBoundaryIsSingleTransaction(t *testing.T) {
+func TestAccountManagementRepositoryBoundaryIsSingleTransaction(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: repository source を静的に読み込み、実装が application port と GORM transaction 境界を持つことを検査する。
-	source := readAccountRepositorySource(t)
+	source := readAccountManagementRepositorySource(t)
 
 	// Step 2: Product Account root と Admin audit target の両方を同じ repository source 内で扱うことを確認する。
-	assertAccountRepositoryContainsAll(t, source,
+	assertAccountManagementRepositoryContainsAll(t, source,
 		"accountsapplication.AccountRepository",
 		"CreateAccountWithAuditTarget",
 		"Transaction(func(tx *gorm.DB) error",
@@ -42,41 +42,40 @@ func TestAccountRepositoryBoundaryIsSingleTransaction(t *testing.T) {
 		"admin.audit_events",
 	)
 
-	// Step 3: repository が Product persistence adapter へ迂回せず、Admin package 内の port 実装として閉じていることを確認する。
-	assertAccountRepositoryNotContainsAny(t, source,
+	// Step 3: repository が旧 postgres/admin/accounts package へ迂回せず、単一 postgres package 内の port 実装として閉じていることを確認する。
+	assertAccountManagementRepositoryNotContainsAny(t, source,
+		"internal/adapter/postgres/admin",
 		"internal/adapter/postgres/product",
-		"NewGormAccountAuthRepository",
-		"NewGormAccountSettingRepository",
 	)
 }
 
-func TestPostgresRepositoriesUseCapabilityPaths(t *testing.T) {
+func TestPostgresRepositoriesUseFlatPaths(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: [ADMIN-CONSOLE-BE-S097] public account aggregate repository と audit repository が Admin surface package ではなく capability path に分かれていることを固定する。
-	accountSource := readAccountRepositorySource(t)
-	auditSource, err := os.ReadFile("../audit/repository.go")
+	// Step 1: [ADMIN-CONSOLE-BE-S097] public account aggregate repository と audit repository が単一 postgres package の flat path にあることを固定する。
+	accountSource := readAccountManagementRepositorySource(t)
+	auditSource, err := os.ReadFile("operator_audit_repository.go")
 	if err != nil {
 		t.Fatalf("read audit capability repository: %v", err)
 	}
 
 	// Step 2: account repository は accounts application port だけを実装し、audit repository owner は audit capability port だけを実装する。
-	assertAccountRepositoryContainsAll(t, accountSource, "accountsapplication.AccountRepository", "accountsapplication.AccountSearchRepository")
+	assertAccountManagementRepositoryContainsAll(t, accountSource, "accountsapplication.AccountRepository", "accountsapplication.AccountSearchRepository")
 	if !strings.Contains(string(auditSource), "auditapplication.Repository") {
 		t.Fatalf("[ADMIN-CONSOLE-BE-S097] audit repository must implement audit capability port")
 	}
-	assertAccountRepositoryNotContainsAny(t, accountSource, "internal/application/admin")
+	assertAccountManagementRepositoryNotContainsAny(t, accountSource, "internal/application/admin")
 	if strings.Contains(string(auditSource), "internal/application/admin") {
 		t.Fatalf("[ADMIN-CONSOLE-BE-S097] audit repository must not import Admin surface application package")
 	}
 }
 
-func TestAccountRepositoryDoesNotInlineAccountDomainRules(t *testing.T) {
+func TestAccountManagementRepositoryDoesNotInlineAccountDomainRules(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: repository が Account domain constructor の代替実装を持たず、構築済み domain.Account の snapshot だけを保存していることを確認する。
-	source := readAccountRepositorySource(t)
-	assertAccountRepositoryContainsAll(t, source,
+	source := readAccountManagementRepositorySource(t)
+	assertAccountManagementRepositoryContainsAll(t, source,
 		"record.Account.Email().String()",
 		"record.Account.Status().String()",
 		"record.Account.Setting().Locale().String()",
@@ -84,7 +83,7 @@ func TestAccountRepositoryDoesNotInlineAccountDomainRules(t *testing.T) {
 	)
 
 	// Step 2: email 正規化や lifecycle 初期値の決定に使う domain constructor / enum を repository が直接呼ばないことを確認する。
-	assertAccountRepositoryNotContainsAny(t, source,
+	assertAccountManagementRepositoryNotContainsAny(t, source,
 		"NewAccountEmail(",
 		"strings.ToLower(",
 		"AccountStatusActive",
@@ -99,8 +98,8 @@ func TestAccountSearchRepositoryUsesParameterizedQueries(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: repository source を静的に読み込み、search query が GORM parameter binding の形を保つことを検査する。
-	source := readAccountRepositorySource(t)
-	assertAccountRepositoryContainsAll(t, source,
+	source := readAccountManagementRepositorySource(t)
+	assertAccountManagementRepositoryContainsAll(t, source,
 		"SearchAccounts(ctx context.Context, query accountsapplication.AccountSearchQuery)",
 		"Where(\"email ILIKE ?\", accountEmailSearchPattern(query.Email))",
 		"Where(\"id < ?\", query.Cursor)",
@@ -108,18 +107,18 @@ func TestAccountSearchRepositoryUsesParameterizedQueries(t *testing.T) {
 	)
 
 	// Step 2: raw query API や SQL fragment の動的生成に戻っていないことを確認し、S084 の repository boundary を固定する。
-	assertAccountRepositoryNotContainsAny(t, source,
+	assertAccountManagementRepositoryNotContainsAny(t, source,
 		".Raw(",
 		".Exec(",
 		"fmt.Sprintf(",
 	)
 }
 
-func readAccountRepositorySource(t *testing.T) string {
+func readAccountManagementRepositorySource(t *testing.T) string {
 	t.Helper()
 
 	// Step 1: gosec G304 を避けるため、読み込み対象を package-local の固定 file 名に限定する。
-	content, err := os.ReadFile("account_repository.go")
+	content, err := os.ReadFile("account_management_repository.go")
 	if err != nil {
 		t.Fatalf("read admin account repository: %v", err)
 	}
@@ -128,7 +127,7 @@ func readAccountRepositorySource(t *testing.T) string {
 	return string(content)
 }
 
-func assertAccountRepositoryContainsAll(t *testing.T, content string, requiredValues ...string) {
+func assertAccountManagementRepositoryContainsAll(t *testing.T, content string, requiredValues ...string) {
 	t.Helper()
 
 	// Step 1: 必須断片を個別に確認し、欠落時に repository boundary のどの証跡が壊れたかを示す。
@@ -139,10 +138,10 @@ func assertAccountRepositoryContainsAll(t *testing.T, content string, requiredVa
 	}
 }
 
-func assertAccountRepositoryNotContainsAny(t *testing.T, content string, forbiddenValues ...string) {
+func assertAccountManagementRepositoryNotContainsAny(t *testing.T, content string, forbiddenValues ...string) {
 	t.Helper()
 
-	// Step 1: 禁止断片を個別に確認し、Product repository 迂回や domain rule 再実装を早期に検出する。
+	// Step 1: 禁止断片を個別に確認し、旧 package path 迂回や domain rule 再実装を早期に検出する。
 	for _, forbidden := range forbiddenValues {
 		if strings.Contains(content, forbidden) {
 			t.Fatalf("admin account repository must not contain %q", forbidden)

@@ -1,4 +1,4 @@
-package product
+package postgres
 
 import (
 	"context"
@@ -19,7 +19,8 @@ type gormAccountRecord struct {
 }
 
 func (gormAccountRecord) TableName() string {
-	return "accounts"
+	// public schema を明示し、search_path 依存を避ける。
+	return "public.accounts"
 }
 
 type gormPasskeyCredentialRecord struct {
@@ -39,26 +40,41 @@ type gormPasskeyCredentialRecord struct {
 }
 
 func (gormPasskeyCredentialRecord) TableName() string {
-	return "account_passkey_credentials"
+	// public schema を明示し、search_path 依存を避ける。
+	return "public.account_passkey_credentials"
 }
 
-// GormAccountAuthRepository は Account.Auth projection を PostgreSQL から復元する repository adapter である。
-type GormAccountAuthRepository struct {
+// AccountAuthRepository は Account.Auth projection を PostgreSQL から復元する repository adapter である。
+//
+// 役割:
+//   - public.accounts と public.account_passkey_credentials だけを扱い、Admin schema へ依存しない。
+//   - schema/table/role/grant 境界で security を守り、package path による Product/Admin 分離は行わない。
+type AccountAuthRepository struct {
 	db *gorm.DB
 }
 
-// NewGormAccountAuthRepository は GormAccountAuthRepository を構築する。
-func NewGormAccountAuthRepository(db *gorm.DB) *GormAccountAuthRepository {
-	return &GormAccountAuthRepository{db: db}
+// NewAccountAuthRepository は AccountAuthRepository を構築する。
+func NewAccountAuthRepository(db *gorm.DB) *AccountAuthRepository {
+	return &AccountAuthRepository{db: db}
 }
 
 // FindByIdentifier は identifier に対応する Account.Auth projection を返す。
-func (r *GormAccountAuthRepository) FindByIdentifier(ctx context.Context, identifier string) (domain.AccountAuth, error) {
-	return r.findByPasskey(ctx, "identifier = ?", strings.TrimSpace(identifier))
+func (r *AccountAuthRepository) FindByIdentifier(ctx context.Context, identifier string) (domain.AccountAuth, error) {
+	var passkey gormPasskeyCredentialRecord
+	if err := r.db.WithContext(ctx).Where("identifier = ?", strings.TrimSpace(identifier)).First(&passkey).Error; err != nil {
+		return emptyAccountAuth(), mapAccountAuthError(err)
+	}
+
+	var account gormAccountRecord
+	if err := r.db.WithContext(ctx).Where("id = ?", passkey.AccountID).First(&account).Error; err != nil {
+		return emptyAccountAuth(), mapAccountAuthError(err)
+	}
+
+	return normalizeDomainAccount(account, passkey)
 }
 
 // FindByID は accountID（ULID）でアカウントを検索し、最古の passkey credential を含む AccountAuth を返す。
-func (r *GormAccountAuthRepository) FindByID(ctx context.Context, accountID domain.AccountID) (domain.AccountAuth, error) {
+func (r *AccountAuthRepository) FindByID(ctx context.Context, accountID domain.AccountID) (domain.AccountAuth, error) {
 	var account gormAccountRecord
 	if err := r.db.WithContext(ctx).Where("id = ?", accountID.String()).First(&account).Error; err != nil {
 		return emptyAccountAuth(), mapAccountAuthError(err)
@@ -73,13 +89,23 @@ func (r *GormAccountAuthRepository) FindByID(ctx context.Context, accountID doma
 }
 
 // FindByCredential は credential handle に対応する Account.Auth projection を返す。
-func (r *GormAccountAuthRepository) FindByCredential(ctx context.Context, credential string) (domain.AccountAuth, error) {
-	return r.findByPasskey(ctx, "credential_handle = ?", strings.TrimSpace(credential))
+func (r *AccountAuthRepository) FindByCredential(ctx context.Context, credential string) (domain.AccountAuth, error) {
+	var passkey gormPasskeyCredentialRecord
+	if err := r.db.WithContext(ctx).Where("credential_handle = ?", strings.TrimSpace(credential)).First(&passkey).Error; err != nil {
+		return emptyAccountAuth(), mapAccountAuthError(err)
+	}
+
+	var account gormAccountRecord
+	if err := r.db.WithContext(ctx).Where("id = ?", passkey.AccountID).First(&account).Error; err != nil {
+		return emptyAccountAuth(), mapAccountAuthError(err)
+	}
+
+	return normalizeDomainAccount(account, passkey)
 }
 
 // FindByEmail は email でアカウントを検索し、最古の passkey credential（id ASC 先頭）を
 // 含む AccountAuth を返す。複数パスキーがある場合も先頭 1 件を返す挙動を維持する。
-func (r *GormAccountAuthRepository) FindByEmail(ctx context.Context, email string) (domain.AccountAuth, error) {
+func (r *AccountAuthRepository) FindByEmail(ctx context.Context, email string) (domain.AccountAuth, error) {
 	var account gormAccountRecord
 	if err := r.db.WithContext(ctx).Where("email = ?", strings.TrimSpace(email)).First(&account).Error; err != nil {
 		return emptyAccountAuth(), mapAccountAuthError(err)
@@ -95,7 +121,7 @@ func (r *GormAccountAuthRepository) FindByEmail(ctx context.Context, email strin
 
 // ListPasskeys は accountID に紐づく全 passkey credential を返す。
 // account が存在しない場合は domain.ErrAccountAuthNotFound を返す。
-func (r *GormAccountAuthRepository) ListPasskeys(ctx context.Context, accountID domain.AccountID) ([]domain.PasskeyCredential, error) {
+func (r *AccountAuthRepository) ListPasskeys(ctx context.Context, accountID domain.AccountID) ([]domain.PasskeyCredential, error) {
 	// account の存在確認
 	var account gormAccountRecord
 	if err := r.db.WithContext(ctx).Where("id = ?", accountID.String()).First(&account).Error; err != nil {
@@ -127,7 +153,7 @@ func (r *GormAccountAuthRepository) ListPasskeys(ctx context.Context, accountID 
 // これは既存認証フロー（FindByCredential, FindByEmail）との一貫性を保つ意図仕様であり、
 // session の passkeyCredentialId は「先頭 credential」を指す。
 // 新規追加 credential を passkeyCredentialId として返したい場合は呼び出し側で ListPasskeys を呼ぶこと。
-func (r *GormAccountAuthRepository) AddPasskey(ctx context.Context, accountID domain.AccountID, credentialID string, handle string, credData domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
+func (r *AccountAuthRepository) AddPasskey(ctx context.Context, accountID domain.AccountID, credentialID string, handle string, credData domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
 	var account gormAccountRecord
 	if err := r.db.WithContext(ctx).Where("id = ?", accountID.String()).First(&account).Error; err != nil {
 		return emptyAccountAuth(), mapAccountAuthError(err)
@@ -160,7 +186,7 @@ func (r *GormAccountAuthRepository) AddPasskey(ctx context.Context, accountID do
 }
 
 // DeletePasskeyByID は account_id と id の両方で絞り込んで削除し、他アカウントの誤削除を防ぐ。
-func (r *GormAccountAuthRepository) DeletePasskeyByID(ctx context.Context, accountID domain.AccountID, credentialID string) error {
+func (r *AccountAuthRepository) DeletePasskeyByID(ctx context.Context, accountID domain.AccountID, credentialID string) error {
 	result := r.db.WithContext(ctx).
 		Where("id = ? AND account_id = ?", credentialID, accountID.String()).
 		Delete(&gormPasskeyCredentialRecord{})
@@ -175,12 +201,12 @@ func (r *GormAccountAuthRepository) DeletePasskeyByID(ctx context.Context, accou
 
 // FindWebAuthnCredential は credentialHandle（base64url rawID）から WebAuthn stored credential を返す。
 // FinishLogin 時の署名検証に必要な public key 等を提供する。
-func (r *GormAccountAuthRepository) FindWebAuthnCredential(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
+func (r *AccountAuthRepository) FindWebAuthnCredential(ctx context.Context, handle string) (domain.WebAuthnStoredCredential, error) {
 	var rec gormPasskeyCredentialRecord
 	if err := r.db.WithContext(ctx).Where("credential_handle = ?", strings.TrimSpace(handle)).First(&rec).Error; err != nil {
 		return domain.ZeroWebAuthnStoredCredential(), mapAccountAuthError(err)
 	}
-	return domain.ReconstitueWebAuthnStoredCredential(
+	return domain.ReconstituteWebAuthnStoredCredential(
 		rec.CredentialHandle,
 		rec.PublicKey,
 		rec.SignCount,
@@ -193,7 +219,7 @@ func (r *GormAccountAuthRepository) FindWebAuthnCredential(ctx context.Context, 
 
 // UpdateWebAuthnCredentialState は FinishLogin 成功後に credential の SignCount と BackupState を更新する。
 // SignCount はリプレイ攻撃検出に使用するため、login 成功のたびに最新値へ更新する必要がある。
-func (r *GormAccountAuthRepository) UpdateWebAuthnCredentialState(ctx context.Context, handle string, newSignCount uint32, newBackupState bool) error {
+func (r *AccountAuthRepository) UpdateWebAuthnCredentialState(ctx context.Context, handle string, newSignCount uint32, newBackupState bool) error {
 	result := r.db.WithContext(ctx).Model(&gormPasskeyCredentialRecord{}).
 		Where("credential_handle = ?", strings.TrimSpace(handle)).
 		Updates(map[string]any{
@@ -204,20 +230,6 @@ func (r *GormAccountAuthRepository) UpdateWebAuthnCredentialState(ctx context.Co
 		return domain.ErrAuthStoreUnavailable
 	}
 	return nil
-}
-
-func (r *GormAccountAuthRepository) findByPasskey(ctx context.Context, query string, value string) (domain.AccountAuth, error) {
-	var passkey gormPasskeyCredentialRecord
-	if err := r.db.WithContext(ctx).Where(query, value).First(&passkey).Error; err != nil {
-		return emptyAccountAuth(), mapAccountAuthError(err)
-	}
-
-	var account gormAccountRecord
-	if err := r.db.WithContext(ctx).Where("id = ?", passkey.AccountID).First(&account).Error; err != nil {
-		return emptyAccountAuth(), mapAccountAuthError(err)
-	}
-
-	return normalizeDomainAccount(account, passkey)
 }
 
 func toDomainAccountAuth(account gormAccountRecord, passkey gormPasskeyCredentialRecord) (domain.AccountAuth, error) {

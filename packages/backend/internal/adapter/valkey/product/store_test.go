@@ -1,4 +1,4 @@
-package valkey
+package product
 
 import (
 	"context"
@@ -39,8 +39,8 @@ func TestValkeyStoreGetDelReturnsValueAndDeletesKey(t *testing.T) {
 
 	// キーが削除されていることを確認
 	_, err = store.Get(ctx, key)
-	if !errors.Is(err, errRESPNil) {
-		t.Fatalf("expected errRESPNil after GetDel, got %v", err)
+	if !errors.Is(err, errKeyNotFound) {
+		t.Fatalf("expected errKeyNotFound after GetDel, got %v", err)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestValkeyStoreGetDelReturnsNilForMissingKey(t *testing.T) {
 	key := store.Key("test", "getdel", "missing")
 
 	_, err = store.GetDel(ctx, key)
-	if !errors.Is(err, errRESPNil) {
-		t.Fatalf("expected errRESPNil for missing key, got %v", err)
+	if !errors.Is(err, errKeyNotFound) {
+		t.Fatalf("expected errKeyNotFound for missing key, got %v", err)
 	}
 }

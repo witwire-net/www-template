@@ -409,7 +409,7 @@ func TestCreateAdminAccountMapsTransportDTOToApplicationDTO(t *testing.T) {
 	assertAdminSecurityHeaders(t, response)
 }
 
-func TestNewRouterWithDependenciesInjectsOperatorSessionValidatorForAccountCreation(t *testing.T) {
+func TestNewRouterInjectsOperatorSessionValidatorForAccountCreation(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: exported Dependencies DTO だけで validator と account creation use case を注入し、production runtime と同じ public composition 経路を検査する。
@@ -417,7 +417,7 @@ func TestNewRouterWithDependenciesInjectsOperatorSessionValidatorForAccountCreat
 	creator := &stubAdminAccountCreator{created: validCreatedAdminAccount()}
 	cfg := config.Config{}
 	cfg.Admin.Domain = "https://admin.example.com"
-	router := NewRouterWithDependencies(cfg, Dependencies{OperatorSessions: validator, AccountCreation: creator})
+	router := NewRouter(cfg, Dependencies{OperatorSessions: validator, AccountCreation: creator})
 	request := newAdminJSONRequest(stdhttp.MethodPost, "/api/v1/accounts", `{"email":"customer@example.com"}`)
 	request.Header.Set(adminOriginHeader, "https://admin.example.com")
 	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
@@ -1250,12 +1250,12 @@ func newAdminAuthServiceForBoundaryTest(t *testing.T, signer adminauth.JSONSignV
 	// Step 1: Product bearer の payload 検証だけを観測するため、repository / store / secret / ID port は deterministic な最小実装で埋める。
 	service, err := adminauth.NewOperatorSessionService(
 		adminauth.OperatorSessionDependencies{
-			Operators: adminBoundaryOperatorRepository{},
-			Sessions:  adminBoundaryOperatorSessionStore{},
-			Signer:    signer,
-			Secrets:   adminBoundarySecretGenerator{},
-			IDs:       adminBoundaryIDGenerator{},
-			Clock:     func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+			Operators:       adminBoundaryOperatorRepository{},
+			RefreshSessions: adminBoundaryOperatorSessionStore{},
+			Signer:          signer,
+			TokenGenerator:  adminBoundarySecretGenerator{},
+			IDGenerator:     adminBoundaryIDGenerator{},
+			Clock:           func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 		},
 		adminauth.OperatorSessionConfig{OperatorAccessTokenTTL: 15 * time.Minute, OperatorRefreshSessionTTL: time.Hour, OperatorRefreshCookieLifetime: 30 * time.Minute, WebAuthnRPID: "admin.example.com"},
 	)

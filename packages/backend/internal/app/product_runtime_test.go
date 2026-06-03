@@ -11,10 +11,10 @@ import (
 	"www-template/packages/backend/internal/platform/config"
 )
 
-func TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment(t *testing.T) {
+func TestNewProductRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewRuntimeWithConfig(context.Background(), config.Config{
+	_, err := NewProductRuntimeWithConfig(context.Background(), config.Config{
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		Environment:    "production",
 		Port:           "8080",
@@ -24,10 +24,10 @@ func TestNewRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment(t *testin
 	}
 }
 
-func TestNewRuntimeWithConfigFailsClosedWhenRequiredInfrastructureIsMissing(t *testing.T) {
+func TestNewProductRuntimeWithConfigFailsClosedWhenRequiredInfrastructureIsMissing(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewRuntimeWithConfig(context.Background(), config.Config{
+	_, err := NewProductRuntimeWithConfig(context.Background(), config.Config{
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Environment:    "development",
@@ -99,24 +99,24 @@ func fullyConfiguredDevelopmentConfig() config.Config {
 }
 
 // [UT-AUTH-BE-S040] Short TTL blocks startup
-func TestNewRuntimeWithConfigRejectsShortRefreshTokenTTL(t *testing.T) {
+func TestNewProductRuntimeWithConfigRejectsShortRefreshTokenTTL(t *testing.T) {
 	t.Parallel()
 
 	cfg := fullyConfiguredDevelopmentConfig()
 	cfg.Auth.RefreshTokenTTL = 23 * time.Hour
-	_, err := NewRuntimeWithConfig(context.Background(), cfg)
+	_, err := NewProductRuntimeWithConfig(context.Background(), cfg)
 	if err == nil {
 		t.Fatal("expected error for short refresh token TTL")
 	}
 }
 
 // [UT-AUTH-BE-S040] Negative TTL blocks startup
-func TestNewRuntimeWithConfigRejectsNegativeRefreshTokenTTL(t *testing.T) {
+func TestNewProductRuntimeWithConfigRejectsNegativeRefreshTokenTTL(t *testing.T) {
 	t.Parallel()
 
 	cfg := fullyConfiguredDevelopmentConfig()
 	cfg.Auth.RefreshTokenTTL = -1 * time.Hour
-	_, err := NewRuntimeWithConfig(context.Background(), cfg)
+	_, err := NewProductRuntimeWithConfig(context.Background(), cfg)
 	if err == nil {
 		t.Fatal("expected error for negative refresh token TTL")
 	}
@@ -128,7 +128,7 @@ func TestAdminHTTPAdapterDoesNotRegisterProductOperations(t *testing.T) {
 	t.Parallel()
 
 	// Step 1: Admin runtime が使う Admin HTTP adapter を直接作成し、Product runtime の Gin router や Product generated handlers を経由しないことを確認対象にする。
-	mux := adminhttp.NewRouter(fullyConfiguredDevelopmentConfig())
+	mux := adminhttp.NewRouter(fullyConfiguredDevelopmentConfig(), adminhttp.Dependencies{})
 	productRoutes := []struct {
 		method string
 		path   string

@@ -94,3 +94,54 @@ func (s *Store) key(parts ...string) string {
 	// Step 2: Valkey key として扱いやすい colon 区切りへ変換する。
 	return strings.Join(segments, ":")
 }
+
+// Key は Product namespace を付与した Valkey key を生成する。
+// parts は key の機能別 segment のリストであり、Product namespace（`product:`）と環境 prefix が先頭に付与される。
+// ルート valkey package から移行し、公開 API として提供することで webauthn.ChallengeStore 等の interface 実装を可能にする。
+func (s *Store) Key(parts ...string) string {
+	return s.key(parts...)
+}
+
+// Set は指定した key に対して value を ttl 付きで保存する。
+// ルート valkey package の ValkeyStore.Set 相当の機能を Product package でも提供する。
+func (s *Store) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+	return s.client.Set(ctx, key, value, ttl).Err()
+}
+
+// Get は指定した key の値を取得する。キーが存在しない場合は redis.Nil を返す。
+func (s *Store) Get(ctx context.Context, key string) (string, error) {
+	return s.client.Get(ctx, key).Result()
+}
+
+// GetDel は指定したキーに対して GETDEL コマンドを発行し、値を取得すると同時にアトミックに削除する。
+// キーが存在しない場合は redis.Nil に対応する errKeyNotFound を返す。
+func (s *Store) GetDel(ctx context.Context, key string) (string, error) {
+	val, err := s.client.GetDel(ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", errKeyNotFound
+		}
+		return "", err
+	}
+	return val, nil
+}
+
+// Delete は指定した key を削除する。
+func (s *Store) Delete(ctx context.Context, key string) error {
+	return s.client.Del(ctx, key).Err()
+}
+
+// Increment は指定した key のカウンター値をインクリメントし、新しい値を返す。
+func (s *Store) Increment(ctx context.Context, key string) (int64, error) {
+	return s.client.Incr(ctx, key).Result()
+}
+
+// Expire は指定した key に ttl を設定する。
+func (s *Store) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	return s.client.PExpire(ctx, key, ttl).Err()
+}
+
+// Eval は指定された Lua スクリプトを Valkey サーバー上でアトミックに実行する。
+func (s *Store) Eval(ctx context.Context, script string, keys []string, args ...interface{}) *redis.Cmd {
+	return s.client.Eval(ctx, script, keys, args...)
+}

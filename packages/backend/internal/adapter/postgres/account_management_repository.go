@@ -11,19 +11,20 @@ import (
 	accountsapplication "www-template/packages/backend/internal/application/accounts"
 )
 
-var _ accountsapplication.AccountRepository = (*AccountRepository)(nil)
-var _ accountsapplication.AccountSearchRepository = (*AccountRepository)(nil)
+var _ accountsapplication.AccountRepository = (*AccountManagementRepository)(nil)
+var _ accountsapplication.AccountSearchRepository = (*AccountManagementRepository)(nil)
 
-// AccountRepository は Admin account creation と account search 用に Product Account root を扱う PostgreSQL adapter である。
+// AccountManagementRepository は Admin account creation と account search 用に Product Account root を扱う PostgreSQL adapter である。
 //
 // 役割:
 //   - public.accounts / public.account_settings と Admin-owned schema の admin.audit_events だけを扱う。
 //   - accountsapplication.AccountRepository と AccountSearchRepository port を実装し、application 層へ GORM record や DB error を公開しない。
 //   - Account root の email 正規化、status 初期値、locale 初期値は domain.Account から受け取り、repository 内で業務 rule を再実装しない。
 //   - account search では application 検証済み query だけを受け取り、GORM parameter binding で unsafe SQL construction を避ける。
+//   - schema/table/role/grant 境界で security を守り、package path による Product/Admin 分離は行わない。
 //
 // 引数:
-//   - NewAccountRepository の db: Admin runtime role として public.accounts と admin.audit_events を更新できる GORM handle。
+//   - NewAccountManagementRepository の db: Admin runtime role として public.accounts と admin.audit_events を更新できる GORM handle。
 //   - CreateAccountWithAuditTarget の record: 作成済み Account root と pending audit event ID を含む application DTO。
 //
 // 戻り値:
@@ -32,11 +33,11 @@ var _ accountsapplication.AccountSearchRepository = (*AccountRepository)(nil)
 //
 // 使用例:
 //
-//	repo := admin.NewAccountRepository(db)
+//	repo := postgres.NewAccountManagementRepository(db)
 //	created, err := repo.CreateAccountWithAuditTarget(ctx, record)
 //	_ = created
 //	_ = err
-type AccountRepository struct {
+type AccountManagementRepository struct {
 	db *gorm.DB
 }
 
@@ -92,13 +93,13 @@ func (auditTargetRecord) TableName() string {
 	return "admin.audit_events"
 }
 
-// NewAccountRepository は Admin account repository を構築する。
+// NewAccountManagementRepository は Admin account repository を構築する。
 //
 // db は runtime composition で接続・ping・role validation 済みの GORM handle を渡す。
 // nil handle の検出は CreateAccountWithAuditTarget でも fail-closed に行い、構築だけでは外部 I/O を発生させない。
-func NewAccountRepository(db *gorm.DB) *AccountRepository {
+func NewAccountManagementRepository(db *gorm.DB) *AccountManagementRepository {
 	// Step 1: DB handle を保持し、接続検証や migration 適用は runtime / deployment 境界に分離する。
-	return &AccountRepository{db: db}
+	return &AccountManagementRepository{db: db}
 }
 
 // CreateAccountWithAuditTarget は Product Account root 作成と Admin audit target / success outcome 関連付けを 1 transaction で実行する。
@@ -106,8 +107,8 @@ func NewAccountRepository(db *gorm.DB) *AccountRepository {
 // ctx は transaction 全体に deadline/cancellation を伝播する。
 // record.Account は application が domain constructor を通して構築した Account root であり、repository はその snapshot を保存するだけである。
 // record.AuditID は mutation 前に作成済みの pending audit event ID で、存在しない場合は account 作成全体を rollback する。
-// record.AuditCompletion は AuditService が domain.AdminAuditEvent で作った success outcome で、account 作成 commit と同じ transaction で保存する。
-func (r *AccountRepository) CreateAccountWithAuditTarget(ctx context.Context, record accountsapplication.AccountCreationRecord) (accountsapplication.AccountRecord, error) {
+// record.AuditCompletion は AuditService が domain.OperatorAuditEvent で作った success outcome で、account 作成 commit と同じ transaction で保存する。
+func (r *AccountManagementRepository) CreateAccountWithAuditTarget(ctx context.Context, record accountsapplication.AccountCreationRecord) (accountsapplication.AccountRecord, error) {
 	// Step 1: repository または DB handle が欠けている場合、transaction を開始せず application error に畳む。
 	if r == nil || r.db == nil {
 		return accountsapplication.AccountRecord{}, accountsapplication.ErrAccountRepositoryUnavailable
@@ -143,7 +144,7 @@ func (r *AccountRepository) CreateAccountWithAuditTarget(ctx context.Context, re
 // ctx は query 全体に deadline/cancellation を伝播する。
 // query は application use case が検証済みの email/cursor/limit だけを含み、repository では範囲外 limit の補正を行わない。
 // 成功時は Product Account 要約 read model と次ページ cursor を返し、DB failure は ErrAccountRepositoryUnavailable に畳む。
-func (r *AccountRepository) SearchAccounts(ctx context.Context, query accountsapplication.AccountSearchQuery) (accountsapplication.AccountSearchRepositoryResult, error) {
+func (r *AccountManagementRepository) SearchAccounts(ctx context.Context, query accountsapplication.AccountSearchQuery) (accountsapplication.AccountSearchRepositoryResult, error) {
 	// Step 1: repository または DB handle が欠けている場合、検索 query を開始せず application error に畳む。
 	if r == nil || r.db == nil {
 		return accountsapplication.AccountSearchRepositoryResult{}, accountsapplication.ErrAccountRepositoryUnavailable
@@ -177,7 +178,7 @@ func (r *AccountRepository) SearchAccounts(ctx context.Context, query accountsap
 // ctx は query 全体に deadline/cancellation を伝播する。
 // accountID は generated route binding から渡された Product Account ID で、repository では SQL parameter としてだけ扱う。
 // 成功時は admin_view.account_summaries の snapshot を返し、対象不在は ErrAccountSearchNotFound に畳む。
-func (r *AccountRepository) FindAccountByID(ctx context.Context, accountID string) (accountsapplication.AccountSummaryRecord, error) {
+func (r *AccountManagementRepository) FindAccountByID(ctx context.Context, accountID string) (accountsapplication.AccountSummaryRecord, error) {
 	// Step 1: repository または DB handle が欠けている場合、detail query を開始せず application error に畳む。
 	if r == nil || r.db == nil {
 		return accountsapplication.AccountSummaryRecord{}, accountsapplication.ErrAccountRepositoryUnavailable

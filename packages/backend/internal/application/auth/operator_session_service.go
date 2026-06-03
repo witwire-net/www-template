@@ -10,10 +10,10 @@ import (
 	domain "www-template/packages/backend/internal/domain"
 )
 
-// OperatorSessionService は Admin operator auth の application boundary である。
+// OperatorSessionService は Operator auth の application boundary である。
 //
 // 役割:
-//   - Admin operator session 発行、refresh rotation、current operator、mutation authorization、logout を提供する。
+//   - Operator session 発行、refresh rotation、current operator、mutation authorization、logout を提供する。
 //   - Product auth application や Product-specific domain object を import せず、OperatorAuth domain object だけを使う。
 //   - refreshToken 平文を response body DTO に置かず、HttpOnly Cookie command 専用値として adapter へ渡す。
 type OperatorSessionService struct {
@@ -26,25 +26,25 @@ type OperatorSessionService struct {
 	config    OperatorSessionConfig
 }
 
-// OperatorSessionDependencies は Admin OperatorSessionService の必須 port をまとめた DTO である。
+// OperatorSessionDependencies は OperatorSessionService の必須 port をまとめた DTO である。
 //
 // 役割:
 //   - AccountSessionDependencies と同じ constructor-time validation 形式にそろえ、欠落依存を fail-close に拒否する。
 //   - repository、store、signer、secret generator、ID generator、clock の具象型を application public API へ持ち込まない。
 type OperatorSessionDependencies struct {
-	Operators OperatorRepository
-	Sessions  OperatorRefreshSessionStore
-	Signer    JSONSignVerifier
-	Secrets   OpaqueTokenGenerator
-	IDs       IDGenerator
-	Clock     func() time.Time
+	Operators       OperatorRepository
+	RefreshSessions OperatorRefreshSessionStore
+	Signer          JSONSignVerifier
+	TokenGenerator  OpaqueTokenGenerator
+	IDGenerator     IDGenerator
+	Clock           func() time.Time
 }
 
-// NewOperatorSessionService は Admin operator auth OperatorSessionService を生成する。
+// NewOperatorSessionService は Operator auth OperatorSessionService を生成する。
 //
 // 引数:
-//   - deps: Admin Operator snapshot repository、refresh session store、signer、secret generator、ID generator、clock。
-//   - config: Admin auth の TTL と Cookie lifetime 設定。
+//   - deps: Operator snapshot repository、refresh session store、signer、secret generator、ID generator、clock。
+//   - config: Operator auth の TTL と Cookie lifetime 設定。
 //
 // 戻り値:
 //   - *OperatorSessionService: 検証済み依存を保持する use case service。
@@ -70,10 +70,10 @@ func NewOperatorSessionService(deps OperatorSessionDependencies, config Operator
 	// Step 3: 検証済み依存だけを Service に保持し、以後の use case が同じ境界を共有する。
 	return &OperatorSessionService{
 		operators: deps.Operators,
-		sessions:  deps.Sessions,
+		sessions:  deps.RefreshSessions,
 		signer:    deps.Signer,
-		secrets:   deps.Secrets,
-		ids:       deps.IDs,
+		secrets:   deps.TokenGenerator,
+		ids:       deps.IDGenerator,
 		clock:     deps.Clock,
 		config:    config,
 	}, nil
@@ -81,7 +81,7 @@ func NewOperatorSessionService(deps OperatorSessionDependencies, config Operator
 
 func validateOperatorSessionDependencies(deps OperatorSessionDependencies) error {
 	// Step 1: session lifecycle が使う必須依存をまとめて検証し、部分的な service 構築を防ぐ。
-	if deps.Operators == nil || deps.Sessions == nil || deps.Signer == nil || deps.Secrets == nil || deps.IDs == nil || deps.Clock == nil {
+	if deps.Operators == nil || deps.RefreshSessions == nil || deps.Signer == nil || deps.TokenGenerator == nil || deps.IDGenerator == nil || deps.Clock == nil {
 		return ErrOperatorAuthUnavailable
 	}
 
@@ -89,7 +89,7 @@ func validateOperatorSessionDependencies(deps OperatorSessionDependencies) error
 	return nil
 }
 
-// RefreshOperatorSession は Admin refresh credential を rotation し、新しい accessToken と refresh credential command を返す。
+// RefreshOperatorSession は refresh credential を rotation し、新しい accessToken と refresh credential command を返す。
 //
 // 古い refreshToken は OperatorRefreshSessionStore.Rotate で hash 一致を確認しながら置換される。
 func (s *OperatorSessionService) RefreshOperatorSession(ctx context.Context, input RefreshOperatorSessionInput) (OperatorSessionResult, error) {
@@ -99,10 +99,10 @@ func (s *OperatorSessionService) RefreshOperatorSession(ctx context.Context, inp
 		return OperatorSessionResult{}, err
 	}
 
-	// Step 2: 保存済み Admin session state を復元し、Product refresh state を参照しない。
+	// Step 2: 保存済み session state を復元し、refresh state を参照しない。
 	record, err := s.sessions.Get(ctx, sessionID.String())
 	if err != nil {
-		return OperatorSessionResult{}, mapAdminStoreError(err)
+		return OperatorSessionResult{}, mapOperatorStoreError(err)
 	}
 	operator, session, err := s.operatorAndSession(ctx, record)
 	if err != nil {
@@ -114,9 +114,9 @@ func (s *OperatorSessionService) RefreshOperatorSession(ctx context.Context, inp
 		return OperatorSessionResult{}, ErrOperatorAuthUnauthenticated
 	}
 
-	// Step 4: Admin OperatorAuth domain object で refreshToken が session と一致することを検証する。
+	// Step 4: OperatorAuth domain object で refreshToken が session と一致することを検証する。
 	if err := session.ValidateRefreshToken(input.RefreshTokenValue, s.clock()); err != nil {
-		return OperatorSessionResult{}, mapAdminDomainAuthError(err)
+		return OperatorSessionResult{}, mapOperatorDomainAuthError(err)
 	}
 
 	// Step 5: 新しい session state を発行し、store の atomic rotation port へ渡す。
@@ -125,24 +125,24 @@ func (s *OperatorSessionService) RefreshOperatorSession(ctx context.Context, inp
 		return OperatorSessionResult{}, err
 	}
 	if err := s.sessions.Rotate(ctx, session.ID().String(), session.RefreshTokenHash().String(), issued.record, s.config.OperatorRefreshSessionTTL); err != nil {
-		return OperatorSessionResult{}, mapAdminStoreError(err)
+		return OperatorSessionResult{}, mapOperatorStoreError(err)
 	}
 
 	// Step 6: 新しい accessToken と refresh credential command を返し、transport mode ごとの露出判断は HTTP adapter に閉じる。
 	return s.sessionResult(operator, issued), nil
 }
 
-// CurrentOperator は Admin accessToken から現在の Operator DTO を返す。
+// CurrentOperator は accessToken から現在の Operator DTO を返す。
 //
 // current operator は mutation ではないため CSRF は要求せず、session と operator snapshot の一致だけを検証する。
 func (s *OperatorSessionService) CurrentOperator(ctx context.Context, input CurrentOperatorInput) (OperatorDTO, error) {
-	// Step 1: 署名済み accessToken を検証し、Admin operator claim payload として復元する。
+	// Step 1: 署名済み accessToken を検証し、operator claim payload として復元する。
 	payload, err := s.verifyAccessPayload(input.AccessToken)
 	if err != nil {
 		return OperatorDTO{}, err
 	}
 
-	// Step 2: payload の session ID から Admin session state と現在 Operator を取得する。
+	// Step 2: payload の session ID から Operator session state と現在 Operator を取得する。
 	operator, session, err := s.operatorAndSessionByID(ctx, payload.SessionID)
 	if err != nil {
 		return OperatorDTO{}, err
@@ -153,11 +153,11 @@ func (s *OperatorSessionService) CurrentOperator(ctx context.Context, input Curr
 		return OperatorDTO{}, err
 	}
 
-	// Step 4: adapter/frontend 向けの Admin Operator DTO と、middleware context binding に必要な session ID を返す。
+	// Step 4: adapter/frontend 向けの Operator DTO と、middleware context binding に必要な session ID を返す。
 	return mapOperatorDTOWithSession(operator, payload.SessionID), nil
 }
 
-// AuthorizeOperatorSession は Admin mutation route の bearer/session/snapshot 検証後に permission を判定する。
+// AuthorizeOperatorSession は mutation route の bearer/session/snapshot 検証後に permission を判定する。
 //
 // 役割:
 //   - HTTP adapter が RBAC role matrix を再実装せず、OperatorAuth domain の ValidateAccess へ判定を委譲できるようにする。
@@ -169,7 +169,7 @@ func (s *OperatorSessionService) AuthorizeOperatorSession(ctx context.Context, i
 		return OperatorAuthorizationDecision{}, ErrOperatorAuthForbidden
 	}
 
-	// Step 2: 署名済み accessToken を検証し、Admin operator claim payload として復元する。
+	// Step 2: 署名済み accessToken を検証し、operator claim payload として復元する。
 	payload, err := s.verifyAccessPayload(input.AccessToken)
 	if err != nil {
 		return OperatorAuthorizationDecision{}, err
@@ -196,7 +196,7 @@ func (s *OperatorSessionService) AuthorizeOperatorSession(ctx context.Context, i
 	}, nil
 }
 
-// LogoutOperator は Admin accessToken が示す Operator session を revoke する。
+// LogoutOperator は accessToken が示す Operator session を revoke する。
 //
 // refreshToken 平文は不要であり、返却する Cookie command は adapter が refresh Cookie を削除するためだけに使う。
 func (s *OperatorSessionService) LogoutOperator(ctx context.Context, input LogoutOperatorInput) (OperatorRefreshCookieCommand, error) {
@@ -206,7 +206,7 @@ func (s *OperatorSessionService) LogoutOperator(ctx context.Context, input Logou
 		return OperatorRefreshCookieCommand{}, err
 	}
 
-	// Step 2: session state から現在 Operator と Admin refresh session を復元し、logout 対象の所有者を確認する。
+	// Step 2: session state から現在 Operator と refresh session を復元し、logout 対象の所有者を確認する。
 	operator, session, err := s.operatorAndSessionByID(ctx, payload.SessionID)
 	if err != nil {
 		return OperatorRefreshCookieCommand{}, err
@@ -219,14 +219,14 @@ func (s *OperatorSessionService) LogoutOperator(ctx context.Context, input Logou
 
 	// Step 4: store port へ revoke を委譲し、access/refresh eligibility を同じ session ID で失効させる。
 	if err := s.sessions.Revoke(ctx, operator.ID().String(), payload.SessionID); err != nil {
-		return OperatorRefreshCookieCommand{}, mapAdminStoreError(err)
+		return OperatorRefreshCookieCommand{}, mapOperatorStoreError(err)
 	}
 
 	// Step 5: adapter が対象 auth context の HttpOnly Cookie だけを削除するための command を返す。
 	return clearRefreshCookieCommand(payload.SessionID), nil
 }
 
-// IssueOperatorSession は確定済み Operator に Admin session を発行する。
+// IssueOperatorSession は確定済み Operator に session を発行する。
 //
 // 引数:
 //   - ctx: session store への保存に使う cancellation context。
@@ -236,7 +236,7 @@ func (s *OperatorSessionService) LogoutOperator(ctx context.Context, input Logou
 //   - OperatorSessionResult: accessToken と HttpOnly refresh Cookie command を分離した session DTO。
 //   - error: Operator が存在しない、inactive、未登録状態、または session 保存に失敗した場合の stable application error。
 func (s *OperatorSessionService) IssueOperatorSession(ctx context.Context, input IssueOperatorSessionInput) (OperatorSessionResult, error) {
-	// Step 1: 認証済み Operator snapshot を repository から復元し、Product account auth state を参照しない。
+	// Step 1: 認証済み Operator snapshot を repository から復元し、account auth state を参照しない。
 	operator, err := s.findOperatorByID(ctx, input.OperatorID)
 	if err != nil {
 		return OperatorSessionResult{}, err
@@ -277,28 +277,28 @@ func (s *OperatorSessionService) issueSession(ctx context.Context, operator doma
 		return issuedOperatorSession{}, ErrOperatorAuthUnavailable
 	}
 
-	// Step 2: Admin OperatorAuth domain object で refresh session state を構築する。
+	// Step 2: OperatorAuth domain object で refresh session state を構築する。
 	session, err := domain.NewOperatorAuthSession(operator, sessionID, refreshToken, ttl, issuedAt)
 	if err != nil {
-		return issuedOperatorSession{}, mapAdminDomainAuthError(err)
+		return issuedOperatorSession{}, mapOperatorDomainAuthError(err)
 	}
 
-	// Step 3: accessToken claims も Admin OperatorAuth domain object で構築する。
+	// Step 3: accessToken claims も OperatorAuth domain object で構築する。
 	accessTTL, err := domain.NewTokenTTL(s.config.OperatorAccessTokenTTL)
 	if err != nil {
 		return issuedOperatorSession{}, ErrOperatorAuthUnavailable
 	}
 	claims, err := domain.NewOperatorAccessTokenClaims(operator, session, tokenID, accessTTL, issuedAt)
 	if err != nil {
-		return issuedOperatorSession{}, mapAdminDomainAuthError(err)
+		return issuedOperatorSession{}, mapOperatorDomainAuthError(err)
 	}
-	// Step 3-a: canonical lifecycle へ渡す Admin subject payload を明示的に作り、Product account subject と discriminator で切り替えない。
+	// Step 3-a: canonical lifecycle へ渡す subject payload を明示的に作り、account subject と discriminator で切り替えない。
 	subject, err := NewOperatorSubjectPayload(operator.ID().String(), session.ID().String())
 	if err != nil {
-		return issuedOperatorSession{}, mapAdminDomainAuthError(err)
+		return issuedOperatorSession{}, mapOperatorDomainAuthError(err)
 	}
 
-	// Step 4: claim DTO を中立 signer で署名し、payload 意味はこの Admin use case に閉じる。
+	// Step 4: claim DTO を中立 signer で署名し、payload 意味はこの use case に閉じる。
 	accessToken, err := s.signClaims(claims)
 	if err != nil {
 		return issuedOperatorSession{}, err
@@ -338,7 +338,7 @@ func (s *OperatorSessionService) nextSessionSecrets() (domain.OperatorSessionID,
 		return "", "", "", err
 	}
 
-	// Step 3: 生成済みの Admin session secrets を返す。
+	// Step 3: 生成済みの session secrets を返す。
 	return sessionID, tokenID, refreshToken, nil
 }
 
@@ -354,7 +354,7 @@ func (s *OperatorSessionService) refreshCookieValue(sessionID domain.OperatorSes
 }
 
 func (s *OperatorSessionService) signClaims(claims domain.OperatorAccessTokenClaims) (string, error) {
-	// Step 1: Admin claim payload へ変換し、Product account claim を混入させない。
+	// Step 1: claim payload へ変換し、account claim を混入させない。
 	payload := operatorAccessPayload{
 		OperatorID: claims.OperatorID().String(),
 		SessionID:  claims.SessionID().String(),
@@ -391,7 +391,7 @@ func (s *OperatorSessionService) verifyAccessPayload(accessToken string) (operat
 		return operatorAccessPayload{}, ErrOperatorAuthUnauthenticated
 	}
 
-	// Step 3: Admin operator claim DTO として decode し、必須値は domain constructor 側で検証する。
+	// Step 3: operator claim DTO として decode し、必須値は domain constructor 側で検証する。
 	var payload operatorAccessPayload
 	if err := json.Unmarshal(verifiedPayload, &payload); err != nil {
 		return operatorAccessPayload{}, ErrOperatorAuthUnauthenticated
@@ -400,7 +400,7 @@ func (s *OperatorSessionService) verifyAccessPayload(accessToken string) (operat
 		return operatorAccessPayload{}, ErrOperatorAuthUnauthenticated
 	}
 
-	// Step 4: 有効な Admin access payload として返す。
+	// Step 4: 有効な access payload として返す。
 	return payload, nil
 }
 
@@ -408,24 +408,24 @@ func (s *OperatorSessionService) findOperatorByID(ctx context.Context, operatorI
 	// Step 1: OperatorID を domain value object として検証し、未検証 selector を repository へ渡さない。
 	validatedID, err := domain.NewOperatorID(operatorID)
 	if err != nil {
-		return zeroAdminOperator(), ErrOperatorAuthUnauthenticated
+		return zeroOperator(), ErrOperatorAuthUnauthenticated
 	}
 
-	// Step 2: repository port から Admin Operator snapshot を取得し、Product account repository へは委譲しない。
+	// Step 2: repository port から Operator snapshot を取得し、account repository へは委譲しない。
 	snapshot, err := s.operators.FindOperatorByID(ctx, validatedID.String())
 	if err != nil {
-		return zeroAdminOperator(), mapAdminStoreError(err)
+		return zeroOperator(), mapOperatorStoreError(err)
 	}
 
-	// Step 3: snapshot を Admin Operator domain object へ復元し、不正 role/state を拒否する。
+	// Step 3: snapshot を Operator domain object へ復元し、不正 role/state を拒否する。
 	return operatorFromSnapshot(snapshot)
 }
 
 func (s *OperatorSessionService) operatorAndSessionByID(ctx context.Context, sessionID string) (domain.Operator, domain.OperatorAuthSession, error) {
-	// Step 1: session ID で保存済み Admin refresh session state を取得する。
+	// Step 1: session ID で保存済み refresh session state を取得する。
 	record, err := s.sessions.Get(ctx, sessionID)
 	if err != nil {
-		return zeroAdminOperator(), zeroAdminOperatorSession(), mapAdminStoreError(err)
+		return zeroOperator(), zeroOperatorSession(), mapOperatorStoreError(err)
 	}
 
 	// Step 2: record から Operator と session domain object を復元する。
@@ -436,17 +436,17 @@ func (s *OperatorSessionService) operatorAndSession(ctx context.Context, record 
 	// Step 1: session record の owner OperatorID から現在 snapshot を取得する。
 	operatorSnapshot, err := s.operators.FindOperatorByID(ctx, record.OperatorID)
 	if err != nil {
-		return zeroAdminOperator(), zeroAdminOperatorSession(), mapAdminStoreError(err)
+		return zeroOperator(), zeroOperatorSession(), mapOperatorStoreError(err)
 	}
 	operator, err := operatorFromSnapshot(operatorSnapshot)
 	if err != nil {
-		return zeroAdminOperator(), zeroAdminOperatorSession(), err
+		return zeroOperator(), zeroOperatorSession(), err
 	}
 
-	// Step 2: session record を Admin OperatorAuth domain object へ復元する。
+	// Step 2: session record を OperatorAuth domain object へ復元する。
 	session, err := sessionFromRecord(record)
 	if err != nil {
-		return zeroAdminOperator(), zeroAdminOperatorSession(), mapAdminDomainAuthError(err)
+		return zeroOperator(), zeroOperatorSession(), mapOperatorDomainAuthError(err)
 	}
 
 	// Step 3: 復元した Operator と session を返す。
@@ -469,14 +469,14 @@ func (s *OperatorSessionService) sessionResult(operator domain.Operator, issued 
 }
 
 func operatorFromSnapshot(snapshot OperatorSnapshot) (domain.Operator, error) {
-	// Step 1: application DTO の primitive 値を Admin Operator domain value object へ変換する。
+	// Step 1: application DTO の primitive 値を Operator domain value object へ変換する。
 	operatorID, err := domain.NewOperatorID(snapshot.ID)
 	if err != nil {
-		return zeroAdminOperator(), ErrOperatorAuthUnauthenticated
+		return zeroOperator(), ErrOperatorAuthUnauthenticated
 	}
 	operatorEmail, err := domain.NewOperatorEmail(snapshot.Email)
 	if err != nil {
-		return zeroAdminOperator(), ErrOperatorAuthUnauthenticated
+		return zeroOperator(), ErrOperatorAuthUnauthenticated
 	}
 
 	// Step 2: domain.NewOperator に role/active/passkey state の不変条件を委譲する。
@@ -488,7 +488,7 @@ func operatorFromSnapshot(snapshot OperatorSnapshot) (domain.Operator, error) {
 		domain.OperatorPasskeyRegistrationState(snapshot.PasskeyRegistrationState),
 	)
 	if err != nil {
-		return zeroAdminOperator(), mapAdminDomainAuthError(err)
+		return zeroOperator(), mapOperatorDomainAuthError(err)
 	}
 
 	// Step 3: 復元済み Operator domain object を返す。
@@ -499,11 +499,11 @@ func sessionFromRecord(record OperatorSessionRecord) (domain.OperatorAuthSession
 	// Step 1: session record の primitive 値を domain value object へ変換する。
 	sessionID, err := domain.NewOperatorSessionID(record.SessionID)
 	if err != nil {
-		return zeroAdminOperatorSession(), err
+		return zeroOperatorSession(), err
 	}
 	operatorID, err := domain.NewOperatorID(record.OperatorID)
 	if err != nil {
-		return zeroAdminOperatorSession(), err
+		return zeroOperatorSession(), err
 	}
 
 	// Step 2: ReconstituteOperatorAuthSession で state 全体の不変条件を検証する。
@@ -519,13 +519,13 @@ func sessionFromRecord(record OperatorSessionRecord) (domain.OperatorAuthSession
 	)
 }
 
-func zeroAdminOperator() domain.Operator {
-	// Step 1: error return 専用の zero value を var 経由で作り、Admin Operator の生成は constructor/reconstitution に限定する。
+func zeroOperator() domain.Operator {
+	// Step 1: error return 専用の zero value を var 経由で作り、Operator の生成は constructor/reconstitution に限定する。
 	var operator domain.Operator
 	return operator
 }
 
-func zeroAdminOperatorSession() domain.OperatorAuthSession {
+func zeroOperatorSession() domain.OperatorAuthSession {
 	// Step 1: error return 専用の zero value を var 経由で作り、OperatorAuthSession の復元は domain helper だけに集約する。
 	var session domain.OperatorAuthSession
 	return session
@@ -551,7 +551,7 @@ func recordFromSessionWithSubject(session domain.OperatorAuthSession, subject Op
 }
 
 func mapOperatorDTO(operator domain.Operator) OperatorDTO {
-	// Step 1: Admin Operator domain object を external-facing DTO へ変換する。
+	// Step 1: Operator domain object を external-facing DTO へ変換する。
 	return OperatorDTO{
 		ID:                       operator.ID().String(),
 		Email:                    operator.Email().String(),
@@ -570,7 +570,7 @@ func mapOperatorDTOWithSession(operator domain.Operator, sessionID string) Opera
 	return dto
 }
 
-func mapAdminStoreError(err error) error {
+func mapOperatorStoreError(err error) error {
 	// Step 1: 保存層の not found/expired/revoked 系は認証失敗へ畳み、詳細を隠す。
 	if errors.Is(err, domain.ErrSessionNotFound) || errors.Is(err, domain.ErrSessionExpired) || errors.Is(err, domain.ErrSessionRevoked) {
 		return ErrOperatorAuthUnauthenticated
@@ -585,7 +585,7 @@ func mapAdminStoreError(err error) error {
 	return ErrOperatorAuthUnavailable
 }
 
-func mapAdminDomainAuthError(err error) error {
+func mapOperatorDomainAuthError(err error) error {
 	// Step 1: 期限切れ、失効、形式不備は認証失敗として扱う。
 	if errors.Is(err, domain.ErrTokenExpired) || errors.Is(err, domain.ErrSessionExpired) || errors.Is(err, domain.ErrSessionRevoked) || errors.Is(err, domain.ErrInvalidToken) {
 		return ErrOperatorAuthUnauthenticated
@@ -605,7 +605,7 @@ func mapAdminDomainAuthError(err error) error {
 	return ErrOperatorAuthUnauthenticated
 }
 
-func mapAdminPasskeyStoreError(err error) error {
+func mapOperatorPasskeyStoreError(err error) error {
 	// Step 1: passkey 不在は selector 不正として扱い、他 Operator 所有 credential の存在有無を詳細に出さない。
 	if errors.Is(err, domain.ErrSessionNotFound) || errors.Is(err, domain.ErrAccountAuthNotFound) {
 		return ErrOperatorAuthPasskeyNotFound
@@ -625,7 +625,7 @@ func mapAdminPasskeyStoreError(err error) error {
 	return ErrOperatorAuthUnavailable
 }
 
-func mapAdminPasskeyDomainError(err error) error {
+func mapOperatorPasskeyDomainError(err error) error {
 	// Step 1: 最後の credential 削除拒否は UI が再取得できる conflict として扱う。
 	if errors.Is(err, domain.ErrOperatorLastPasskeyDeletion) {
 		return ErrOperatorAuthLastPasskey

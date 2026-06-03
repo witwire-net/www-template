@@ -1,8 +1,8 @@
 ---
 description: Researches the web, repository, specs/standards, best practices, and policies/laws; answers with evidence-backed takeaways and recommendations.
 mode: subagent
-model: openai/gpt-5.5
-reasoningEffort: 'high'
+model: opencode-go/deepseek-v4-pro
+reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: deny

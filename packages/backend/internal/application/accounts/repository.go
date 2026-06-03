@@ -84,7 +84,7 @@ type AccountSearchRepository interface {
 // 役割:
 //   - Account は concrete domain object として受け取り、repository 側に email 正規化や lifecycle 初期値決定を置かない。
 //   - AuditID は mutation 前に作成済みの pending Admin audit event を指し、作成 account と audit target を同じ transaction で結び付ける。
-//   - AuditCompletion は audit.AuditService が domain.AdminAuditEvent から作った success outcome で、account 作成 commit と同じ transaction で保存する。
+//   - AuditCompletion は audit.AuditService が domain.OperatorAuditEvent から作った success outcome で、account 作成 commit と同じ transaction で保存する。
 //   - adapter 型や generated 型を含めず、port purity と Clean Architecture の境界を守る。
 type AccountCreationRecord struct {
 	Account         domain.Account

@@ -63,10 +63,10 @@ func (s *AccountSessionService) RefreshAccountSession(ctx context.Context, input
 		// Step 6-a: token を消費した後で metadata 所有権を照合し、path mismatch でも提示済み refreshToken を再利用不能にする。
 		existingMetadata, err := s.sessions.Get(ctx, selector)
 		if err != nil {
-			return zeroProductRefreshSession(), mapAccountAuthError(err)
+			return zeroAccountRefreshSession(), mapAccountAuthError(err)
 		}
 		if existingMetadata.AccountID != consumed.AccountID() || existingMetadata.SessionID != selector.String() {
-			return zeroProductRefreshSession(), ErrAccountAuthUnauthorized
+			return zeroAccountRefreshSession(), ErrAccountAuthUnauthorized
 		}
 		return s.buildRotatedRefreshSession(ctx, consumed, selector, newRefreshHash, jti, issuedAt, deviceInput{clientIP: input.ClientIP, userAgent: input.UserAgent}, &claims, &metadata)
 	})
@@ -228,7 +228,7 @@ func (s *AccountSessionService) accountBearerTokenValues(
 	return accountBearerTokenValues{
 		accountID: claims.AccountID(),
 		sessionID: claims.SessionID(),
-		jti:       claims.JTI(),
+		jti:       claims.TokenID(),
 		claims:    claims,
 	}, nil
 }
@@ -237,12 +237,12 @@ func (s *AccountSessionService) accountRootForBearer(ctx context.Context, accoun
 	// Step 1: token subject に対応する現在の Product AccountAuth projection を repository から取得する。
 	accountAuth, err := s.accounts.FindByID(ctx, accountID)
 	if err != nil {
-		return zeroProductAccount(), err
+		return zeroAccount(), err
 	}
 
 	// Step 2: repository が別 subject を返す不整合は Product bearer として fail-closed に拒否する。
 	if accountAuth.AccountID() != accountID {
-		return zeroProductAccount(), ErrAccountAuthUnauthorized
+		return zeroAccount(), ErrAccountAuthUnauthorized
 	}
 
 	// Step 3: AccountAuth projection を Account root へ写像し、domain eligibility 検証に使える形へ戻す。
@@ -273,30 +273,30 @@ func (s *AccountSessionService) buildRotatedRefreshSession(ctx context.Context, 
 	// Step 1: refresh session が所有する Product AccountAuth projection を取得する。
 	accountAuth, err := s.accounts.FindByID(ctx, consumed.AccountID())
 	if err != nil {
-		return zeroProductRefreshSession(), mapAccountAuthError(err)
+		return zeroAccountRefreshSession(), mapAccountAuthError(err)
 	}
 
 	// Step 2: projection を Account root へ写像し、Product lifecycle と revoke 境界を domain method で使えるようにする。
 	account, err := accountRootFromAuth(accountAuth)
 	if err != nil {
-		return zeroProductRefreshSession(), mapAccountAuthError(err)
+		return zeroAccountRefreshSession(), mapAccountAuthError(err)
 	}
 
 	// Step 3: 旧 refresh session が現在 Account 状態と selector で rotation 可能か domain object に判定させる。
 	if err := consumed.CanRotate(account, selector, issuedAt); err != nil {
-		return zeroProductRefreshSession(), mapAccountAuthError(err)
+		return zeroAccountRefreshSession(), mapAccountAuthError(err)
 	}
 
 	// Step 4: 新 accessToken claim を Product AccountAuth domain constructor で生成する。
 	nextClaims, err := domain.NewAccountAccessTokenClaims(account, selector, jti, issuedAt, s.accessTTLValue())
 	if err != nil {
-		return zeroProductRefreshSession(), mapAccountAuthError(err)
+		return zeroAccountRefreshSession(), mapAccountAuthError(err)
 	}
 
 	// Step 5: 新 refresh session state を同じ Product session selector で生成し、multi-session 時に対象 session だけを rotation する。
 	nextSession, err := domain.NewAccountRefreshSession(account, selector, nextHash, issuedAt, s.refreshTTL.ExpiresAt(issuedAt))
 	if err != nil {
-		return zeroProductRefreshSession(), mapAccountAuthError(err)
+		return zeroAccountRefreshSession(), mapAccountAuthError(err)
 	}
 
 	// Step 6: callback 外で署名・metadata 保存できるよう検証済み値を呼び出し元変数へ渡す。
@@ -327,25 +327,25 @@ func (p accessTokenPayload) domainClaims() (domain.AccountAccessTokenClaims, err
 	// Step 1: subject を Product AccountID として検証する。
 	accountID, err := domain.NewAccountID(p.Subject)
 	if err != nil {
-		return zeroProductAccessTokenClaims(), err
+		return zeroAccountAccessTokenClaims(), err
 	}
 
 	// Step 2: sid を Product AccountAuth session ID として検証する。
 	sessionID, err := domain.NewAccountAuthSessionID(p.SessionID)
 	if err != nil {
-		return zeroProductAccessTokenClaims(), err
+		return zeroAccountAccessTokenClaims(), err
 	}
 
 	// Step 3: jti を中立 TokenJTI として検証する。
 	jti, err := domain.NewTokenJTI(p.TokenID)
 	if err != nil {
-		return zeroProductAccessTokenClaims(), err
+		return zeroAccountAccessTokenClaims(), err
 	}
 
 	// Step 4: status と iat/exp を Product AccountAuth claims として復元し、snapshot/expiry rule は domain に委譲する。
 	status, err := domain.NewAccountStatus(p.Status)
 	if err != nil {
-		return zeroProductAccessTokenClaims(), err
+		return zeroAccountAccessTokenClaims(), err
 	}
 	issuedAt := time.Unix(p.IssuedAt, 0).UTC()
 	expiresAt := time.Unix(p.ExpiresAt, 0).UTC()

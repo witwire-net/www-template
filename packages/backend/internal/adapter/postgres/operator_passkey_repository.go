@@ -1,4 +1,4 @@
-package admin
+package postgres
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 //   - admin.operator_passkeys だけを扱い、Product account_passkey_credentials へ依存しない。
 //   - application には非秘匿 DTO だけを返し、credential_handle、public_key、sign_count は一覧 response に漏らさない。
 //   - 削除時は operator_id と credential id の両方で絞り、最後の 1 件削除を repository 側でも防ぐ。
+//   - schema/table/role/grant 境界で security を守り、package path による Product/Admin 分離は行わない。
 type OperatorPasskeyRepository struct {
 	db *gorm.DB
 }
@@ -44,7 +45,7 @@ func (r *OperatorPasskeyRepository) FindWebAuthnCredential(ctx context.Context, 
 	}
 
 	// Step 3: WebAuthn provider が署名検証に使う domain DTO へ写像する。
-	return domain.ReconstitueWebAuthnStoredCredential(record.CredentialHandle, record.PublicKey, signCount, record.AAGUID, record.BackupEligible, record.BackupState, transports), nil
+	return domain.ReconstituteWebAuthnStoredCredential(record.CredentialHandle, record.PublicKey, signCount, record.AAGUID, record.BackupEligible, record.BackupState, transports), nil
 }
 
 // UpdateWebAuthnCredentialState は passkey login 成功後の sign count と backup state を保存する。

@@ -152,7 +152,7 @@ func (s *AccountCreationService) CreateAccount(ctx context.Context, input Create
 		return s.failAccountCreation(ctx, intent.AuditID, err, stableCodeForAccountRootError(err))
 	}
 
-	// Step 5: success audit completion を domain.AdminAuditEvent 経由で作り、Account 作成 transaction に同梱する。
+	// Step 5: success audit completion を domain.OperatorAuditEvent 経由で作り、Account 作成 transaction に同梱する。
 	completion, err := s.audits.BuildMutationSucceededCompletion(audit.CompletionInput{AuditID: intent.AuditID})
 	if err != nil {
 		return s.failAccountCreation(ctx, intent.AuditID, err, adminAccountStableCodeInternal)
@@ -181,14 +181,14 @@ func (s *AccountCreationService) projectAccountCreationAudit(ctx context.Context
 		TargetID:    created.AccountID,
 		RequestID:   intent.RequestID,
 		DetailsJSON: intent.DetailsJSON,
-		Outcome:     string(domain.AdminAuditOutcomeSucceeded),
+		Outcome:     string(domain.OperatorAuditOutcomeSucceeded),
 		OccurredAt:  intent.OccurredAt,
 		CompletedAt: &completion.CompletedAt,
 	}
 
 	// Step 2: OpenSearch 側の一時障害は成功済み DB mutation を rollback できないため、error は observer へ渡して成功 response を維持する。
-	if err := s.projector.ProjectAdminAuditEvent(ctx, projection); err != nil {
-		s.projectionFailures.ObserveAdminAuditProjectionFailure(ctx, intent.AuditID, err)
+	if err := s.projector.ProjectOperatorAuditEvent(ctx, projection); err != nil {
+		s.projectionFailures.ObserveOperatorAuditProjectionFailure(ctx, intent.AuditID, err)
 	}
 }
 
@@ -199,7 +199,7 @@ func (s *AccountCreationService) recordAccountCreationIntent(ctx context.Context
 		return audit.Record{}, ErrAccountCreationInternal
 	}
 
-	// Step 2: operator/action/request correlation を audit service へ渡し、pending intent の組み立ては AdminAuditEvent に委譲する。
+	// Step 2: operator/action/request correlation を audit service へ渡し、pending intent の組み立ては OperatorAuditEvent に委譲する。
 	return s.audits.RecordMutationIntent(ctx, audit.IntentInput{
 		OperatorID:  operator.ID().String(),
 		Action:      adminAccountCreateAction,

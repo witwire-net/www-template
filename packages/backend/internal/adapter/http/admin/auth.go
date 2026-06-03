@@ -304,5 +304,6 @@ func writeAdminAuthFailure(c *gin.Context, status int, classification adminopena
 	applyAdminSecurityHeaders(c)
 
 	// Step 2: non-secret な分類と request ID だけを返し、token/session の詳細を外部へ露出しない。
-	c.AbortWithStatusJSON(status, adminopenapi.WWWTemplateAuthFailureResponse{Error: classification, RequestId: fallbackRequestID})
+	// request ID は handler と同じ nextAdminRequestID を使い、固定 fallback との非対称を解消する。
+	c.AbortWithStatusJSON(status, adminopenapi.WWWTemplateAuthFailureResponse{Error: classification, RequestId: nextAdminRequestID()})
 }

@@ -170,7 +170,7 @@ func TestConfigValidateAdminRuntimeRejectsOpenSearchNamespaceCollision(t *testin
 	if err == nil {
 		t.Fatal("expected error for OpenSearch namespace collision")
 	}
-	if !strings.Contains(fmt.Sprint(err), "opensearch.admin_audit_index_prefix must not collide with opensearch.product_index_prefix") {
+	if !strings.Contains(fmt.Sprint(err), "opensearch.operator_audit_index_prefix must not collide with opensearch.product_index_prefix") {
 		t.Fatalf("expected OpenSearch namespace collision error, got %v", err)
 	}
 }
@@ -185,7 +185,7 @@ func TestConfigValidateAdminRuntimeRejectsOpenSearchNamespaceContainment(t *test
 	if err == nil {
 		t.Fatal("expected error for OpenSearch namespace containment")
 	}
-	if !strings.Contains(fmt.Sprint(err), "opensearch.admin_audit_index_prefix must not collide with opensearch.product_index_prefix") {
+	if !strings.Contains(fmt.Sprint(err), "opensearch.operator_audit_index_prefix must not collide with opensearch.product_index_prefix") {
 		t.Fatalf("expected OpenSearch namespace containment error, got %v", err)
 	}
 }
@@ -222,7 +222,7 @@ product_url = "redis://valkey:6379/0"
 
 [opensearch]
 url = "http://opensearch:9200"
-admin_audit_index_prefix = "admin-audit"
+operator_audit_index_prefix = "admin-audit"
 product_index_prefix = "product-domain"
 
 [observability]
@@ -264,7 +264,7 @@ otel_service_name = "www-template-admin-api"
 func assertAdminConfigSurfaceInfrastructure(t *testing.T, cfg Config) {
 	t.Helper()
 
-	if cfg.Infra.OpenSearch.AdminAuditIndexPrefix != "admin-audit" || cfg.Infra.OpenSearch.ProductIndexPrefix != "product-domain" {
+	if cfg.Infra.OpenSearch.OperatorAuditIndexPrefix != "admin-audit" || cfg.Infra.OpenSearch.ProductIndexPrefix != "product-domain" {
 		t.Fatalf("expected OpenSearch namespace mapping, got %#v", cfg.Infra.OpenSearch)
 	}
 	if cfg.Observability.OTELExporterOTLPEndpoint != "signoz-otel-collector:4317" || cfg.Observability.OTELServiceName != "www-template-admin-api" {
@@ -288,7 +288,7 @@ func fullyConfiguredAdminValidationBase() Config {
 			Valkey:        ValkeyConfig{URL: "redis://valkey:6379/1"},
 			ProductValkey: ValkeyConfig{URL: "redis://valkey:6379/0"},
 		},
-		Infra: InfraConfig{OpenSearch: OpenSearchConfig{URL: "http://opensearch:9200", AdminAuditIndexPrefix: "admin-audit", ProductIndexPrefix: "product-domain"}},
+		Infra: InfraConfig{OpenSearch: OpenSearchConfig{URL: "http://opensearch:9200", OperatorAuditIndexPrefix: "admin-audit", ProductIndexPrefix: "product-domain"}},
 	}
 }
 

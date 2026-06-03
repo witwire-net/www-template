@@ -54,9 +54,9 @@ type WebAuthnStoredCredential struct {
 	Transports []string
 }
 
-// ReconstitueWebAuthnStoredCredential は DB 永続化レコードから WebAuthnStoredCredential を復元する。
+// ReconstituteWebAuthnStoredCredential は DB 永続化レコードから WebAuthnStoredCredential を復元する。
 // persistence 層が DB カラム値から呼び出す reconstitution helper。
-func ReconstitueWebAuthnStoredCredential(handle string, publicKey []byte, signCount uint32, aaguid []byte, backupEligible bool, backupState bool, transports []string) WebAuthnStoredCredential {
+func ReconstituteWebAuthnStoredCredential(handle string, publicKey []byte, signCount uint32, aaguid []byte, backupEligible bool, backupState bool, transports []string) WebAuthnStoredCredential {
 	return WebAuthnStoredCredential{
 		Handle:         handle,
 		PublicKey:      publicKey,

@@ -29,7 +29,7 @@ product_url = "redis://valkey:6379/0"
 [opensearch]
 url = "http://opensearch:9200"
 admin_audit_replicas = 0
-admin_audit_index_prefix = "admin-audit"
+operator_audit_index_prefix = "admin-audit"
 product_index_prefix = "www-template"
 
 [observability]

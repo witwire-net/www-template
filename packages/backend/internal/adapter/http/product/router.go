@@ -28,7 +28,7 @@ type Dependencies struct {
 	SessionService  application.ProductSessionService
 }
 
-type StrictServer struct {
+type strictServer struct {
 	auth                    application.ProductAuthService
 	accountSetting          *productaccounts.AccountSettingService
 	accountSnapshot         *productaccounts.AccountSettingSnapshotService
@@ -76,7 +76,7 @@ func NewRouter(cfg config.Config, dependencies Dependencies) *gin.Engine {
 		})
 	})
 
-	strictHandler := openapi.NewStrictHandler(NewStrictServer(cfg, dependencies), nil)
+	strictHandler := openapi.NewStrictHandler(newStrictServer(cfg, dependencies), nil)
 	openapi.RegisterHandlers(router, strictHandler)
 
 	router.NoRoute(func(c *gin.Context) {
@@ -122,13 +122,13 @@ func refreshOptionalBodyMiddleware() gin.HandlerFunc {
 	}
 }
 
-// NewStrictServer は generated OpenAPI strict handler に渡す server 実装を構築する。
+// newStrictServer は generated OpenAPI strict handler に渡す server 実装を構築する。
 //
-// cfg には HttpOnly refresh Cookie の寿命を決める Auth 設定を渡す。
-// dependencies には Auth、Token、Session、AccountSetting の各 use case を渡す。
-// nil の依存関係は handler 側で fail-close し、外部へは 503 または認証失敗として返す。
-func NewStrictServer(cfg config.Config, dependencies Dependencies) *StrictServer {
-	return &StrictServer{
+// cfg は Product runtime config であり、CORS 許可 origin リストと Auth Cookie maxAge の解決に使う。
+// dependencies は app 層が compose した application service 群であり、nil field は該当 endpoint を fail-close にする。
+// 戻り値は generated openapi.StrictServerInterface を満たす実装であり、package 外部へは公開しない。
+func newStrictServer(cfg config.Config, dependencies Dependencies) *strictServer {
+	return &strictServer{
 		auth:                    dependencies.Auth,
 		accountSetting:          dependencies.AccountSetting,
 		accountSnapshot:         dependencies.AccountSnapshot,
@@ -139,7 +139,7 @@ func NewStrictServer(cfg config.Config, dependencies Dependencies) *StrictServer
 	}
 }
 
-func (s *StrictServer) GetStatus(ctx context.Context, _ openapi.GetStatusRequestObject) (openapi.GetStatusResponseObject, error) {
+func (s *strictServer) GetStatus(ctx context.Context, _ openapi.GetStatusRequestObject) (openapi.GetStatusResponseObject, error) {
 	return openapi.GetStatus200JSONResponse{
 		Message:   "API status ok",
 		Timestamp: time.Now().UTC(),
@@ -147,7 +147,7 @@ func (s *StrictServer) GetStatus(ctx context.Context, _ openapi.GetStatusRequest
 }
 
 // GetAccountSettings は bearer session で認可された AccountID の AccountSetting を返す。
-func (s *StrictServer) GetAccountSettings(ctx context.Context, _ openapi.GetAccountSettingsRequestObject) (openapi.GetAccountSettingsResponseObject, error) {
+func (s *strictServer) GetAccountSettings(ctx context.Context, _ openapi.GetAccountSettingsRequestObject) (openapi.GetAccountSettingsResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -167,7 +167,7 @@ func (s *StrictServer) GetAccountSettings(ctx context.Context, _ openapi.GetAcco
 }
 
 // UpdateAccountSettings は bearer session で認可された AccountID の AccountSetting.locale を更新する。
-func (s *StrictServer) UpdateAccountSettings(ctx context.Context, request openapi.UpdateAccountSettingsRequestObject) (openapi.UpdateAccountSettingsResponseObject, error) {
+func (s *strictServer) UpdateAccountSettings(ctx context.Context, request openapi.UpdateAccountSettingsRequestObject) (openapi.UpdateAccountSettingsResponseObject, error) {
 	if request.Body == nil {
 		return openapi.UpdateAccountSettings400JSONResponse{Body: authOperationError(nextAuthRequestID(), invalidRequestBodyMessage), Headers: openapi.UpdateAccountSettings400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -189,7 +189,7 @@ func (s *StrictServer) UpdateAccountSettings(ctx context.Context, request openap
 	return openapi.UpdateAccountSettings200JSONResponse{Body: mapAccountSettingResponse(setting), Headers: openapi.UpdateAccountSettings200ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
-func (s *StrictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
+func (s *strictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
 	// Step 1: logout 対象の authContextId は accessToken claims と server-side session record から確定し、client が送る Cookie や header hint は使わない。
 	session, sessionErr := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if sessionErr != nil {
@@ -216,7 +216,10 @@ func (s *StrictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject
 	}
 
 	// Step 2: 対象 authContextId の exact refresh path だけに削除 Cookie と response command を返し、他 context の Cookie には触れない。
-	clearProductRefreshCookie(ctx, session.AuthContextID)
+	// Cookie 削除に失敗した場合は fail-close し、stale refreshToken を browser に残さない。
+	if !clearProductRefreshCookie(ctx, session.AuthContextID) {
+		return openapi.Logout503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.Logout503ResponseHeaders{CacheControl: noStoreValue}}, nil
+	}
 	clearCommand, clearErr := productCookieClearCommand(session.AuthContextID)
 	if clearErr != nil {
 		return openapi.Logout503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.Logout503ResponseHeaders{CacheControl: noStoreValue}}, nil
@@ -232,7 +235,7 @@ func (s *StrictServer) Logout(ctx context.Context, _ openapi.LogoutRequestObject
 	}, nil
 }
 
-func (s *StrictServer) StartReauthentication(ctx context.Context, request openapi.StartReauthenticationRequestObject) (openapi.StartReauthenticationResponseObject, error) {
+func (s *strictServer) StartReauthentication(ctx context.Context, request openapi.StartReauthenticationRequestObject) (openapi.StartReauthenticationResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -268,7 +271,7 @@ func (s *StrictServer) StartReauthentication(ctx context.Context, request openap
 	}, nil
 }
 
-func (s *StrictServer) FinishReauthentication(ctx context.Context, request openapi.FinishReauthenticationRequestObject) (openapi.FinishReauthenticationResponseObject, error) {
+func (s *strictServer) FinishReauthentication(ctx context.Context, request openapi.FinishReauthenticationRequestObject) (openapi.FinishReauthenticationResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -308,7 +311,7 @@ func (s *StrictServer) FinishReauthentication(ctx context.Context, request opena
 	}, nil
 }
 
-func (s *StrictServer) StartPasskeyAuthentication(ctx context.Context, request openapi.StartPasskeyAuthenticationRequestObject) (openapi.StartPasskeyAuthenticationResponseObject, error) {
+func (s *strictServer) StartPasskeyAuthentication(ctx context.Context, request openapi.StartPasskeyAuthenticationRequestObject) (openapi.StartPasskeyAuthenticationResponseObject, error) {
 	if request.Body == nil {
 		return openapi.StartPasskeyAuthentication400JSONResponse{Body: authOperationError(nextAuthRequestID(), nonRevealingAuthRejectMessage), Headers: openapi.StartPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -330,7 +333,7 @@ func (s *StrictServer) StartPasskeyAuthentication(ctx context.Context, request o
 	}, nil
 }
 
-func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request openapi.FinishPasskeyAuthenticationRequestObject) (openapi.FinishPasskeyAuthenticationResponseObject, error) {
+func (s *strictServer) FinishPasskeyAuthentication(ctx context.Context, request openapi.FinishPasskeyAuthenticationRequestObject) (openapi.FinishPasskeyAuthenticationResponseObject, error) {
 	if request.Body == nil {
 		return openapi.FinishPasskeyAuthentication400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.FinishPasskeyAuthentication400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -359,7 +362,10 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 		return openapi.FinishPasskeyAuthentication503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.FinishPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 	if cookieToken != "" {
-		setProductRefreshCookie(ctx, result.AuthContextID, cookieToken, s.authRefreshCookieMaxAge)
+		// Cookie Set-Cookie header の書き込みに失敗した場合は fail-close し、refreshToken を browser に渡さず session 発行を破棄する。
+		if !setProductRefreshCookie(ctx, result.AuthContextID, cookieToken, s.authRefreshCookieMaxAge) {
+			return openapi.FinishPasskeyAuthentication503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.FinishPasskeyAuthentication503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
 	}
 	return openapi.FinishPasskeyAuthentication200JSONResponse{
 		Body:    body,
@@ -367,7 +373,7 @@ func (s *StrictServer) FinishPasskeyAuthentication(ctx context.Context, request 
 	}, nil
 }
 
-func (s *StrictServer) RequestPasskeyRecovery(ctx context.Context, request openapi.RequestPasskeyRecoveryRequestObject) (openapi.RequestPasskeyRecoveryResponseObject, error) {
+func (s *strictServer) RequestPasskeyRecovery(ctx context.Context, request openapi.RequestPasskeyRecoveryRequestObject) (openapi.RequestPasskeyRecoveryResponseObject, error) {
 	if request.Body == nil {
 		return openapi.RequestPasskeyRecovery400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.RequestPasskeyRecovery400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -383,7 +389,7 @@ func (s *StrictServer) RequestPasskeyRecovery(ctx context.Context, request opena
 	}, nil
 }
 
-func (s *StrictServer) ConsumeRecoveryToken(ctx context.Context, request openapi.ConsumeRecoveryTokenRequestObject) (openapi.ConsumeRecoveryTokenResponseObject, error) {
+func (s *strictServer) ConsumeRecoveryToken(ctx context.Context, request openapi.ConsumeRecoveryTokenRequestObject) (openapi.ConsumeRecoveryTokenResponseObject, error) {
 	if request.Body == nil {
 		return openapi.ConsumeRecoveryToken400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.ConsumeRecoveryToken400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -403,7 +409,7 @@ func (s *StrictServer) ConsumeRecoveryToken(ctx context.Context, request openapi
 	}, nil
 }
 
-func (s *StrictServer) StartPasskeyRegistration(ctx context.Context, request openapi.StartPasskeyRegistrationRequestObject) (openapi.StartPasskeyRegistrationResponseObject, error) {
+func (s *strictServer) StartPasskeyRegistration(ctx context.Context, request openapi.StartPasskeyRegistrationRequestObject) (openapi.StartPasskeyRegistrationResponseObject, error) {
 	if request.Body == nil {
 		return openapi.StartPasskeyRegistration400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.StartPasskeyRegistration400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -427,7 +433,7 @@ func (s *StrictServer) StartPasskeyRegistration(ctx context.Context, request ope
 	}, nil
 }
 
-func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.RegisterPasskeyRequestObject) (openapi.RegisterPasskeyResponseObject, error) {
+func (s *strictServer) RegisterPasskey(ctx context.Context, request openapi.RegisterPasskeyRequestObject) (openapi.RegisterPasskeyResponseObject, error) {
 	if request.Body == nil {
 		return openapi.RegisterPasskey400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.RegisterPasskey400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -457,7 +463,10 @@ func (s *StrictServer) RegisterPasskey(ctx context.Context, request openapi.Regi
 		return openapi.RegisterPasskey503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RegisterPasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 	if cookieToken != "" {
-		setProductRefreshCookie(ctx, result.AuthContextID, cookieToken, s.authRefreshCookieMaxAge)
+		// Cookie Set-Cookie header の書き込みに失敗した場合は fail-close し、refreshToken を browser に渡さず session 発行を破棄する。
+		if !setProductRefreshCookie(ctx, result.AuthContextID, cookieToken, s.authRefreshCookieMaxAge) {
+			return openapi.RegisterPasskey503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RegisterPasskey503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
 	}
 	return openapi.RegisterPasskey200JSONResponse{
 		Body:    body,
@@ -638,7 +647,7 @@ func chooseAttestationCredential(primary openapi.WebAuthnAttestationCredential, 
 
 // ─── Multi-passkey management handlers ──────────────────────────────────────
 
-func (s *StrictServer) ListPasskeys(ctx context.Context, _ openapi.ListPasskeysRequestObject) (openapi.ListPasskeysResponseObject, error) {
+func (s *strictServer) ListPasskeys(ctx context.Context, _ openapi.ListPasskeysRequestObject) (openapi.ListPasskeysResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -667,7 +676,7 @@ func (s *StrictServer) ListPasskeys(ctx context.Context, _ openapi.ListPasskeysR
 	}, nil
 }
 
-func (s *StrictServer) StartPasskeyAddition(ctx context.Context, _ openapi.StartPasskeyAdditionRequestObject) (openapi.StartPasskeyAdditionResponseObject, error) {
+func (s *strictServer) StartPasskeyAddition(ctx context.Context, _ openapi.StartPasskeyAdditionRequestObject) (openapi.StartPasskeyAdditionResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -692,7 +701,7 @@ func (s *StrictServer) StartPasskeyAddition(ctx context.Context, _ openapi.Start
 	}, nil
 }
 
-func (s *StrictServer) FinishPasskeyAddition(ctx context.Context, request openapi.FinishPasskeyAdditionRequestObject) (openapi.FinishPasskeyAdditionResponseObject, error) {
+func (s *strictServer) FinishPasskeyAddition(ctx context.Context, request openapi.FinishPasskeyAdditionRequestObject) (openapi.FinishPasskeyAdditionResponseObject, error) {
 	if request.Body == nil {
 		return openapi.FinishPasskeyAddition400JSONResponse{Body: authOperationError(nextAuthRequestID(), "request body is required"), Headers: openapi.FinishPasskeyAddition400ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -726,7 +735,7 @@ func (s *StrictServer) FinishPasskeyAddition(ctx context.Context, request openap
 	}, nil
 }
 
-func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.DeletePasskeyRequestObject) (openapi.DeletePasskeyResponseObject, error) {
+func (s *strictServer) DeletePasskey(ctx context.Context, request openapi.DeletePasskeyRequestObject) (openapi.DeletePasskeyResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -759,7 +768,7 @@ func (s *StrictServer) DeletePasskey(ctx context.Context, request openapi.Delete
 	return openapi.DeletePasskey204Response{Headers: openapi.DeletePasskey204ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
-func (s *StrictServer) SendDeviceLink(ctx context.Context, request openapi.SendDeviceLinkRequestObject) (openapi.SendDeviceLinkResponseObject, error) {
+func (s *strictServer) SendDeviceLink(ctx context.Context, request openapi.SendDeviceLinkRequestObject) (openapi.SendDeviceLinkResponseObject, error) {
 	session, err := s.auth.AuthorizeSession(ctx, bearerTokenFromContext(ctx))
 	if err != nil {
 		failureRequestID := nextAuthRequestID()
@@ -870,15 +879,15 @@ func productRefreshCookieValue(ctx context.Context) (string, bool) {
 	return value, true
 }
 
-func setProductRefreshCookie(ctx context.Context, authContextID string, value string, maxAge time.Duration) {
-	// Step 1: generated strict handler から渡される context が Gin context でない場合は header を設定できないため何もしない。
+func setProductRefreshCookie(ctx context.Context, authContextID string, value string, maxAge time.Duration) bool {
+	// Step 1: generated strict handler から渡される context が Gin context でない場合は header を設定できないため、fail-close として false を返す。
 	ginContext, ok := ctx.(*gin.Context)
 	if !ok {
-		return
+		return false
 	}
 	path, err := sharedhttp.BuildRefreshPath(authContextID)
 	if err != nil {
-		return
+		return false
 	}
 
 	// Step 2: SameSite=Lax を明示し、通常遷移では送信しつつ cross-site POST での送信余地を抑える。
@@ -886,22 +895,22 @@ func setProductRefreshCookie(ctx context.Context, authContextID string, value st
 
 	// Step 3: refreshToken は HttpOnly/Secure Cookie としてだけ browser に返し、JavaScript から読める body field を作らない。
 	ginContext.SetCookie(productRefreshCookieName, value, productRefreshCookieMaxAge(maxAge), path, "", true, true)
+	return true
 }
 
-func clearProductRefreshCookie(ctx context.Context, authContextID string) {
-	// Step 1: generated strict handler から渡される context が Gin context でない場合は header を設定できないため何もしない。
+func clearProductRefreshCookie(ctx context.Context, authContextID string) bool {
+	// Step 1: generated strict handler から渡される context が Gin context でない場合は header を設定できないため、fail-close として false を返す。
 	ginContext, ok := ctx.(*gin.Context)
 	if !ok {
-		return
+		return false
 	}
 	path, err := sharedhttp.BuildRefreshPath(authContextID)
 	if err != nil {
-		return
+		return false
 	}
-
-	// Step 2: 発行時と同じ SameSite/Path/HttpOnly/Secure 属性で削除指示を返し、HttpOnly Cookie を server 側から確実に消す。
 	ginContext.SetSameSite(stdhttp.SameSiteLaxMode)
 	ginContext.SetCookie(productRefreshCookieName, "", -1, path, "", true, true)
+	return true
 }
 
 func productCookieClearCommand(authContextID string) (openapi.CookieClearCommand, error) {
@@ -1173,7 +1182,7 @@ type productRefreshCredentialSelection struct {
 	Token string
 }
 
-func (s *StrictServer) RefreshToken(ctx context.Context, request openapi.RefreshTokenRequestObject) (openapi.RefreshTokenResponseObject, error) {
+func (s *strictServer) RefreshToken(ctx context.Context, request openapi.RefreshTokenRequestObject) (openapi.RefreshTokenResponseObject, error) {
 	if s.tokenService == nil {
 		return openapi.RefreshToken503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RefreshToken503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -1211,7 +1220,10 @@ func (s *StrictServer) RefreshToken(ctx context.Context, request openapi.Refresh
 		return openapi.RefreshToken503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RefreshToken503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
 	if cookieToken != "" {
-		setProductRefreshCookie(ctx, result.AuthContextID, cookieToken, s.authRefreshCookieMaxAge)
+		// Cookie Set-Cookie header の書き込みに失敗した場合は fail-close し、refreshToken を browser に渡さず refresh を破棄する。
+		if !setProductRefreshCookie(ctx, result.AuthContextID, cookieToken, s.authRefreshCookieMaxAge) {
+			return openapi.RefreshToken503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RefreshToken503ResponseHeaders{CacheControl: noStoreValue}}, nil
+		}
 	}
 
 	return openapi.RefreshToken200JSONResponse{
@@ -1220,7 +1232,7 @@ func (s *StrictServer) RefreshToken(ctx context.Context, request openapi.Refresh
 	}, nil
 }
 
-func (s *StrictServer) selectProductRefreshCredential(ctx context.Context, request openapi.RefreshTokenRequestObject) (productRefreshCredentialSelection, openapi.RefreshTokenResponseObject, bool) {
+func (s *strictServer) selectProductRefreshCredential(ctx context.Context, request openapi.RefreshTokenRequestObject) (productRefreshCredentialSelection, openapi.RefreshTokenResponseObject, bool) {
 	// Step 1: Authorization header は refresh credential ではないため、提示された時点で rotation 前に拒否する。
 	if hasAuthorizationHeader(ctx) {
 		return productRefreshCredentialSelection{}, openapi.RefreshToken401JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrUnauthenticated), Headers: openapi.RefreshToken401ResponseHeaders{CacheControl: noStoreValue}}, false
@@ -1295,7 +1307,7 @@ func accountSettingUpdateErrorResponse(err error) openapi.UpdateAccountSettingsR
 	return openapi.UpdateAccountSettings503JSONResponse{Body: authFailureResponseObject(requestID, application.ErrInternalError), Headers: openapi.UpdateAccountSettings503ResponseHeaders{CacheControl: noStoreValue}}
 }
 
-func (s *StrictServer) ListSessions(ctx context.Context, _ openapi.ListSessionsRequestObject) (openapi.ListSessionsResponseObject, error) {
+func (s *strictServer) ListSessions(ctx context.Context, _ openapi.ListSessionsRequestObject) (openapi.ListSessionsResponseObject, error) {
 	if s.sessionService == nil {
 		return openapi.ListSessions503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.ListSessions503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -1339,7 +1351,7 @@ func (s *StrictServer) ListSessions(ctx context.Context, _ openapi.ListSessionsR
 	}, nil
 }
 
-func (s *StrictServer) RevokeSession(ctx context.Context, request openapi.RevokeSessionRequestObject) (openapi.RevokeSessionResponseObject, error) {
+func (s *strictServer) RevokeSession(ctx context.Context, request openapi.RevokeSessionRequestObject) (openapi.RevokeSessionResponseObject, error) {
 	if s.sessionService == nil {
 		return openapi.RevokeSession503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RevokeSession503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
@@ -1367,7 +1379,7 @@ func (s *StrictServer) RevokeSession(ctx context.Context, request openapi.Revoke
 	return openapi.RevokeSession204Response{Headers: openapi.RevokeSession204ResponseHeaders{CacheControl: noStoreValue}}, nil
 }
 
-func (s *StrictServer) RevokeOtherSessions(ctx context.Context, _ openapi.RevokeOtherSessionsRequestObject) (openapi.RevokeOtherSessionsResponseObject, error) {
+func (s *strictServer) RevokeOtherSessions(ctx context.Context, _ openapi.RevokeOtherSessionsRequestObject) (openapi.RevokeOtherSessionsResponseObject, error) {
 	if s.sessionService == nil {
 		return openapi.RevokeOtherSessions503JSONResponse{Body: authFailureResponseObject(nextAuthRequestID(), application.ErrInternalError), Headers: openapi.RevokeOtherSessions503ResponseHeaders{CacheControl: noStoreValue}}, nil
 	}
