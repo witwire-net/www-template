@@ -106,7 +106,21 @@ func NewProductRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Produ
 		return nil, err
 	}
 
+	// OTLP logs exporter を初期化し、SigNoz へ backend ログを送信する。
+	// logsEndpoint が空の場合は OTELExporterOTLPEndpoint をフォールバックとして使用する。
+	logsEndpoint := obs.OTELExporterOTLPLogsEndpoint
+	if logsEndpoint == "" {
+		logsEndpoint = obs.OTELExporterOTLPEndpoint
+	}
+	closeLogger, err := observability.InitLogger(ctx, logsEndpoint, obs.OTELServiceName)
+	if err != nil {
+		_ = closeMeter(ctx)
+		_ = closeTracer(ctx)
+		return nil, err
+	}
+
 	closeObs := func(ctx context.Context) error {
+		_ = closeLogger(ctx)
 		_ = closeTracer(ctx)
 		_ = closeMeter(ctx)
 		return nil

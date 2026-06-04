@@ -147,6 +147,29 @@ func (r *stubAccountRepo) FindByEmail(_ context.Context, email string) (domain.A
 	}
 	return emptyAccountAuth(), domain.ErrAccountAuthNotFound
 }
+func (r *stubAccountRepo) FindAccountRootByEmail(_ context.Context, email string) (application.AccountRoot, error) {
+	for _, a := range r.accounts {
+		if a.Email() == email {
+			return application.AccountRoot{
+				AccountID: a.AccountID(),
+				Email:     a.Email(),
+				Status:    a.Status(),
+			}, nil
+		}
+	}
+	return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+}
+func (r *stubAccountRepo) FindAccountRootByID(_ context.Context, accountID domain.AccountID) (application.AccountRoot, error) {
+	a, ok := r.accounts[accountID.String()]
+	if !ok {
+		return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+	}
+	return application.AccountRoot{
+		AccountID: a.AccountID(),
+		Email:     a.Email(),
+		Status:    a.Status(),
+	}, nil
+}
 func (r *stubAccountRepo) AddPasskey(_ context.Context, accountID domain.AccountID, credentialID string, handle string, _ domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
 	a, ok := r.accounts[accountID.String()]
 	if !ok {
@@ -979,4 +1002,257 @@ func TestIdentifierRotationCannotBypassPasskeyStartBudget(t *testing.T) {
 			t.Fatalf("expected ErrBadRequest for throttled attempt %d, got %v", i, err)
 		}
 	}
+}
+
+// ─── Zero-passkey account regression tests ────────────────────────────────────
+
+// zeroPasskeyAccountRepo は passkey が 0 件のアカウントを模擬する stub である。
+//
+// 役割:
+//   - FindByEmail / FindByID / FindByIdentifier / FindByCredential は passkey が必須のため ErrAccountAuthNotFound を返す。
+//   - FindAccountRootByEmail / FindAccountRootByID は passkey に依存しないため AccountRoot を返す。
+//   - AddPasskey は初回 credential 追加をサポートし、追加後は FindByEmail 等が成功する。
+type zeroPasskeyAccountRepo struct {
+	root application.AccountRoot
+	// addPasskeyResult は AddPasskey 呼び出し後に返す AccountAuth。
+	addPasskeyResult *domain.AccountAuth
+}
+
+func newZeroPasskeyAccountRepo(accountID domain.AccountID, email string) *zeroPasskeyAccountRepo {
+	return &zeroPasskeyAccountRepo{
+		root: application.AccountRoot{
+			AccountID: accountID,
+			Email:     email,
+			Status:    "active",
+		},
+	}
+}
+
+func (r *zeroPasskeyAccountRepo) FindByID(_ context.Context, _ domain.AccountID) (domain.AccountAuth, error) {
+	// passkey が 0 件のアカウントでは FindByID は passkey が見つからずエラーを返す。
+	return emptyAccountAuth(), domain.ErrAccountAuthNotFound
+}
+
+func (r *zeroPasskeyAccountRepo) FindByIdentifier(_ context.Context, _ string) (domain.AccountAuth, error) {
+	return emptyAccountAuth(), domain.ErrAccountAuthNotFound
+}
+
+func (r *zeroPasskeyAccountRepo) FindByCredential(_ context.Context, _ string) (domain.AccountAuth, error) {
+	return emptyAccountAuth(), domain.ErrAccountAuthNotFound
+}
+
+func (r *zeroPasskeyAccountRepo) FindByEmail(_ context.Context, _ string) (domain.AccountAuth, error) {
+	// passkey が 0 件のアカウントでは FindByEmail は passkey が見つからずエラーを返す。
+	return emptyAccountAuth(), domain.ErrAccountAuthNotFound
+}
+
+func (r *zeroPasskeyAccountRepo) FindAccountRootByEmail(_ context.Context, email string) (application.AccountRoot, error) {
+	if email != r.root.Email {
+		return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+	}
+	return r.root, nil
+}
+
+func (r *zeroPasskeyAccountRepo) FindAccountRootByID(_ context.Context, accountID domain.AccountID) (application.AccountRoot, error) {
+	if accountID != r.root.AccountID {
+		return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+	}
+	return r.root, nil
+}
+
+func (r *zeroPasskeyAccountRepo) AddPasskey(_ context.Context, accountID domain.AccountID, credentialID string, handle string, _ domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
+	// 初回 credential 追加: AccountAuth を構築して返す。
+	account, err := domain.NewAccountAuth(accountID, r.root.Email, r.root.Email, credentialID, handle)
+	if err != nil {
+		return emptyAccountAuth(), err
+	}
+	r.addPasskeyResult = &account
+	return account, nil
+}
+
+func (r *zeroPasskeyAccountRepo) ListPasskeys(_ context.Context, _ domain.AccountID) ([]domain.PasskeyCredential, error) {
+	if r.addPasskeyResult != nil {
+		return r.addPasskeyResult.Credentials(), nil
+	}
+	return nil, nil
+}
+
+func (r *zeroPasskeyAccountRepo) DeletePasskeyByID(_ context.Context, _ domain.AccountID, _ string) error {
+	return domain.ErrAccountAuthNotFound
+}
+
+func (r *zeroPasskeyAccountRepo) FindWebAuthnCredential(_ context.Context, _ string) (domain.WebAuthnStoredCredential, error) {
+	return domain.ZeroWebAuthnStoredCredential(), domain.ErrAccountAuthNotFound
+}
+
+func (r *zeroPasskeyAccountRepo) UpdateWebAuthnCredentialState(_ context.Context, _ string, _ uint32, _ bool) error {
+	return nil
+}
+
+// [AUTH-BE-ZERO-1] passkey が 0 件のアカウントで RequestPasskeyRecovery が recovery token を発行し、配送を呼び出す。
+func TestRequestPasskeyRecoveryWithZeroPasskeyAccountIssuesRecoveryToken(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+	sender := &trackingRecoverySender{}
+	svc := newTestAuthServiceWithSender(stateRepo, accountRepo, sender)
+
+	result, err := svc.RequestPasskeyRecovery(context.Background(), application.RequestPasskeyRecoveryInput{
+		Email:    "newuser@example.com",
+		ClientIP: "10.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("RequestPasskeyRecovery: %v", err)
+	}
+	if !result.Accepted {
+		t.Fatal("expected Accepted=true for existing email with zero passkeys")
+	}
+	if result.RequestID == "" {
+		t.Fatal("expected non-empty RequestID")
+	}
+	// recovery sender が呼ばれたことを確認
+	if sender.callCount != 1 {
+		t.Fatalf("expected recovery sender to be called once, got %d", sender.callCount)
+	}
+}
+
+// [AUTH-BE-ZERO-2] 存在しないメールアドレスで RequestPasskeyRecovery は generic accepted を返し、sender を呼ばない。
+func TestRequestPasskeyRecoveryWithMissingEmailReturnsAcceptedWithoutSender(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+	sender := &trackingRecoverySender{}
+	svc := newTestAuthServiceWithSender(stateRepo, accountRepo, sender)
+
+	result, err := svc.RequestPasskeyRecovery(context.Background(), application.RequestPasskeyRecoveryInput{
+		Email:    "nonexistent@example.com",
+		ClientIP: "10.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("RequestPasskeyRecovery: %v", err)
+	}
+	if !result.Accepted {
+		t.Fatal("expected Accepted=true for missing email (account enumeration resistance)")
+	}
+	// sender は呼ばれないはず
+	if sender.callCount != 0 {
+		t.Fatalf("expected recovery sender NOT to be called for missing email, got %d calls", sender.callCount)
+	}
+}
+
+// [AUTH-BE-ZERO-3] passkey が 0 件のアカウントで StartPasskeyRegistration が成功する。
+func TestStartPasskeyRegistrationWithZeroPasskeyAccountSucceeds(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+
+	accountID := testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW")
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, domain.TokenKindRecovery, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("NewRecoverySession: %v", err)
+	}
+	stateRepo.recoverySessions[recoverySession.ID()] = recoverySession
+
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, &mockWebAuthnProvider{})
+
+	challenge, err := svc.StartPasskeyRegistration(context.Background(), application.StartPasskeyRegistrationInput{
+		RecoverySession: recoverySession.ID(),
+		ClientIP:        "10.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("StartPasskeyRegistration: %v", err)
+	}
+	if challenge.Challenge == "" {
+		t.Fatal("expected non-empty challenge")
+	}
+	if challenge.WebAuthnRPID != "example.com" {
+		t.Fatalf("expected WebAuthnRPID=example.com, got %q", challenge.WebAuthnRPID)
+	}
+}
+
+// [AUTH-BE-ZERO-4] passkey が 0 件のアカウントで RegisterPasskey が初回 credential を作成し、
+// AuthSession に non-empty PasskeyCredentialID を返す。
+func TestRegisterPasskeyWithZeroPasskeyAccountCreatesFirstCredential(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+
+	accountID := testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW")
+	recoverySession, err := domain.NewRecoverySession("01ARZ3NDEKTSV4RRFFQ69G5FAV", accountID, domain.TokenKindRecovery, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("NewRecoverySession: %v", err)
+	}
+	stateRepo.recoverySessions[recoverySession.ID()] = recoverySession
+
+	provider := &mockWebAuthnProvider{
+		finishRegistrationFn: func(_ context.Context, _ string, _ domain.AccountID, _ application.WebAuthnAttestationCredentialDTO) (string, domain.WebAuthnCredentialData, error) {
+			return "new-credential-handle", domain.WebAuthnCredentialData{}, nil
+		},
+	}
+	svc := newTestAuthServiceWithProvider(stateRepo, accountRepo, provider)
+
+	session, err := svc.RegisterPasskey(context.Background(), application.RegisterPasskeyInput{
+		RecoverySession: recoverySession.ID(),
+		Credential: application.WebAuthnAttestationCredentialDTO{
+			ID:    "new-cred-id",
+			RawID: "new-cred-id",
+			Type:  "public-key",
+			Response: application.WebAuthnAttestationResponseDTO{
+				ClientDataJSON:    "clientdata",
+				AttestationObject: "attestation",
+			},
+		},
+		ClientIP:  "10.0.0.1",
+		UserAgent: "test-agent",
+	})
+	if err != nil {
+		t.Fatalf("RegisterPasskey: %v", err)
+	}
+	if session.AccountID != accountID {
+		t.Fatalf("expected AccountID=%q, got %q", accountID, session.AccountID)
+	}
+	// passkey が 0 件のアカウントに初回 credential を追加した場合、PasskeyCredentialID は空であってはならない。
+	if session.PasskeyCredentialID == "" {
+		t.Fatal("expected non-empty PasskeyCredentialID for first credential registration")
+	}
+}
+
+// trackingRecoverySender は recovery sender の呼び出し回数を記録する stub である。
+type trackingRecoverySender struct {
+	callCount int
+}
+
+func (s *trackingRecoverySender) SendAccountRecovery(_ context.Context, _ application.RecoveryDelivery) error {
+	s.callCount++
+	return nil
+}
+
+// newTestAuthServiceWithSender は recovery sender を注入できるテスト用 AuthService を生成する。
+func newTestAuthServiceWithSender(stateRepo application.AuthStateRepository, accountRepo application.PasskeyAccountRepository, sender application.AccountRecoverySender) *application.AuthService {
+	cfg := config.AuthConfig{
+		ChallengeTTL:                    5 * time.Minute,
+		SessionIdleTTL:                  30 * time.Minute,
+		SessionAbsoluteTTL:              24 * time.Hour,
+		RecoveryTokenTTL:                30 * time.Minute,
+		RecoverySessionTTL:              10 * time.Minute,
+		RecoveryEmailThrottleLimit:      3,
+		RecoveryIPThrottleLimit:         5,
+		RecoveryEmailThrottleWindow:     time.Hour,
+		RecoveryIPThrottleWindow:        time.Hour,
+		PasskeyStartThrottleLimit:       5,
+		PasskeyStartGlobalThrottleLimit: 1000,
+		SecretHashKey:                   "test-pepper",
+		PasskeyStartThrottleWindow:      time.Minute,
+		FailureLockThreshold:            10,
+		FailureLockDuration:             15 * time.Minute,
+		FailureLockWindow:               time.Minute,
+		WebAuthnRPID:                    "example.com",
+		AccountRecoveryURLBase:          "https://example.com/recover",
+		JWTSecret:                       "test-jwt-secret-key-must-be-at-least-32bytes",
+	}
+	auth, err := application.NewAuthService(application.AuthServiceDependencies{StateRepo: stateRepo, AccountRepo: accountRepo, RecoverySender: sender, InvitationRegistrar: stubInvitationPasskeyRegistrar{}, AccountLifecycle: stubProductAccountLifecycle{}, Clock: fixedClock(), Policy: newSeqPolicy()}, application.AuthServiceOptionalPorts{}, cfg)
+	if err != nil {
+		panic(fmt.Sprintf("NewAuthService: %v", err))
+	}
+	return auth
 }

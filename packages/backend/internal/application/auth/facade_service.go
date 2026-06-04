@@ -104,7 +104,7 @@ func (s *AuthService) ExecuteDeviceLink(ctx context.Context, accountID domain.Ac
 		return DeviceLinkIssued{}, ErrBadRequest
 	}
 
-	delivery, err := s.issueRecoveryDelivery(ctx, requestID, account, domain.TokenKindDeviceLink)
+	delivery, err := s.issueRecoveryDelivery(ctx, requestID, account.AccountID(), account.Email(), domain.TokenKindDeviceLink)
 	if err != nil {
 		return DeviceLinkIssued{}, err
 	}
@@ -289,15 +289,19 @@ func (s *AuthService) RequestPasskeyRecovery(ctx context.Context, input RequestP
 		return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
 	}
 
-	account, err := s.accountRepo.FindByEmail(ctx, input.Email)
+	// アカウントルート検索を使い、passkey が 0 件のアカウント（Admin 作成直後など）にも対応する。
+	// FindByEmail は passkey credential が必須のため、0 件の場合に record not found となる。
+	root, err := s.accountRepo.FindAccountRootByEmail(ctx, input.Email)
 	if err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return RecoveryAccepted{}, ErrInternalError
 		}
+		// アカウントが存在しない場合も generic accepted を返し、account existence を漏らさない。
 		return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
 	}
 
-	delivery, err := s.issueRecoveryDelivery(ctx, requestID, account, domain.TokenKindRecovery)
+	// AccountRoot から直接 delivery を発行する。AccountAuth の偽装は不要。
+	delivery, err := s.issueRecoveryDelivery(ctx, requestID, root.AccountID, root.Email, domain.TokenKindRecovery)
 	if err != nil {
 		return RecoveryAccepted{}, err
 	}
@@ -625,7 +629,13 @@ func (s *AuthService) AuthorizeSession(ctx context.Context, token string) (AuthS
 
 // issueRecoveryDelivery は recovery token を発行し、指定された kind の RecoveryDelivery を生成する。
 // RecoveryURL は AccountRecoveryURLBase を使用する。kind が空の場合はエラーを返す。
-func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID string, account domain.AccountAuth, kind domain.TokenKind) (RecoveryDelivery, error) {
+//
+// 引数:
+//   - requestID: 相関 ID。
+//   - accountID: Product Account の canonical ULID。
+//   - email: 配送先メールアドレス。
+//   - kind: TokenKindRecovery または TokenKindDeviceLink。
+func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID string, accountID domain.AccountID, email string, kind domain.TokenKind) (RecoveryDelivery, error) {
 	tokenID, err := s.policy.Next()
 	if err != nil {
 		return RecoveryDelivery{}, ErrInternalError
@@ -634,7 +644,7 @@ func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID strin
 	if err != nil {
 		return RecoveryDelivery{}, ErrInternalError
 	}
-	recoveryToken, err := domain.NewRecoveryToken(tokenID, account.AccountID(), plainSecret, kind, s.clock().Add(s.authConfig.RecoveryTokenTTL))
+	recoveryToken, err := domain.NewRecoveryToken(tokenID, accountID, plainSecret, kind, s.clock().Add(s.authConfig.RecoveryTokenTTL))
 	if err != nil {
 		return RecoveryDelivery{}, ErrInternalError
 	}
@@ -645,8 +655,8 @@ func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID strin
 	return RecoveryDelivery{
 		RequestID:       requestID,
 		RecoveryTokenID: tokenID,
-		AccountID:       account.AccountID(),
-		Email:           account.Email(),
+		AccountID:       accountID,
+		Email:           email,
 		RecoveryURL:     fmt.Sprintf("%s?token=%s", strings.TrimSpace(s.authConfig.AccountRecoveryURLBase), urlToken),
 		Kind:            kind,
 		ExpiresAt:       recoveryToken.ExpiresAt(),
@@ -654,17 +664,19 @@ func (s *AuthService) issueRecoveryDelivery(ctx context.Context, requestID strin
 }
 
 // ensureAccountActive は指定アカウントが active であることを検証する。
+// passkey が 0 件のアカウント（Admin 作成直後など）にも対応するため、
+// FindAccountRootByID を使用し、passkey credential に依存しない。
 // 停止中アカウントの場合は ErrAccountSuspended を返す。
 // DB 障害時は ErrInternalError を返す。
 func (s *AuthService) ensureAccountActive(ctx context.Context, accountID domain.AccountID) error {
-	account, err := s.accountRepo.FindByID(ctx, accountID)
+	root, err := s.accountRepo.FindAccountRootByID(ctx, accountID)
 	if err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
 			return ErrInternalError
 		}
 		return ErrBadRequest
 	}
-	if account.IsSuspended() {
+	if root.Status == "suspended" {
 		return ErrAccountSuspended
 	}
 	return nil

@@ -55,7 +55,7 @@ func NewAdminRuntimeWithConfig(ctx context.Context, cfg config.Config) (*AdminRu
 		return nil, err
 	}
 
-	// Step 4: Admin API process 用の tracer / meter を初期化し、startup 以後の観測情報を収集できる状態にする。
+	// Step 4: Admin API process 用の tracer / meter / logger を初期化し、startup 以後の観測情報を収集できる状態にする。
 	obs := cfg.Observability
 	closeTracer, err := observability.InitTracer(ctx, obs.OTELExporterOTLPEndpoint, obs.OTELServiceName)
 	if err != nil {
@@ -68,8 +68,22 @@ func NewAdminRuntimeWithConfig(ctx context.Context, cfg config.Config) (*AdminRu
 		return nil, err
 	}
 
-	// Step 5: tracer と meter の close を一つの関数へまとめ、cmd/admin-api から安全に解放できるようにする。
+	// OTLP logs exporter を初期化し、SigNoz へ Admin backend ログを送信する。
+	// logsEndpoint が空の場合は OTELExporterOTLPEndpoint をフォールバックとして使用する。
+	logsEndpoint := obs.OTELExporterOTLPLogsEndpoint
+	if logsEndpoint == "" {
+		logsEndpoint = obs.OTELExporterOTLPEndpoint
+	}
+	closeLogger, err := observability.InitLogger(ctx, logsEndpoint, obs.OTELServiceName)
+	if err != nil {
+		_ = closeMeter(ctx)
+		_ = closeTracer(ctx)
+		return nil, err
+	}
+
+	// Step 5: tracer / meter / logger の close を一つの関数へまとめ、cmd/admin-api から安全に解放できるようにする。
 	closeObs := func(ctx context.Context) error {
+		_ = closeLogger(ctx)
 		_ = closeTracer(ctx)
 		_ = closeMeter(ctx)
 		return nil

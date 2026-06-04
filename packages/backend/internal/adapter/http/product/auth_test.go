@@ -1008,6 +1008,28 @@ func (r *stubAccountAuthRepository) FindByEmail(_ context.Context, email string)
 	return r.account, nil
 }
 
+func (r *stubAccountAuthRepository) FindAccountRootByEmail(_ context.Context, email string) (application.AccountRoot, error) {
+	if email != r.account.Email() {
+		return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+	}
+	return application.AccountRoot{
+		AccountID: r.account.AccountID(),
+		Email:     r.account.Email(),
+		Status:    r.account.Status(),
+	}, nil
+}
+
+func (r *stubAccountAuthRepository) FindAccountRootByID(_ context.Context, accountID domain.AccountID) (application.AccountRoot, error) {
+	if accountID != r.account.AccountID() {
+		return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+	}
+	return application.AccountRoot{
+		AccountID: r.account.AccountID(),
+		Email:     r.account.Email(),
+		Status:    r.account.Status(),
+	}, nil
+}
+
 func (r *stubAccountAuthRepository) AddPasskey(_ context.Context, accountID domain.AccountID, passkeyCredentialID string, credential string, _ domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
 	if accountID != r.account.AccountID() {
 		return emptyAccountAuthForTest(), domain.ErrAccountAuthNotFound
@@ -1233,6 +1255,31 @@ func (m *multiAccountStubAccountAuthRepository) FindByEmail(ctx context.Context,
 		}
 	}
 	return emptyAccountAuthForTest(), domain.ErrAccountAuthNotFound
+}
+
+func (m *multiAccountStubAccountAuthRepository) FindAccountRootByEmail(_ context.Context, email string) (application.AccountRoot, error) {
+	for _, r := range m.accounts {
+		if r.account.Email() == email {
+			return application.AccountRoot{
+				AccountID: r.account.AccountID(),
+				Email:     r.account.Email(),
+				Status:    r.account.Status(),
+			}, nil
+		}
+	}
+	return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+}
+
+func (m *multiAccountStubAccountAuthRepository) FindAccountRootByID(_ context.Context, accountID domain.AccountID) (application.AccountRoot, error) {
+	r, ok := m.repoByID(accountID)
+	if !ok {
+		return application.AccountRoot{}, domain.ErrAccountAuthNotFound
+	}
+	return application.AccountRoot{
+		AccountID: r.account.AccountID(),
+		Email:     r.account.Email(),
+		Status:    r.account.Status(),
+	}, nil
 }
 
 func (m *multiAccountStubAccountAuthRepository) AddPasskey(ctx context.Context, accountID domain.AccountID, passkeyCredentialID string, credential string, credData domain.WebAuthnCredentialData) (domain.AccountAuth, error) {

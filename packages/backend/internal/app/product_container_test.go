@@ -127,6 +127,24 @@ func (stubAccountAuthRepository) FindByID(_ context.Context, _ domain.AccountID)
 	return emptyAccountAuthForContainerTest(), nil
 }
 
+func (stubAccountAuthRepository) FindAccountRootByEmail(_ context.Context, _ string) (application.AccountRoot, error) {
+	account := emptyAccountAuthForContainerTest()
+	return application.AccountRoot{
+		AccountID: account.AccountID(),
+		Email:     account.Email(),
+		Status:    account.Status(),
+	}, nil
+}
+
+func (stubAccountAuthRepository) FindAccountRootByID(_ context.Context, _ domain.AccountID) (application.AccountRoot, error) {
+	account := emptyAccountAuthForContainerTest()
+	return application.AccountRoot{
+		AccountID: account.AccountID(),
+		Email:     account.Email(),
+		Status:    account.Status(),
+	}, nil
+}
+
 type fakeAuthStateRepository struct{}
 
 func (fakeAuthStateRepository) SaveChallenge(context.Context, domain.AuthChallenge, time.Duration) error {

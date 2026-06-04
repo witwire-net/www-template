@@ -325,6 +325,18 @@ type AuthStateRepository interface {
 	ConsumeReauthenticationSession(ctx context.Context, reauthID string) (domain.ReauthenticationSession, error)
 }
 
+// AccountRoot は passkey credential に依存しないアカウントルート情報の DTO である。
+//
+// 役割:
+//   - recovery request やアカウント停止検証など、passkey が 0 件でもアカウント存在を確認できるようにする。
+//   - domain.AccountAuth が credential 非空を前提とする制約を壊さず、account root 情報だけを返す。
+//   - passkey credential が 0 件のアカウント（Admin 作成直後など）にも対応する。
+type AccountRoot struct {
+	AccountID domain.AccountID
+	Email     string
+	Status    string
+}
+
 // PasskeyAccountRepository は Auth facade が Account.Auth projection を取得・更新するための port である。
 //
 // 実装は永続化技術を隠蔽し、認証処理に必要な account identifier、email、status、
@@ -339,6 +351,12 @@ type PasskeyAccountRepository interface {
 	FindByEmail(context.Context, string) (domain.AccountAuth, error)
 	// FindByID は accountID（ULID）でアカウントを検索する。
 	FindByID(ctx context.Context, accountID domain.AccountID) (domain.AccountAuth, error)
+	// FindAccountRootByEmail は email でアカウントルートを検索し、passkey credential に依存しない AccountRoot を返す。
+	// passkey が 0 件のアカウント（Admin 作成直後など）にも対応する。
+	FindAccountRootByEmail(ctx context.Context, email string) (AccountRoot, error)
+	// FindAccountRootByID は accountID でアカウントルートを検索し、passkey credential に依存しない AccountRoot を返す。
+	// passkey が 0 件のアカウント（Admin 作成直後など）にも対応する。
+	FindAccountRootByID(ctx context.Context, accountID domain.AccountID) (AccountRoot, error)
 	// AddPasskey は既存パスキーを保持したまま 1 件追加する。
 	// credData に WebAuthn credential record のデータを渡す（provider なしの場合は zero value で可）。
 	AddPasskey(ctx context.Context, accountID domain.AccountID, credentialID string, handle string, credData domain.WebAuthnCredentialData) (domain.AccountAuth, error)

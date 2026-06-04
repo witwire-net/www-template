@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	application "www-template/packages/backend/internal/application/auth"
 	domain "www-template/packages/backend/internal/domain"
 )
 
@@ -119,6 +120,54 @@ func (r *AccountAuthRepository) FindByEmail(ctx context.Context, email string) (
 	return normalizeDomainAccount(account, passkey)
 }
 
+// FindAccountRootByEmail は email でアカウントルートを検索し、passkey credential に依存しない AccountRoot を返す。
+//
+// 役割:
+//   - passkey が 0 件のアカウント（Admin 作成直後など）でもアカウント存在を確認できる。
+//   - public.accounts テーブルだけを参照し、public.account_passkey_credentials には JOIN しない。
+//   - GORM の record not found は mapAccountAuthError で ErrAccountAuthNotFound に変換される。
+func (r *AccountAuthRepository) FindAccountRootByEmail(ctx context.Context, email string) (application.AccountRoot, error) {
+	var account gormAccountRecord
+	if err := r.db.WithContext(ctx).Where("email = ?", strings.TrimSpace(email)).First(&account).Error; err != nil {
+		return application.AccountRoot{}, mapAccountAuthError(err)
+	}
+
+	accountID, err := domain.NewAccountID(account.ID)
+	if err != nil {
+		return application.AccountRoot{}, domain.ErrInvalidAccountID
+	}
+
+	return application.AccountRoot{
+		AccountID: accountID,
+		Email:     account.Email,
+		Status:    account.Status,
+	}, nil
+}
+
+// FindAccountRootByID は accountID でアカウントルートを検索し、passkey credential に依存しない AccountRoot を返す。
+//
+// 役割:
+//   - passkey が 0 件のアカウント（Admin 作成直後など）でもアカウント存在を確認できる。
+//   - public.accounts テーブルだけを参照し、public.account_passkey_credentials には JOIN しない。
+//   - GORM の record not found は mapAccountAuthError で ErrAccountAuthNotFound に変換される。
+func (r *AccountAuthRepository) FindAccountRootByID(ctx context.Context, accountID domain.AccountID) (application.AccountRoot, error) {
+	var account gormAccountRecord
+	if err := r.db.WithContext(ctx).Where("id = ?", accountID.String()).First(&account).Error; err != nil {
+		return application.AccountRoot{}, mapAccountAuthError(err)
+	}
+
+	parsedID, err := domain.NewAccountID(account.ID)
+	if err != nil {
+		return application.AccountRoot{}, domain.ErrInvalidAccountID
+	}
+
+	return application.AccountRoot{
+		AccountID: parsedID,
+		Email:     account.Email,
+		Status:    account.Status,
+	}, nil
+}
+
 // ListPasskeys は accountID に紐づく全 passkey credential を返す。
 // account が存在しない場合は domain.ErrAccountAuthNotFound を返す。
 func (r *AccountAuthRepository) ListPasskeys(ctx context.Context, accountID domain.AccountID) ([]domain.PasskeyCredential, error) {
@@ -149,26 +198,37 @@ func (r *AccountAuthRepository) ListPasskeys(ctx context.Context, accountID doma
 
 // AddPasskey は既存パスキーを削除せず 1 件追加する。
 // credData に WebAuthn credential record のデータを渡す（provider なしの場合は zero value で可）。
-// 返却する AccountAuth は追加前から存在する先頭 credential（id ASC）をベースに構築する。
-// これは既存認証フロー（FindByCredential, FindByEmail）との一貫性を保つ意図仕様であり、
-// session の passkeyCredentialId は「先頭 credential」を指す。
-// 新規追加 credential を passkeyCredentialId として返したい場合は呼び出し側で ListPasskeys を呼ぶこと。
+//
+// 返却する AccountAuth は以下のルールで構築する:
+//   - 既存パスキーがある場合: 追加前から存在する先頭 credential（id ASC）をベースに構築する。
+//     これは既存認証フロー（FindByCredential, FindByEmail）との一貫性を保つ意図仕様であり、
+//     session の passkeyCredentialId は「先頭 credential」を指す。
+//   - 既存パスキーが 0 件の場合（Admin 作成直後など）: 追加した credential を含む AccountAuth を返す。
+//     これにより session の passkeyCredentialId が空にならない。
 func (r *AccountAuthRepository) AddPasskey(ctx context.Context, accountID domain.AccountID, credentialID string, handle string, credData domain.WebAuthnCredentialData) (domain.AccountAuth, error) {
 	var account gormAccountRecord
 	if err := r.db.WithContext(ctx).Where("id = ?", accountID.String()).First(&account).Error; err != nil {
 		return emptyAccountAuth(), mapAccountAuthError(err)
 	}
 
-	// identifier は FindByEmail に準じ既存 passkey の identifier を流用
+	// 既存 passkey の identifier を取得する。0 件の場合はアカウント email を identifier として使用する。
+	var identifier string
 	var firstPasskey gormPasskeyCredentialRecord
 	if err := r.db.WithContext(ctx).Where("account_id = ?", accountID.String()).Order("id ASC").First(&firstPasskey).Error; err != nil {
-		return emptyAccountAuth(), mapAccountAuthError(err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// passkey が 0 件のアカウント（Admin 作成直後など）: アカウント email を identifier として使う。
+			identifier = account.Email
+		} else {
+			return emptyAccountAuth(), domain.ErrAuthStoreUnavailable
+		}
+	} else {
+		identifier = firstPasskey.Identifier
 	}
 
 	newRecord := gormPasskeyCredentialRecord{
 		ID:               credentialID,
 		AccountID:        accountID.String(),
-		Identifier:       firstPasskey.Identifier,
+		Identifier:       identifier,
 		CredentialHandle: strings.TrimSpace(handle),
 		CreatedAt:        time.Now().UTC(),
 		PublicKey:        credData.PublicKey,
@@ -182,7 +242,12 @@ func (r *AccountAuthRepository) AddPasskey(ctx context.Context, accountID domain
 		return emptyAccountAuth(), domain.ErrAuthStoreUnavailable
 	}
 
-	return normalizeDomainAccount(account, firstPasskey)
+	// 追加後の credential を使って AccountAuth を構築する。
+	// 既存 passkey がある場合は先頭 credential を、0 件の場合は追加した credential を使う。
+	if firstPasskey.ID != "" {
+		return normalizeDomainAccount(account, firstPasskey)
+	}
+	return normalizeDomainAccount(account, newRecord)
 }
 
 // DeletePasskeyByID は account_id と id の両方で絞り込んで削除し、他アカウントの誤削除を防ぐ。

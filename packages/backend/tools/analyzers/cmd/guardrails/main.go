@@ -47,6 +47,8 @@ var allowedExternalImports = map[string][]string{
 	"adapter-postgres": {
 		"gorm.io/driver/postgres",
 		"gorm.io/gorm",
+		// GORM ロガー設定に使用。record not found のノイズ抑制と SQL パラメータの露出防止に必要。
+		"gorm.io/gorm/logger",
 	},
 	"adapter-valkey": {
 		"github.com/redis/go-redis/v9",
@@ -61,9 +63,12 @@ var allowedExternalImports = map[string][]string{
 		"github.com/pelletier/go-toml/v2",
 		"go.opentelemetry.io/contrib/instrumentation/runtime",
 		"go.opentelemetry.io/otel",
+		"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc",
 		"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
 		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+		"go.opentelemetry.io/otel/log",
 		"go.opentelemetry.io/otel/propagation",
+		"go.opentelemetry.io/otel/sdk/log",
 		"go.opentelemetry.io/otel/sdk/metric",
 		"go.opentelemetry.io/otel/sdk/resource",
 		"go.opentelemetry.io/otel/sdk/trace",
