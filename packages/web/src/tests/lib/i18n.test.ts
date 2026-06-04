@@ -27,13 +27,13 @@ describe('[LOCALIZATION-FE-S002] web translator 生成', () => {
     const i18n = useI18n('ja');
     expect(i18n.locale).toBe('ja');
     expect(i18n.t('common.home')).toBe('Home');
-    expect(i18n.t('common.heroTitle')).toBe('公開面と認証面を再利用しやすい構成でまとめています。');
+    expect(i18n.t('common.heroTitle')).toBe('公開面と認証面を、再利用しやすい層として組み立てる。');
   });
 
   it('useI18n: en locale の translator を生成する', () => {
     const i18n = useI18n('en');
     expect(i18n.locale).toBe('en');
     expect(i18n.t('common.home')).toBe('Home');
-    expect(i18n.t('common.loginCta')).toBe('Try Login');
+    expect(i18n.t('common.heroCtaPrimary')).toBe('Try login');
   });
 });

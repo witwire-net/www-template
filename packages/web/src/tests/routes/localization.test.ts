@@ -61,8 +61,8 @@ describe('[LOCALIZATION-FE-S003] web route の root redirect / supported locale 
     const localePageSource = readRoute('[locale]/+page.svelte');
     expectRouteContains(localePageSource, [
       "i18n.t('common.heroTitle')",
-      "i18n.t('common.heroDescription')",
-      "i18n.t('common.loginCta')",
+      "i18n.t('common.heroLead')",
+      "i18n.t('common.heroCtaPrimary')",
     ]);
 
     const layoutSource = readRoute('+layout.svelte');

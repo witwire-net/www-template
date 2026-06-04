@@ -1,7 +1,6 @@
 ---
 description: Backend implementation specialist for packages/backend, packages/typespec, and packages/admin. Loads coding-guardian and orchestration-playbook skills to implement, fix, investigate, and iterate until reviewer approval, then returns results to the caller.
 mode: subagent
-hidden: true
 model: opencode-go/mimo-v2.5-pro
 reasoningEffort: 'high'
 temperature: 0.1

@@ -1,2 +1,15 @@
 @layer components {
+  /**
+   * Mono / eyebrow ラベル共通の視覚契約。
+   * brand-mark / mono-label / 各種 eyebrow / metadata 行で再利用する。
+   * サイズは text-xs (0.75rem) / tracking は widest (0.1em) を採用し、
+   * Tailwind 任意値記法を避ける。
+   */
+  .ww-eyebrow {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-eyebrow);
+  }
 }

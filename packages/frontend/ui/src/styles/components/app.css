@@ -1,72 +1,111 @@
 @layer components {
-  /* ===== App Layout ===== */
+  /* ========================================
+     App Layout
+     ======================================== */
+
+  /**
+   * 認証済み SPA の main レイアウト。page-header (sticky) + content panel
+   * の 2 段構成で、grid gap のみ距離を制御する。
+   */
   .app-layout {
     display: grid;
     gap: 1.25rem;
   }
 
+  /**
+   * dashboard banner。中央に brand-mark + title、左に nav、右に account switcher。
+   */
   .app-layout__banner {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1.2rem 1.6rem;
-    border-radius: var(--radius-xl);
-    border: 1px solid var(--color-border-subtle);
-    background: var(--color-surface);
-    color: var(--color-text);
-    transition: border-color var(--transition-fast);
+    gap: 1rem 1.5rem;
+    padding: 1rem 1.5rem;
+  }
+
+  @media (width <= 720px) {
+    .app-layout__banner {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .app-layout__banner-main {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+
+  .app-layout__banner-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
   }
 
   .app-layout__banner-title {
-    margin: 0.35rem 0 0;
-    font-size: clamp(1.5rem, 4vw, 2.4rem);
+    margin: 0;
+    font-family: var(--font-family-display);
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--color-text);
   }
 
-  .app-layout__banner-eyebrow {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    color: var(--color-text-muted);
+  .app-layout__banner-side {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
   }
 
-  .app-layout__links {
+  /**
+   * 認証済み SPA 共通の nav。タブ風 pill 群。active 状態を[data-active]で受ける。
+   */
+  .app-layout__nav {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.65rem;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
   }
 
-  .app-layout__links a {
+  .app-layout__nav-link {
     display: inline-flex;
     align-items: center;
-    padding: 0.55rem 0.85rem;
+    padding: 0.4rem 0.9rem;
     border-radius: var(--radius-full);
-    background: var(--color-surface-hover);
-    color: inherit;
-    font-weight: 600;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: transparent;
     transition:
-      background var(--transition-fast),
-      transform var(--transition-fast),
-      color var(--transition-fast);
+      color var(--transition-fast),
+      background-color var(--transition-fast);
+    text-decoration: none;
   }
 
-  .app-layout__links a:hover {
-    background: color-mix(in srgb, var(--brand-500) 12%, transparent);
-    color: var(--brand-500);
-    transform: scale(1.02);
+  .app-layout__nav-link:hover {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
   }
 
+  .app-layout__nav-link[data-active='true'] {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+
+  /**
+   * メインコンテンツ。surface panel パターン。
+   */
   .app-layout__panel {
-    padding: clamp(1.1rem, 3vw, 1.6rem);
-    border-radius: var(--radius-xl);
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: var(--radius-2xl, calc(var(--radius) * 1.8));
     background: var(--color-surface);
     border: 1px solid var(--color-border-subtle);
-    transition: border-color var(--transition-fast);
-  }
-
-  .app-layout__panel:hover {
-    border-color: var(--color-border-hover);
+    min-height: 60vh;
   }
 
   .app-layout__loading {
@@ -78,36 +117,116 @@
     font-size: 0.875rem;
   }
 
-  /* ===== Overview / Content ===== */
+  /* ========================================
+     Overview Page
+     ======================================== */
+
+  /**
+   * dashboard overview のページレイアウト。editorial な型スケールと
+   * monospace metadata を組み合わせた「インフラコンソール」風。
+   */
   .overview-section {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .overview-section__head {
+    display: flex;
+    flex-direction: column;
     gap: 0.85rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border-subtle);
   }
 
-  .overview-section__eyebrow {
+  .overview-section__title {
+    margin: 0;
     font-family: var(--font-family-display);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    letter-spacing: 0.2em;
-    color: var(--color-info);
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    color: var(--color-text);
   }
 
-  .overview-section__link {
+  .overview-section__lead {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+    max-width: 64ch;
+  }
+
+  /**
+   * 統計 / メタ情報カード群。3-column grid で gap を生かした block 群。
+   */
+  .overview-section__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+  }
+
+  .overview-section__stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .overview-section__stat-value {
+    font-family: var(--font-family-display);
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--color-text);
+    line-height: 1.1;
+  }
+
+  /**
+   * 次のアクション行。リンクと操作を monospace メタで挟むレイアウト。
+   */
+  .overview-section__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+  }
+
+  .overview-section__action-link {
     display: inline-flex;
     align-items: center;
-    width: fit-content;
-    padding: 0.75rem var(--spacing-md);
-    border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--color-info) 10%, transparent);
-    color: var(--color-info);
-    font-weight: var(--font-weight-bold);
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--color-text);
+    background: var(--color-surface);
     transition:
-      background var(--transition-fast),
-      transform var(--transition-fast);
+      border-color var(--transition-fast),
+      color var(--transition-fast),
+      background-color var(--transition-fast);
+    text-decoration: none;
   }
 
-  .overview-section__link:hover {
-    background: color-mix(in srgb, var(--color-info) 18%, transparent);
-    transform: scale(1.02);
+  .overview-section__action-link:hover {
+    border-color: var(--color-text);
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+
+  .overview-section__action-link--primary {
+    background: var(--color-text);
+    border-color: var(--color-text);
+    color: var(--color-surface);
+  }
+
+  .overview-section__action-link--primary:hover {
+    background: var(--brand-600);
+    border-color: var(--brand-600);
+    color: var(--color-text-on-brand);
   }
 }

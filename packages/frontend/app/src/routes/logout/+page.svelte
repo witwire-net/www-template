@@ -1,9 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { useAuthSession } from '@www-template/domain/auth/session';
-  import { Button, Card, CardContent } from '@www-template/ui/components';
+  import { AuthPanel, Button, StatusIcon } from '@www-template/ui';
+
+  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   const { actions } = useAuthSession();
@@ -33,29 +34,48 @@
 </script>
 
 <AuthLayout>
-  <Card class="w-full">
-    <CardContent>
-      <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label={i18n.t('common.logoutRegionLabel')}>
-        {#if isLoggingOut}
-          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.logoutInProgressTitle')}</h1>
-          <p class="m-0 text-sm text-muted-foreground text-center">{i18n.t('common.logoutInProgressDescription')}</p>
-        {:else if logoutError}
-          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.logoutFailedTitle')}</h1>
-          <p class="text-destructive text-sm m-0" role="alert">{logoutError}</p>
-          <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
-            {i18n.t('common.logoutFailedButton')}
-          </Button>
-        {:else}
-          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.logoutSuccessTitle')}</h1>
-          <Button variant="secondary" class="w-full" onclick={() => { void goto('/login'); }}>
-            {i18n.t('common.logoutSuccessButton')}
-          </Button>
-        {/if}
+  <AuthPanel width="narrow">
+    {#if isLoggingOut}
+      <div class="flex flex-col items-center gap-3 text-center">
+        <StatusIcon name="loader" tone="accent" />
+        <h1 class="auth-shell__heading">{i18n.t('common.logoutInProgressTitle')}</h1>
+        <p class="auth-shell__body">{i18n.t('common.logoutInProgressDescription')}</p>
       </div>
-    </CardContent>
-  </Card>
+    {:else if logoutError}
+      <div class="flex flex-col items-center gap-3 text-center">
+        <StatusIcon name="alert-circle" tone="destructive" />
+        <h1 class="auth-shell__heading">{i18n.t('common.logoutFailedTitle')}</h1>
+        <p class="auth-shell__error" role="alert">{logoutError}</p>
+      </div>
+
+      <Button
+        variant="outline"
+        size="lg"
+        onclick={() => {
+          void goto('/login');
+        }}
+      >
+        {i18n.t('common.logoutFailedButton')}
+      </Button>
+    {:else}
+      <div class="flex flex-col items-center gap-3 text-center">
+        <StatusIcon name="check" tone="success" />
+        <h1 class="auth-shell__heading">{i18n.t('common.logoutSuccessTitle')}</h1>
+      </div>
+
+      <Button
+        variant="outline"
+        size="lg"
+        onclick={() => {
+          void goto('/login');
+        }}
+      >
+        {i18n.t('common.logoutSuccessButton')}
+      </Button>
+    {/if}
+  </AuthPanel>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.logoutBackToPublic')}</a>
+    <a class="auth-shell__link" href="/">{i18n.t('common.logoutBackToPublic')}</a>
   {/snippet}
 </AuthLayout>

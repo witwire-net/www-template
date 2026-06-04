@@ -1,15 +1,18 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
-  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
-  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
+  import { AuthPanel, Button, StatusIcon } from '@www-template/ui';
 
+  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { removeQueryParamFromUrl } from '../../../../lib/auth/url';
+  import { formatAuthError, resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   const { data, actions } = useRecoveryFlow();
-  const i18n = useI18n(resolveUnauthenticatedLocale());
+  const initialLocale = resolveUnauthenticatedLocale();
+  const i18n = useI18n(initialLocale);
+
+  const errorMessage = $derived(formatAuthError(i18n, data.state.error, initialLocale));
 
   /**
    * consume 完了後の表示フェーズ。
@@ -62,49 +65,39 @@
 </script>
 
 <AuthLayout>
-  <Card class="w-full">
-    <CardContent>
-      {#if consumePhase === 'done'}
-        <!--
-          デバイスリンク用 token の consume が成功した場合の案内。
-          recovery とは異なり、すぐに登録画面へ遷移せずユーザー操作を待つ。
-        -->
-        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label={i18n.t('common.recoveryConsumeDoneTitle')}>
-          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeDoneTitle')}</h1>
-          <p class="m-0 text-sm text-muted-foreground text-center">
-            {i18n.t('common.recoveryConsumeDoneDescription')}
-          </p>
+  <AuthPanel width="narrow">
+    {#if consumePhase === 'done'}
+      <div class="flex flex-col items-center gap-3 text-center">
+        <StatusIcon name="check" tone="accent" />
+        <h1 class="auth-shell__heading">{i18n.t('common.recoveryConsumeDoneTitle')}</h1>
+        <p class="auth-shell__body">{i18n.t('common.recoveryConsumeDoneDescription')}</p>
+      </div>
 
-          <Separator />
+      <Button size="lg" onclick={goToRegisterPasskey}>
+        {i18n.t('common.recoveryConsumeDoneButton')}
+      </Button>
+    {:else if data.state.phase === 'invalid'}
+      <div class="flex flex-col items-center gap-3 text-center">
+        <StatusIcon name="alert-circle" tone="destructive" />
+        <h1 class="auth-shell__heading">{i18n.t('common.recoveryConsumeInvalidTitle')}</h1>
+        <p class="auth-shell__body">
+          {errorMessage || i18n.t('common.recoveryConsumeInvalidDescription')}
+        </p>
+      </div>
 
-          <Button onclick={goToRegisterPasskey}>
-            {i18n.t('common.recoveryConsumeDoneButton')}
-          </Button>
-        </div>
-      {:else}
-        <div class="flex flex-col items-center gap-4 text-center" role="region" aria-label={i18n.t('common.recoveryConsumeCheckingTitle')}>
-          {#if data.state.phase === 'consuming'}
-            <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeCheckingTitle')}</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">{i18n.t('common.recoveryConsumeCheckingDescription')}</p>
-          {:else if data.state.phase === 'invalid'}
-            <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeInvalidTitle')}</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">
-              {data.state.error ?? i18n.t('common.recoveryConsumeInvalidDescription')}
-            </p>
-
-            <Separator />
-
-            <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryConsumeRetry')}</a>
-          {:else}
-            <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryConsumeCheckingTitle')}</h1>
-            <p class="m-0 text-sm text-muted-foreground text-center">{i18n.t('common.recoveryConsumeCheckingDescription')}</p>
-          {/if}
-        </div>
-      {/if}
-    </CardContent>
-  </Card>
+      <a class="auth-shell__link justify-center" href="/login/recovery">
+        {i18n.t('common.recoveryConsumeRetry')}
+      </a>
+    {:else}
+      <div class="flex flex-col items-center gap-3 text-center">
+        <StatusIcon name="loader" tone="accent" />
+        <h1 class="auth-shell__heading">{i18n.t('common.recoveryConsumeCheckingTitle')}</h1>
+        <p class="auth-shell__body">{i18n.t('common.recoveryConsumeCheckingDescription')}</p>
+      </div>
+    {/if}
+  </AuthPanel>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryConsumeBackToPublic')}</a>
+    <a class="auth-shell__link" href="/">{i18n.t('common.recoveryConsumeBackToPublic')}</a>
   {/snippet}
 </AuthLayout>

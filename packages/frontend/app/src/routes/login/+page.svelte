@@ -1,10 +1,16 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { usePasskeyLogin } from '@www-template/domain/auth/passkey';
-  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
-  import { persistAppLocale, resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
+  import { AuthPanel, Button } from '@www-template/ui';
+
+  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
+  import {
+    formatAuthError,
+    persistAppLocale,
+    resolveUnauthenticatedLocale,
+    useI18n,
+  } from '$lib/i18n';
 
   const { data, actions } = usePasskeyLogin();
 
@@ -12,6 +18,8 @@
   const initialLocale = resolveUnauthenticatedLocale();
   persistAppLocale(initialLocale);
   const i18n = useI18n(initialLocale);
+
+  const errorMessage = $derived(formatAuthError(i18n, data.state.error, initialLocale));
 
   async function handlePasskeySignIn() {
     const result = await actions.signInWithPasskey();
@@ -26,45 +34,37 @@
 </script>
 
 <AuthLayout>
-  <Card class="w-full">
-    <CardContent>
-      <div class="flex flex-col items-center gap-4 text-center">
-        <h1 class="m-0 text-2xl font-bold text-center">
-          {i18n.t('login.login')}
-        </h1>
-        <p class="m-0 text-sm text-muted-foreground text-center">
-          {i18n.t('login.passkeyPrompt')}
-        </p>
+  <AuthPanel width="narrow">
+    <div class="flex flex-col items-center gap-3 text-center">
+      <h1 class="auth-shell__heading">{i18n.t('login.login')}</h1>
+      <p class="auth-shell__body">{i18n.t('login.passkeyPrompt')}</p>
+    </div>
 
-        {#if data.state.error}
-          <p class="text-destructive text-sm m-0" role="alert">{data.state.error}</p>
+    {#if errorMessage}
+      <p class="auth-shell__error" role="alert">{errorMessage}</p>
+    {/if}
+
+    <div class="auth-shell__actions">
+      <Button
+        type="button"
+        size="lg"
+        disabled={data.state.isSubmitting}
+        onclick={handlePasskeySignIn}
+      >
+        {#if data.state.isSubmitting}
+          {i18n.t('login.signingIn')}
+        {:else}
+          {i18n.t('login.signInButton')}
         {/if}
+      </Button>
 
-        <Button
-          class="w-full"
-          type="button"
-          disabled={data.state.isSubmitting}
-          onclick={handlePasskeySignIn}
-        >
-          {#if data.state.isSubmitting}
-            {i18n.t('login.signingIn')}
-          {:else}
-            {i18n.t('login.signInButton')}
-          {/if}
-        </Button>
-
-        <Separator />
-
-        <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">
-          {i18n.t('login.lostPasskey')}
-        </a>
-      </div>
-    </CardContent>
-  </Card>
+      <a class="auth-shell__link justify-center" href="/login/recovery">
+        {i18n.t('login.lostPasskey')}
+      </a>
+    </div>
+  </AuthPanel>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">
-      {i18n.t('login.backToPublic')}
-    </a>
+    <a class="auth-shell__link" href="/">{i18n.t('login.backToPublic')}</a>
   {/snippet}
 </AuthLayout>

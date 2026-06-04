@@ -22,8 +22,8 @@ describe('[LOCALIZATION-FE-S006] ログイン画面の fallback locale 表示', 
 
     // fallback 文字列が表示されていることを確認
     expect(screen.getByText('ログイン')).toBeInTheDocument();
-    expect(screen.getByText('パスキーを使ってサインインしてください。')).toBeInTheDocument();
+    expect(screen.getByText('パスキーでサインインしてください。')).toBeInTheDocument();
     expect(screen.getByText('パスキーでログイン')).toBeInTheDocument();
-    expect(screen.getByText('パスキーを紛失した場合')).toBeInTheDocument();
+    expect(screen.getByText('パスキーを紛失した場合はこちら')).toBeInTheDocument();
   });
 });

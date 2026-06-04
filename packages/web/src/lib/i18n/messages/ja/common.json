@@ -1,10 +1,16 @@
 {
-  "heroEyebrow": "SvelteKit + Cloudflare Workers",
-  "heroTitle": "公開面と認証面を再利用しやすい構成でまとめています。",
-  "heroDescription": "packages/web は公開ルートの SSR を担い、packages/frontend/app は別ドメインの SvelteKit SPA を担います。",
-  "highlight1": "public route は SSR の SvelteKit として運用",
-  "highlight2": "認証 UI は別ドメインの CSR アプリとして分離",
-  "loginCta": "ログインを試す",
+  "navAriaLabel": "メインナビゲーション",
+  "heroTitle": "公開面と認証面を、再利用しやすい層として組み立てる。",
+  "heroLead": "公開ルートは SSR の SvelteKit として、認証 UI は別ドメインの CSR アプリとして独立。両者の境界にドメイン hooks と生成 SDK だけを通します。",
+  "heroCtaPrimary": "ログインを試す",
+  "heroCtaSecondary": "GitHub で確認",
+  "heroMetaAriaLabel": "アーキテクチャメタ情報",
+  "metaStackLabel": "STACK",
+  "metaStackValue": "SvelteKit / Svelte 5 / TypeSpec / Go",
+  "metaRuntimeLabel": "RUNTIME",
+  "metaRuntimeValue": "Web = SSR · App = CSR",
+  "metaArchitectureLabel": "ARCHITECTURE",
+  "metaArchitectureValue": "web → ui / app → domain → api",
   "languageSwitchAriaLabel": "言語切り替え",
   "home": "Home"
 }

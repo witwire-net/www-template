@@ -90,3 +90,33 @@ export { default as EmptyState } from './components/empty-state/empty-state.svel
 
 // ConfirmDialog
 export { default as ConfirmDialog } from './components/confirm-dialog/confirm-dialog.svelte';
+
+// Form primitives
+export { default as Label } from './components/label/label.svelte';
+
+// Brand wordmark
+export { BrandMark, type BrandMarkProps, type BrandMarkSize } from './components/brand-mark';
+
+// Bordered solid surface shell
+export {
+  SurfacePanel,
+  type SurfacePanelProps,
+  type SurfacePanelInteractive,
+} from './components/surface-panel';
+
+// Sticky page header
+export { PageHeader, type PageHeaderProps } from './components/page-header';
+
+// Monospace metadata label
+export { MonoLabel, type MonoLabelProps, type MonoLabelTone } from './components/mono-label';
+
+// Auth surface status card
+export { AuthPanel, type AuthPanelProps } from './components/auth-panel';
+
+// Auth surface status icon (Tabler Icons wrapper with brand tone)
+export {
+  StatusIcon,
+  type StatusIconProps,
+  type StatusIconName,
+  type StatusIconTone,
+} from './components/status-icon';

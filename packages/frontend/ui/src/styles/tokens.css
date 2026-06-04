@@ -161,6 +161,9 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.65;
 
+  /* Tracking presets (用途別レタースペーシング) */
+  --letter-spacing-eyebrow: 0.22em;
+
   /* ========================================
      06. Effects ( guideline: NO shadows / glow / glassmorphism )
      ======================================== */

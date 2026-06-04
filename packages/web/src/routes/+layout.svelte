@@ -1,8 +1,6 @@
-<svelte:head>
-  <title>www-template</title>
-</svelte:head>
 <script lang="ts">
   import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+  import { BrandMark, PageHeader } from '@www-template/ui';
   import '@www-template/ui/styles.css';
   import '../app.css';
   import { useObservability } from '$lib/observability.svelte';
@@ -38,23 +36,31 @@
 
 <QueryClientProvider client={queryClient}>
   <div class="web-layout">
-    <header class="web-layout__topbar">
-      <a class="web-layout__brand" href={`/${currentLocale}`}>www-template</a>
-      <nav class="web-layout__nav">
+    <PageHeader>
+      <BrandMark size="md" />
+      <nav class="web-layout__nav" aria-label={i18n.t('common.navAriaLabel')}>
         {#each links as link (link.href)}
-          <a class="web-layout__nav-link" href={link.href}>{link.label}</a>
+          <a
+            class="web-layout__nav-link"
+            href={link.href}
+            data-active={link.href === `/${currentLocale}`}
+          >
+            {link.label}
+          </a>
         {/each}
       </nav>
-      <nav class="web-layout__lang-switch" aria-label={i18n.t('common.languageSwitchAriaLabel')}>
-        {#each SUPPORTED_LOCALES as locale (locale)}
-          {#if locale === currentLocale}
-            <span class="web-layout__lang-current" aria-current="true">{locale.toUpperCase()}</span>
-          {:else}
-            <a class="web-layout__lang-link" href={`/${locale}`}>{locale.toUpperCase()}</a>
-          {/if}
-        {/each}
-      </nav>
-    </header>
+      {#snippet trailing()}
+        <nav class="web-layout__nav" aria-label={i18n.t('common.languageSwitchAriaLabel')}>
+          {#each SUPPORTED_LOCALES as locale (locale)}
+            {#if locale === currentLocale}
+              <span class="web-layout__nav-link" aria-current="true">{locale.toUpperCase()}</span>
+            {:else}
+              <a class="web-layout__nav-link" href={`/${locale}`}>{locale.toUpperCase()}</a>
+            {/if}
+          {/each}
+        </nav>
+      {/snippet}
+    </PageHeader>
 
     <main class="web-layout__content">
       {@render children()}

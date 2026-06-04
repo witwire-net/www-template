@@ -1,13 +1,17 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
 
-  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
   import { useRecoveryFlow } from '@www-template/domain/auth/recovery';
-  import { Button, Card, CardContent, Separator } from '@www-template/ui/components';
-  import { resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
+  import { AuthPanel, Button } from '@www-template/ui';
+
+  import AuthLayout from '$lib/layouts/AuthLayout.svelte';
+  import { formatAuthError, resolveUnauthenticatedLocale, useI18n } from '$lib/i18n';
 
   const { data, actions } = useRecoveryFlow();
-  const i18n = useI18n(resolveUnauthenticatedLocale());
+  const initialLocale = resolveUnauthenticatedLocale();
+  const i18n = useI18n(initialLocale);
+
+  const errorMessage = $derived(formatAuthError(i18n, data.state.error, initialLocale));
 
   async function handleRegisterPasskey() {
     const result = await actions.registerRecoveryPasskey();
@@ -26,46 +30,45 @@
 </script>
 
 <AuthLayout>
-  <Card class="w-full">
-    <CardContent>
-      <div class="flex flex-col items-center gap-4 text-center">
-        {#if data.state.kind === 'device-link'}
-          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryRegisterNewDeviceTitle')}</h1>
-          <p class="m-0 text-sm text-muted-foreground text-center">
-            {i18n.t('common.recoveryRegisterNewDeviceDescription')}
-          </p>
+  <AuthPanel width="narrow">
+    <div class="flex flex-col items-center gap-3 text-center">
+      <h1 class="auth-shell__heading">
+        {data.state.kind === 'device-link'
+          ? i18n.t('common.recoveryRegisterNewDeviceTitle')
+          : i18n.t('common.recoveryRegisterReissueTitle')}
+      </h1>
+      <p class="auth-shell__body">
+        {data.state.kind === 'device-link'
+          ? i18n.t('common.recoveryRegisterNewDeviceDescription')
+          : i18n.t('common.recoveryRegisterReissueDescription')}
+      </p>
+    </div>
+
+    {#if errorMessage}
+      <p class="auth-shell__error" role="alert">{errorMessage}</p>
+    {/if}
+
+    <div class="auth-shell__actions">
+      <Button
+        size="lg"
+        type="button"
+        disabled={data.state.phase === 'registering'}
+        onclick={handleRegisterPasskey}
+      >
+        {#if data.state.phase === 'registering'}
+          {i18n.t('common.recoveryRegisterSubmitting')}
         {:else}
-          <h1 class="m-0 text-2xl font-bold text-center">{i18n.t('common.recoveryRegisterReissueTitle')}</h1>
-          <p class="m-0 text-sm text-muted-foreground text-center">
-            {i18n.t('common.recoveryRegisterReissueDescription')}
-          </p>
+          {i18n.t('common.recoveryRegisterSubmit')}
         {/if}
+      </Button>
 
-        {#if data.state.error}
-          <p class="text-destructive text-sm m-0" role="alert">{data.state.error}</p>
-        {/if}
-
-        <Button
-          class="w-full"
-          type="button"
-          disabled={data.state.phase === 'registering'}
-          onclick={handleRegisterPasskey}
-        >
-          {#if data.state.phase === 'registering'}
-            {i18n.t('common.recoveryRegisterSubmitting')}
-          {:else}
-            {i18n.t('common.recoveryRegisterSubmit')}
-          {/if}
-        </Button>
-
-        <Separator />
-
-        <a href="/login/recovery" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryRegisterRetry')}</a>
-      </div>
-    </CardContent>
-  </Card>
+      <a class="auth-shell__link justify-center" href="/login/recovery">
+        {i18n.t('common.recoveryRegisterRetry')}
+      </a>
+    </div>
+  </AuthPanel>
 
   {#snippet footer()}
-    <a href="/" class="text-sm text-muted-foreground no-underline hover:underline">{i18n.t('common.recoveryRegisterBackToPublic')}</a>
+    <a class="auth-shell__link" href="/">{i18n.t('common.recoveryRegisterBackToPublic')}</a>
   {/snippet}
 </AuthLayout>

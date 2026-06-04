@@ -82,6 +82,17 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 4. Frontend-owned work stays within `packages/frontend` and `packages/web`; backend-owned paths (`packages/backend`, `packages/admin`, `packages/typespec`) are not modified unless the caller explicitly describes a cross-agent handoff
 5. Lint, typecheck, build, and test evidence uses `pnpm` scripts only; direct `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, `stylelint`, `pnpm exec`, or `pnpm --filter ... exec` commands are not accepted as verification evidence
 
+## Strict UI content checks
+
+- Treat poetic, atmospheric, metaphorical, or decorative copy in product UI, code comments, summaries, or reports as a violation; require direct functional wording only.
+- Treat explanatory UI copy that describes how the interface looks or works as a violation.
+- Treat text used as decoration, background texture, visual filler, ornamental labels, repeated marquee text, ASCII art, typographic patterns, or purely aesthetic marks as `BLOCKED`.
+- Treat handwritten or inline SVG markup in Svelte, TypeScript, HTML, CSS, asset files, or string templates as `BLOCKED`; require existing approved icon components, existing assets, or shared UI primitives instead.
+- Require user-visible UI text to be the absolute minimum. If a label, paragraph, caption, helper text, badge, tooltip, or heading can be removed without losing required meaning, request its removal.
+- Prefer UI that communicates through structure, affordance, state, and behavior instead of text; absence of UI text is acceptable when the interaction remains understandable and accessible.
+- Treat raw error codes, internal identifiers, exception names, stack details, or transport-level messages shown to users as `BLOCKED`.
+- Require user-facing errors to use the smallest clear wording that explains what happened and, when useful, what the user can do. If the code cannot derive that wording safely, require a generic user-safe message plus a reported missing error mapping.
+
 ## Quantitative app-style thresholds
 
 - Evaluate app styling primarily from added or modified styling in touched files under `packages/frontend/app/**`; do not return `BLOCKED` based only on untouched legacy styling outside the diff.

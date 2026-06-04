@@ -1,8 +1,7 @@
 ---
 description: Frontend implementation specialist for packages/frontend and packages/web. Loads gpt-ux, coding-guardian, orchestration-playbook, and agent-browser skills to implement, fix, investigate, and iterate until reviewer approval, then returns results to the caller.
 mode: subagent
-hidden: true
-model: kimi-for-coding/k2p6
+model: opencode-go/minimax-m3
 temperature: 0.1
 permission:
   edit: allow
@@ -85,6 +84,17 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - Do not call direct verification tools such as `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, `stylelint`, `pnpm exec`, or `pnpm --filter ... exec`; if a package script uses `exec` internally, run only the parent `pnpm` script
 - Stop and report before crossing any Ask-first boundary
 - Do not report completion until `unit/frontend/reviewer` returns `Approve`
+
+## Strict UI content rules
+
+- Never write poetic, atmospheric, metaphorical, or decorative copy in product UI, code comments, commit-style summaries, or reports; use only direct functional wording.
+- Never write explanatory UI copy that describes the interface itself; UI must communicate through structure, affordance, state, and behavior instead of explanation text.
+- Never use text as decoration, background texture, visual filler, ornamental labels, repeated marquee text, ASCII art, typographic patterns, or purely aesthetic marks.
+- Do not handwrite or inline SVG markup in Svelte, TypeScript, HTML, CSS, asset files, or string templates; use existing approved icon components, existing assets, or shared UI primitives instead.
+- Keep user-visible UI text to the absolute minimum. Less text is better; aim for UI that still works with no text whenever the task allows it.
+- Before finalizing any UI, actively search for removable or redundant text and delete it when the user can still understand the action, state, or outcome.
+- Do not display raw error codes, internal identifiers, exception names, stack details, or transport-level messages to users. Map errors to the smallest clear user-facing wording that explains what happened and what the user can do.
+- If minimal error wording cannot be derived safely from available information, show a generic user-safe message and report the missing error mapping to the caller.
 
 ## Architecture
 

@@ -156,3 +156,4 @@ export function persistAppLocale(locale: Locale): void {
 
 export { normalizeLocale, resolveLocale, SUPPORTED_LOCALES };
 export type { Locale };
+export { formatAuthError } from './errorCopy';

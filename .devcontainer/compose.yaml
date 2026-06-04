@@ -26,7 +26,7 @@ services:
       ADMIN_CONFIG_PATH: /workspaces/www-template/.config/local.admin.toml
       NODE_ENV: development
       TOOLCHAIN_GO_VERSION: 1.26.4
-      TOOLCHAIN_PNPM_VERSION: 11.5.0
+      TOOLCHAIN_PNPM_VERSION: 11.5.1
       TOOLCHAIN_GORM_VERSION: 1.31.0
       TOOLCHAIN_GOLANG_MIGRATE_VERSION: 4.18.3
       TOOLCHAIN_OAPI_CODEGEN_VERSION: 2.4.1
@@ -97,6 +97,8 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
+    ports:
+      - '8025:8025'
     restart: unless-stopped
 
   signoz-init-clickhouse:
@@ -262,7 +264,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'found=0; while read -r _ addr _ state _; do case "$${addr}:$${state}" in *:10DD:0A) found=1;; esac; done < /proc/net/tcp; [ "$${found}" = 1 ]',
+          'found=0; for file in /proc/net/tcp /proc/net/tcp6; do [ -r "$${file}" ] || continue; while read -r _ addr _ state _; do case "$${addr}:$${state}" in *:334D:0A) found=1;; esac; done < "$${file}"; done; [ "$${found}" = 1 ]',
         ]
       interval: 5s
       timeout: 2s

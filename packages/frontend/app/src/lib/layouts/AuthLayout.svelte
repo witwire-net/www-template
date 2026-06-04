@@ -1,38 +1,34 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Separator } from '@www-template/ui/components';
 
+  import { BrandMark } from '@www-template/ui';
+
+  /**
+   * 認証 surface の共通レイアウト。
+   * brand-mark header + main 中央配置 + footer 段の 3 ブロックで構成し、
+   * 内部の status card は AuthPanel を呼び出し側で利用する。
+   */
   interface AuthLayoutProps {
-    /** メインコンテンツのスニペット。 */
+    /** パネル本体。AuthPanel を渡して使うことを想定。 */
     children: Snippet;
-    /** フッターのスニペット。省略した場合フッターは表示されない。 */
+    /** フッター領域の snippet。省略可。 */
     footer?: Snippet;
   }
 
   let { children, footer }: AuthLayoutProps = $props();
 </script>
 
-<!--
-  認証フロー全体で共通するページレイアウト。
-  header（ブランドロゴ）+ main（中央配置のカードエリア）+ footer（任意）の三段構成。
-  スタイルは Tailwind ユーティリティクラスのみで記述し、<style> ブロックは一切使用しない。
--->
-<div class="flex flex-col items-center min-h-screen px-4 py-8 font-sans bg-background text-foreground">
-  <header class="flex justify-center py-4">
-    <a href="/" class="no-underline text-inherit" aria-label="www-template トップページ">
-      <span class="font-bold tracking-[0.08em]">www-template</span>
-    </a>
+<div class="auth-shell">
+  <header class="auth-shell__header">
+    <BrandMark size="sm" />
   </header>
 
-  <Separator />
-
-  <main class="flex flex-1 w-full max-w-[400px] items-center justify-center py-8">
+  <main class="auth-shell__main">
     {@render children()}
   </main>
 
   {#if footer}
-    <Separator />
-    <footer class="flex justify-center py-4">
+    <footer class="auth-shell__footer">
       {@render footer()}
     </footer>
   {/if}

@@ -78,3 +78,20 @@ export { Spinner } from './spinner';
 export { Toaster } from './sonner';
 export { ConfirmDialog } from './confirm-dialog';
 export { EmptyState } from './empty-state';
+
+// Surface-shell primitives
+export { BrandMark, type BrandMarkProps, type BrandMarkSize } from './brand-mark';
+export {
+  SurfacePanel,
+  type SurfacePanelProps,
+  type SurfacePanelInteractive,
+} from './surface-panel';
+export { PageHeader, type PageHeaderProps } from './page-header';
+export { MonoLabel, type MonoLabelProps, type MonoLabelTone } from './mono-label';
+export { AuthPanel, type AuthPanelProps } from './auth-panel';
+export {
+  StatusIcon,
+  type StatusIconProps,
+  type StatusIconName,
+  type StatusIconTone,
+} from './status-icon';

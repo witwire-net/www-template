@@ -1,8 +1,8 @@
 {
   "login": "ログイン",
-  "passkeyPrompt": "パスキーを使ってサインインしてください。",
+  "passkeyPrompt": "パスキーでサインインしてください。",
   "signInButton": "パスキーでログイン",
   "signingIn": "認証中…",
-  "lostPasskey": "パスキーを紛失した場合",
+  "lostPasskey": "パスキーを紛失した場合はこちら",
   "backToPublic": "公開サイトに戻る"
 }

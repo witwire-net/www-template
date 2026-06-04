@@ -1,5 +1,6 @@
 <script lang="ts">
   import { env } from '$env/dynamic/public';
+  import { MonoLabel } from '@www-template/ui';
 
   import { useI18n, type Locale } from '$lib/i18n';
 
@@ -25,26 +26,49 @@
       document.documentElement.lang = locale;
     }
   });
-
-  const highlights = $derived([i18n.t('common.highlight1'), i18n.t('common.highlight2')]);
 </script>
 
 <svelte:head>
   <title>{i18n.t('common.heroTitle')}</title>
-  <meta name="description" content={i18n.t('common.heroDescription')} />
+  <meta name="description" content={i18n.t('common.heroLead')} />
   <link rel="canonical" href={`/${data.locale}`} />
 </svelte:head>
 
 <section class="hero-section">
-  <div class="hero-section__copy">
-    <div class="hero-section__eyebrow">{i18n.t('common.heroEyebrow')}</div>
-    <h1>{i18n.t('common.heroTitle')}</h1>
-    <p>{i18n.t('common.heroDescription')}</p>
-    <ul>
-      {#each highlights as item (item)}
-        <li>{item}</li>
-      {/each}
-    </ul>
-    <a href={`${appUrl}/login`} class="hero-section__cta">{i18n.t('common.loginCta')}</a>
+  <div class="hero-section__grid">
+    <div class="hero-section__copy">
+      <h1 class="hero-section__title">
+        {i18n.t('common.heroTitle')}
+      </h1>
+      <p class="hero-section__lead">{i18n.t('common.heroLead')}</p>
+      <div class="hero-section__actions">
+        <a href={`${appUrl}/login`} class="hero-section__cta">
+          {i18n.t('common.heroCtaPrimary')}
+        </a>
+        <a
+          href="https://github.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="hero-section__secondary-link"
+        >
+          {i18n.t('common.heroCtaSecondary')}
+        </a>
+      </div>
+    </div>
+
+    <aside class="hero-section__meta" aria-label={i18n.t('common.heroMetaAriaLabel')}>
+      <div class="hero-section__meta-row">
+        <MonoLabel tone="muted">{i18n.t('common.metaStackLabel')}</MonoLabel>
+        <span class="hero-section__meta-value">{i18n.t('common.metaStackValue')}</span>
+      </div>
+      <div class="hero-section__meta-row">
+        <MonoLabel tone="muted">{i18n.t('common.metaRuntimeLabel')}</MonoLabel>
+        <span class="hero-section__meta-value">{i18n.t('common.metaRuntimeValue')}</span>
+      </div>
+      <div class="hero-section__meta-row">
+        <MonoLabel tone="muted">{i18n.t('common.metaArchitectureLabel')}</MonoLabel>
+        <span class="hero-section__meta-value">{i18n.t('common.metaArchitectureValue')}</span>
+      </div>
+    </aside>
   </div>
 </section>

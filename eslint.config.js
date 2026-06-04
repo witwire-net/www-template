@@ -785,6 +785,7 @@ const frontendI18nLiteralGuardPlugin = {
           /^(?:ja|en)(?:-[A-Z]{2})?$/u,
           /^(?:[0-9]+(?:\.[0-9]+)?)$/u,
           /^www-template(?:\s+UI)?$/iu,
+          /^WitWire(?:\s+Inc\.)?(?:\s+株式会社)?$/iu,
         ];
 
         const isAllowedLiteral = (value) => {

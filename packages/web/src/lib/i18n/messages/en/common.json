@@ -1,10 +1,16 @@
 {
-  "heroEyebrow": "SvelteKit + Cloudflare Workers",
-  "heroTitle": "A reusable architecture for public and authenticated surfaces.",
-  "heroDescription": "packages/web handles public routes with SSR, while packages/frontend/app serves the authenticated SvelteKit SPA on a separate domain.",
-  "highlight1": "Public routes run as SSR SvelteKit",
-  "highlight2": "Auth UI is separated as a CSR app on another domain",
-  "loginCta": "Try Login",
+  "navAriaLabel": "Main navigation",
+  "heroTitle": "A reusable split between the public and authenticated surfaces.",
+  "heroLead": "Public routes run as SSR SvelteKit. Auth runs as a CSR SvelteKit SPA on a separate origin. Both sides communicate only through domain hooks and the generated SDK.",
+  "heroCtaPrimary": "Try login",
+  "heroCtaSecondary": "View on GitHub",
+  "heroMetaAriaLabel": "Architecture metadata",
+  "metaStackLabel": "STACK",
+  "metaStackValue": "SvelteKit / Svelte 5 / TypeSpec / Go",
+  "metaRuntimeLabel": "RUNTIME",
+  "metaRuntimeValue": "Web = SSR · App = CSR",
+  "metaArchitectureLabel": "ARCHITECTURE",
+  "metaArchitectureValue": "web → ui / app → domain → api",
   "languageSwitchAriaLabel": "Language switch",
   "home": "Home"
 }
