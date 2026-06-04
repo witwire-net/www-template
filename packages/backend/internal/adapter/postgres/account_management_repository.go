@@ -69,7 +69,7 @@ type auditTargetRecord struct {
 	TargetAccountID    string    `gorm:"column:target_account_id"`
 	TargetAccountEmail string    `gorm:"column:target_account_email"`
 	Outcome            string    `gorm:"column:outcome"`
-	StableErrorCode    string    `gorm:"column:stable_error_code"`
+	StableErrorCode    *string   `gorm:"column:stable_error_code"`
 	CompletedAt        time.Time `gorm:"column:completed_at"`
 }
 
@@ -274,26 +274,33 @@ func bindAuditTarget(ctx context.Context, tx *gorm.DB, record accountsapplicatio
 		return accountsapplication.ErrAccountAuditNotFound
 	}
 
-	// Step 3: admin.audit_events の target 欄と success outcome を同時に更新し、account 作成成功と監査完了の atomicity を保つ。
+	// Step 3: stable_error_code は success では NULL、failure では stable code 文字列として保存し、DB CHECK 制約と一致させる。
+	// 空文字列を挿入すると CHECK (stable_error_code IS NULL) が失敗するため、nil pointer で NULL を表現する。
+	var stableErrorCode *string
+	if record.AuditCompletion.StableErrorCode != "" {
+		stableErrorCode = &record.AuditCompletion.StableErrorCode
+	}
+
+	// Step 4: admin.audit_events の target 欄と success outcome を同時に更新し、account 作成成功と監査完了の atomicity を保つ。
 	result := tx.WithContext(ctx).Model(&auditTargetRecord{}).
 		Where("id = ? AND outcome = ?", auditID, "pending").
 		Updates(map[string]any{
 			"target_account_id":    record.Account.ID().String(),
 			"target_account_email": record.Account.Email().String(),
 			"outcome":              record.AuditCompletion.Outcome,
-			"stable_error_code":    record.AuditCompletion.StableErrorCode,
+			"stable_error_code":    stableErrorCode,
 			"completed_at":         record.AuditCompletion.CompletedAt,
 		})
 	if result.Error != nil {
 		return accountsapplication.ErrAccountRepositoryUnavailable
 	}
 
-	// Step 4: pending audit intent が存在しない場合は Product Account 作成も rollback し、監査なし mutation を禁止する。
+	// Step 5: pending audit intent が存在しない場合は Product Account 作成も rollback し、監査なし mutation を禁止する。
 	if result.RowsAffected == 0 {
 		return accountsapplication.ErrAccountAuditNotFound
 	}
 
-	// Step 5: Admin schema 側の target correlation と success outcome が同じ transaction 内で完了したことを nil で返す。
+	// Step 6: Admin schema 側の target correlation と success outcome が同じ transaction 内で完了したことを nil で返す。
 	return nil
 }
 

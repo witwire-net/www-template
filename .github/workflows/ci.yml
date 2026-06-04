@@ -14,6 +14,24 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # バックエンド統合テスト用の PostgreSQL サービス。
+    # 統合テストは BACKEND_POSTGRES_TEST_OWNER_URL を使い、isolated なテスト DB を作成する。
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +71,8 @@ jobs:
 
       - name: Unit tests (frontend + Go)
         run: pnpm test:run
+        env:
+          BACKEND_POSTGRES_TEST_OWNER_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
       - name: Codegen drift check
         run: pnpm check:codegen

@@ -29,8 +29,8 @@ type auditEventRecord struct {
 	ID                 string     `gorm:"column:id;primaryKey"`
 	RequestID          string     `gorm:"column:request_id"`
 	OperatorID         string     `gorm:"column:operator_id"`
-	TargetAccountID    string     `gorm:"column:target_account_id"`
-	TargetAccountEmail string     `gorm:"column:target_account_email"`
+	TargetAccountID    *string    `gorm:"column:target_account_id"`
+	TargetAccountEmail *string    `gorm:"column:target_account_email"`
 	Action             string     `gorm:"column:action"`
 	Outcome            string     `gorm:"column:outcome"`
 	StableErrorCode    *string    `gorm:"column:stable_error_code"`
@@ -109,7 +109,16 @@ func auditEventRecordFromIntent(record auditapplication.IntentRecord, auditID st
 	if metadata == "" {
 		metadata = "{}"
 	}
-	return auditEventRecord{ID: auditID, RequestID: record.RequestID, OperatorID: record.OperatorID, Action: record.Action, Outcome: record.Outcome, Metadata: metadata, CreatedAt: record.OccurredAt.UTC()}
+
+	// Step 2: target_account_id は account creation の場合だけ設定し、operator creation では NULL とする。
+	// target_account_id は public.accounts(id) への FK 制約を持つため、account 以外の target type では
+	// 存在しない account ID を参照して FK 違反になるのを防ぐ。
+	var targetAccountID *string
+	if record.TargetType == "account" && record.TargetID != "" {
+		targetAccountID = &record.TargetID
+	}
+
+	return auditEventRecord{ID: auditID, RequestID: record.RequestID, OperatorID: record.OperatorID, TargetAccountID: targetAccountID, Action: record.Action, Outcome: record.Outcome, Metadata: metadata, CreatedAt: record.OccurredAt.UTC()}
 }
 
 func auditCompletionUpdates(record auditapplication.CompletionRecord) map[string]any {
@@ -127,7 +136,15 @@ func (r auditEventRecord) toApplicationRecord() auditapplication.Record {
 	if r.StableErrorCode != nil {
 		stableErrorCode = *r.StableErrorCode
 	}
-	return auditapplication.Record{AuditID: r.ID, OperatorID: r.OperatorID, Action: r.Action, TargetType: "account", TargetID: r.TargetAccountID, RequestID: r.RequestID, DetailsJSON: r.Metadata, Outcome: r.Outcome, StableErrorCode: stableErrorCode, OccurredAt: r.CreatedAt, CompletedAt: r.CompletedAt}
+
+	// Step 2: nullable target_account_id を application DTO の空文字表現へ戻す。
+	// pending intent では NULL で保存しているため、application 層には空文字として渡す。
+	targetAccountID := ""
+	if r.TargetAccountID != nil {
+		targetAccountID = *r.TargetAccountID
+	}
+
+	return auditapplication.Record{AuditID: r.ID, OperatorID: r.OperatorID, Action: r.Action, TargetType: "account", TargetID: targetAccountID, RequestID: r.RequestID, DetailsJSON: r.Metadata, Outcome: r.Outcome, StableErrorCode: stableErrorCode, OccurredAt: r.CreatedAt, CompletedAt: r.CompletedAt}
 }
 
 func mapAuditRepositoryError(err error) error {
