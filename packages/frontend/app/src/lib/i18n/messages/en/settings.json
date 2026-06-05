@@ -1,11 +1,11 @@
 {
   "title": "Settings",
   "localeLabel": "Display Language",
-  "localeDescription": "Select the app display language.",
   "save": "Save",
   "saving": "Saving…",
   "success": "Settings updated.",
   "error": "Failed to update settings.",
   "jaLabel": "日本語",
-  "enLabel": "English"
+  "enLabel": "English",
+  "signInAndDevices": "Sign-in & Devices"
 }

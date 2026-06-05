@@ -59,7 +59,8 @@ const loginViaPasskeyUi = async (page: Page) => {
   await page.goto('http://app.localhost:5174/login');
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
   await expect(page).toHaveURL(/app.localhost:5174\/?$/);
-  await expect(page.getByRole('heading', { name: '認証済みアプリのエントリー' })).toBeVisible();
+  // ホームページが表示されることを確認
+  await expect(page.getByRole('heading', { name: 'ホーム' })).toBeVisible();
 };
 
 test.describe('auth flow', () => {
@@ -122,7 +123,9 @@ test.describe('auth flow', () => {
 
   test('passkey login 成功で protected app へ入れる', async ({ page }) => {
     await loginViaPasskeyUi(page);
-    await expect(page.getByRole('link', { name: 'ログアウト', exact: true })).toBeVisible();
+    // ユーザーメニューにログアウトが表示されることを確認
+    await page.getByLabel('ユーザーメニュー').click();
+    await expect(page.getByRole('menuitem', { name: 'ログアウト' })).toBeVisible();
   });
 
   test('認証済み状態から logout 導線で login に戻れる', async ({ page }) => {
@@ -135,7 +138,9 @@ test.describe('auth flow', () => {
       });
     });
 
-    await page.getByRole('link', { name: 'ログアウト', exact: true }).click();
+    // ユーザーメニューからログアウト
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: 'ログアウト' }).click();
     await expect(page).toHaveURL(/app.localhost:5174\/login$/);
     await expect(page.getByRole('heading', { name: 'ログイン' })).toBeVisible();
   });
@@ -198,7 +203,7 @@ test.describe('auth flow', () => {
     await page.getByRole('button', { name: '新しいパスキーを登録' }).click();
 
     await expect(page).toHaveURL(/app.localhost:5174\/?$/);
-    await expect(page.getByRole('heading', { name: '認証済みアプリのエントリー' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'ホーム' })).toBeVisible();
   });
 
   /**

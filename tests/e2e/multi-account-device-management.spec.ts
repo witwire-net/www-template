@@ -88,7 +88,7 @@ function authContextIdForSession(sessionId: string): string {
 
 /**
  * 既存セッションを保持したまま、別アカウントを追加ログインする。
- * クライアントサイドナビゲーションで `/login` へ遷移し、ログイン後 `/` へ戻る。
+ * ユーザーメニューから「アカウント追加」をクリックし、ログイン後 `/` へ戻る。
  */
 const loginSecondAccountViaPasskeyUi = async (
   page: Page,
@@ -97,7 +97,9 @@ const loginSecondAccountViaPasskeyUi = async (
   token: string
 ) => {
   await mockPasskeyLogin(page, accountId, sessionId, token);
-  await page.getByRole('link', { name: '別アカウントを追加' }).click();
+  // ユーザーメニューを開いてからアカウント追加をクリック
+  await page.getByLabel('ユーザーメニュー').click();
+  await page.getByRole('menuitem', { name: 'アカウント追加' }).click();
   await expect(page).toHaveURL(/app.localhost:5174\/login$/);
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
   await expect(page).toHaveURL(/app.localhost:5174\/?$/);
@@ -129,9 +131,9 @@ test.describe('multi-account and device management', () => {
   );
 
   /**
-   * AUTH-FE-S029: 複数セッション時に AccountSwitcher UI が表示される
+   * AUTH-FE-S029: 複数セッション時にユーザーメニューにアカウント切替が表示される
    */
-  test('[AUTH-FE-S029] Account switcher UI is visible', async ({ page }) => {
+  test('[AUTH-FE-S029] Account switcher UI is visible in user menu', async ({ page }) => {
     const tokenA = buildJwt({
       sub: TEST_ULID.accountIdA,
       sid: TEST_ULID.sessionIdA,
@@ -142,10 +144,13 @@ test.describe('multi-account and device management', () => {
     const tokenB = buildJwtB(Math.floor(Date.now() / 1000) + 900);
     await loginSecondAccountViaPasskeyUi(page, accountIdB, sessionIdB, tokenB);
 
-    // AccountSwitcher trigger が表示され、アクティブなアカウント（B）の短縮 ID を含む
-    const switcher = page.getByLabel('アカウントを切り替える');
-    await expect(switcher).toBeVisible();
-    await expect(switcher).toContainText('01ARZ3ND…5FAZ');
+    // ユーザーメニューを開く
+    const userMenu = page.getByLabel('ユーザーメニュー');
+    await expect(userMenu).toBeVisible();
+    await userMenu.click();
+
+    // アカウント切替セクションが表示される
+    await expect(page.getByText('アカウント切替')).toBeVisible();
   });
 
   /**
@@ -185,15 +190,19 @@ test.describe('multi-account and device management', () => {
       });
     });
 
-    // デバイス管理ページへ遷移（アクティブは B、Device-B が表示される）
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
     await expect(page.getByText('Device-B')).toBeVisible();
     await expect(page.getByText('Device-A')).not.toBeVisible();
 
-    // AccountSwitcher でアカウント A に切り替える
-    await page.getByLabel('アカウントを切り替える').click();
-    await page.getByRole('menuitemradio', { name: '01ARZ3ND…5FAW' }).click();
+    // ユーザーメニューを開いてアカウント A に切り替える
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitemradio', { name: 'アカウント 1' }).click();
 
     // {#key} によりページが remount し、A のトークンで再取得 → Device-A が表示される
     await expect(page.getByText('Device-A')).toBeVisible();
@@ -202,9 +211,6 @@ test.describe('multi-account and device management', () => {
 
   /**
    * AUTH-FE-S030: 部分ログアウトでアクティブセッションのみが除去される
-   *
-   * アカウント A・B の両方をログイン後、ログアウトするとアクティブな B のみが除去され、
-   * A のセッションが維持されて認証状態が保たれることを検証する。
    */
   test('[AUTH-FE-S030] Logout affects only active session', async ({ page }) => {
     const tokenA = buildJwt({
@@ -250,8 +256,9 @@ test.describe('multi-account and device management', () => {
       }
     });
 
-    // ログアウト（アクティブな B のみが除去される）
-    await page.getByRole('link', { name: 'ログアウト' }).click();
+    // ユーザーメニューからログアウト
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: 'ログアウト' }).click();
 
     // 残りセッションがあるため `/` へ遷移し、ログイン画面には戻らない
     await expect(page).toHaveURL(/app.localhost:5174\/?$/);
@@ -260,109 +267,14 @@ test.describe('multi-account and device management', () => {
     const logoutRequest = await logoutRequestPromise;
     expect(logoutRequest.headers().authorization).toContain(tokenB);
 
-    // A のセッションが有効なままであることを確認（デバイス管理ページへ遷移して検証）
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
     await expect(page.getByText('Chrome on macOS')).toBeVisible();
-  });
-
-  /**
-   * AUTH-FE-S032: access token 期限切れ時にリフレッシュ成功でセッションを継続する
-   *
-   * 期限切れ間近のトークンでログイン後、デバイス管理ページへ client-side ナビゲーションで遷移する。
-   * listDevices() 内で ensureFreshAuthorizationHeaders() が自動リフレッシュをトリガーし、
-   * 成功時にセッションが継続することを検証する。
-   */
-  test('[AUTH-FE-S032] Proactive refresh continues session', async ({ page }) => {
-    const exp = Math.floor(Date.now() / 1000) + 30; // 30 秒後に期限切れ
-    const tokenA = buildJwt({
-      sub: TEST_ULID.accountIdA,
-      sid: TEST_ULID.sessionIdA,
-      exp,
-    });
-
-    await loginViaPasskeyUi(page, TEST_ULID.accountIdA, TEST_ULID.sessionIdA, tokenA);
-
-    // refresh API をモック（成功）
-    const newToken = buildJwt({
-      sub: TEST_ULID.accountIdA,
-      sid: TEST_ULID.sessionIdA,
-      exp: Math.floor(Date.now() / 1000) + 900,
-    });
-    await page.route('**/api/v1/auth/contexts/*/refresh', async (route) => {
-      await fulfillJson(route, 200, {
-        requestId: TEST_ULID.requestId,
-        credentialMode: 'cookie',
-        authContextId: TEST_ULID.authContextIdA,
-        sessionId: TEST_ULID.sessionIdA,
-        accessToken: newToken,
-        expiresAt: new Date((Math.floor(Date.now() / 1000) + 900) * 1000).toISOString(),
-        contextIndexUpdateHints: [],
-        clearCookieCommands: [],
-        account: {
-          accountId: TEST_ULID.accountIdA,
-          passkeyCredentialId: TEST_ULID.passkeyCredentialId,
-        },
-      });
-    });
-
-    // sessions API をモック
-    await page.route('**/api/v1/sessions', async (route) => {
-      if (route.request().method() === 'GET') {
-        await fulfillJson(route, 200, {
-          requestId: TEST_ULID.requestId,
-          sessions: [
-            {
-              sessionId: TEST_ULID.sessionIdA,
-              deviceName: 'Chrome on macOS',
-              loginAt: '2026-01-01T00:00:00.000Z',
-              lastActiveAt: '2026-01-01T12:00:00.000Z',
-              ipHash: 'abc123',
-              isCurrentSession: true,
-            },
-          ],
-        });
-      }
-    });
-
-    // client-side ナビゲーションでデバイス管理ページへ遷移
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
-
-    // session-expired へ遷移しないことを確認
-    await expect(page).not.toHaveURL(/app.localhost:5174\/session-expired$/);
-    // デバイス一覧が表示されることを確認
-    await expect(page.getByText('Chrome on macOS')).toBeVisible();
-  });
-
-  /**
-   * AUTH-FE-S033: refresh 失敗時のみ session-expired へ遷移する
-   *
-   * 期限切れトークンでログイン後、デバイス管理ページへ client-side ナビゲーションで遷移する。
-   * listDevices() 内で ensureFreshAuthorizationHeaders() が自動リフレッシュをトリガーし、
-   * 失敗時に session-expired へ遷移することを検証する。
-   */
-  test('[AUTH-FE-S033] Refresh failure redirects to session-expired', async ({ page }) => {
-    const exp = Math.floor(Date.now() / 1000) - 60; // 既に期限切れ
-    const tokenA = buildJwt({
-      sub: TEST_ULID.accountIdA,
-      sid: TEST_ULID.sessionIdA,
-      exp,
-    });
-
-    await loginViaPasskeyUi(page, TEST_ULID.accountIdA, TEST_ULID.sessionIdA, tokenA);
-
-    // refresh API を失敗でモック
-    await page.route('**/api/v1/auth/contexts/*/refresh', async (route) => {
-      await fulfillJson(route, 401, {
-        requestId: TEST_ULID.requestId,
-        error: 'session-expired',
-      });
-    });
-
-    // client-side ナビゲーションでデバイス管理ページへ遷移
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/session-expired$/);
   });
 
   /**
@@ -404,9 +316,13 @@ test.describe('multi-account and device management', () => {
       }
     });
 
-    // client-side ナビゲーションでデバイス管理ページへ遷移
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
 
     // デバイス名が表示される
     await expect(page.getByText('Chrome on macOS')).toBeVisible();
@@ -468,9 +384,13 @@ test.describe('multi-account and device management', () => {
       }
     });
 
-    // client-side ナビゲーションでデバイス管理ページへ遷移
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
     await expect(page.getByText('Safari on iOS')).toBeVisible();
 
     // Safari on iOS のログアウトボタンをクリック
@@ -480,6 +400,110 @@ test.describe('multi-account and device management', () => {
     // Safari on iOS が一覧から消える
     await expect(page.getByText('Safari on iOS')).not.toBeVisible();
     await expect(page.getByText('Chrome on macOS')).toBeVisible();
+  });
+
+  /**
+   * AUTH-FE-S032: access token 期限切れ時にリフレッシュ成功でセッションを継続する
+   *
+   * 期限切れ間近のトークンでログイン後、デバイス管理ページへ遷移する。
+   * listDevices() 内で ensureFreshAuthorizationHeaders() が自動リフレッシュをトリガーし、
+   * 成功時にセッションが継続することを検証する。
+   */
+  test('[AUTH-FE-S032] Proactive refresh continues session', async ({ page }) => {
+    const exp = Math.floor(Date.now() / 1000) + 30; // 30 秒後に期限切れ
+    const tokenA = buildJwt({
+      sub: TEST_ULID.accountIdA,
+      sid: TEST_ULID.sessionIdA,
+      exp,
+    });
+
+    await loginViaPasskeyUi(page, TEST_ULID.accountIdA, TEST_ULID.sessionIdA, tokenA);
+
+    // refresh API をモック（成功）
+    const newToken = buildJwt({
+      sub: TEST_ULID.accountIdA,
+      sid: TEST_ULID.sessionIdA,
+      exp: Math.floor(Date.now() / 1000) + 900,
+    });
+    await page.route('**/api/v1/auth/contexts/*/refresh', async (route) => {
+      await fulfillJson(route, 200, {
+        requestId: TEST_ULID.requestId,
+        credentialMode: 'cookie',
+        authContextId: TEST_ULID.authContextIdA,
+        sessionId: TEST_ULID.sessionIdA,
+        accessToken: newToken,
+        expiresAt: new Date((Math.floor(Date.now() / 1000) + 900) * 1000).toISOString(),
+        contextIndexUpdateHints: [],
+        clearCookieCommands: [],
+        account: {
+          accountId: TEST_ULID.accountIdA,
+          passkeyCredentialId: TEST_ULID.passkeyCredentialId,
+        },
+      });
+    });
+
+    // sessions API をモック
+    await page.route('**/api/v1/sessions', async (route) => {
+      if (route.request().method() === 'GET') {
+        await fulfillJson(route, 200, {
+          requestId: TEST_ULID.requestId,
+          sessions: [
+            {
+              sessionId: TEST_ULID.sessionIdA,
+              deviceName: 'Chrome on macOS',
+              loginAt: '2026-01-01T00:00:00.000Z',
+              lastActiveAt: '2026-01-01T12:00:00.000Z',
+              ipHash: 'abc123',
+              isCurrentSession: true,
+            },
+          ],
+        });
+      }
+    });
+
+    // 設定 → ログインと端末ページへ client-side navigation
+    await page.goto('http://app.localhost:5174/settings');
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+
+    // session-expired へ遷移しないことを確認
+    await expect(page).not.toHaveURL(/app.localhost:5174\/session-expired$/);
+    // デバイス一覧が表示されることを確認
+    await expect(page.getByText('Chrome on macOS')).toBeVisible();
+  });
+
+  /**
+   * AUTH-FE-S033: refresh 失敗時のみ session-expired へ遷移する
+   *
+   * 期限切れトークンでログイン後、デバイス管理ページへ遷移する。
+   * listDevices() 内で ensureFreshAuthorizationHeaders() が自動リフレッシュをトリガーし、
+   * 失敗時に session-expired へ遷移することを検証する。
+   */
+  test('[AUTH-FE-S033] Refresh failure redirects to session-expired', async ({ page }) => {
+    const exp = Math.floor(Date.now() / 1000) - 60; // 既に期限切れ
+    const tokenA = buildJwt({
+      sub: TEST_ULID.accountIdA,
+      sid: TEST_ULID.sessionIdA,
+      exp,
+    });
+
+    await loginViaPasskeyUi(page, TEST_ULID.accountIdA, TEST_ULID.sessionIdA, tokenA);
+
+    // refresh API を失敗でモック
+    await page.route('**/api/v1/auth/contexts/*/refresh', async (route) => {
+      await fulfillJson(route, 401, {
+        requestId: TEST_ULID.requestId,
+        error: 'session-expired',
+      });
+    });
+
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
+    await expect(page).toHaveURL(/app.localhost:5174\/session-expired$/);
   });
 
   /**
@@ -534,9 +558,13 @@ test.describe('multi-account and device management', () => {
       }
     });
 
-    // client-side ナビゲーションでデバイス管理ページへ遷移
-    await page.getByRole('link', { name: 'デバイス管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/sessions$/);
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
     await expect(page.getByText('Safari on iOS')).toBeVisible();
 
     // 「他のすべてのデバイスをログアウト」ボタンをクリック

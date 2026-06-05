@@ -1,27 +1,10 @@
 {
-  "appTitle": "認証済みアプリ",
-  "appNavAriaLabel": "アプリ内ナビゲーション",
-  "accountSwitcherAriaLabel": "アカウントを切り替える",
-  "overview": "概要",
-  "overviewTitle": "認証済みアプリ",
-  "overviewLead": "CSR の SvelteKit アプリで、bearer session 付きの認証済みフローを提供します。",
-  "openLogout": "/logout を開く",
-  "openPasskeys": "パスキー",
-  "openSessions": "デバイス",
-  "openSettings": "設定",
-  "statSurfaceLabel": "Surface",
-  "statSurfaceValue": "/app · CSR",
-  "statSessionLabel": "Session",
-  "statSessionValue": "in-memory only",
-  "statFormatLabel": "Format",
-  "statFormatValue": "ULID + Bearer",
   "passkeys": "パスキー",
   "sessions": "デバイス",
   "settings": "設定",
   "addAccount": "アカウント追加",
   "logout": "ログアウト",
   "loading": "セッションを確認しています…",
-  "eyebrow": "Authenticated App",
   "passkeysAriaLabel": "パスキー管理",
   "passkeysLoadingText": "処理中…",
   "passkeysEmptyText": "パスキーが登録されていません",
@@ -91,5 +74,25 @@
   "passkeyOperationSecurityError": "セキュリティエラーが発生しました。ページを再読み込みしてもう一度お試しください。",
   "passkeyOperationAborted": "パスキー操作が中断されました。もう一度お試しください。",
   "passkeyOperationBrowserUnsupported": "パスキー操作を完了できませんでした。ブラウザーがパスキーに対応しているか確認してください。",
-  "passkeyOperationFailed": "パスキー操作に失敗しました。時間を置いて再度お試しください。"
+  "passkeyOperationFailed": "パスキー操作に失敗しました。時間を置いて再度お試しください。",
+  "shell": {
+    "sidebarAriaLabel": "メインメニュー",
+    "sidebarClose": "メニューを閉じる",
+    "home": "ホーム",
+    "gettingStarted": "はじめる",
+    "userMenuAriaLabel": "ユーザーメニュー",
+    "switchAccount": "アカウント切替",
+    "addAccount": "アカウント追加",
+    "accountSettings": "設定",
+    "logout": "ログアウト",
+    "accountLabel": "アカウント"
+  },
+  "home": {
+    "title": "ホーム"
+  },
+  "getting-started": {
+    "title": "はじめる",
+    "step1": "表示言語を設定する",
+    "step2": "ログインと端末を確認する"
+  }
 }

@@ -36,6 +36,15 @@ describe('[LOCALIZATION-FE-S005] 設定画面の fallback locale 表示', () => 
     // fallback 文字列が表示されていることを確認
     expect(screen.getByText('設定')).toBeInTheDocument();
     expect(screen.getByText('表示言語')).toBeInTheDocument();
-    expect(screen.getByText('アプリの表示言語を選択します。')).toBeInTheDocument();
+  });
+
+  it('Card ラッパーが廃止され、section 構成になっている', async () => {
+    render(SettingsPage);
+
+    // Card クラスの要素が存在しないことを確認
+    expect(document.querySelector('[class*="card"]')).not.toBeInTheDocument();
+
+    // section 要素でページが構成されていることを確認
+    expect(document.querySelector('section')).toBeInTheDocument();
   });
 });

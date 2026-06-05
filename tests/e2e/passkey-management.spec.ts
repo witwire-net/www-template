@@ -78,9 +78,13 @@ const loginAndGoToPasskeys = async (page: Page) => {
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
   await expect(page).toHaveURL(/app.localhost:5174\/?$/);
 
-  // client-side navigation で passkeys ページへ遷移（in-memory session を維持）
-  await page.getByRole('link', { name: 'パスキー管理' }).click();
-  await expect(page).toHaveURL(/app.localhost:5174\/passkeys$/);
+  // ユーザーメニューから設定ページへ client-side navigation
+  await page.getByLabel('ユーザーメニュー').click();
+  await page.getByRole('menuitem', { name: '設定' }).click();
+  await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+  // 設定ページからログインと端末へ client-side navigation
+  await page.getByRole('link', { name: 'ログインと端末' }).click();
+  await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
 };
 
 /** reauth 用の API モックをセットアップする。
@@ -277,9 +281,13 @@ test.describe('passkey management', () => {
     await page.getByRole('button', { name: 'パスキーでログイン' }).click();
     await expect(page).toHaveURL(/app.localhost:5174\/?$/);
 
-    // client-side navigation で passkeys ページへ遷移
-    await page.getByRole('link', { name: 'パスキー管理' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/passkeys$/);
+    // ユーザーメニューから設定ページへ client-side navigation
+    await page.getByLabel('ユーザーメニュー').click();
+    await page.getByRole('menuitem', { name: '設定' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    // 設定ページからログインと端末へ client-side navigation
+    await page.getByRole('link', { name: 'ログインと端末' }).click();
+    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
 
     await expect(page.getByText('MacBook Pro')).toBeVisible();
 

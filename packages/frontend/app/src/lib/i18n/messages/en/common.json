@@ -1,27 +1,10 @@
 {
-  "appTitle": "Authenticated App",
-  "appNavAriaLabel": "App navigation",
-  "accountSwitcherAriaLabel": "Switch account",
-  "overview": "Overview",
-  "overviewTitle": "Authenticated app",
-  "overviewLead": "A CSR SvelteKit app that runs the bearer-session flow for signed-in users.",
-  "openLogout": "Open /logout",
-  "openPasskeys": "Passkeys",
-  "openSessions": "Devices",
-  "openSettings": "Settings",
-  "statSurfaceLabel": "Surface",
-  "statSurfaceValue": "/app · CSR",
-  "statSessionLabel": "Session",
-  "statSessionValue": "in-memory only",
-  "statFormatLabel": "Format",
-  "statFormatValue": "ULID + Bearer",
   "passkeys": "Passkeys",
   "sessions": "Devices",
   "settings": "Settings",
   "addAccount": "Add account",
   "logout": "Logout",
   "loading": "Checking session…",
-  "eyebrow": "Authenticated App",
   "passkeysAriaLabel": "Passkey Management",
   "passkeysLoadingText": "Processing…",
   "passkeysEmptyText": "No passkeys are registered",
@@ -91,5 +74,25 @@
   "passkeyOperationSecurityError": "A security error occurred. Please reload the page and try again.",
   "passkeyOperationAborted": "Passkey operation was aborted. Please try again.",
   "passkeyOperationBrowserUnsupported": "Could not complete passkey operation. Please check if your browser supports passkeys.",
-  "passkeyOperationFailed": "Passkey operation failed. Please try again later."
+  "passkeyOperationFailed": "Passkey operation failed. Please try again later.",
+  "shell": {
+    "sidebarAriaLabel": "Main menu",
+    "sidebarClose": "Close menu",
+    "home": "Home",
+    "gettingStarted": "Getting started",
+    "userMenuAriaLabel": "User menu",
+    "switchAccount": "Switch account",
+    "addAccount": "Add account",
+    "accountSettings": "Settings",
+    "logout": "Logout",
+    "accountLabel": "Account"
+  },
+  "home": {
+    "title": "Home"
+  },
+  "getting-started": {
+    "title": "Getting started",
+    "step1": "Set display language",
+    "step2": "Review sign-in & devices"
+  }
 }
