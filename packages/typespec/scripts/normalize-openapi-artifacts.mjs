@@ -27,13 +27,20 @@ for (const artifactMapping of artifactMappings) {
   // TypeSpec emitter の出力名と repository が公開する安定名を、それぞれ絶対 path として組み立てる。
   const sourcePath = join(openApiDirectory, artifactMapping.sourceFileName);
   const destinationPath = join(openApiDirectory, artifactMapping.destinationFileName);
+  const temporaryPath = join(openApiDirectory, `.${artifactMapping.destinationFileName}.tmp`);
 
-  // 既存の安定名 artifact は古い生成結果なので、rename 前に削除して同一 filesystem 上の置換を明示する。
-  await rm(destinationPath, { force: true });
+  // 前回の失敗で一時 artifact が残っていても、今回の正規化結果へ混ざらないよう先に削除する。
+  await rm(temporaryPath, { force: true });
 
   try {
-    // 中間 artifact を安定名へ移動し、Product/Admin の出力が混ざらない形で追跡対象にする。
-    await rename(sourcePath, destinationPath);
+    // 大小文字を同一視する filesystem では Admin.openapi.json と admin.openapi.json が衝突するため、まず一意な一時名へ退避する。
+    await rename(sourcePath, temporaryPath);
+
+    // 既存の安定名 artifact は古い生成結果なので、一時退避後に削除して source の誤削除を防ぐ。
+    await rm(destinationPath, { force: true });
+
+    // 一時 artifact を安定名へ移動し、Product/Admin の出力が混ざらない形で追跡対象にする。
+    await rename(temporaryPath, destinationPath);
   } catch (error) {
     // service 名の変更や emitter 設定の失敗を検出しやすくするため、実際に出力された file 一覧を添えて失敗させる。
     const generatedFiles = await readdir(openApiDirectory);

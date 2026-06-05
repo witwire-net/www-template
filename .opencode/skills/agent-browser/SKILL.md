@@ -8,7 +8,12 @@ description: Browser automation CLI for AI agents. Use when the user needs to in
 Fast browser automation CLI for AI agents. Chrome/Chromium via CDP with
 accessibility-tree snapshots and compact `@eN` element refs.
 
-Install: `npm i -g agent-browser && agent-browser install`
+The devcontainer sets `AGENT_BROWSER_EXECUTABLE_PATH` to `/usr/bin/chromium`,
+so regular `agent-browser ...` commands work on x86_64/amd64 and ARM64.
+
+Install is handled by `.devcontainer/Dockerfile`; do not run
+`agent-browser install` in this devcontainer because that command downloads
+Chrome for Testing, which is unavailable for Linux ARM64.
 
 ## Start here
 

@@ -16,7 +16,7 @@
 
 - `postCreateCommand` で `pnpm install` を実行
 - Playwright のブラウザをインストール
-- `agent-browser` と Chrome for Testing を利用可能
+- `agent-browser` を利用可能（Debian Chromium を全 CPU architecture で使用）
 - `packages/backend/go.mod` が存在すれば依存取得を実行
 - `pnpm migrate:up` を実行し、backend migration と Admin Console 用 login role 作成を適用
 
@@ -36,6 +36,7 @@
 ## Agent Browser
 
 - バージョン: `agent-browser@0.27.0`
+- ブラウザ: 全 CPU architecture で `/usr/bin/chromium`（`AGENT_BROWSER_EXECUTABLE_PATH` で指定）
 - 起動確認: `agent-browser doctor --offline --quick`
 - 基本操作: `agent-browser open http://www.localhost:5173` の後に `agent-browser snapshot`
 - Dashboard: `agent-browser dashboard start` の後に `http://localhost:4848`

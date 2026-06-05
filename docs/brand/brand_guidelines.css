@@ -1,5 +1,5 @@
 /* ========================================
-   WitWire Brand Guidelines — Stylesheet
+   www-template Brand Guidelines — Stylesheet
    ======================================== */
 
 /* --- CSS Reset & Variables --- */
@@ -729,7 +729,7 @@ hr {
 }
 
 /* --- Responsive --- */
-@media (max-width: 860px) {
+@media (width <= 860px) {
   .sidebar {
     display: none;
   }
@@ -740,7 +740,7 @@ hr {
   }
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   h1 {
     font-size: 1.75rem;
   }

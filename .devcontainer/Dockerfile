@@ -20,11 +20,13 @@ ENV GOPATH=/go
 ENV GOMODCACHE=/go/pkg/mod
 ENV GOCACHE=/home/node/.cache/go-build
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PATH=/usr/local/go/bin:/home/node/.local/bin:/home/node/.npm-global/bin:/home/node/.local/share/pnpm:/go/bin:$PATH
 
 RUN apt-get update && apt-get install -y \
     build-essential \
     ca-certificates \
+    chromium \
     curl \
     git \
     jq \
@@ -128,8 +130,9 @@ RUN corepack prepare pnpm@${PNPM_VERSION} --activate
 
 ENV GOBIN=/home/node/.local/bin
 
-RUN npm install -g "wrangler@${WRANGLER_VERSION}" "@typespec/compiler@${TYPESPEC_VERSION}" "@fission-ai/openspec@${OPENSPEC_VERSION}" "opencode-ai@${OPENCODE_VERSION}" "agent-browser@${AGENT_BROWSER_VERSION}" \
-    && agent-browser install
+# agent-browser install は Chrome for Testing を取得し、Linux ARM64 で失敗する。
+# ブラウザ本体は apt の Chromium に統一し、AGENT_BROWSER_EXECUTABLE_PATH で CLI 全体から参照させる。
+RUN npm install -g "wrangler@${WRANGLER_VERSION}" "@typespec/compiler@${TYPESPEC_VERSION}" "@fission-ai/openspec@${OPENSPEC_VERSION}" "opencode-ai@${OPENCODE_VERSION}" "agent-browser@${AGENT_BROWSER_VERSION}"
 
 RUN go install golang.org/x/tools/gopls@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \

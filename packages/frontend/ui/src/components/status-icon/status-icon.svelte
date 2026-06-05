@@ -1,7 +1,7 @@
 <!--
   StatusIcon — 認証 surface で繰り返し現れる status / check / alert アイコンの
   共通 primitive。@tabler/icons-svelte の標準アイコンを
-  WitWire ブランドガイド 06 に従い currentColor と統一ストロークで描画する。
+  www-template ブランドガイド 06 に従い currentColor と統一ストロークで描画する。
   tone 値に応じて data-tone 属性で CSS 側の色を上書きできる。
 -->
 <script lang="ts" module>

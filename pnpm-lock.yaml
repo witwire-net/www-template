@@ -175,6 +175,9 @@ importers:
         specifier: workspace:*
         version: link:../api
     devDependencies:
+      svelte:
+        specifier: ^5.53.9
+        version: 5.53.9
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
