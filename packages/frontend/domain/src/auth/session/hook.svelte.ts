@@ -36,29 +36,21 @@ import type {
   AuthSessionState,
   AuthSessionSummary,
 } from '../types';
-
 import type { DeviceSession } from './session_api';
-
 import type { AccessTokenClaims } from './token_state';
 
 const SESSION_EXPIRED_ERROR = 'session-expired';
 const ACCOUNT_SUSPENDED_ERROR = 'account-suspended';
 
-/** same-origin Product API へのみ Cookie を添付する共通 request init。 */
+/** same-origin Product API へのみ Cookie を添付する。 */
 const COOKIE_AUTH_REQUEST_INIT = { credentials: 'same-origin' } as const satisfies RequestInit;
 
-/**
- * refresh 応答の accessToken が更新対象 session と一致するか検証する。
- * 不一致時は fail-close する。
- */
+/** refresh 応答の accessToken が更新対象 session と一致するか検証する。 */
 function isAccessTokenForSession(claims: AccessTokenClaims, session: AuthSessionSummary): boolean {
   return claims.accountId === session.accountId && claims.sessionId === session.sessionId;
 }
 
-/**
- * context index bootstrap の進行状態。
- * `'pending'`: 復元試行中（guard は redirect を保留）。`'done'`: 完了。
- */
+/** context index bootstrap の進行状態。 */
 type BootstrapPhase = 'pending' | 'done';
 
 interface AuthSessionData {
@@ -84,13 +76,10 @@ interface AuthSessionActions {
 /** bearer token は persistent storage に保存せず、tab close で破棄する。 */
 const state = $state<AuthSessionState>(createAuthSessionInitialState());
 
-/** 並行リフレッシュを防止するため、authContextId 単位で実行中の refresh Promise を保持する。 */
+/** authContextId 単位で実行中の refresh Promise を保持する。 */
 const refreshInFlight = new SvelteMap<string, Promise<AuthRouteIntent | null>>();
 
-/**
- * トークン期限間近なら自動リフレッシュし、最新 Authorization ヘッダーを返す。
- * 並行リクエストは単一 refresh に集約される。
- */
+/** トークン期限間近なら自動リフレッシュし、最新 Authorization ヘッダーを返す。 */
 async function ensureFreshAuthorizationHeaders(
   authState: AuthSessionState
 ): Promise<Record<string, string>> {
@@ -128,8 +117,7 @@ async function attemptRefreshForLogout(authState: AuthSessionState): Promise<voi
   }
 
   try {
-    // Cookie-only refresh は request body を持たないため、生成 SDK の body 引数には
-    // `undefined` を渡し、HttpOnly Cookie だけを same-origin 境界で送信する。
+    // Cookie-only refresh は body を持たず、HttpOnly Cookie だけを送信する。
     const response = await refreshToken(active.authContextId, undefined, COOKIE_AUTH_REQUEST_INIT);
 
     if (response.status === 200 && 'accessToken' in response.data) {
@@ -197,7 +185,7 @@ async function executeLogoutCurrentSession(
         }
         writeContextIndex(index);
       } else {
-        // fallback: active session の authContextId のみを index から削除
+        // hint がない場合は active session の authContextId のみ削除する。
         const activeSession = authState.session;
         if (activeSession != null) {
           const index = readContextIndex() ?? createEmptyContextIndex();
@@ -223,10 +211,7 @@ async function executeLogoutCurrentSession(
   }
 }
 
-/**
- * リフレッシュ失敗時に対象セッションを整理する。
- * 非アクティブは除去、アクティブは失効遷移。
- */
+/** リフレッシュ失敗時に対象セッションを整理する。 */
 function handleRefreshFailureForTarget(
   authState: AuthSessionState,
   targetSessionId: string
@@ -266,9 +251,7 @@ function handleAccountSuspendedForTarget(
   return applyAccountSuspended(authState, cacheControl, targetSessionId);
 }
 
-/**
- * HttpOnly Cookie でリフレッシュし新トークンを取得。失敗時は対象セッションを失効させる。
- */
+/** HttpOnly Cookie でリフレッシュし新トークンを取得する。 */
 async function executeRefreshActiveSession(
   authState: AuthSessionState,
   targetSessionId: string
@@ -281,9 +264,7 @@ async function executeRefreshActiveSession(
   }
 
   try {
-    // Cookie-only refresh は request body を持たないため、生成 SDK の body 引数には
-    // `undefined` を渡し、HttpOnly Cookie だけを same-origin 境界で送信する。
-    // authContextId を path parameter として渡し、refresh 対象の選択を URL path で行う。
+    // authContextId を path parameter にし、HttpOnly Cookie だけを送信する。
     const response = await refreshToken(
       targetSession.authContextId,
       undefined,
