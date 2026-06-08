@@ -41,6 +41,8 @@ Before beginning any work, you MUST summarize your understanding of the Credo be
 ## Command Policy
 
 - For both backend and frontend work, lint, typecheck, build, and test MUST be invoked through `pnpm` scripts.
+- When running verification from Codex Desktop or any host-side shell, invoke the required `pnpm` script through `scripts/devcontainer/run.sh` so the command uses the DevContainer toolchain instead of host Node.js, Go, bash, or pnpm. Example: `scripts/devcontainer/run.sh pnpm check`.
+- When already inside the DevContainer, run the same `pnpm` scripts directly or through `scripts/devcontainer/run.sh`; the wrapper detects the container and executes the command in place.
 - Use `pnpm lint` for lint, `pnpm check` for typecheck, `pnpm build` or package-specific `pnpm build:*` scripts for build, and `pnpm test:*` scripts for tests.
 - Do not call direct verification tools such as `go test`, `go vet`, `go build`, `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, or `stylelint`; route them through the existing `pnpm` scripts instead.
 - Do not call `pnpm exec` or `pnpm --filter ... exec` directly. If an existing package script uses `exec` internally, run only the parent `pnpm` script.

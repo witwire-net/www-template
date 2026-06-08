@@ -19,6 +19,7 @@
 - 初回接続時は `.zed/settings.json` の LSP / formatter / extension 設定を有効化するため、worktree を trust します
 - Zed 接続後の terminal、task、language server は Dev Container 内で動作します
 - `.zed/tasks.json` の task はすべて `pnpm` script 経由で実行し、直接 `go test` や `tsc` などは呼びません
+- Codex Desktop や host 側 terminal から検証する場合は、`scripts/devcontainer/run.sh pnpm check` のように wrapper 経由で workspace service 内の toolchain を使います
 
 ## コンテナ起動後の状態
 
