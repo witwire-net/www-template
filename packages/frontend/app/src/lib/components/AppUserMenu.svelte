@@ -110,7 +110,7 @@
     <DropdownMenu.DropdownMenuItem onclick={() => navigateTo('/login')}>
       {labels.addAccount}
     </DropdownMenu.DropdownMenuItem>
-    <DropdownMenu.DropdownMenuItem onclick={() => navigateTo('/settings')}>
+    <DropdownMenu.DropdownMenuItem onclick={() => navigateTo('/settings/general/language')}>
       {labels.accountSettings}
     </DropdownMenu.DropdownMenuItem>
     <DropdownMenu.DropdownMenuSeparator />

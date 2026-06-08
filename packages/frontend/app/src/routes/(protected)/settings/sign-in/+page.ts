@@ -1,6 +1,13 @@
 /**
- * 認証済みパスキー・デバイス管理ルート。
- * このページを no-store 認証サーフェスとして宣言する。
- * PasskeyList と DeviceManager はページコンポーネントのマウント時に呼び出される（CSR 専用 SPA。サーバーロードなし）。
+ * 旧ログインと端末ページ。
+ * `/settings/security/passkeys` へリダイレクトする。
  */
-export const _AUTH_ROUTE_CACHE_POLICY = 'no-store' as const;
+import { redirect } from '@sveltejs/kit';
+
+/**
+ * 旧ログインと端末ページの load function。
+ * `/settings/security/passkeys` へ 302 リダイレクトする。
+ */
+export const load = () => {
+  redirect(302, '/settings/security/passkeys');
+};

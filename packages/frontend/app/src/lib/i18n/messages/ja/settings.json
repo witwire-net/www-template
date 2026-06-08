@@ -1,5 +1,10 @@
 {
   "title": "設定",
+  "general": "一般",
+  "security": "セキュリティ",
+  "language": "表示言語",
+  "passkeys": "パスキー",
+  "devices": "端末",
   "localeLabel": "表示言語",
   "save": "保存",
   "saving": "保存中…",
@@ -7,5 +12,6 @@
   "error": "設定の更新に失敗しました。",
   "jaLabel": "日本語",
   "enLabel": "English",
-  "signInAndDevices": "ログインと端末"
+  "dangerZone": "危険な操作",
+  "dangerZoneDescription": "以下の操作は取り消せません。実行前に内容を確認してください。"
 }

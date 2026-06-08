@@ -15,8 +15,8 @@
 
   /** はじめるステップ。テンプレート利用者向けの最小アクション。 */
   const steps = [
-    { key: 'step1', href: '/settings' },
-    { key: 'step2', href: '/settings/sign-in' },
+    { key: 'step1', href: '/settings/general/language' },
+    { key: 'step2', href: '/settings/security/passkeys' },
   ] as const;
 </script>
 

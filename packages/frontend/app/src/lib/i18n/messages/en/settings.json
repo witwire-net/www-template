@@ -1,5 +1,10 @@
 {
   "title": "Settings",
+  "general": "General",
+  "security": "Security",
+  "language": "Display Language",
+  "passkeys": "Passkeys",
+  "devices": "Devices",
   "localeLabel": "Display Language",
   "save": "Save",
   "saving": "Saving…",
@@ -7,5 +12,6 @@
   "error": "Failed to update settings.",
   "jaLabel": "日本語",
   "enLabel": "English",
-  "signInAndDevices": "Sign-in & Devices"
+  "dangerZone": "Danger Zone",
+  "dangerZoneDescription": "These actions cannot be undone. Please review before proceeding."
 }

@@ -74,11 +74,11 @@ function buildJwt(claims: { exp: number; accountId?: string; sessionId?: string 
   return `${header}.${payload}.sig`;
 }
 
-function createSession(id: string, token: string) {
+function createSession(id: string, token: string, accountId?: string) {
   return {
     requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     authContextId: `01ARZ3NDEKTSV4RRFFQ69G5F${id}`,
-    accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+    accountId: accountId ?? '01ARZ3NDEKTSV4RRFFQ69G5FAW',
     passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
     sessionId: `01ARZ3NDEKTSV4RRFFQ69G5F${id}`,
     accessToken: token,
@@ -126,6 +126,7 @@ describe('useAuthSession hook', () => {
 
   const sidA = '01ARZ3NDEKTSV4RRFFQ69G5FA1';
   const sidB = '01ARZ3NDEKTSV4RRFFQ69G5FB2';
+  const accountB = '01ARZ3NDEKTSV4RRFFQ69G5FB1';
 
   it('[AUTH-FE-S027] acceptSession adds a new session', () => {
     const { data, actions } = useAuthSession();
@@ -269,7 +270,7 @@ describe('useAuthSession hook', () => {
   it('[AUTH-FE-S060] logout response clear-cookie command syncs context index and memory state', async () => {
     const { data, actions } = useAuthSession();
     actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
-    actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
+    actions.acceptSession(createSession('B2', 'token-b', accountB), 'no-store');
 
     // logout response に contextIndexUpdateHints を含める
     vi.spyOn(authApi, 'logout').mockResolvedValue({
@@ -289,7 +290,7 @@ describe('useAuthSession hook', () => {
     const preIndex = JSON.stringify({
       version: 1,
       surface: 'product',
-      activeAuthContextId: createSession('B2', '').authContextId,
+      activeAuthContextId: createSession('B2', '', accountB).authContextId,
       entries: [
         {
           authContextId: createSession('A1', '').authContextId,
@@ -299,7 +300,7 @@ describe('useAuthSession hook', () => {
           expiresHintAt: '2026-03-21T01:00:00.000Z',
         },
         {
-          authContextId: createSession('B2', '').authContextId,
+          authContextId: createSession('B2', '', accountB).authContextId,
           sessionId: sidB,
           identityKind: 'account',
           lastSeenAt: '2026-03-21T00:00:00.000Z',
@@ -319,13 +320,15 @@ describe('useAuthSession hook', () => {
     const raw = localStorage.getItem('www-template:product:context-index') ?? '';
     const postIndex = JSON.parse(raw);
     expect(postIndex.entries).toHaveLength(1);
-    expect(postIndex.entries[0].authContextId).toBe(createSession('B2', '').authContextId);
+    expect(postIndex.entries[0].authContextId).toBe(
+      createSession('B2', '', accountB).authContextId
+    );
   });
 
   it('[AUTH-FE-S028] switchSession changes active token', () => {
     const { data, actions } = useAuthSession();
     actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
-    actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
+    actions.acceptSession(createSession('B2', 'token-b', accountB), 'no-store');
     actions.switchSession(sidA);
     expect(data.state.activeSessionId).toBe(sidA);
     expect(data.state.session?.accessToken).toBe('token-a');
@@ -334,7 +337,7 @@ describe('useAuthSession hook', () => {
   it('[AUTH-FE-S049] account switch changes the bearer accessToken source', () => {
     const { actions } = useAuthSession();
     actions.acceptSession(createSession('A1', 'account-a-access-token'), 'no-store');
-    actions.acceptSession(createSession('B2', 'account-b-access-token'), 'no-store');
+    actions.acceptSession(createSession('B2', 'account-b-access-token', accountB), 'no-store');
 
     actions.switchSession(sidA);
 
@@ -346,7 +349,7 @@ describe('useAuthSession hook', () => {
   it('[AUTH-FE-S050] logoutCurrentSession asks the server to revoke the target Cookie session', async () => {
     const { data, actions } = useAuthSession();
     actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
-    actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
+    actions.acceptSession(createSession('B2', 'token-b', accountB), 'no-store');
     const result = await actions.logoutCurrentSession();
     expect(authApi.logout).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -363,7 +366,7 @@ describe('useAuthSession hook', () => {
     const { actions } = useAuthSession();
     const exp = Math.floor(Date.now() / 1000) + 30;
     const activeToken = buildJwt({ exp, sessionId: sidB });
-    actions.acceptSession(createSession('B2', activeToken), 'no-store');
+    actions.acceptSession(createSession('B2', activeToken, accountB), 'no-store');
     vi.spyOn(apiModule, 'refreshToken').mockResolvedValue({
       status: 200,
       data: { accessToken: buildJwt({ exp: exp + 900, sessionId: sidA }) },
@@ -545,7 +548,7 @@ describe('useAuthSession hook', () => {
   it('revokeDevice removes the target session locally on success', async () => {
     const { data, actions } = useAuthSession();
     actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
-    actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
+    actions.acceptSession(createSession('B2', 'token-b', accountB), 'no-store');
 
     vi.spyOn(apiModule, 'revokeSession').mockResolvedValue({
       status: 204,
@@ -562,7 +565,7 @@ describe('useAuthSession hook', () => {
   it('revokeOtherDevices keeps only active session', async () => {
     const { data, actions } = useAuthSession();
     actions.acceptSession(createSession('A1', 'token-a'), 'no-store');
-    actions.acceptSession(createSession('B2', 'token-b'), 'no-store');
+    actions.acceptSession(createSession('B2', 'token-b', accountB), 'no-store');
 
     vi.spyOn(apiModule, 'revokeOtherSessions').mockResolvedValue({
       status: 204,
@@ -595,7 +598,7 @@ describe('useAuthSession hook', () => {
     const tokenB = buildJwt({ exp: expB });
     actions.acceptSession(
       {
-        ...createSession('B2', tokenB),
+        ...createSession('B2', tokenB, accountB),
         expiresAt: new Date(expB * 1000).toISOString(),
       },
       'no-store'
@@ -675,7 +678,7 @@ describe('useAuthSession hook', () => {
     const tokenB = buildJwt({ exp: expB });
     actions.acceptSession(
       {
-        ...createSession('B2', tokenB),
+        ...createSession('B2', tokenB, accountB),
         expiresAt: new Date(expB * 1000).toISOString(),
       },
       'no-store'
@@ -773,7 +776,7 @@ describe('useAuthSession hook', () => {
     );
     actions.acceptSession(
       {
-        ...createSession('B2', buildJwt({ exp: expB })),
+        ...createSession('B2', buildJwt({ exp: expB }), accountB),
         expiresAt: new Date(expB * 1000).toISOString(),
       },
       'no-store'

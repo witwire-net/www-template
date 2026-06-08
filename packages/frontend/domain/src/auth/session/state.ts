@@ -51,15 +51,29 @@ function applyAuthenticatedSession(
   state.lastCacheControl = cacheControl;
 }
 
-/** 新しいセッションを追加し、アクティブセッションとして設定する。
- *  同じ sessionId が存在する場合は上書きする。 */
+/**
+ * 新しいセッションを追加し、アクティブセッションとして設定する。
+ *
+ * - 同一 `sessionId` の既存 entry は新セッションで上書きする。
+ * - 同一 `accountId` で異なる `sessionId` の既存 entry も新セッションで置換する。
+ *   これにより同一アカウントがブラウザ内で重複表示されるのを防ぐ。
+ * - 異なる `accountId` のセッションはマルチアカウント切替のため保持する。
+ *
+ * @param state - 更新対象の認証セッション state
+ * @param session - 追加する認証セッション概要
+ * @param cacheControl - レスポンスの cache-control 値
+ */
 function addAuthenticatedSession(
   state: AuthSessionState,
   session: AuthSessionSummary,
   cacheControl: string | null
 ): void {
   const sessions = state.sessions ?? [];
-  const filtered = sessions.filter((s) => s.sessionId !== session.sessionId);
+  // 同一 sessionId または同一 accountId の既存 entry を除去し、新セッションで置換する。
+  // これにより同一アカウントの重複 entry を防止する。
+  const filtered = sessions.filter(
+    (s) => s.sessionId !== session.sessionId && s.accountId !== session.accountId
+  );
   filtered.push(session);
   state.sessions = filtered;
   state.activeSessionId = session.sessionId;

@@ -37,6 +37,8 @@
     onRevoke: (sessionId: string) => void;
     /** 他のすべてのデバイスのログアウトアクション。 */
     onRevokeOthers: () => void;
+    /** 他端末一括ログアウトボタンを表示するかどうか。danger zone 分離時に false にする。 */
+    showRevokeOthers?: boolean;
     /** 日時 formatter。呼び出し側から注入する。 */
     formatDateTime: (iso: string) => string;
     /** 翻訳済みラベル群。呼び出し側から注入する。 */
@@ -60,6 +62,7 @@
     error,
     onRevoke,
     onRevokeOthers,
+    showRevokeOthers = true,
     formatDateTime,
     labels,
   }: DeviceManagerProps = $props();
@@ -142,21 +145,23 @@
     </ItemGroup>
   {/if}
 
-  <Separator />
+  {#if showRevokeOthers}
+    <Separator />
 
-  <div class="flex flex-wrap justify-end gap-2">
-    <!--
-      他のすべてのデバイスを一括ログアウトするボタン。
-      不審なアクティビティを検知した際に、現在の端末のみを残して他を無効化するための緊急アクション。
-      他デバイスが存在しない場合は無効化する。
-    -->
-    <Button
-      variant="destructive"
-      size="sm"
-      disabled={loading || !hasOtherDevices}
-      onclick={onRevokeOthers}
-    >
-      {labels.revokeOthersButtonText}
-    </Button>
-  </div>
+    <div class="flex flex-wrap justify-end gap-2">
+      <!--
+        他のすべてのデバイスを一括ログアウトするボタン。
+        不審なアクティビティを検知した際に、現在の端末のみを残して他を無効化するための緊急アクション。
+        他デバイスが存在しない場合は無効化する。
+      -->
+      <Button
+        variant="destructive"
+        size="sm"
+        disabled={loading || !hasOtherDevices}
+        onclick={onRevokeOthers}
+      >
+        {labels.revokeOthersButtonText}
+      </Button>
+    </div>
+  {/if}
 </section>

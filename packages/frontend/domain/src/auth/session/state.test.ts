@@ -311,4 +311,66 @@ describe('authSessionState', () => {
     expect(state.session?.sessionId).toBe(sessionB.sessionId);
     expect(state.phase).toBe('authenticated');
   });
+
+  it('[AUTH-FE-DEDUP] 同一 accountId + 異なる sessionId を add しても sessions が重複しない', () => {
+    const state = createAuthSessionInitialState();
+    // 同一アカウント（accountId 相同）だが異なるセッション ID の 2 つを追加する
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      accessToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+    const sessionA2 = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+      // 同一 accountId
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FBY',
+      accessToken: 'token-a2',
+      expiresAt: '2026-03-21T02:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    expect(state.sessions).toHaveLength(1);
+
+    addAuthenticatedSession(state, sessionA2, 'no-store');
+    // 同一 accountId の旧セッションが置換され、重複しない
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions?.[0]?.sessionId).toBe(sessionA2.sessionId);
+    expect(state.sessions?.[0]?.accessToken).toBe('token-a2');
+    expect(state.activeSessionId).toBe(sessionA2.sessionId);
+  });
+
+  it('[AUTH-FE-DEDUP] 異なる accountId は複数セッションとして保持される', () => {
+    const state = createAuthSessionInitialState();
+    const sessionA = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+      accessToken: 'token-a',
+      expiresAt: '2026-03-21T00:00:00.000Z',
+    };
+    const sessionB = {
+      requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      authContextId: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+      accountId: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+      passkeyCredentialId: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+      accessToken: 'token-b',
+      expiresAt: '2026-03-21T01:00:00.000Z',
+    };
+
+    addAuthenticatedSession(state, sessionA, 'no-store');
+    addAuthenticatedSession(state, sessionB, 'no-store');
+    // 異なる accountId なので両方残る
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe(sessionB.sessionId);
+  });
 });

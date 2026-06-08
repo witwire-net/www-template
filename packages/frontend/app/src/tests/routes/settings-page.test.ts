@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import SettingsPage from '../../routes/(protected)/settings/+page.svelte';
+import LanguagePage from '../../routes/(protected)/settings/general/language/+page.svelte';
 
 // domain hooks のモック
 vi.mock('@www-template/domain', () => ({
@@ -21,7 +21,7 @@ vi.mock('@www-template/domain/auth/session', () => ({
   }),
 }));
 
-describe('[LOCALIZATION-FE-S005] 設定画面の fallback locale 表示', () => {
+describe('[LOCALIZATION-FE-S005] 設定画面の表示言語ページ', () => {
   beforeEach(() => {
     localStorage.setItem('www-template:locale', 'ja');
   });
@@ -30,21 +30,14 @@ describe('[LOCALIZATION-FE-S005] 設定画面の fallback locale 表示', () => 
     localStorage.clear();
   });
 
-  it('translator 読み込み前に日本語文字列が表示される', async () => {
-    render(SettingsPage);
+  it('表示言語ラベルと Select が表示される', async () => {
+    render(LanguagePage);
 
-    // fallback 文字列が表示されていることを確認
-    expect(screen.getByText('設定')).toBeInTheDocument();
+    // 表示言語ラベルが表示されていることを確認
     expect(screen.getByText('表示言語')).toBeInTheDocument();
-  });
 
-  it('Card ラッパーが廃止され、section 構成になっている', async () => {
-    render(SettingsPage);
-
-    // Card クラスの要素が存在しないことを確認
-    expect(document.querySelector('[class*="card"]')).not.toBeInTheDocument();
-
-    // section 要素でページが構成されていることを確認
-    expect(document.querySelector('section')).toBeInTheDocument();
+    // Select トリガーが存在することを確認
+    const trigger = screen.getByRole('button', { name: '表示言語' });
+    expect(trigger).toBeInTheDocument();
   });
 });
