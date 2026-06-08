@@ -36,6 +36,15 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     init: true
+    ports:
+      - '127.0.0.1:24282:24282'
+      - '127.0.0.1:3001:3001'
+      - '127.0.0.1:4848:4848'
+      - '127.0.0.1:5173:5173'
+      - '127.0.0.1:5174:5174'
+      - '127.0.0.1:5176:5176'
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8081:8081'
     volumes:
       - ..:/workspaces/www-template:cached
       - go-build-cache:/home/node/.cache/go-build
@@ -75,6 +84,8 @@ services:
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
       discovery.type: single-node
     restart: unless-stopped
+    ports:
+      - '127.0.0.1:9200:9200'
     ulimits:
       memlock:
         soft: -1
@@ -91,6 +102,8 @@ services:
     environment:
       MINIO_ROOT_PASSWORD: minioadmin
       MINIO_ROOT_USER: minioadmin
+    ports:
+      - '127.0.0.1:9001:9001'
     restart: unless-stopped
     volumes:
       - minio-data:/data
@@ -98,7 +111,7 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - '8025:8025'
+      - '127.0.0.1:8025:8025'
     restart: unless-stopped
 
   signoz-init-clickhouse:
@@ -209,7 +222,7 @@ services:
       timeout: 5s
       retries: 3
     ports:
-      - '3301:8080'
+      - '127.0.0.1:3301:8080'
     restart: unless-stopped
     volumes:
       - signoz-query-data:/var/lib/signoz
@@ -272,8 +285,8 @@ services:
       start_period: 5s
     hostname: signoz-otel-collector
     ports:
-      - '4317:4317'
-      - '4318:4318'
+      - '127.0.0.1:4317:4317'
+      - '127.0.0.1:4318:4318'
     restart: unless-stopped
     volumes:
       - type: bind
