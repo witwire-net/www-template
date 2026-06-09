@@ -77,6 +77,7 @@ From the caller agent, you must receive at least:
 1. Intent (why)
 2. What to implement or fix (what and how)
 3. Scope and constraints (where to work)
+4. Original caller instruction, or an explicit acceptance-criteria list that preserves every requirement, constraint, and non-goal from the caller
 
 If any are missing, do not start. Reply with Status BLOCKED and list missing inputs.
 
@@ -98,6 +99,8 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - Do not call direct verification tools such as `go test`, `go vet`, `go build`, `pnpm exec`, or `pnpm --filter ... exec`; if a package script uses `exec` internally, run only the parent `pnpm` script
 - Stop and report before crossing any Ask-first boundary
 - Do not report completion until `unit/backend/reviewer` returns `Approve`
+- Preserve caller intent when requesting review. Do not compress the original instruction into a vague summary; expand it into explicit acceptance criteria, constraints, non-goals, and any user-visible or security-sensitive requirements.
+- If the original instruction is ambiguous, incomplete, or unavailable, return `Status: BLOCKED` instead of letting the reviewer infer it from your completion report.
 
 ## Verification
 
@@ -115,7 +118,7 @@ Use `pnpm test:run` and `pnpm build` when cross-package generated artifacts or A
 ## Mandatory review gate
 
 1. Implement and self-check the change.
-2. Call `unit/backend/reviewer` with the intent, change summary, touched paths, and verification evidence.
+2. Call `unit/backend/reviewer` with the original caller instruction or exact acceptance criteria, intent, constraints and non-goals, change summary, touched paths, and verification evidence.
 3. If the reviewer returns `Request changes` or `Needs clarification`, address every item and send the updated change back to the same reviewer.
 4. Repeat until the reviewer returns `Approve`.
 5. Only then report `Status: DONE` or equivalent completion status to the caller.
@@ -123,5 +126,5 @@ Use `pnpm test:run` and `pnpm build` when cross-package generated artifacts or A
 ## Reporting
 
 - Reply format is defined in `.opencode/skills/orchestration-playbook/SKILL.md`
-- Include: Status, Intent echo, What I did, Delivered, Blockers, Risks, Evidence (path:line), Commands run
+- Include: Status, Intent echo, original instruction or acceptance criteria, What I did, Delivered, Blockers, Risks, Evidence (path:line), Commands run
 - Always include the latest reviewer verdict, the reviewer agent used, and the evidence that approval was obtained
