@@ -12,7 +12,7 @@
 
   let { data }: Props = $props();
 
-  const appUrl = env.PUBLIC_APP_URL ?? 'http://app.localhost:5174';
+  const appUrl = env.PUBLIC_APP_URL ?? 'http://localhost:5174';
   const locale = $derived(data.locale);
   const i18n = $derived(useI18n(locale));
 

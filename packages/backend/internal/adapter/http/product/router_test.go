@@ -242,7 +242,7 @@ func newTestRouter(t *testing.T) *gin.Engine {
 
 func testConfig() config.Config {
 	cfg := config.Config{
-		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
+		AllowedOrigins: []string{"http://www.localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Port:           "8080",
 	}

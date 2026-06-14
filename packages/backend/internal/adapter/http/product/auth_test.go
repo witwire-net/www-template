@@ -23,7 +23,7 @@ import (
 
 var ulidRegex = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`)
 
-const productTestAllowedOrigin = "http://localhost:5173"
+const productTestAllowedOrigin = "http://www.localhost:5173"
 
 func TestAuthPasskeyFinishIssuesSession(t *testing.T) {
 	t.Parallel()

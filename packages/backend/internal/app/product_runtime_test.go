@@ -15,7 +15,7 @@ func TestNewProductRuntimeWithConfigFailsClosedWithoutTokenOutsideDevelopment(t 
 	t.Parallel()
 
 	_, err := NewProductRuntimeWithConfig(context.Background(), config.Config{
-		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
+		AllowedOrigins: []string{"http://www.localhost:5173", "http://localhost:5174"},
 		Environment:    "production",
 		Port:           "8080",
 	})
@@ -28,7 +28,7 @@ func TestNewProductRuntimeWithConfigFailsClosedWhenRequiredInfrastructureIsMissi
 	t.Parallel()
 
 	_, err := NewProductRuntimeWithConfig(context.Background(), config.Config{
-		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
+		AllowedOrigins: []string{"http://www.localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Environment:    "development",
 		Port:           "8080",
@@ -76,7 +76,7 @@ func TestAdminOperatorAuthRuntimeConfigUsesOperatorSemantics(t *testing.T) {
 // これにより、TTL 検証の前に infrastructure missing で落ちることを防ぐ。
 func fullyConfiguredDevelopmentConfig() config.Config {
 	return config.Config{
-		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:5174"},
+		AllowedOrigins: []string{"http://www.localhost:5173", "http://localhost:5174"},
 		AppBearerToken: "dev-app-auth",
 		Environment:    "development",
 		Port:           "8080",

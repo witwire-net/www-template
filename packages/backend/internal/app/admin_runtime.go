@@ -57,24 +57,28 @@ func NewAdminRuntimeWithConfig(ctx context.Context, cfg config.Config) (*AdminRu
 
 	// Step 4: Admin API process 用の tracer / meter / logger を初期化し、startup 以後の観測情報を収集できる状態にする。
 	obs := cfg.Observability
-	closeTracer, err := observability.InitTracer(ctx, obs.OTELExporterOTLPEndpoint, obs.OTELServiceName)
+	// Step 4-1: traces/metrics/logs の endpoint を起動前に解決し、設定の fallback と exporter の実利用先を一致させる。
+	otlpEndpoints := observability.ResolveOTLPEndpoints(obs.OTELExporterOTLPEndpoint, obs.OTELExporterOTLPTracesEndpoint, obs.OTELExporterOTLPLogsEndpoint)
+	// Step 4-2: SigNoz collector が OTLP gRPC を受けられない状態なら fail-fast し、実行中の exporter retry ログを発生させない。
+	if err := observability.VerifyOTLPEndpoints(ctx, otlpEndpoints); err != nil {
+		return nil, err
+	}
+
+	// Step 4-3: 検証済み traces endpoint で tracer を初期化し、Admin API の trace を SigNoz に送信する。
+	closeTracer, err := observability.InitTracer(ctx, otlpEndpoints.Traces, obs.OTELServiceName)
 	if err != nil {
 		return nil, err
 	}
 
-	closeMeter, err := observability.InitMeter(ctx, obs.OTELExporterOTLPEndpoint, obs.OTELServiceName)
+	// Step 4-4: 検証済み metrics endpoint で meter を初期化し、Admin runtime metrics を SigNoz に送信する。
+	closeMeter, err := observability.InitMeter(ctx, otlpEndpoints.Metrics, obs.OTELServiceName)
 	if err != nil {
 		_ = closeTracer(ctx)
 		return nil, err
 	}
 
-	// OTLP logs exporter を初期化し、SigNoz へ Admin backend ログを送信する。
-	// logsEndpoint が空の場合は OTELExporterOTLPEndpoint をフォールバックとして使用する。
-	logsEndpoint := obs.OTELExporterOTLPLogsEndpoint
-	if logsEndpoint == "" {
-		logsEndpoint = obs.OTELExporterOTLPEndpoint
-	}
-	closeLogger, err := observability.InitLogger(ctx, logsEndpoint, obs.OTELServiceName)
+	// Step 4-5: 検証済み logs endpoint で logger を初期化し、stdout と SigNoz の両方へ Admin backend logs を送信する。
+	closeLogger, err := observability.InitLogger(ctx, otlpEndpoints.Logs, obs.OTELServiceName)
 	if err != nil {
 		_ = closeMeter(ctx)
 		_ = closeTracer(ctx)

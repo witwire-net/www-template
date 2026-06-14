@@ -70,13 +70,11 @@ func (h *traceContextHandler) WithGroup(name string) slog.Handler {
 //   - func(context.Context) error: LoggerProvider をシャットダウンする関数。
 //   - error: exporter 初期化失敗時。
 func InitLogger(ctx context.Context, logsEndpoint string, serviceName string) (func(context.Context) error, error) {
-	// endpoint のフォールバック: logsEndpoint → OTELExporterOTLPEndpoint → localhost:4317
-	endpoint := logsEndpoint
-	if endpoint == "" {
-		endpoint = "localhost:4317"
-	}
+	// Step 1: 空 endpoint は OTLP 無効化として扱わず、共通の gRPC 既定 endpoint へ正規化する。
+	endpoint := resolveOTLPEndpoint(logsEndpoint)
 
 	if serviceName == "" {
+		// Step 2: serviceName 未設定時も logs が無名 service にならないよう Product API 名へ正規化する。
 		serviceName = "www-template-api"
 	}
 

@@ -33,7 +33,7 @@ const loginAndGoToPasskeys = async (page: Page) => {
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
       challenge: 'dGVzdC1jaGFsbGVuZ2U',
-      rpId: 'app.localhost',
+      rpId: 'localhost',
       userVerification: 'required',
     });
   });
@@ -74,17 +74,17 @@ const loginAndGoToPasskeys = async (page: Page) => {
     }
   });
 
-  await page.goto('http://app.localhost:5174/login');
+  await page.goto('http://localhost:5174/login');
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
-  await expect(page).toHaveURL(/app.localhost:5174\/?$/);
+  await expect(page).toHaveURL(/localhost:5174\/?$/);
 
   // ユーザーメニューから設定ページへ client-side navigation
   await page.getByLabel('ユーザーメニュー').click();
   await page.getByRole('menuitem', { name: '設定' }).click();
-  await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+  await expect(page).toHaveURL(/localhost:5174\/settings$/);
   // 設定ページからログインと端末へ client-side navigation
   await page.getByRole('link', { name: 'ログインと端末' }).click();
-  await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
+  await expect(page).toHaveURL(/localhost:5174\/settings\/sign-in$/);
 };
 
 /** reauth 用の API モックをセットアップする。
@@ -97,7 +97,7 @@ const mockReauth = async (page: Page, kind: 'otp-issue' | 'passkey-delete' = 'ot
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
       challenge: 'cmVhdXRoLWNoYWxsZW5nZQ',
-      rpId: 'app.localhost',
+      rpId: 'localhost',
       userVerification: 'required',
     });
   });
@@ -140,7 +140,7 @@ test.describe('passkey management', () => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
         challenge: 'YWRkLWNoYWxsZW5nZQ',
-        rpId: 'app.localhost',
+        rpId: 'localhost',
         rpName: 'www-template',
         user: {
           id: 'dXNlcjE',
@@ -242,7 +242,7 @@ test.describe('passkey management', () => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
         challenge: 'dGVzdC1jaGFsbGVuZ2U',
-        rpId: 'app.localhost',
+        rpId: 'localhost',
         userVerification: 'required',
       });
     });
@@ -277,17 +277,17 @@ test.describe('passkey management', () => {
       }
     });
 
-    await page.goto('http://app.localhost:5174/login');
+    await page.goto('http://localhost:5174/login');
     await page.getByRole('button', { name: 'パスキーでログイン' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/?$/);
+    await expect(page).toHaveURL(/localhost:5174\/?$/);
 
     // ユーザーメニューから設定ページへ client-side navigation
     await page.getByLabel('ユーザーメニュー').click();
     await page.getByRole('menuitem', { name: '設定' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/settings$/);
+    await expect(page).toHaveURL(/localhost:5174\/settings$/);
     // 設定ページからログインと端末へ client-side navigation
     await page.getByRole('link', { name: 'ログインと端末' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/settings\/sign-in$/);
+    await expect(page).toHaveURL(/localhost:5174\/settings\/sign-in$/);
 
     await expect(page.getByText('MacBook Pro')).toBeVisible();
 

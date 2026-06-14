@@ -36,9 +36,24 @@ type webAuthnProvider struct {
 	challengeTTL time.Duration
 }
 
-// NewWebAuthnProvider は WebAuthnProvider を生成する。
-// rpid は WebAuthn RPID（例: "localhost"）, origins は許可 origin のリスト（例: ["http://localhost:5173"]）。
-// origins が空の場合は "https://<rpid>" を fallback として補完する。
+// NewWebAuthnProvider は go-webauthn を利用する Product 認証用 WebAuthnProvider を生成する。
+//
+// 引数:
+//   - rpid: ブラウザの WebAuthn ceremony が検証する Relying Party ID。ローカル app では "localhost" を渡す。
+//   - origins: WebAuthn ceremony を許可する origin 一覧。ローカル app では ["http://localhost:5174"] を渡す。
+//   - challengeTTL: challenge session を外部ストアへ保存する期間。短すぎると ceremony 完了前に失効する。
+//   - store: challenge session を保存・取得・削除する外部ストア。nil は許可しない呼び出し側契約とする。
+//
+// 戻り値:
+//   - application.WebAuthnProvider: authentication/register/reauth ceremony を開始・完了する adapter 実装。
+//   - error: rpid と origins の組み合わせを go-webauthn が受理できない場合に設定エラーを返す。
+//
+// 使用例:
+//
+//	provider, err := NewWebAuthnProvider("localhost", []string{"http://localhost:5174"}, 5*time.Minute, store)
+//	if err != nil {
+//		return err
+//	}
 func NewWebAuthnProvider(rpid string, origins []string, challengeTTL time.Duration, store ChallengeStore) (application.WebAuthnProvider, error) {
 	rpOrigins := origins
 	if len(rpOrigins) == 0 {

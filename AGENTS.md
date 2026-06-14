@@ -13,7 +13,8 @@ Before beginning any work, you MUST summarize your understanding of the Credo be
 3. 後方互換性は完全悪だ。後方互換性のためのコードや計画がある時点で、そのシステムは一切認められない。常に完璧なプロダクトであるために、不要な機能は即座に削除。
 4. 全てのアーキテクチャは保守性のためにある。同じレイヤーの中で同じコードは二度と書くな。コピペはするな。抽象化して考えろ。アーキテクチャで説明できない再実装や再記入は存在してはならない。
 5. すべてのルールには意図がある。必ず意図を理解すること。意図を理解しないまま改定したり、逆に遵守しようとしてはならない。
-6. 常に完璧なプロダクトであること。妥協、横着、顧客にとって意味のないプロダクトを作ることは一切許されない。仮置きを残す、後回し、コメントにしておいて放置に決してしてはならない。後回しという言葉は発することするら厳禁である。いかなる理由があろうと、クレドに違反しないこと、クレド違反を放置しないことを最優先とすること。
+6. 常に完璧なプロダクトであること。妥協、横着、顧客にとって意味のないプロダクトを作ることは一切許されない。仮置きを残す、後回し、コメントにしておいて放置に決してしてはならない。後回しという言葉は発することするら厳禁である。最小実装などという言葉は何があっても使ってはならないし、問題の本質的な解決以外の解決は一切認めない。
+7. いかなる理由があろうと、クレドに違反しないこと、クレド違反を放置しないことを最優先とすること。どのクレドによって肯定しうるのか、その作業内容が一切クレドに違反しないことを必ず方針の前に声に出して報告しなければならない。
 
 ## Code Comments
 
@@ -35,7 +36,7 @@ Before beginning any work, you MUST summarize your understanding of the Credo be
 - Dev (admin server): `pnpm dev:admin-server` (Admin Go API on `http://localhost:8081`)
 - Dev (client entry): `pnpm dev:client` (alias of `pnpm dev:web`, Vite on `http://www.localhost:5173`)
 - Dev (web): `pnpm dev:web` (SvelteKit public site on `http://www.localhost:5173`)
-- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://app.localhost:5174`)
+- Dev (app): `pnpm dev:app` (SvelteKit SPA app on `http://localhost:5174`)
 - Dev (admin): `pnpm dev:admin` (Admin Console on `http://admin.localhost:5176`)
 
 ## Command Policy

@@ -1,4 +1,4 @@
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { SvelteMap } from 'svelte/reactivity';
 
 import { authApi, refreshToken } from '@www-template/api';
 
@@ -28,8 +28,10 @@ import {
 
 import { fetchDevices, revokeDevice, revokeOtherDevices } from './session_api';
 
+import { bootstrapSessionsFromContextIndex } from './bootstrap';
 import { decodeAccessToken, expToIsoString, isRefreshNeeded } from './token_state';
 
+import type { BootstrapPhase } from './bootstrap';
 import type {
   AuthFailureState,
   AuthRouteIntent,
@@ -49,9 +51,6 @@ const COOKIE_AUTH_REQUEST_INIT = { credentials: 'same-origin' } as const satisfi
 function isAccessTokenForSession(claims: AccessTokenClaims, session: AuthSessionSummary): boolean {
   return claims.accountId === session.accountId && claims.sessionId === session.sessionId;
 }
-
-/** context index bootstrap の進行状態。 */
-type BootstrapPhase = 'pending' | 'done';
 
 interface AuthSessionData {
   state: AuthSessionState;
@@ -444,96 +443,6 @@ async function executeRevokeOtherDevices(authState: AuthSessionState): Promise<b
   return true;
 }
 
-/** context index から session bootstrap を試行し、成功 entry を復元する。 */
-async function bootstrapSessionsFromContextIndex(): Promise<void> {
-  try {
-    const index = readContextIndex();
-    if (index == null || index.entries.length === 0) {
-      return;
-    }
-
-    const restoredSessions: AuthSessionSummary[] = [];
-    let restoredActiveSession: AuthSessionSummary | null = null;
-
-    for (const entry of index.entries) {
-      try {
-        const response = await refreshToken(
-          entry.authContextId,
-          undefined,
-          COOKIE_AUTH_REQUEST_INIT
-        );
-        if (response.status === 200 && 'accessToken' in response.data) {
-          const { accessToken, account, sessionId, expiresAt } = response.data;
-          const accountId = account.accountId;
-          const claims = decodeAccessToken(accessToken);
-          if (claims == null || claims.accountId !== accountId || claims.sessionId !== sessionId) {
-            continue;
-          }
-          const restoredSession: AuthSessionSummary = {
-            requestId: response.data.requestId,
-            authContextId: entry.authContextId,
-            accountId,
-            passkeyCredentialId: account.passkeyCredentialId,
-            sessionId,
-            accessToken,
-            expiresAt,
-          };
-          restoredSessions.push(restoredSession);
-          if (index.activeAuthContextId === entry.authContextId) {
-            restoredActiveSession = restoredSession;
-          }
-        }
-      } catch {
-        // refresh failure: 該当 entry は authenticated state として採用しない
-      }
-    }
-
-    if (restoredSessions.length > 0) {
-      // 同一 accountId 重複を除去（後方 entry を優先）
-      const dedupedSessions: AuthSessionSummary[] = [];
-      const seenAccountIds = new SvelteSet<string>();
-      for (let i = restoredSessions.length - 1; i >= 0; i--) {
-        const s = restoredSessions[i];
-        if (!seenAccountIds.has(s.accountId)) {
-          seenAccountIds.add(s.accountId);
-          dedupedSessions.unshift(s);
-        }
-      }
-
-      state.sessions = dedupedSessions;
-      // active が dedup 後も残っていれば維持、なければ先頭へ切替
-      const active =
-        restoredActiveSession != null &&
-        dedupedSessions.some((s) => s.sessionId === restoredActiveSession.sessionId)
-          ? restoredActiveSession
-          : dedupedSessions[0];
-      state.session = active;
-      state.activeSessionId = active.sessionId;
-      state.phase = 'authenticated';
-      state.routeIntent = '/login';
-      state.lastFailure = null;
-      state.lastError = null;
-
-      // bootstrap 後に index を再構築（失敗した entry と重複 entry を除去）
-      const newIndex = createEmptyContextIndex();
-      for (const s of dedupedSessions) {
-        upsertContextEntry(
-          newIndex,
-          toContextIndexEntry(s, s.expiresAt),
-          s.sessionId === active.sessionId
-        );
-      }
-      writeContextIndex(newIndex);
-    } else {
-      // 復元できなかった場合は index をクリアする
-      clearContextIndex();
-    }
-  } finally {
-    // bootstrap 完了を記録し、guard が redirect 判断を再評価できるようにする
-    bootstrapPhase.value = 'done';
-  }
-}
-
 /** bootstrap が完了しているかどうかのフラグ。 */
 let hasBootstrapped = false;
 
@@ -545,7 +454,12 @@ function useAuthSession(): { data: AuthSessionData; actions: AuthSessionActions 
   if (!hasBootstrapped) {
     hasBootstrapped = true;
     // non-blocking で context index から session を復元する
-    void bootstrapSessionsFromContextIndex();
+    void bootstrapSessionsFromContextIndex({
+      authState: state,
+      bootstrapPhase,
+      refreshContext: (authContextId) =>
+        refreshToken(authContextId, undefined, COOKIE_AUTH_REQUEST_INIT),
+    });
   }
   const actions: AuthSessionActions = {
     acceptSession: (session, cacheControl) => {

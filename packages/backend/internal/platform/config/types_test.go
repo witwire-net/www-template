@@ -114,7 +114,7 @@ func TestConfigValidateAdminRuntimeRejectsMismatchedCookieDomain(t *testing.T) {
 
 	// Step 1: Cookie domain が Admin origin と違う場合、refreshToken が別 surface に送られる危険があるため拒否されることを確認する。
 	cfg := fullyConfiguredAdminValidationBase()
-	cfg.Admin.Cookie.Domain = "app.localhost"
+	cfg.Admin.Cookie.Domain = "localhost"
 	err := cfg.ValidateAdminRuntime()
 	if err == nil {
 		t.Fatal("expected error for mismatched Admin cookie domain")
@@ -199,7 +199,7 @@ environment = "development"
 
 [server]
 origin = "http://admin.localhost:5176"
-product_origin = "http://app.localhost:5174"
+product_origin = "http://localhost:5174"
 
 [cookie]
 name = "www_template_admin_refresh"
@@ -240,7 +240,7 @@ otel_service_name = "www-template-admin-api"
 	if cfg.Admin.Domain != "http://admin.localhost:5176" {
 		t.Fatalf("expected Admin domain mapping, got %q", cfg.Admin.Domain)
 	}
-	if cfg.Admin.ProductDomain != "http://app.localhost:5174" {
+	if cfg.Admin.ProductDomain != "http://localhost:5174" {
 		t.Fatalf("expected Product domain mapping, got %q", cfg.Admin.ProductDomain)
 	}
 	if cfg.Admin.Cookie.Name != "www_template_admin_refresh" || cfg.Admin.Cookie.Domain != "admin.localhost" {
@@ -277,7 +277,7 @@ func fullyConfiguredAdminValidationBase() Config {
 		Environment: "development",
 		Admin: AdminRuntimeConfig{
 			Domain:        "http://admin.localhost:5176",
-			ProductDomain: "http://app.localhost:5174",
+			ProductDomain: "http://localhost:5174",
 			Cookie: AdminCookieConfig{
 				Name:     "www_template_admin_refresh",
 				Domain:   "admin.localhost",

@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultPort           = "8080"
-	defaultAllowedOrigins = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
+	defaultAllowedOrigins = "http://www.localhost:5173,http://localhost:5174"
 	defaultAppAuthValue   = "dev-app-auth"
 	defaultWebAuthnRPID   = "localhost"
 	defaultValkeyPrefix   = "www-template"

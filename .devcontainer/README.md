@@ -41,6 +41,7 @@
 - SigNoz UI: `http://localhost:3301`
 - SigNoz OTLP gRPC: `signoz-otel-collector:4317` / `http://localhost:4317`
 - SigNoz OTLP HTTP: `http://localhost:4318`
+- SigNoz OTel Collector は repository 内の `.devcontainer/signoz/otel-collector-config.yaml` を静的設定として起動し、OpAMP 管理設定で receiver を差し替えません
 
 ## Agent Browser
 

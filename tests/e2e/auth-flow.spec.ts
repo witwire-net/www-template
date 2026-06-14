@@ -30,7 +30,7 @@ const mockPasskeyLogin = async (page: Page) => {
     await fulfillJson(route, 200, {
       requestId: TEST_ULID.requestId,
       challenge: 'dGVzdC1jaGFsbGVuZ2U',
-      rpId: 'app.localhost',
+      rpId: 'localhost',
       userVerification: 'required',
     });
   });
@@ -56,9 +56,9 @@ const mockPasskeyLogin = async (page: Page) => {
 const loginViaPasskeyUi = async (page: Page) => {
   await mockWebAuthn(page);
   await mockPasskeyLogin(page);
-  await page.goto('http://app.localhost:5174/login');
+  await page.goto('http://localhost:5174/login');
   await page.getByRole('button', { name: 'パスキーでログイン' }).click();
-  await expect(page).toHaveURL(/app.localhost:5174\/?$/);
+  await expect(page).toHaveURL(/localhost:5174\/?$/);
   // ホームページが表示されることを確認
   await expect(page.getByRole('heading', { name: 'ホーム' })).toBeVisible();
 };
@@ -70,9 +70,9 @@ test.describe('auth flow', () => {
   );
 
   test('未認証で protected route に入ると login に戻る', async ({ page }) => {
-    await page.goto('http://app.localhost:5174/');
+    await page.goto('http://localhost:5174/');
 
-    await expect(page).toHaveURL(/app.localhost:5174\/login$/);
+    await expect(page).toHaveURL(/localhost:5174\/login$/);
     await expect(page.getByRole('heading', { name: 'ログイン' })).toBeVisible();
   });
 
@@ -84,12 +84,12 @@ test.describe('auth flow', () => {
       });
     });
 
-    await page.goto('http://app.localhost:5174/login/recovery');
+    await page.goto('http://localhost:5174/login/recovery');
 
     await page.getByLabel('メールアドレス').fill('member@example.com');
     await page.getByRole('button', { name: '復旧メールを送信' }).click();
 
-    await expect(page).toHaveURL(/app.localhost:5174\/login\/recovery\/sent$/);
+    await expect(page).toHaveURL(/localhost:5174\/login\/recovery\/sent$/);
     await expect(page.getByRole('heading', { name: 'メールをご確認ください' })).toBeVisible();
     await expect(
       page.getByText('登録済みの宛先であれば、復旧用リンクをお送りします。')
@@ -97,7 +97,7 @@ test.describe('auth flow', () => {
   });
 
   test('無効な recovery token は retry guidance を表示する', async ({ page }) => {
-    await page.goto('http://app.localhost:5174/login/recovery/consume?token=invalid-token');
+    await page.goto('http://localhost:5174/login/recovery/consume?token=invalid-token');
 
     await expect(page.getByRole('heading', { name: '復旧リンクを確認できません' })).toBeVisible();
     await expect(page.getByRole('link', { name: '復旧をやり直す' })).toHaveAttribute(
@@ -107,18 +107,18 @@ test.describe('auth flow', () => {
   });
 
   test('register page は snapshot が無いと recovery に戻す', async ({ page }) => {
-    await page.goto('http://app.localhost:5174/login/recovery/register');
+    await page.goto('http://localhost:5174/login/recovery/register');
 
-    await expect(page).toHaveURL(/app.localhost:5174\/login\/recovery$/);
+    await expect(page).toHaveURL(/localhost:5174\/login\/recovery$/);
     await expect(page.getByRole('button', { name: '復旧メールを送信' })).toBeVisible();
   });
 
   test('session-expired route から login に戻れる', async ({ page }) => {
-    await page.goto('http://app.localhost:5174/session-expired');
+    await page.goto('http://localhost:5174/session-expired');
 
     await expect(page.getByRole('heading', { name: 'セッションが切れました' })).toBeVisible();
     await page.getByRole('button', { name: 'ログインへ' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/login$/);
+    await expect(page).toHaveURL(/localhost:5174\/login$/);
   });
 
   test('passkey login 成功で protected app へ入れる', async ({ page }) => {
@@ -141,7 +141,7 @@ test.describe('auth flow', () => {
     // ユーザーメニューからログアウト
     await page.getByLabel('ユーザーメニュー').click();
     await page.getByRole('menuitem', { name: 'ログアウト' }).click();
-    await expect(page).toHaveURL(/app.localhost:5174\/login$/);
+    await expect(page).toHaveURL(/localhost:5174\/login$/);
     await expect(page.getByRole('heading', { name: 'ログイン' })).toBeVisible();
   });
 
@@ -162,7 +162,7 @@ test.describe('auth flow', () => {
       await fulfillJson(route, 200, {
         requestId: TEST_ULID.requestId,
         challenge: 'cmVnaXN0ZXItY2hhbGxlbmdl',
-        rpId: 'app.localhost',
+        rpId: 'localhost',
         rpName: 'www-template',
         user: {
           id: 'dXNlcjE',
@@ -196,13 +196,13 @@ test.describe('auth flow', () => {
       });
     });
 
-    await page.goto('http://app.localhost:5174/login/recovery/consume?token=valid-token');
-    await expect(page).toHaveURL(/app.localhost:5174\/login\/recovery\/register$/);
+    await page.goto('http://localhost:5174/login/recovery/consume?token=valid-token');
+    await expect(page).toHaveURL(/localhost:5174\/login\/recovery\/register$/);
     await expect(page.getByRole('heading', { name: 'パスキー再登録' })).toBeVisible();
 
     await page.getByRole('button', { name: '新しいパスキーを登録' }).click();
 
-    await expect(page).toHaveURL(/app.localhost:5174\/?$/);
+    await expect(page).toHaveURL(/localhost:5174\/?$/);
     await expect(page.getByRole('heading', { name: 'ホーム' })).toBeVisible();
   });
 
@@ -217,10 +217,10 @@ test.describe('auth flow', () => {
       });
     });
 
-    await page.goto('http://app.localhost:5174/login/recovery/consume?token=some-token');
+    await page.goto('http://localhost:5174/login/recovery/consume?token=some-token');
 
     // URL から token query が除去されることを確認
-    await expect(page).toHaveURL(/app.localhost:5174\/login\/recovery\/consume$/);
+    await expect(page).toHaveURL(/localhost:5174\/login\/recovery\/consume$/);
     await expect(page).not.toHaveURL(/token=/);
   });
 });

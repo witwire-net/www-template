@@ -856,7 +856,7 @@ describe('useAuthSession hook', () => {
       data: {
         requestId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
         challenge: 'YQ',
-        rpId: 'app.localhost',
+        rpId: 'localhost',
         timeout: 60000,
         allowCredentials: [],
         userVerification: 'required',

@@ -164,7 +164,7 @@ const handlers = [
       {
         requestId: TEST_ULID.requestId,
         challenge: 'add-challenge-base64',
-        rpId: 'app.localhost',
+        rpId: 'localhost',
       },
       {
         status: 200,

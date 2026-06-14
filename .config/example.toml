@@ -15,10 +15,7 @@ bearer_token = "your-secret-bearer-token"
 port = 8080
 
 # CORS allowed origins (comma-separated in TOML array).
-allowed_origins = [
-  "https://your-domain.com",
-  "https://app.your-domain.com",
-]
+allowed_origins = ["https://www.your-domain.com", "https://your-domain.com"]
 
 # Trusted proxy CIDRs for secure client IP extraction.
 trusted_proxy_cidrs = ["10.0.0.0/8"]
@@ -28,7 +25,7 @@ trusted_proxy_cidrs = ["10.0.0.0/8"]
 webauthn_rp_id = "your-domain.com"
 
 # Base URL for account recovery deep links.
-account_recovery_url_base = "https://app.your-domain.com/login/recovery/consume"
+account_recovery_url_base = "https://your-domain.com/login/recovery/consume"
 
 # Time-to-live durations for various auth tokens and sessions.
 challenge_ttl = "5m"

@@ -7,7 +7,7 @@
 origin = "https://admin.your-domain.com"
 
 # Product public origin. Must differ from Admin origin.
-product_origin = "https://app.your-domain.com"
+product_origin = "https://your-domain.com"
 
 [cookie]
 # Admin refreshToken Cookie settings. Domain must match the Admin origin host.

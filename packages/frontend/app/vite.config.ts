@@ -22,14 +22,18 @@ function canonicalHostRedirectPlugin(canonicalHost: string, canonicalPort: numbe
           return;
         }
 
-        // Step 3: loopback host かつ対象 dev port の場合だけ canonical host へ寄せ、WebAuthn RP ID と origin を一致させる。
+        // Step 3: canonical host 以外の loopback host だけを対象にし、localhost 自身への自己 redirect を防ぐ。
         const host = parseHostHeader(hostHeader);
-        if (host?.port !== canonicalPortString || !loopbackDevHosts.has(host.hostname)) {
+        const shouldRedirect =
+          host?.port === canonicalPortString &&
+          host.hostname !== canonicalHost &&
+          loopbackDevHosts.has(host.hostname);
+        if (!shouldRedirect) {
           next();
           return;
         }
 
-        // Step 4: path と query を維持した 308 redirect を返し、誤った localhost origin を history に積ませない。
+        // Step 4: path と query を維持した 308 redirect を返し、誤った loopback origin を history に積ませない。
         const redirectURL = new URL(request.url ?? '/', canonicalOrigin);
         response.statusCode = 308;
         response.setHeader('Location', redirectURL.href);
@@ -51,7 +55,7 @@ function parseHostHeader(hostHeader: string): { hostname: string; port: string }
 }
 
 export default defineConfig({
-  plugins: [canonicalHostRedirectPlugin('app.localhost', 5174), tailwindcss(), sveltekit()],
+  plugins: [canonicalHostRedirectPlugin('localhost', 5174), tailwindcss(), sveltekit()],
 
   build: {
     rollupOptions: {
@@ -73,7 +77,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5174,
     strictPort: true,
-    allowedHosts: ['app.localhost'],
+    allowedHosts: ['localhost'],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

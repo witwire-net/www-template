@@ -264,9 +264,7 @@ services:
       - |
         /signoz-otel-collector migrate sync check &&
         /signoz-otel-collector \
-          --config=/etc/signoz/otel-collector-config.yaml \
-          --manager-config=/etc/signoz/otel-collector-opamp-config.yaml \
-          --copy-path=/var/tmp/collector-config.yaml
+          --config=/etc/signoz/otel-collector-config.yaml
     environment:
       OTEL_RESOURCE_ATTRIBUTES: host.name=signoz-host,os.type=linux
       LOW_CARDINAL_EXCEPTION_GROUPING: 'false'
@@ -278,7 +276,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'found=0; for file in /proc/net/tcp /proc/net/tcp6; do [ -r "$${file}" ] || continue; while read -r _ addr _ state _; do case "$${addr}:$${state}" in *:334D:0A) found=1;; esac; done < "$${file}"; done; [ "$${found}" = 1 ]',
+          'found_health=0; found_otlp=0; for file in /proc/net/tcp /proc/net/tcp6; do [ -r "$${file}" ] || continue; while read -r _ addr _ state _; do case "$${addr}:$${state}" in *:334D:0A) found_health=1;; *:10DD:0A) found_otlp=1;; esac; done < "$${file}"; done; [ "$${found_health}" = 1 ] && [ "$${found_otlp}" = 1 ]',
         ]
       interval: 5s
       timeout: 2s
