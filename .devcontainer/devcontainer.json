@@ -22,7 +22,7 @@
   "updateRemoteUserUID": true,
   "containerEnv": {
     "TOOLCHAIN_NODE_VERSION": "24.12.0",
-    "TOOLCHAIN_PNPM_VERSION": "11.5.1",
+    "TOOLCHAIN_PNPM_VERSION": "11.6.0",
     "TOOLCHAIN_SVELTEKIT_VERSION": "2.22.0",
     "TOOLCHAIN_ADAPTER_CLOUDFLARE_VERSION": "5.1.0",
     "TOOLCHAIN_GO_VERSION": "1.26.4",
@@ -34,9 +34,6 @@
     "TOOLCHAIN_TYPESPEC_VERSION": "1.8.0",
     "TOOLCHAIN_OPENSPEC_VERSION": "1.3.1",
     "TOOLCHAIN_AGENT_BROWSER_VERSION": "0.27.0"
-  },
-  "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
   "postCreateCommand": "bash .devcontainer/scripts/post-create.sh"
 }

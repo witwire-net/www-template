@@ -35,8 +35,10 @@ lerna-debug.log*
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/tasks.json
 .idea
 .DS_Store
+*Zone.Identifier
 *.suo
 *.ntvs*
 *.njsproj

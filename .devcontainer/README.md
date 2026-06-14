@@ -1,6 +1,6 @@
 # Devcontainer
 
-この devcontainer は、Zed から接続して Go バックエンド、Svelte フロントエンド、TypeSpec を扱う作業用の土台です。
+この devcontainer は、VSCode から接続して Go バックエンド、Svelte フロントエンド、TypeSpec を扱う作業用の土台です。
 
 ## 含まれるもの
 
@@ -10,15 +10,14 @@
 - `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode` `agent-browser`
 - Playwright 実行に必要な Linux 依存
 - PostgreSQL 18、Valkey 9、OpenSearch 3、MinIO、Mailpit、SigNoz のローカルサービス
-- `docker` と `docker compose` をコンテナ内から利用可能
+- host 側の `scripts/devcontainer/run.sh` から workspace service 内の toolchain を利用可能
 
-## Zed での利用
+## VSCode での利用
 
-- repository root を Zed で開き、Dev Container prompt の `Open in Container` を選択します
-- prompt を閉じた場合は command palette の `Project: Open Remote` から Dev Container に接続します
-- 初回接続時は `.zed/settings.json` の LSP / formatter / extension 設定を有効化するため、worktree を trust します
-- Zed 接続後の terminal、task、language server は Dev Container 内で動作します
-- `.zed/tasks.json` の task はすべて `pnpm` script 経由で実行し、直接 `go test` や `tsc` などは呼びません
+- repository root を VSCode で開き、Dev Containers 拡張の `Reopen in Container` を選択します
+- 初回接続時は `.vscode/extensions.json` の推奨拡張をインストールします
+- VSCode 接続後の terminal、task、language server は Dev Container 内で動作します
+- `.vscode/tasks.json` の task はすべて `pnpm` script 経由で実行し、直接 `go test` や `tsc` などは呼びません
 - Codex Desktop や host 側 terminal から検証する場合は、`scripts/devcontainer/run.sh pnpm check` のように wrapper 経由で workspace service 内の toolchain を使います
 
 ## コンテナ起動後の状態
@@ -71,7 +70,7 @@
 
 ## メモ
 
-- Zed Dev Container は `forwardPorts` に依存しないため、host から使う開発ポートは Docker Compose の `ports` で `127.0.0.1` にだけ公開しています
+- Dev Container は `forwardPorts` に依存しないため、host から使う開発ポートは Docker Compose の `ports` で `127.0.0.1` にだけ公開しています
 - frontend、Go API、SigNoz 向けの主要ポートに加え、`5174` の app dev server も host から利用できます
 - 今後の Go API や OpenNext アプリ向けに `3001` `8080` `8081` も loopback 公開しています
 - PostgreSQL と OpenSearch は major 更新時のローカルデータ衝突を避けるため versioned named volume を使っています

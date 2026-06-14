@@ -4,7 +4,7 @@ set -euo pipefail
 
 # Devcontainer 内で指定 pnpm を必ず使い、host 側の Corepack 状態に依存しないようにする。
 corepack enable
-corepack prepare pnpm@11.5.1 --activate
+corepack prepare pnpm@11.6.0 --activate
 
 # workspace の Node 依存を先に復元し、以降の pnpm script と TypeScript 系 tooling を利用可能にする。
 pnpm install

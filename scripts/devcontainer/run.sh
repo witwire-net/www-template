@@ -45,7 +45,7 @@ fi
 workspace_container_id="$(docker compose -f "${compose_file}" ps -q workspace)"
 if [ -z "${workspace_container_id}" ]; then
   printf '%s\n' 'DevContainer workspace service is not created.' >&2
-  printf '%s\n' 'Open the repository in Zed Dev Container, or run: docker compose -f .devcontainer/compose.yaml up -d workspace' >&2
+  printf '%s\n' 'Open the repository in VSCode Dev Container, or run: docker compose -f .devcontainer/compose.yaml up -d workspace' >&2
   exit 69
 fi
 
@@ -53,7 +53,7 @@ fi
 workspace_running="$(docker inspect -f '{{.State.Running}}' "${workspace_container_id}" 2>/dev/null || true)"
 if [ "${workspace_running}" != "true" ]; then
   printf '%s\n' 'DevContainer workspace service is not running.' >&2
-  printf '%s\n' 'Open the repository in Zed Dev Container, or run: docker compose -f .devcontainer/compose.yaml up -d workspace' >&2
+  printf '%s\n' 'Open the repository in VSCode Dev Container, or run: docker compose -f .devcontainer/compose.yaml up -d workspace' >&2
   exit 69
 fi
 

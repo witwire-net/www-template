@@ -3,11 +3,11 @@
 ## 前提
 
 - Node.js 24.12+
-- pnpm 11.5.1
+- pnpm 11.6.0
 - Go 1.26.4+
 - backend 実行には `DATABASE_URL`, `VALKEY_URL`, `OPENSEARCH_URL`, `R2_ENDPOINT`, `R2_REGION`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `MAIL_FROM_ADDRESS`
 
-Zed で作業する場合は repository root を Dev Container として開き、初回に worktree を trust してください。Zed の terminal、task、LSP、formatter は Dev Container 内の toolchain を使います。
+VSCode で作業する場合は repository root を Dev Container として開いてください。VSCode の terminal、task、LSP、formatter は Dev Container 内の toolchain を使います。
 
 ## 基本フロー
 
