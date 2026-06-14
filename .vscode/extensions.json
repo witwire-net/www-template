@@ -2,13 +2,16 @@
   "recommendations": [
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
-    "golang.go",
-    "redhat.vscode-yaml",
+    "stylelint.vscode-stylelint",
     "svelte.svelte-vscode",
-    "tamasfe.even-better-toml",
-    "tintoy.msbuild-project-tools",
+    "bradlc.vscode-tailwindcss",
+    "golang.go",
     "typespec.typespec-vscode",
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+    "mikestead.dotenv",
     "ms-azuretools.vscode-docker",
-    "github.vscode-github-actions"
+    "github.vscode-github-actions",
+    "davidanson.vscode-markdownlint"
   ]
 }

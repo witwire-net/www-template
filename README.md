@@ -173,7 +173,7 @@ packages/typespec/main.tsp
 ### オプション A: VSCode + Dev Containers（推奨）
 
 VSCode で repository root を開き、Dev Containers 拡張の `Reopen in Container` を選びます。
-初回接続時は `.vscode/extensions.json` の推奨拡張をインストールし、`.vscode/settings.json` の formatter / LSP 設定を利用します。
+初回接続時は `.devcontainer/devcontainer.json` の `customizations.vscode.extensions` に定義した拡張を Dev Container 内へ自動導入し、`.vscode/settings.json` の formatter / LSP 設定を利用します。
 
 VSCode 接続後の terminal、task、language server は Dev Container 内で動作します。起動すると以下のサービスが自動で立ち上がります。
 
@@ -610,7 +610,7 @@ Conventional Commits 形式を強制します（`commitlint`）。
 | `CODING_STANDARDS.md`         | 機械的に fail するルールの完全一覧（guardrail の解説付き） |
 | `AGENTS.md`                   | AI コーディングエージェント向けの実行方針                  |
 | `.devcontainer/README.md`     | Dev Container の詳細（サービス接続先・環境変数）           |
-| `.vscode/extensions.json`     | VSCode の推奨拡張                                          |
+| `.vscode/extensions.json`     | Dev Container と同じ VSCode 拡張の推奨一覧                 |
 | `.vscode/settings.json`       | VSCode の LSP / formatter / scan 除外設定                  |
 | `.vscode/tasks.json`          | VSCode から実行する `pnpm` ベースの開発・検証 task         |
 | `packages/typespec/README.md` | TypeSpec 契約の詳細                                        |

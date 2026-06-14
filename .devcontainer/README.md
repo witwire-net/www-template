@@ -15,7 +15,7 @@
 ## VSCode での利用
 
 - repository root を VSCode で開き、Dev Containers 拡張の `Reopen in Container` を選択します
-- 初回接続時は `.vscode/extensions.json` の推奨拡張をインストールします
+- 初回接続時は `.devcontainer/devcontainer.json` の `customizations.vscode.extensions` に定義した拡張を Dev Container 内へ自動導入します
 - VSCode 接続後の terminal、task、language server は Dev Container 内で動作します
 - `.vscode/tasks.json` の task はすべて `pnpm` script 経由で実行し、直接 `go test` や `tsc` などは呼びません
 - Codex Desktop や host 側 terminal から検証する場合は、`scripts/devcontainer/run.sh pnpm check` のように wrapper 経由で workspace service 内の toolchain を使います
