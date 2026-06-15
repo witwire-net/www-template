@@ -16,7 +16,11 @@ import (
 	operatorsapplication "www-template/packages/backend/internal/application/operators"
 	domain "www-template/packages/backend/internal/domain"
 	"www-template/packages/backend/internal/platform/config"
+	platformobservability "www-template/packages/backend/internal/platform/observability"
 )
+
+const adminRouterTraceParentHeader = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+const adminRouterTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
 
 // OpenSpec 追跡: ADMIN-AUTH-BE-S057 / task 4.40 は TestAdminOperatorContextIsBoundAfterSessionValidation で、operator accessToken 検証後の operator/session context binding を固定する。
 // OpenSpec 追跡: ADMIN-AUTH-BE-S058 / task 4.41 は TestAdminAPIRejectsProductBearerToken で、Product bearer を Admin operator session として扱わない境界を固定する。
@@ -66,6 +70,33 @@ func TestAdminProtectedRouteRequiresOperatorSession(t *testing.T) {
 		t.Fatalf("expected missing bearer to stop before validator, got calls=%d", validator.calls)
 	}
 	assertAdminSecurityHeaders(t, response)
+}
+
+// [ADMIN-AUTH-BE-OBS-1] Admin strict handler が application へ渡す context は otelgin の request span を保持する。
+func TestAdminStrictHandlerPropagatesRequestTraceContextToApplication(t *testing.T) {
+	// Step 1: OTel global provider と TraceContext propagator をこのテスト専用に差し替え、traceparent header を otelgin が解釈できる状態にする。
+	installAdminRouterTraceProvider(t)
+
+	// Step 2: protected current route を通し、middleware 後の generated strict handler が auth service に渡す ctx を stub で記録する。
+	validator := &stubOperatorSessionValidator{contextToReturn: validOperatorSessionContext()}
+	auth := &stubAdminOperatorAuth{operator: validAdminOperatorDTO()}
+	router := newAdminTestRouterWithAuth(validator, auth)
+	request := httptest.NewRequest(stdhttp.MethodGet, "/api/v1/auth/operator/current", nil)
+	request.Header.Set(adminAuthHeader, "Bearer valid-admin-token")
+	request.Header.Set("traceparent", adminRouterTraceParentHeader)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("expected current operator to return 200, got %d body=%s", response.Code, response.Body.String())
+	}
+	if auth.currentTraceID == "" {
+		t.Fatal("expected admin auth handler to receive a valid trace context")
+	}
+	if got := auth.currentTraceID; got != adminRouterTraceID {
+		t.Fatalf("expected propagated trace id %s, got %s", adminRouterTraceID, got)
+	}
 }
 
 func TestAdminProtectedRouteBearerOnlyScenarioTitles(t *testing.T) {
@@ -1202,6 +1233,18 @@ func newAdminTestRouterWithAccountSearcher(validator operatorSessionValidator, s
 	return newRouterWithDependencies(cfg, adminRouterDependencies{operatorSessions: validator, accountSearch: searcher})
 }
 
+func installAdminRouterTraceProvider(t *testing.T) {
+	t.Helper()
+
+	// Step 1: OTel global state は platform/observability に閉じ込め、adapter test は復元関数だけを扱う。
+	restore := platformobservability.InstallLocalTracerProviderForTesting()
+
+	t.Cleanup(func() {
+		// Step 2: provider shutdown 後に global state を戻し、後続テストの tracing 設定を汚染しない。
+		_ = restore(context.Background())
+	})
+}
+
 func newAdminJSONRequest(method string, path string, body string) *stdhttp.Request {
 	// Step 1: generated binding が JSON body として解釈できる request を組み立て、middleware 以外の 400 を避ける。
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -1568,6 +1611,7 @@ type stubAdminOperatorAuth struct {
 	operator       adminauth.OperatorDTO
 	logoutCookie   adminauth.OperatorRefreshCookieCommand
 	errToReturn    error
+	currentTraceID string
 }
 
 type stubAdminOperatorSetupper struct {
@@ -1697,9 +1741,10 @@ func (s *stubAdminOperatorAuth) RefreshOperatorSession(_ context.Context, input 
 	return s.sessionResult, nil
 }
 
-func (s *stubAdminOperatorAuth) CurrentOperator(_ context.Context, input adminauth.CurrentOperatorInput) (adminauth.OperatorDTO, error) {
-	// Step 1: handler が header から抽出した accessToken を記録し、current operator DTO を返す。
+func (s *stubAdminOperatorAuth) CurrentOperator(ctx context.Context, input adminauth.CurrentOperatorInput) (adminauth.OperatorDTO, error) {
+	// Step 1: handler が header から抽出した accessToken と context trace 相関を記録し、current operator DTO を返す。
 	s.currentInput = input
+	s.currentTraceID = platformobservability.TraceIDFromContext(ctx)
 	if s.errToReturn != nil {
 		return adminauth.OperatorDTO{}, s.errToReturn
 	}

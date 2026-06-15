@@ -49,6 +49,7 @@ func NewRouter(cfg config.Config, dependencies Dependencies) *gin.Engine {
 	}
 
 	router := gin.New()
+	sharedhttp.EnableStrictHandlerRequestContextFallback(router)
 	_ = router.SetTrustedProxies(cfg.TrustedProxyCIDRs)
 	router.Use(gin.Recovery())
 	router.Use(productSecurityHeadersMiddleware())

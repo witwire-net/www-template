@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"slices"
@@ -12,7 +13,11 @@ import (
 
 	application "www-template/packages/backend/internal/application/auth"
 	"www-template/packages/backend/internal/platform/config"
+	platformobservability "www-template/packages/backend/internal/platform/observability"
 )
+
+const routerTraceParentHeader = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+const routerTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
 
 func TestHealthRoute(t *testing.T) {
 	t.Parallel()
@@ -58,6 +63,40 @@ func TestAppAuthEndpointRequiresAuthorization(t *testing.T) {
 
 	if recorder.Code != stdhttp.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", recorder.Code)
+	}
+}
+
+// [AUTH-BE-OBS-5] Product strict handler が application へ渡す context は otelgin の request span を保持する。
+func TestProductStrictHandlerPropagatesRequestTraceContextToApplication(t *testing.T) {
+	// Step 1: OTel global provider と TraceContext propagator をこのテスト専用に差し替え、traceparent header を otelgin が解釈できる状態にする。
+	installProductRouterTraceProvider(t)
+
+	// Step 2: recovery observer を差し込み、strict handler 経由で application に届いた context の SpanContext を記録する。
+	observer := &capturingProductRecoveryTraceObserver{}
+	clock := func() time.Time {
+		return time.Date(2026, time.March, 21, 0, 0, 0, 0, time.UTC)
+	}
+	accountRepo := stubAccountAuthRepositoryWithMember()
+	lifecycle, contextRefresh := newTestProductAccountLifecycle(t, accountRepo, clock, testConfig().AuthRuntime().RefreshTokenTTL)
+	auth := mustNewProductAuthForTest(t, newStubAuthStateRepository(clock), accountRepo, &capturingAccountRecoverySender{}, &stubInvitationPasskeyRegistrar{}, lifecycle, clock, testConfig().AuthRuntime(), application.AuthServiceOptionalPorts{WebAuthn: newMockWebAuthnProvider(), RecoveryDeliveryObserver: observer})
+	router := NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: contextRefresh, SessionService: application.NewProductSessionService(lifecycle)})
+
+	// Step 3: incoming traceparent を持つ recovery request を送り、response body や SMTP 経路ではなく application ctx の trace 相関だけを検証する。
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/auth/recovery", strings.NewReader(`{"email":"member@example.com"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("traceparent", routerTraceParentHeader)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected recovery request to return 202, got %d body=%s", response.Code, response.Body.String())
+	}
+	if observer.traceID == "" {
+		t.Fatal("expected application observer to receive a valid trace context")
+	}
+	if got := observer.traceID; got != routerTraceID {
+		t.Fatalf("expected propagated trace id %s, got %s", routerTraceID, got)
 	}
 }
 
@@ -238,6 +277,32 @@ func newTestRouter(t *testing.T) *gin.Engine {
 	sessionService := application.NewProductSessionService(lifecycle)
 
 	return NewRouter(testConfig(), Dependencies{Auth: auth, TokenService: contextRefresh, SessionService: sessionService})
+}
+
+func installProductRouterTraceProvider(t *testing.T) {
+	t.Helper()
+
+	// Step 1: OTel global state は platform/observability に閉じ込め、adapter test は復元関数だけを扱う。
+	restore := platformobservability.InstallLocalTracerProviderForTesting()
+
+	t.Cleanup(func() {
+		// Step 2: provider shutdown 後に global state を戻し、後続テストの tracing 設定を汚染しない。
+		_ = restore(context.Background())
+	})
+}
+
+type capturingProductRecoveryTraceObserver struct {
+	traceID string
+}
+
+func (o *capturingProductRecoveryTraceObserver) ObserveRecoveryDeliveryEvent(ctx context.Context, event application.RecoveryDeliveryEvent) {
+	// Step 1: request accepted event は external response と同じ request path で発生するため、strict handler から application へ渡った context の代表値として記録する。
+	if event.EventType != application.RecoveryDeliveryEventRequestAccepted || o.traceID != "" {
+		return
+	}
+
+	// Step 2: Gin context fallback が有効であれば Request.Context の OTel span がここで取得できる。
+	o.traceID = platformobservability.TraceIDFromContext(ctx)
 }
 
 func testConfig() config.Config {

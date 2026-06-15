@@ -1,6 +1,6 @@
 package mailer
 
-import "fmt"
+import "strings"
 
 // deliveryError は mailer adapter 内で発生した配送失敗を、安全な stage/class に分類する内部 error である。
 // raw error は Unwrap で保持するが、AuthService 側のログには DeliveryErrorStage / DeliveryErrorClass のみを使う。
@@ -16,13 +16,17 @@ func newDeliveryError(stage string, class string, err error) error {
 	return &deliveryError{stage: stage, class: class, err: err}
 }
 
-// Error は分類名と元 error を連結した文字列を返す。
-// この文字列は Valkey の配送失敗 record に保存され得るため、呼び出し側は secret を含む err を渡してはならない。
+// Error は安全な分類名だけを返す。
+// raw SMTP error、宛先、メール本文、password などが error 文字列経由でログや一時 record に混入しないよう、元 error の文字列は返さない。
 func (e *deliveryError) Error() string {
-	if e.err == nil {
-		return e.class
+	// Step 1: class が空の異常な deliveryError でも、空 error 文字列ではなく安全な汎用分類へ倒す。
+	class := strings.TrimSpace(e.class)
+	if class == "" {
+		return "delivery_failed"
 	}
-	return fmt.Sprintf("%s: %v", e.class, e.err)
+
+	// Step 2: 元 error は Unwrap で辿れるよう保持しつつ、Error 文字列には分類だけを出す。
+	return class
 }
 
 // Unwrap は errors.As / errors.Is が元 error を辿れるようにする。

@@ -264,8 +264,8 @@ func TestAuthRecoverySendFailureStaysGenericAndRecordsRetryExpectationAUTHBES011
 	if recorded.Email() != "member@example.com" {
 		t.Fatalf("expected failure record email member@example.com, got %q", recorded.Email())
 	}
-	if recorded.LastError() != "smtp rejected message" {
-		t.Fatalf("expected failure record last error, got %q", recorded.LastError())
+	if recorded.DeliveryStage() != "delivery" || recorded.ErrorClass() != "delivery_failed" {
+		t.Fatalf("expected generic failure classification without raw SMTP error, stage=%q class=%q", recorded.DeliveryStage(), recorded.ErrorClass())
 	}
 	if !recorded.FailedAt().Equal(env.now()) {
 		t.Fatalf("expected failedAt %s, got %s", env.now(), recorded.FailedAt())

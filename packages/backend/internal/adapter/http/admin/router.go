@@ -56,6 +56,7 @@ func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDepend
 
 	// Step 2: Admin 専用 Gin engine を新規作成し、Product router の middleware / handler table を共有しない。
 	router := gin.New()
+	sharedhttp.EnableStrictHandlerRequestContextFallback(router)
 	_ = router.SetTrustedProxies(cfg.TrustedProxyCIDRs)
 	router.Use(gin.Recovery())
 	router.Use(adminSecurityHeadersMiddleware())
@@ -952,24 +953,12 @@ func accountSearchInput(params adminopenapi.ListAdminAccountsParams, requestID s
 func contextString(ctx context.Context, key string) (string, bool) {
 	// Step 1: context key は package-local 型に限定し、外部 middleware の同名 string key と衝突しないようにする。
 	value, ok := ctx.Value(adminContextValueKey(key)).(string)
-	if ok && value != "" {
-		return value, true
-	}
-
-	// Step 2: generated strict handler が Gin context を渡す場合は Gin の string key 経由で同じ値を取得する。
-	value, ok = ctx.Value(key).(string)
 	return value, ok && value != ""
 }
 
 func contextBool(ctx context.Context, key string) (bool, bool) {
 	// Step 1: bool 値は false も有効な operator state なので、型 assertion の成否だけを返す。
 	value, ok := ctx.Value(adminContextValueKey(key)).(bool)
-	if ok {
-		return value, true
-	}
-
-	// Step 2: generated strict handler が Gin context を渡す場合は Gin の string key 経由で同じ値を取得する。
-	value, ok = ctx.Value(key).(bool)
 	return value, ok
 }
 

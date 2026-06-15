@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 
@@ -29,6 +30,51 @@ func TestSMTPSenderRejectsMissingConfigInsteadOfNoop(t *testing.T) {
 	}
 	if classified.DeliveryErrorStage() != "config" || classified.DeliveryErrorClass() != "smtp_config_missing" {
 		t.Fatalf("unexpected delivery classification: stage=%q class=%q", classified.DeliveryErrorStage(), classified.DeliveryErrorClass())
+	}
+}
+
+// [AUTH-BE-OBS-6] SMTP sender は cancel 済み context では外部接続を開始せず、分類済み error を返す。
+func TestSMTPSenderRejectsCanceledContextBeforeDial(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: context を先に cancel し、SMTP 設定が存在しても DialContext に進まない経路を作る。
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sender := NewSMTPSender(config.InfraConfig{
+		SMTP: config.SMTPConfig{Host: "127.0.0.1", Port: 25},
+		Mail: config.MailConfig{FromAddress: "test@example.com"},
+	})
+
+	// Step 2: send を実行し、raw context error ではなく安全な delivery classification として返ることを検証する。
+	err := sender.Send(ctx, []string{"to@example.com"}, "test message")
+	if err == nil {
+		t.Fatal("expected canceled context error")
+	}
+	var classified interface {
+		DeliveryErrorStage() string
+		DeliveryErrorClass() string
+	}
+	if !errors.As(err, &classified) {
+		t.Fatalf("expected classified delivery error, got %T", err)
+	}
+	if classified.DeliveryErrorStage() != "context" || classified.DeliveryErrorClass() != "smtp_canceled" {
+		t.Fatalf("unexpected delivery classification: stage=%q class=%q", classified.DeliveryErrorStage(), classified.DeliveryErrorClass())
+	}
+}
+
+// [AUTH-BE-OBS-7] deliveryError の Error 文字列は raw SMTP cause を露出しない。
+func TestDeliveryErrorStringDoesNotExposeRawCause(t *testing.T) {
+	t.Parallel()
+
+	// Step 1: raw cause に recipient や SMTP 応答らしき文字列を含め、Error() が class だけを返すことを検査する。
+	err := newDeliveryError("rcpt", "smtp_recipient_rejected", errors.New("550 rejected recipient secret@example.com"))
+	// Step 2: 呼び出し側がログ化などで見る error formatting 結果を検証し、raw cause の文字列分岐は禁止 guardrail に従って避ける。
+	safeMessage := fmt.Sprint(err)
+	if safeMessage != "smtp_recipient_rejected" {
+		t.Fatalf("expected safe error class only, got %q", safeMessage)
+	}
+	if strings.Contains(safeMessage, "secret@example.com") || strings.Contains(safeMessage, "550 rejected") {
+		t.Fatalf("delivery error leaked raw cause: %q", safeMessage)
 	}
 }
 

@@ -330,7 +330,7 @@ func (s *AuthService) executePasskeyRecoveryDelivery(ctx context.Context, reques
 		if err := s.recoverySender.SendAccountRecovery(ctx, delivery); err != nil {
 			stage, class := classifyDeliveryError(err)
 			s.observeRecoveryDelivery(ctx, recoveryDeliveryFailureEvent(delivery, stage, class))
-			if recordErr := s.recordRecoveryDeliveryFailure(ctx, delivery, err); recordErr != nil {
+			if recordErr := s.recordRecoveryDeliveryFailure(ctx, delivery, stage, class); recordErr != nil {
 				s.observeRecoveryDelivery(ctx, recoveryDeliveryFailureRecordEvent(RecoveryDeliveryEventFailureRecordFailed, delivery, "failure_record", "recovery_delivery_failure_record_failed"))
 			} else {
 				s.observeRecoveryDelivery(ctx, recoveryDeliveryFailureRecordEvent(RecoveryDeliveryEventFailureRecordSaved, delivery, "failure_record", ""))
@@ -735,8 +735,9 @@ func (s *AuthService) issueAuthSession(ctx context.Context, authSession AuthSess
 }
 
 // recordRecoveryDeliveryFailure は SMTP 配送失敗を一時監査 record として保存する。
+// raw SMTP error は保存せず、分類済み stage/class だけを永続化する。
 // 保存に失敗した場合は caller が別途 observer で記録できるよう error を返す。
-func (s *AuthService) recordRecoveryDeliveryFailure(ctx context.Context, delivery RecoveryDelivery, sendErr error) error {
+func (s *AuthService) recordRecoveryDeliveryFailure(ctx context.Context, delivery RecoveryDelivery, stage string, class string) error {
 	failedAt := s.clock()
 	ttl := delivery.ExpiresAt.Sub(failedAt)
 	if ttl <= 0 {
@@ -747,7 +748,8 @@ func (s *AuthService) recordRecoveryDeliveryFailure(ctx context.Context, deliver
 		delivery.RecoveryTokenID,
 		delivery.AccountID,
 		delivery.Email,
-		sendErr.Error(),
+		stage,
+		class,
 		failedAt,
 		failedAt,
 		delivery.ExpiresAt,

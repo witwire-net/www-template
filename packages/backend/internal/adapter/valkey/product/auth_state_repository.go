@@ -292,7 +292,8 @@ type recoveryDeliveryFailureRecord struct {
 	RecoveryTokenID string    `json:"recoveryTokenId"`
 	AccountID       string    `json:"accountId"`
 	Email           string    `json:"email"`
-	LastError       string    `json:"lastError"`
+	DeliveryStage   string    `json:"deliveryStage"`
+	ErrorClass      string    `json:"errorClass"`
 	FailedAt        time.Time `json:"failedAt"`
 	RetryAfter      time.Time `json:"retryAfter"`
 	ExpiresAt       time.Time `json:"expiresAt"`
@@ -304,7 +305,8 @@ func recoveryDeliveryFailureRecordFromDomain(failure domain.RecoveryDeliveryFail
 		RecoveryTokenID: failure.RecoveryTokenID(),
 		AccountID:       failure.AccountID().String(),
 		Email:           failure.Email(),
-		LastError:       failure.LastError(),
+		DeliveryStage:   failure.DeliveryStage(),
+		ErrorClass:      failure.ErrorClass(),
 		FailedAt:        failure.FailedAt(),
 		RetryAfter:      failure.RetryAfter(),
 		ExpiresAt:       failure.ExpiresAt(),
