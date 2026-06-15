@@ -64,6 +64,7 @@ func NewRouter(cfg config.Config, dependencies Dependencies) *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 	router.Use(otelMiddleware())
+	router.Use(sharedhttp.ErrorTraceMiddleware("product"))
 	router.Use(appAuthMiddleware(cfg, dependencies.Auth))
 	router.Use(refreshOptionalBodyMiddleware())
 	if cfg.Auth.AuthBodyLimitBytes > 0 {

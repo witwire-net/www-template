@@ -73,6 +73,7 @@ func newRouterWithDependencies(cfg config.Config, dependencies adminRouterDepend
 	// Step 3.5: OTel middleware は認証 middleware より前に配置し、Admin API の全 route で tracing を有効にする。
 	// Product router と同じ構造で OTel を適用し、Admin/Product の observability 非対称を解消する。
 	router.Use(otelMiddleware())
+	router.Use(sharedhttp.ErrorTraceMiddleware("admin"))
 	router.Use(adminAuthMiddleware(cfg, dependencies.operatorSessions))
 
 	// Step 4: health check は Admin router 自身が所有し、Admin runtime が stdlib mux へ fallback しないようにする。

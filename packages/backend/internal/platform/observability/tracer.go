@@ -99,6 +99,18 @@ func InstallLocalTracerProviderForTesting() func(context.Context) error {
 	}
 }
 
+// RecordedTraceEvent は test 用 tracer provider が収集した trace event を OTel 型なしで表す DTO である。
+//
+// 役割:
+//   - adapter 層の test が OTel SDK 型を直接 import せず、platform/observability 境界経由で trace event を検査できるようにする。
+//   - 属性値は検索用の安全な文字列表現へ変換し、test 側が機微情報の非混入を確認しやすくする。
+type RecordedTraceEvent struct {
+	// Name は trace event 名である。
+	Name string
+	// Attributes は trace event 属性の安全な文字列表現である。
+	Attributes map[string]string
+}
+
 // TraceIDFromContext は context に含まれる現在の trace ID を文字列として返す。
 //
 // 役割:

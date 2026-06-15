@@ -4,12 +4,21 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
+
+var traceEventRecorderForTesting traceEventRecorderState
+
+type traceEventRecorderState struct {
+	mu      sync.Mutex
+	enabled bool
+	events  []RecordedTraceEvent
+}
 
 // DetachedTraceContext は request context から trace 相関だけを取り出した background context を返す。
 //
@@ -99,8 +108,69 @@ func AddTraceEvent(ctx context.Context, name string, attrs []slog.Attr) {
 		return
 	}
 
-	// Step 2: slog 属性を OTel trace 属性へ変換し、同じ key で検索できるようにする。
+	// Step 2: test recorder が有効な場合は、OTel 型を使わず AddTraceEvent 境界で同じ event を検査できるよう控える。
+	recordTraceEventForTesting(name, attrs)
+
+	// Step 3: slog 属性を OTel trace 属性へ変換し、同じ key で検索できるようにする。
 	span.AddEvent(name, trace.WithAttributes(slogAttrsToTraceAttributes(attrs)...))
+}
+
+// InstallTraceEventRecorderForTesting は AddTraceEvent が受け取った event を OTel 型なしで収集する test recorder を有効化する。
+//
+// 役割:
+//   - adapter test が OTel SDK の exporter/test package を import せず、platform/observability 境界で trace event を検証できるようにする。
+//   - recording span がある場合だけ AddTraceEvent が recorder にも書くため、実運用の「span が無ければ no-op」という挙動を保つ。
+//   - cleanup 関数で以前の recorder 状態を復元し、他テストの event 記録へ干渉しないようにする。
+//
+// 戻り値:
+//   - func(): test cleanup で呼ぶ復元関数。
+//   - func() []RecordedTraceEvent: 現在までに AddTraceEvent が受け取った event の snapshot を返す reader。
+//
+// 使用例:
+//
+//	restoreRecorder, events := observability.InstallTraceEventRecorderForTesting()
+//	t.Cleanup(restoreRecorder)
+func InstallTraceEventRecorderForTesting() (func(), func() []RecordedTraceEvent) {
+	// Step 1: 既存 recorder 状態を保存し、cleanup 後にテスト間の global state を完全に戻せるようにする。
+	traceEventRecorderForTesting.mu.Lock()
+	previousEnabled := traceEventRecorderForTesting.enabled
+	previousEvents := append([]RecordedTraceEvent(nil), traceEventRecorderForTesting.events...)
+	traceEventRecorderForTesting.enabled = true
+	traceEventRecorderForTesting.events = nil
+	traceEventRecorderForTesting.mu.Unlock()
+
+	// Step 2: cleanup は保存済み状態へ復元する。events slice は copy 済みなので呼び出し元の read 結果に影響されない。
+	restore := func() {
+		traceEventRecorderForTesting.mu.Lock()
+		traceEventRecorderForTesting.enabled = previousEnabled
+		traceEventRecorderForTesting.events = previousEvents
+		traceEventRecorderForTesting.mu.Unlock()
+	}
+
+	// Step 3: reader は snapshot を返し、呼び出し側が slice を変更しても recorder 内部状態を壊せないようにする。
+	readEvents := func() []RecordedTraceEvent {
+		traceEventRecorderForTesting.mu.Lock()
+		defer traceEventRecorderForTesting.mu.Unlock()
+		return append([]RecordedTraceEvent(nil), traceEventRecorderForTesting.events...)
+	}
+
+	return restore, readEvents
+}
+
+func recordTraceEventForTesting(name string, attrs []slog.Attr) {
+	// Step 1: recorder 無効時は lock 内で即 return し、production/runtime の通常 path に event 保持を追加しない。
+	traceEventRecorderForTesting.mu.Lock()
+	defer traceEventRecorderForTesting.mu.Unlock()
+	if !traceEventRecorderForTesting.enabled {
+		return
+	}
+
+	// Step 2: slog.Attr を安全な文字列表現へ解決し、adapter tests が OTel 型なしで属性検査できる形にする。
+	converted := make(map[string]string, len(attrs))
+	for _, attr := range attrs {
+		converted[attr.Key] = attr.Value.Resolve().String()
+	}
+	traceEventRecorderForTesting.events = append(traceEventRecorderForTesting.events, RecordedTraceEvent{Name: name, Attributes: converted})
 }
 
 func slogAttrsToTraceAttributes(attrs []slog.Attr) []attribute.KeyValue {
