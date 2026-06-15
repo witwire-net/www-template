@@ -397,6 +397,15 @@ func checkImports(path string, file *ast.File) []string {
 				continue
 			}
 
+			// Valkey adapter subtree 同士の import は Product/Admin から共通 root helper への依存だけに限定する。
+			// これにより Product/Admin session namespace を混在させず、観測 hook などの中立実装だけを共有できる。
+			if layer == "adapter-valkey" && targetLayer == "adapter-valkey" {
+				if !isAllowedValkeyAdapterBoundaryImport(path, importPath) {
+					violations = append(violations, fmt.Sprintf("%s: Valkey adapter surface must not import %s", path, importPath))
+				}
+				continue
+			}
+
 			// Product/Admin application subtree と persistence adapter は surface を越えた application import を禁止する。
 			// 認証 primitive は domain/application auth concept に集約し、shared wrapper への依存を canonical path にしない。
 			if targetLayer == "application" && !isAllowedApplicationBoundaryImport(path, importPath) {
@@ -456,6 +465,22 @@ func isAllowedHTTPAdapterBoundaryImport(sourcePath string, importPath string) bo
 
 	// Step 3: Product/Admin から shared への一方向依存だけを許可し、shared から具体 surface への逆依存は拒否する。
 	return (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "shared"
+}
+
+// isAllowedValkeyAdapterBoundaryImport は Valkey adapter subtree 間の許可依存だけを判定する。
+// Product/Admin は共通 root helper を使えるが、互いの store package へは依存できない。
+func isAllowedValkeyAdapterBoundaryImport(sourcePath string, importPath string) bool {
+	// Step 1: source file と import target の Valkey surface を取り出し、Product/Admin/root の関係を固定する。
+	sourceSurface := persistenceAdapterSurfaceFromPath(sourcePath, "valkey")
+	targetSurface := surfaceFromRelativePath(strings.TrimPrefix(importPath, modulePath+"/"), "internal/adapter/valkey")
+
+	// Step 2: 同一 surface 内の補助 package は許可し、将来 product/internal 等を増やす余地を残す。
+	if sourceSurface == targetSurface {
+		return true
+	}
+
+	// Step 3: Product/Admin から共通 root helper への片方向依存だけを許可し、root から具体 surface への逆依存は拒否する。
+	return (sourceSurface == "product" || sourceSurface == "admin") && targetSurface == "legacy"
 }
 
 // isAllowedApplicationBoundaryImport は application package への import が surface 境界を越えていないか判定する。

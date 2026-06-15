@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	sharedvalkey "www-template/packages/backend/internal/adapter/valkey"
 	"www-template/packages/backend/internal/platform/config"
 )
 
@@ -57,7 +58,7 @@ func NewStore(cfg config.ValkeyConfig) (*Store, error) {
 	options.WriteTimeout = 3 * time.Second
 
 	// Step 4: 環境別 prefix は保持し、実際の key 生成時に product namespace を必ず挿入する。
-	return &Store{client: redis.NewClient(options), keyPrefix: strings.TrimSpace(cfg.KeyPrefix)}, nil
+	return &Store{client: sharedvalkey.NewObservedClient(options, "product"), keyPrefix: strings.TrimSpace(cfg.KeyPrefix)}, nil
 }
 
 // Close は Product Valkey client を閉じる。

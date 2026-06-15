@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	sharedvalkey "www-template/packages/backend/internal/adapter/valkey"
 	"www-template/packages/backend/internal/platform/config"
 )
 
@@ -47,7 +48,7 @@ func NewStore(cfg config.ValkeyConfig) (*Store, error) {
 	options.WriteTimeout = 3 * time.Second
 
 	// Step 3: Admin logical DB 内の key は必ず `admin:*` から始めるため、Product 用の任意 prefix は取り込まない。
-	return &Store{client: redis.NewClient(options)}, nil
+	return &Store{client: sharedvalkey.NewObservedClient(options, "admin")}, nil
 }
 
 // Close は Admin Valkey client を閉じる。

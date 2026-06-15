@@ -53,8 +53,46 @@ func TestOperatorAuditProjectionWarningObserverLogsFailure(t *testing.T) {
 	observer.ObserveOperatorAuditProjectionFailure(context.Background(), "audit-1", assertProjectionFailureError{})
 
 	logLine := output.String()
-	if !strings.Contains(logLine, "operator audit OpenSearch projection failed") || !strings.Contains(logLine, "operator_audit.opensearch_projection_failed") || !strings.Contains(logLine, "audit-1") {
+	if !strings.Contains(logLine, "operator audit OpenSearch projection failed") || !strings.Contains(logLine, "operator_audit.opensearch_projection_failed") || !strings.Contains(logLine, "audit-1") || !strings.Contains(logLine, "error_class=unknown") {
 		t.Fatalf("warning log does not contain projection failure evidence: %s", logLine)
+	}
+	if strings.Contains(logLine, "opensearch down") || strings.Contains(logLine, " error=") {
+		t.Fatalf("warning log must not contain raw projection error: %s", logLine)
+	}
+}
+
+// [ADMIN-CONSOLE-BE-S088] OpenSearch projection 成功時も body を出さずに request metadata だけを観測する。
+func TestOperatorAuditOpenSearchProjectorObservesRequestWithoutBodies(t *testing.T) {
+	previousLogger := slog.Default()
+	capture := &operatorAuditDatastoreCaptureHandler{}
+	slog.SetDefault(slog.New(capture))
+	defer slog.SetDefault(previousLogger)
+
+	// Step 1: OpenSearch document API を模倣し、response body に秘匿的な値があっても観測属性に出ないことを確認する。
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"result":"created","secret":"response-secret"}`))
+	}))
+	defer server.Close()
+
+	projector := mustNewOperatorAuditOpenSearchProjector(t, server.URL)
+	if err := projector.ProjectOperatorAuditEvent(context.Background(), operatorAuditProjectionTestRecord()); err != nil {
+		t.Fatalf("project operator audit event: %v", err)
+	}
+
+	record := capture.findDatastoreRecord(t, "opensearch", "index_document")
+	attrs := operatorAuditDatastoreAttrsToMap(record.attrs)
+	serialized := operatorAuditDatastoreAttrsString(record.attrs)
+	for _, leaked := range []string{"operator-1", "account-1", "audit-1", "response-secret"} {
+		if strings.Contains(serialized, leaked) {
+			t.Fatalf("OpenSearch datastore observation leaked body/document data %q: %s", leaked, serialized)
+		}
+	}
+	if got := attrs["datastore.target"].String(); got != "/admin-audit-2026.05/_doc/*" {
+		t.Fatalf("datastore.target = %q, want index path with wildcard document", got)
+	}
+	if got := attrs["status_code"].Int64(); got != http.StatusCreated {
+		t.Fatalf("status_code = %d, want %d", got, http.StatusCreated)
 	}
 }
 
@@ -90,4 +128,62 @@ type assertProjectionFailureError struct{}
 func (assertProjectionFailureError) Error() string {
 	// Step 1: warning observer test で secret を含まない固定 error message を使う。
 	return "opensearch down"
+}
+
+type operatorAuditDatastoreCapturedRecord struct {
+	attrs []slog.Attr
+}
+
+type operatorAuditDatastoreCaptureHandler struct {
+	records []operatorAuditDatastoreCapturedRecord
+}
+
+func (h *operatorAuditDatastoreCaptureHandler) Enabled(context.Context, slog.Level) bool {
+	return true
+}
+
+func (h *operatorAuditDatastoreCaptureHandler) Handle(_ context.Context, record slog.Record) error {
+	attrs := make([]slog.Attr, 0, record.NumAttrs())
+	record.Attrs(func(attr slog.Attr) bool {
+		attrs = append(attrs, attr)
+		return true
+	})
+	h.records = append(h.records, operatorAuditDatastoreCapturedRecord{attrs: attrs})
+	return nil
+}
+
+func (h *operatorAuditDatastoreCaptureHandler) WithAttrs([]slog.Attr) slog.Handler {
+	return h
+}
+
+func (h *operatorAuditDatastoreCaptureHandler) WithGroup(string) slog.Handler {
+	return h
+}
+
+func (h *operatorAuditDatastoreCaptureHandler) findDatastoreRecord(t *testing.T, system string, operation string) operatorAuditDatastoreCapturedRecord {
+	t.Helper()
+	for _, record := range h.records {
+		attrs := operatorAuditDatastoreAttrsToMap(record.attrs)
+		if attrs["datastore.system"].String() == system && attrs["datastore.operation"].String() == operation {
+			return record
+		}
+	}
+	t.Fatalf("datastore record system=%s operation=%s not found in %#v", system, operation, h.records)
+	return operatorAuditDatastoreCapturedRecord{}
+}
+
+func operatorAuditDatastoreAttrsToMap(attrs []slog.Attr) map[string]slog.Value {
+	attrMap := make(map[string]slog.Value, len(attrs))
+	for _, attr := range attrs {
+		attrMap[attr.Key] = attr.Value.Resolve()
+	}
+	return attrMap
+}
+
+func operatorAuditDatastoreAttrsString(attrs []slog.Attr) string {
+	parts := make([]string, 0, len(attrs))
+	for _, attr := range attrs {
+		parts = append(parts, attr.Key+"="+attr.Value.Resolve().String())
+	}
+	return strings.Join(parts, " ")
 }

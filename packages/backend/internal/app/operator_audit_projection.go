@@ -89,17 +89,28 @@ func (p *operatorAuditOpenSearchProjector) ProjectOperatorAuditEvent(ctx context
 	request.Header.Set("Content-Type", "application/json")
 
 	// Step 5: 2xx 以外は projection failure として caller に返し、application 側 observer が warning/retry marker に変換できるようにする。
+	requestStartedAt := time.Now()
 	response, err := p.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("index operator audit opensearch document: %w", err)
+		wrappedErr := observability.WrapDatastoreConnectionError(fmt.Errorf("index operator audit opensearch document: %w", err))
+		observeOperatorAuditOpenSearchRequest(ctx, requestStartedAt, indexName, int64(len(body)), 0, 0, wrappedErr)
+		return wrappedErr
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
-	_, _ = io.Copy(io.Discard, response.Body)
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("index operator audit opensearch document: unexpected status %d", response.StatusCode)
+	responseBytes, readErr := io.Copy(io.Discard, response.Body)
+	if readErr != nil {
+		wrappedErr := observability.WrapDatastoreConnectionError(fmt.Errorf("read operator audit opensearch response: %w", readErr))
+		observeOperatorAuditOpenSearchRequest(ctx, requestStartedAt, indexName, int64(len(body)), responseBytes, response.StatusCode, wrappedErr)
+		return wrappedErr
 	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		wrappedErr := observability.WrapDatastoreUnexpectedStatusError(fmt.Errorf("index operator audit opensearch document: unexpected status %d", response.StatusCode))
+		observeOperatorAuditOpenSearchRequest(ctx, requestStartedAt, indexName, int64(len(body)), responseBytes, response.StatusCode, wrappedErr)
+		return wrappedErr
+	}
+	observeOperatorAuditOpenSearchRequest(ctx, requestStartedAt, indexName, int64(len(body)), responseBytes, response.StatusCode, nil)
 	return nil
 }
 
@@ -109,7 +120,54 @@ func (o *operatorAuditProjectionWarningObserver) ObserveOperatorAuditProjectionF
 	if logger == nil {
 		logger = slog.Default()
 	}
-	logger.WarnContext(ctx, "operator audit OpenSearch projection failed", slog.String("event_type", "operator_audit.opensearch_projection_failed"), slog.String("audit_id", auditID), slog.String("error", err.Error()))
+	logger.WarnContext(ctx, "operator audit OpenSearch projection failed", slog.String("event_type", "operator_audit.opensearch_projection_failed"), slog.String("audit_id", auditID), slog.String("error_class", string(observability.ClassifyDatastoreError(err))))
+}
+
+func observeOperatorAuditOpenSearchRequest(ctx context.Context, startedAt time.Time, indexName string, requestBytes int64, responseBytes int64, statusCode int, err error) {
+	// Step 1: index 名は Admin audit prefix と年月だけを含み、document ID は wildcard にして個別 audit ID を target へ出さない。
+	target := "/" + url.PathEscape(indexName) + "/_doc/*"
+	status, errorClass := openSearchObservationStatus(err)
+
+	// Step 2: request/response body は出さず、安全な byte 数だけを存在時に属性化する。
+	requestBytesPointer := positiveInt64Pointer(requestBytes)
+	responseBytesPointer := positiveInt64Pointer(responseBytes)
+	statusCodeValue := int64(statusCode)
+
+	// Step 3: OpenSearch projection の HTTP I/O を datastore operation として SigNoz Logs/traces に残す。
+	observability.ObserveDatastoreOperationCompleted(ctx, observability.DatastoreOperationCompleted{
+		System:        observability.DatastoreSystemOpenSearch,
+		Operation:     "index_document",
+		Target:        target,
+		Status:        status,
+		Duration:      time.Since(startedAt),
+		RequestBytes:  requestBytesPointer,
+		ResponseBytes: responseBytesPointer,
+		StatusCode:    positiveInt64Pointer(statusCodeValue),
+		ResultClass:   observability.DatastoreResultClassStatus,
+		ErrorClass:    errorClass,
+	})
+}
+
+func openSearchObservationStatus(err error) (observability.DatastoreOperationStatus, observability.DatastoreErrorClass) {
+	// Step 1: 成功時は status=ok/error_class=none とし、HTTP status code は別属性に入れる。
+	if err == nil {
+		return observability.DatastoreOperationStatusOK, observability.DatastoreErrorClassNone
+	}
+
+	// Step 2: caller cancellation は backend/OpenSearch 障害と分離して canceled として扱う。
+	class := observability.ClassifyDatastoreError(err)
+	if class == observability.DatastoreErrorClassCanceled {
+		return observability.DatastoreOperationStatusCanceled, class
+	}
+	return observability.DatastoreOperationStatusError, class
+}
+
+func positiveInt64Pointer(value int64) *int64 {
+	// Step 1: 正の値だけを属性化し、未計測と 0 byte を混同しないようにする。
+	if value <= 0 {
+		return nil
+	}
+	return &value
 }
 
 func validateOperatorAuditOpenSearchProjectionConfig(cfg config.OpenSearchConfig) (string, string, error) {

@@ -66,7 +66,7 @@ func OpenDatabase(databaseURL string) (*gorm.DB, error) {
 	)
 
 	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{
-		Logger: gormLogger,
+		Logger: newObservedGORMLogger(gormLogger),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open gorm database: %w", err)
@@ -87,8 +87,11 @@ func PingDatabase(ctx context.Context, db *gorm.DB) error {
 
 	pingContext, cancel := context.WithTimeout(ctx, defaultInfrastructureTimeout)
 	defer cancel()
-	if err := sqlDB.PingContext(pingContext); err != nil {
-		return fmt.Errorf("ping postgres: %w", err)
+	pingStartedAt := time.Now()
+	pingErr := sqlDB.PingContext(pingContext)
+	observePostgresPing(ctx, pingStartedAt, pingErr)
+	if pingErr != nil {
+		return fmt.Errorf("ping postgres: %w", pingErr)
 	}
 
 	return nil

@@ -10,7 +10,6 @@ import (
 	"www-template/packages/backend/internal/adapter/postgres"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/health"
-	"www-template/packages/backend/internal/platform/observability"
 )
 
 const defaultAdminOperatorSetupTokenTTL = 24 * time.Hour
@@ -38,7 +37,7 @@ func NewAdminRuntime(ctx context.Context) (*AdminRuntime, error) {
 // ctx は database / OpenSearch の到達性確認と observability 初期化に使う。
 // cfg は Admin binary 用に渡された設定であり、Product runtime へは渡さない。
 // 戻り値は Admin 専用 HTTP server を持つ runtime で、Product handlers を登録しない。
-// 設定検証、認証 TTL 検証、infrastructure 検証、observability 初期化のいずれかに失敗した場合は error を返す。
+// 設定検証、認証 TTL 検証、observability 初期化、infrastructure 検証のいずれかに失敗した場合は error を返す。
 func NewAdminRuntimeWithConfig(ctx context.Context, cfg config.Config) (*AdminRuntime, error) {
 	// Step 1: Admin surface 固有の domain / cookie / DB role / Valkey URL を検証し、Product 設定だけで Admin binary が起動することを防ぐ。
 	if err := cfg.ValidateAdminRuntime(); err != nil {
@@ -50,57 +49,26 @@ func NewAdminRuntimeWithConfig(ctx context.Context, cfg config.Config) (*AdminRu
 		return nil, err
 	}
 
-	// Step 3: Admin binary が依存する backend infrastructure の到達性を起動前に検証し、Product 専用 object storage 等へ依存しない。
+	// Step 3: Admin API process 用の tracer / meter / logger を infrastructure 検証より前に初期化し、startup I/O も観測できる状態にする。
+	closeObs, err := initRuntimeObservability(ctx, cfg.Observability)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 4: Admin binary が依存する backend infrastructure の到達性を起動前に検証し、Product 専用 object storage 等へ依存しない。
 	if err := verifyAdminInfrastructure(ctx, cfg); err != nil {
+		_ = closeObs(ctx)
 		return nil, err
 	}
 
-	// Step 4: Admin API process 用の tracer / meter / logger を初期化し、startup 以後の観測情報を収集できる状態にする。
-	obs := cfg.Observability
-	// Step 4-1: traces/metrics/logs の endpoint を起動前に解決し、設定の fallback と exporter の実利用先を一致させる。
-	otlpEndpoints := observability.ResolveOTLPEndpoints(obs.OTELExporterOTLPEndpoint, obs.OTELExporterOTLPTracesEndpoint, obs.OTELExporterOTLPLogsEndpoint)
-	// Step 4-2: SigNoz collector が OTLP gRPC を受けられない状態なら fail-fast し、実行中の exporter retry ログを発生させない。
-	if err := observability.VerifyOTLPEndpoints(ctx, otlpEndpoints); err != nil {
-		return nil, err
-	}
-
-	// Step 4-3: 検証済み traces endpoint で tracer を初期化し、Admin API の trace を SigNoz に送信する。
-	closeTracer, err := observability.InitTracer(ctx, otlpEndpoints.Traces, obs.OTELServiceName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Step 4-4: 検証済み metrics endpoint で meter を初期化し、Admin runtime metrics を SigNoz に送信する。
-	closeMeter, err := observability.InitMeter(ctx, otlpEndpoints.Metrics, obs.OTELServiceName)
-	if err != nil {
-		_ = closeTracer(ctx)
-		return nil, err
-	}
-
-	// Step 4-5: 検証済み logs endpoint で logger を初期化し、stdout と SigNoz の両方へ Admin backend logs を送信する。
-	closeLogger, err := observability.InitLogger(ctx, otlpEndpoints.Logs, obs.OTELServiceName)
-	if err != nil {
-		_ = closeMeter(ctx)
-		_ = closeTracer(ctx)
-		return nil, err
-	}
-
-	// Step 5: tracer / meter / logger の close を一つの関数へまとめ、cmd/admin-api から安全に解放できるようにする。
-	closeObs := func(ctx context.Context) error {
-		_ = closeLogger(ctx)
-		_ = closeTracer(ctx)
-		_ = closeMeter(ctx)
-		return nil
-	}
-
-	// Step 6: Admin account 管理 use case と audit projection を runtime で構成し、HTTP adapter へ具象 repository を直接持ち込まない。
+	// Step 5: Admin account 管理 use case と audit projection を runtime で構成し、HTTP adapter へ具象 repository を直接持ち込まない。
 	container, err := BuildAdminContainer(ctx, cfg)
 	if err != nil {
 		_ = closeObs(ctx)
 		return nil, err
 	}
 
-	// Step 7: Admin 専用 HTTP adapter を設定し、Product router / Product generated bindings を Admin binary に持ち込まない。
+	// Step 6: Admin 専用 HTTP adapter を設定し、Product router / Product generated bindings を Admin binary に持ち込まない。
 	server := &stdhttp.Server{
 		Addr: ":" + cfg.Port,
 		Handler: adminhttp.NewRouter(cfg, adminhttp.Dependencies{

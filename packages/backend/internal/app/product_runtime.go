@@ -9,7 +9,6 @@ import (
 	productvalkey "www-template/packages/backend/internal/adapter/valkey/product"
 	"www-template/packages/backend/internal/platform/config"
 	"www-template/packages/backend/internal/platform/health"
-	"www-template/packages/backend/internal/platform/observability"
 )
 
 // ProductRuntime は Product Account 向け HTTP API サーバーの起動・停止・設定アクセスを束ねる runtime である。
@@ -66,7 +65,7 @@ func NewProductRuntime(ctx context.Context) (*ProductRuntime, error) {
 // NewProductRuntimeWithConfig は明示的な設定値から Product runtime を生成する。
 //
 // テストや fail-close 検証のために設定を外部注入する際に使用する。
-// cfg の検証、認証設定の検証、infrastructure の接続確認、OTel の初期化を順に行い、
+// cfg の検証、認証設定の検証、OTel の初期化、infrastructure の接続確認を順に行い、
 // いずれかが失敗した場合は即座に error を返す（fail-fast）。
 //
 // 引数:
@@ -90,44 +89,13 @@ func NewProductRuntimeWithConfig(ctx context.Context, cfg config.Config) (*Produ
 	if err := validateAuthConfig(cfg.Auth); err != nil {
 		return nil, err
 	}
+	closeObs, err := initRuntimeObservability(ctx, cfg.Observability)
+	if err != nil {
+		return nil, err
+	}
 	if err := verifyInfrastructure(ctx, cfg); err != nil {
+		_ = closeObs(ctx)
 		return nil, err
-	}
-
-	obs := cfg.Observability
-	// Step 1: traces/metrics/logs の endpoint を起動前に解決し、設定の fallback と exporter の実利用先を一致させる。
-	otlpEndpoints := observability.ResolveOTLPEndpoints(obs.OTELExporterOTLPEndpoint, obs.OTELExporterOTLPTracesEndpoint, obs.OTELExporterOTLPLogsEndpoint)
-	// Step 2: SigNoz collector が OTLP gRPC を受けられない状態なら fail-fast し、実行中の exporter retry ログを発生させない。
-	if err := observability.VerifyOTLPEndpoints(ctx, otlpEndpoints); err != nil {
-		return nil, err
-	}
-
-	// Step 3: 検証済み traces endpoint で tracer を初期化し、Product API の trace を SigNoz に送信する。
-	closeTracer, err := observability.InitTracer(ctx, otlpEndpoints.Traces, obs.OTELServiceName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Step 4: 検証済み metrics endpoint で meter を初期化し、runtime metrics を SigNoz に送信する。
-	closeMeter, err := observability.InitMeter(ctx, otlpEndpoints.Metrics, obs.OTELServiceName)
-	if err != nil {
-		_ = closeTracer(ctx)
-		return nil, err
-	}
-
-	// Step 5: 検証済み logs endpoint で logger を初期化し、stdout と SigNoz の両方へ backend logs を送信する。
-	closeLogger, err := observability.InitLogger(ctx, otlpEndpoints.Logs, obs.OTELServiceName)
-	if err != nil {
-		_ = closeMeter(ctx)
-		_ = closeTracer(ctx)
-		return nil, err
-	}
-
-	closeObs := func(ctx context.Context) error {
-		_ = closeLogger(ctx)
-		_ = closeTracer(ctx)
-		_ = closeMeter(ctx)
-		return nil
 	}
 
 	container, err := BuildProductContainer(ctx, cfg)
