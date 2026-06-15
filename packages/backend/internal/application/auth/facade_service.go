@@ -274,45 +274,71 @@ func (s *AuthService) RequestPasskeyRecovery(ctx context.Context, input RequestP
 	if err != nil {
 		return RecoveryAccepted{}, ErrInternalError
 	}
+	s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventRequestAccepted, RequestID: requestID, Email: input.Email, Kind: domain.TokenKindRecovery})
 
 	emailKey := recoveryEmailKey(input.Email)
 	ipKey := recoveryIPKey(input.ClientIP)
 	emailCount, err := s.stateRepo.IncrementThrottle(ctx, emailKey, s.authConfig.RecoveryEmailThrottleWindow)
 	if err != nil {
+		s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventFailed, RequestID: requestID, Email: input.Email, Kind: domain.TokenKindRecovery, DeliveryStage: "throttle_email", ErrorClass: "recovery_throttle_store_failed"})
 		return RecoveryAccepted{}, ErrInternalError
 	}
 	ipCount, err := s.stateRepo.IncrementThrottle(ctx, ipKey, s.authConfig.RecoveryIPThrottleWindow)
 	if err != nil {
+		s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventFailed, RequestID: requestID, Email: input.Email, Kind: domain.TokenKindRecovery, DeliveryStage: "throttle_ip", ErrorClass: "recovery_throttle_store_failed"})
 		return RecoveryAccepted{}, ErrInternalError
 	}
 	if emailCount > s.authConfig.RecoveryEmailThrottleLimit || ipCount > s.authConfig.RecoveryIPThrottleLimit {
+		s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventSuppressed, RequestID: requestID, Email: input.Email, Kind: domain.TokenKindRecovery, SuppressedReason: "throttled"})
 		return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
 	}
 
+	s.runRecoveryDelivery(ctx, func(deliveryCtx context.Context) {
+		s.executePasskeyRecoveryDelivery(deliveryCtx, requestID, input.Email)
+	})
+
+	return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
+}
+
+// executePasskeyRecoveryDelivery は復旧 request 受付後の account lookup / token 発行 / SMTP 配送を実行する。
+// 外部 response は既に generic accepted として返せるため、この関数内の分岐は observer だけに記録する。
+func (s *AuthService) executePasskeyRecoveryDelivery(ctx context.Context, requestID string, email string) {
 	// アカウントルート検索を使い、passkey が 0 件のアカウント（Admin 作成直後など）にも対応する。
 	// FindByEmail は passkey credential が必須のため、0 件の場合に record not found となる。
-	root, err := s.accountRepo.FindAccountRootByEmail(ctx, input.Email)
+	root, err := s.accountRepo.FindAccountRootByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(s.mapAuthStoreError(err), ErrInternalError) {
-			return RecoveryAccepted{}, ErrInternalError
+			s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventFailed, RequestID: requestID, Email: email, Kind: domain.TokenKindRecovery, DeliveryStage: "account_lookup", ErrorClass: "account_lookup_failed"})
+			return
 		}
 		// アカウントが存在しない場合も generic accepted を返し、account existence を漏らさない。
-		return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
+		s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventAccountLookupCompleted, RequestID: requestID, Email: email, Kind: domain.TokenKindRecovery, AccountFoundKnown: true, AccountFound: false})
+		s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventSuppressed, RequestID: requestID, Email: email, Kind: domain.TokenKindRecovery, SuppressedReason: "account_not_found"})
+		return
 	}
+	s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventAccountLookupCompleted, RequestID: requestID, AccountID: root.AccountID.String(), Email: email, Kind: domain.TokenKindRecovery, AccountFoundKnown: true, AccountFound: true})
 
 	// AccountRoot から直接 delivery を発行する。AccountAuth の偽装は不要。
 	delivery, err := s.issueRecoveryDelivery(ctx, requestID, root.AccountID, root.Email, domain.TokenKindRecovery)
 	if err != nil {
-		return RecoveryAccepted{}, err
+		s.observeRecoveryDelivery(ctx, RecoveryDeliveryEvent{EventType: RecoveryDeliveryEventFailed, RequestID: requestID, AccountID: root.AccountID.String(), Email: email, Kind: domain.TokenKindRecovery, DeliveryStage: "token_issue", ErrorClass: "recovery_token_issue_failed"})
+		return
 	}
+	s.observeRecoveryDelivery(ctx, recoveryDeliveryEventFromDelivery(RecoveryDeliveryEventTokenIssued, delivery))
 	if s.recoverySender != nil {
+		s.observeRecoveryDelivery(ctx, recoveryDeliveryEventFromDelivery(RecoveryDeliveryEventSendStarted, delivery))
 		if err := s.recoverySender.SendAccountRecovery(ctx, delivery); err != nil {
-			s.recordRecoveryDeliveryFailure(ctx, delivery, err)
-			return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
+			stage, class := classifyDeliveryError(err)
+			s.observeRecoveryDelivery(ctx, recoveryDeliveryFailureEvent(delivery, stage, class))
+			if recordErr := s.recordRecoveryDeliveryFailure(ctx, delivery, err); recordErr != nil {
+				s.observeRecoveryDelivery(ctx, recoveryDeliveryFailureRecordEvent(RecoveryDeliveryEventFailureRecordFailed, delivery, "failure_record", "recovery_delivery_failure_record_failed"))
+			} else {
+				s.observeRecoveryDelivery(ctx, recoveryDeliveryFailureRecordEvent(RecoveryDeliveryEventFailureRecordSaved, delivery, "failure_record", ""))
+			}
+			return
 		}
+		s.observeRecoveryDelivery(ctx, recoveryDeliveryEventFromDelivery(RecoveryDeliveryEventSMTPSucceeded, delivery))
 	}
-
-	return RecoveryAccepted{RequestID: requestID, Accepted: true}, nil
 }
 
 func (s *AuthService) ConsumeRecoveryToken(ctx context.Context, input ConsumeRecoveryTokenInput) (RecoverySession, error) {
@@ -708,11 +734,13 @@ func (s *AuthService) issueAuthSession(ctx context.Context, authSession AuthSess
 	return authSession, nil
 }
 
-func (s *AuthService) recordRecoveryDeliveryFailure(ctx context.Context, delivery RecoveryDelivery, sendErr error) {
+// recordRecoveryDeliveryFailure は SMTP 配送失敗を一時監査 record として保存する。
+// 保存に失敗した場合は caller が別途 observer で記録できるよう error を返す。
+func (s *AuthService) recordRecoveryDeliveryFailure(ctx context.Context, delivery RecoveryDelivery, sendErr error) error {
 	failedAt := s.clock()
 	ttl := delivery.ExpiresAt.Sub(failedAt)
 	if ttl <= 0 {
-		return
+		return ErrInternalError
 	}
 	failure, err := domain.NewRecoveryDeliveryFailure(
 		delivery.RequestID,
@@ -725,9 +753,80 @@ func (s *AuthService) recordRecoveryDeliveryFailure(ctx context.Context, deliver
 		delivery.ExpiresAt,
 	)
 	if err != nil {
+		return ErrInternalError
+	}
+	if err := s.stateRepo.SaveRecoveryDeliveryFailure(ctx, failure, ttl); err != nil {
+		return ErrInternalError
+	}
+	return nil
+}
+
+type deliveryErrorClassifier interface {
+	DeliveryErrorStage() string
+	DeliveryErrorClass() string
+}
+
+// classifyDeliveryError は mailer adapter が返した分類可能 error から安全な stage/class を取り出す。
+// 分類できない error は raw message をログに出さず、汎用 delivery_failed として扱う。
+func classifyDeliveryError(err error) (string, string) {
+	if err == nil {
+		return "", ""
+	}
+	var classified deliveryErrorClassifier
+	if errors.As(err, &classified) {
+		return classified.DeliveryErrorStage(), classified.DeliveryErrorClass()
+	}
+	return "delivery", "delivery_failed"
+}
+
+// observeRecoveryDelivery は observer 未接続時には何もせず、復旧 flow 本体の成否に影響を与えない。
+// production container では必ず observer を注入し、SigNoz Logs / traces へ配送原因を残す。
+func (s *AuthService) observeRecoveryDelivery(ctx context.Context, event RecoveryDeliveryEvent) {
+	if s.recoveryDeliveryObserver == nil {
 		return
 	}
-	_ = s.stateRepo.SaveRecoveryDeliveryFailure(ctx, failure, ttl)
+	s.recoveryDeliveryObserver.ObserveRecoveryDeliveryEvent(ctx, event)
+}
+
+// runRecoveryDelivery は runner がある場合は request path 外で、ない場合は同期的に配送 job を実行する。
+// production は非同期 runner、テストは同期実行にすることで、外部 timing 対策と deterministic test を両立する。
+func (s *AuthService) runRecoveryDelivery(ctx context.Context, job func(context.Context)) {
+	if s.recoveryDeliveryRunner != nil {
+		s.recoveryDeliveryRunner.RunRecoveryDelivery(ctx, job)
+		return
+	}
+	job(ctx)
+}
+
+// recoveryDeliveryEventFromDelivery は配送 DTO から共通の観測イベント属性を作る。
+// RecoveryURL は意図的に含めず、token secret がログに流れないようにする。
+func recoveryDeliveryEventFromDelivery(eventType RecoveryDeliveryEventType, delivery RecoveryDelivery) RecoveryDeliveryEvent {
+	return RecoveryDeliveryEvent{
+		EventType:       eventType,
+		RequestID:       delivery.RequestID,
+		RecoveryTokenID: delivery.RecoveryTokenID,
+		AccountID:       delivery.AccountID.String(),
+		Email:           delivery.Email,
+		Kind:            delivery.Kind,
+	}
+}
+
+// recoveryDeliveryFailureEvent は SMTP/template 失敗用の観測イベントを作る。
+// stage/class は分類済みの安全な値だけを受け取り、raw error は含めない。
+func recoveryDeliveryFailureEvent(delivery RecoveryDelivery, stage string, class string) RecoveryDeliveryEvent {
+	event := recoveryDeliveryEventFromDelivery(RecoveryDeliveryEventFailed, delivery)
+	event.DeliveryStage = stage
+	event.ErrorClass = class
+	return event
+}
+
+// recoveryDeliveryFailureRecordEvent は配送失敗 record の保存結果を表す観測イベントを作る。
+// 保存成功時は error_class を空にし、保存失敗時だけ error_class を付与する。
+func recoveryDeliveryFailureRecordEvent(eventType RecoveryDeliveryEventType, delivery RecoveryDelivery, stage string, class string) RecoveryDeliveryEvent {
+	event := recoveryDeliveryEventFromDelivery(eventType, delivery)
+	event.DeliveryStage = stage
+	event.ErrorClass = class
+	return event
 }
 
 func (s *AuthService) ensureNotLocked(ctx context.Context, key string) error {

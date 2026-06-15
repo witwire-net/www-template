@@ -205,7 +205,8 @@ func buildProductContainer(ctx context.Context, cfg config.Config, newAccountAut
 		_ = composeClosers(func(context.Context) error { return productAuthStore.Close() }, closeChallengeStore, closeStateRepo, closeAccountRepo)(ctx)
 		return nil, fmt.Errorf("webauthn provider init: %w", webAuthnErr)
 	}
-	authSvc, err := productauth.NewProductAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, productLifecycle, productauth.AuthServiceOptionalPorts{WebAuthn: webAuthnProv, DeviceLinkSender: recoverySender, RecoveryCompleteSender: recoverySender, DeviceLinkCompleteSender: recoverySender, AuditNotifier: newSlogAuditNotifier(observability.Logger())}, func() time.Time {
+	logger := observability.Logger()
+	authSvc, err := productauth.NewProductAuthService(stateRepo, accountRepo, recoverySender, rejectingInvitationPasskeyRegistrar{}, productLifecycle, productauth.AuthServiceOptionalPorts{WebAuthn: webAuthnProv, DeviceLinkSender: recoverySender, RecoveryCompleteSender: recoverySender, DeviceLinkCompleteSender: recoverySender, AuditNotifier: newSlogAuditNotifier(logger), RecoveryDeliveryObserver: newSlogRecoveryDeliveryObserver(logger, authConfig.SecretHashKey), RecoveryDeliveryRunner: newAsyncRecoveryDeliveryRunner(logger)}, func() time.Time {
 		return time.Now().UTC()
 	}, idPolicy, authConfig)
 	if err != nil {

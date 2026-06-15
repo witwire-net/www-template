@@ -1140,6 +1140,81 @@ func TestRequestPasskeyRecoveryWithMissingEmailReturnsAcceptedWithoutSender(t *t
 	}
 }
 
+// [AUTH-BE-OBS-1] 存在しないメールアドレスの復旧 request は外部 202 を維持しつつ内部観測へ account_found=false を残す。
+func TestRequestPasskeyRecoveryObservesMissingEmailWithoutCallingSender(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+	sender := &trackingRecoverySender{}
+	observer := &recordingRecoveryDeliveryObserver{}
+	svc := newTestAuthServiceWithSenderAndObserver(stateRepo, accountRepo, sender, observer)
+
+	result, err := svc.RequestPasskeyRecovery(context.Background(), application.RequestPasskeyRecoveryInput{Email: "missing@example.com", ClientIP: "10.0.0.1"})
+	if err != nil {
+		t.Fatalf("RequestPasskeyRecovery: %v", err)
+	}
+	if !result.Accepted {
+		t.Fatal("expected generic accepted response")
+	}
+	if sender.callCount != 0 {
+		t.Fatalf("expected recovery sender not to be called, got %d", sender.callCount)
+	}
+	lookup := observer.requireEvent(t, application.RecoveryDeliveryEventAccountLookupCompleted)
+	if !lookup.AccountFoundKnown || lookup.AccountFound {
+		t.Fatalf("expected account_found=false event, got %#v", lookup)
+	}
+	suppressed := observer.requireEvent(t, application.RecoveryDeliveryEventSuppressed)
+	if suppressed.SuppressedReason != "account_not_found" {
+		t.Fatalf("expected account_not_found suppression, got %#v", suppressed)
+	}
+}
+
+// [AUTH-BE-OBS-2] SMTP 配送失敗は外部 202 を維持しつつ内部観測へ stage/class と failure record 保存結果を残す。
+func TestRequestPasskeyRecoveryObservesDeliveryFailureAndRecordSave(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+	observer := &recordingRecoveryDeliveryObserver{}
+	svc := newTestAuthServiceWithSenderAndObserver(stateRepo, accountRepo, classifiedFailingRecoverySender{}, observer)
+
+	result, err := svc.RequestPasskeyRecovery(context.Background(), application.RequestPasskeyRecoveryInput{Email: "newuser@example.com", ClientIP: "10.0.0.1"})
+	if err != nil {
+		t.Fatalf("RequestPasskeyRecovery: %v", err)
+	}
+	if !result.Accepted {
+		t.Fatal("expected generic accepted response")
+	}
+	failed := observer.requireEvent(t, application.RecoveryDeliveryEventFailed)
+	if failed.DeliveryStage != "rcpt" || failed.ErrorClass != "smtp_recipient_rejected" {
+		t.Fatalf("expected classified SMTP failure, got %#v", failed)
+	}
+	recorded := observer.requireEvent(t, application.RecoveryDeliveryEventFailureRecordSaved)
+	if recorded.RecoveryTokenID == "" || recorded.AccountID == "" {
+		t.Fatalf("expected failure record event with correlation fields, got %#v", recorded)
+	}
+}
+
+// [AUTH-BE-OBS-3] 復旧メールの SMTP 受理成功は内部観測へ smtp_accepted として残る。
+func TestRequestPasskeyRecoveryObservesSMTPSuccess(t *testing.T) {
+	t.Parallel()
+	stateRepo := newStubStateRepo(fixedClock())
+	accountRepo := newZeroPasskeyAccountRepo(testAccountID("01ARZ3NDEKTSV4RRFFQ69G5FAW"), "newuser@example.com")
+	observer := &recordingRecoveryDeliveryObserver{}
+	svc := newTestAuthServiceWithSenderAndObserver(stateRepo, accountRepo, &trackingRecoverySender{}, observer)
+
+	result, err := svc.RequestPasskeyRecovery(context.Background(), application.RequestPasskeyRecoveryInput{Email: "newuser@example.com", ClientIP: "10.0.0.1"})
+	if err != nil {
+		t.Fatalf("RequestPasskeyRecovery: %v", err)
+	}
+	if !result.Accepted {
+		t.Fatal("expected generic accepted response")
+	}
+	accepted := observer.requireEvent(t, application.RecoveryDeliveryEventSMTPSucceeded)
+	if accepted.RecoveryTokenID == "" || accepted.AccountID == "" {
+		t.Fatalf("expected SMTP success event with correlation fields, got %#v", accepted)
+	}
+}
+
 // [AUTH-BE-ZERO-3] passkey が 0 件のアカウントで StartPasskeyRegistration が成功する。
 func TestStartPasskeyRegistrationWithZeroPasskeyAccountSucceeds(t *testing.T) {
 	t.Parallel()
@@ -1227,6 +1302,39 @@ func (s *trackingRecoverySender) SendAccountRecovery(_ context.Context, _ applic
 	return nil
 }
 
+type recordingRecoveryDeliveryObserver struct {
+	events []application.RecoveryDeliveryEvent
+}
+
+func (o *recordingRecoveryDeliveryObserver) ObserveRecoveryDeliveryEvent(_ context.Context, event application.RecoveryDeliveryEvent) {
+	o.events = append(o.events, event)
+}
+
+func (o *recordingRecoveryDeliveryObserver) requireEvent(t *testing.T, eventType application.RecoveryDeliveryEventType) application.RecoveryDeliveryEvent {
+	t.Helper()
+	for _, event := range o.events {
+		if event.EventType == eventType {
+			return event
+		}
+	}
+	t.Fatalf("expected recovery delivery event %q, got %#v", eventType, o.events)
+	return application.RecoveryDeliveryEvent{}
+}
+
+type classifiedFailingRecoverySender struct{}
+
+func (classifiedFailingRecoverySender) SendAccountRecovery(context.Context, application.RecoveryDelivery) error {
+	return classifiedRecoveryDeliveryError{}
+}
+
+type classifiedRecoveryDeliveryError struct{}
+
+func (classifiedRecoveryDeliveryError) Error() string { return "smtp recipient rejected" }
+
+func (classifiedRecoveryDeliveryError) DeliveryErrorStage() string { return "rcpt" }
+
+func (classifiedRecoveryDeliveryError) DeliveryErrorClass() string { return "smtp_recipient_rejected" }
+
 // newTestAuthServiceWithSender は recovery sender を注入できるテスト用 AuthService を生成する。
 func newTestAuthServiceWithSender(stateRepo application.AuthStateRepository, accountRepo application.PasskeyAccountRepository, sender application.AccountRecoverySender) *application.AuthService {
 	cfg := config.AuthConfig{
@@ -1251,6 +1359,35 @@ func newTestAuthServiceWithSender(stateRepo application.AuthStateRepository, acc
 		JWTSecret:                       "test-jwt-secret-key-must-be-at-least-32bytes",
 	}
 	auth, err := application.NewAuthService(application.AuthServiceDependencies{StateRepo: stateRepo, AccountRepo: accountRepo, RecoverySender: sender, InvitationRegistrar: stubInvitationPasskeyRegistrar{}, AccountLifecycle: stubProductAccountLifecycle{}, Clock: fixedClock(), Policy: newSeqPolicy()}, application.AuthServiceOptionalPorts{}, cfg)
+	if err != nil {
+		panic(fmt.Sprintf("NewAuthService: %v", err))
+	}
+	return auth
+}
+
+func newTestAuthServiceWithSenderAndObserver(stateRepo application.AuthStateRepository, accountRepo application.PasskeyAccountRepository, sender application.AccountRecoverySender, observer application.RecoveryDeliveryObserver) *application.AuthService {
+	cfg := config.AuthConfig{
+		ChallengeTTL:                    5 * time.Minute,
+		SessionIdleTTL:                  30 * time.Minute,
+		SessionAbsoluteTTL:              24 * time.Hour,
+		RecoveryTokenTTL:                30 * time.Minute,
+		RecoverySessionTTL:              10 * time.Minute,
+		RecoveryEmailThrottleLimit:      3,
+		RecoveryIPThrottleLimit:         5,
+		RecoveryEmailThrottleWindow:     time.Hour,
+		RecoveryIPThrottleWindow:        time.Hour,
+		PasskeyStartThrottleLimit:       5,
+		PasskeyStartGlobalThrottleLimit: 1000,
+		SecretHashKey:                   "test-pepper",
+		PasskeyStartThrottleWindow:      time.Minute,
+		FailureLockThreshold:            10,
+		FailureLockDuration:             15 * time.Minute,
+		FailureLockWindow:               time.Minute,
+		WebAuthnRPID:                    "example.com",
+		AccountRecoveryURLBase:          "https://example.com/recover",
+		JWTSecret:                       "test-jwt-secret-key-must-be-at-least-32bytes",
+	}
+	auth, err := application.NewAuthService(application.AuthServiceDependencies{StateRepo: stateRepo, AccountRepo: accountRepo, RecoverySender: sender, InvitationRegistrar: stubInvitationPasskeyRegistrar{}, AccountLifecycle: stubProductAccountLifecycle{}, Clock: fixedClock(), Policy: newSeqPolicy()}, application.AuthServiceOptionalPorts{RecoveryDeliveryObserver: observer}, cfg)
 	if err != nil {
 		panic(fmt.Sprintf("NewAuthService: %v", err))
 	}

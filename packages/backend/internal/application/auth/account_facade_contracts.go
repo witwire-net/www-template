@@ -576,6 +576,8 @@ type AuthServiceOptionalPorts struct {
 	RecoveryCompleteSender   RecoveryCompleteSender
 	DeviceLinkCompleteSender DeviceLinkCompleteSender
 	AuditNotifier            AuditNotifier
+	RecoveryDeliveryObserver RecoveryDeliveryObserver
+	RecoveryDeliveryRunner   RecoveryDeliveryRunner
 }
 
 // AuthService は Product passkey/recovery outer flow を扱う認証 facade である。
@@ -596,6 +598,8 @@ type AuthService struct {
 	deviceLinkCompleteSender DeviceLinkCompleteSender
 	invitationRegistrar      InvitationPasskeyRegistrar
 	auditNotifier            AuditNotifier
+	recoveryDeliveryObserver RecoveryDeliveryObserver
+	recoveryDeliveryRunner   RecoveryDeliveryRunner
 	webauthn                 WebAuthnProvider
 	accountLifecycle         ProductAccountLifecycle
 	clock                    func() time.Time
@@ -634,6 +638,8 @@ func NewAuthService(deps AuthServiceDependencies, optional AuthServiceOptionalPo
 		deviceLinkCompleteSender: optional.DeviceLinkCompleteSender,
 		invitationRegistrar:      deps.InvitationRegistrar,
 		auditNotifier:            optional.AuditNotifier,
+		recoveryDeliveryObserver: optional.RecoveryDeliveryObserver,
+		recoveryDeliveryRunner:   optional.RecoveryDeliveryRunner,
 		webauthn:                 optional.WebAuthn,
 		accountLifecycle:         deps.AccountLifecycle,
 		clock:                    deps.Clock,

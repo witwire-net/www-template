@@ -2,6 +2,7 @@ package mailer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -9,6 +10,27 @@ import (
 
 	"www-template/packages/backend/internal/platform/config"
 )
+
+// [AUTH-BE-OBS-4] SMTP host や From が欠けている場合、送信成功扱いにせず分類可能な error を返す。
+func TestSMTPSenderRejectsMissingConfigInsteadOfNoop(t *testing.T) {
+	t.Parallel()
+	sender := NewSMTPSender(config.InfraConfig{})
+
+	err := sender.Send(context.Background(), []string{"to@example.com"}, "test message")
+	if err == nil {
+		t.Fatal("expected missing SMTP config error")
+	}
+	var classified interface {
+		DeliveryErrorStage() string
+		DeliveryErrorClass() string
+	}
+	if !errors.As(err, &classified) {
+		t.Fatalf("expected classified delivery error, got %T", err)
+	}
+	if classified.DeliveryErrorStage() != "config" || classified.DeliveryErrorClass() != "smtp_config_missing" {
+		t.Fatalf("unexpected delivery classification: stage=%q class=%q", classified.DeliveryErrorStage(), classified.DeliveryErrorClass())
+	}
+}
 
 // [AUTH-BE-S027] production recovery mail delivery は TLS または STARTTLS を強制する
 func TestSecureTransportRejectsServerWithoutSTARTTLS(t *testing.T) {

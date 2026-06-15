@@ -63,6 +63,8 @@ var allowedExternalImports = map[string][]string{
 		"github.com/pelletier/go-toml/v2",
 		"go.opentelemetry.io/contrib/instrumentation/runtime",
 		"go.opentelemetry.io/otel",
+		// Trace event の属性を platform/observability 内で生成し、application/app 層へ OTel 型を漏らさないために許可する。
+		"go.opentelemetry.io/otel/attribute",
 		"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc",
 		"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
 		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",

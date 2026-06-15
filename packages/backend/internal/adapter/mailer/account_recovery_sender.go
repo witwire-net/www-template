@@ -44,7 +44,7 @@ func NewAccountRecoverySender(sender *SMTPSender, cfg config.InfraConfig, accoun
 // 未知の kind の場合はセキュリティ上エラーを返す（fail-closed）。
 func (s *AccountRecoverySender) SendAccountRecovery(ctx context.Context, delivery application.RecoveryDelivery) error {
 	if s.sender == nil {
-		return nil
+		return newDeliveryError("config", "smtp_sender_missing", nil)
 	}
 
 	msg, err := s.buildAccountRecoveryMessage(ctx, delivery)
@@ -62,7 +62,7 @@ func (s *AccountRecoverySender) SendDeviceLink(ctx context.Context, delivery app
 // SendRecoveryComplete はパスキー復旧完了の通知メールを送信する。
 func (s *AccountRecoverySender) SendRecoveryComplete(ctx context.Context, delivery application.CompletionDelivery) error {
 	if s.sender == nil {
-		return nil
+		return newDeliveryError("config", "smtp_sender_missing", nil)
 	}
 	msg, err := s.buildCompletionMessage(ctx, delivery)
 	if err != nil {
@@ -74,7 +74,7 @@ func (s *AccountRecoverySender) SendRecoveryComplete(ctx context.Context, delive
 // SendDeviceLinkComplete は新規デバイスでのパスキー追加完了の通知メールを送信する。
 func (s *AccountRecoverySender) SendDeviceLinkComplete(ctx context.Context, delivery application.CompletionDelivery) error {
 	if s.sender == nil {
-		return nil
+		return newDeliveryError("config", "smtp_sender_missing", nil)
 	}
 	msg, err := s.buildCompletionMessage(ctx, delivery)
 	if err != nil {
@@ -86,17 +86,17 @@ func (s *AccountRecoverySender) SendDeviceLinkComplete(ctx context.Context, deli
 func (s *AccountRecoverySender) buildAccountRecoveryMessage(ctx context.Context, delivery application.RecoveryDelivery) (string, error) {
 	locale, err := s.resolveLocale(ctx, delivery.AccountID)
 	if err != nil {
-		return "", err
+		return "", newDeliveryError("locale", "locale_unavailable", err)
 	}
 
 	kind, err := tokenKindToMailTemplateKind(delivery.Kind)
 	if err != nil {
-		return "", err
+		return "", newDeliveryError("template", "template_kind_invalid", err)
 	}
 
 	tmpl, err := resolveMailTemplate(kind, locale)
 	if err != nil {
-		return "", err
+		return "", newDeliveryError("template", "template_resolve_failed", err)
 	}
 
 	rendered, err := renderMailTemplate(tmpl, recoveryMessageTemplateData{
@@ -105,7 +105,7 @@ func (s *AccountRecoverySender) buildAccountRecoveryMessage(ctx context.Context,
 		RequestID:   delivery.RequestID,
 	})
 	if err != nil {
-		return "", fmt.Errorf("render recovery message: %w", err)
+		return "", newDeliveryError("template", "template_render_failed", fmt.Errorf("render recovery message: %w", err))
 	}
 
 	return s.formatMessage(delivery.Email, rendered), nil
@@ -114,24 +114,24 @@ func (s *AccountRecoverySender) buildAccountRecoveryMessage(ctx context.Context,
 func (s *AccountRecoverySender) buildCompletionMessage(ctx context.Context, delivery application.CompletionDelivery) (string, error) {
 	locale, err := s.resolveLocale(ctx, delivery.AccountID)
 	if err != nil {
-		return "", err
+		return "", newDeliveryError("locale", "locale_unavailable", err)
 	}
 
 	kind, err := completionKindToMailTemplateKind(delivery.Kind)
 	if err != nil {
-		return "", err
+		return "", newDeliveryError("template", "template_kind_invalid", err)
 	}
 
 	tmpl, err := resolveMailTemplate(kind, locale)
 	if err != nil {
-		return "", err
+		return "", newDeliveryError("template", "template_resolve_failed", err)
 	}
 
 	rendered, err := renderMailTemplate(tmpl, recoveryCompleteTemplateData{
 		ProductName: s.productName,
 	})
 	if err != nil {
-		return "", fmt.Errorf("render completion message: %w", err)
+		return "", newDeliveryError("template", "template_render_failed", fmt.Errorf("render completion message: %w", err))
 	}
 
 	return s.formatMessage(delivery.Email, rendered), nil
