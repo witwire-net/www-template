@@ -1,4 +1,4 @@
-## 1. <!-- TODO: Task group name (e.g., Setup / FE / BE / Migration / Tests / Docs). -->
+## 1. <!-- TODO: Task group name (e.g., Setup / Capability / Migration / Tests / Docs). -->
 
 <!-- This file contains implementation work only. -->
 <!-- MUST NOT restate requirements using SHALL/MUST blocks or Customer Context. -->

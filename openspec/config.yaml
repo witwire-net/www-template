@@ -20,24 +20,23 @@ context: |
   - Change-local specs live under openspec/changes/**/specs/**/spec.md
   - Canonical main specs live at openspec/specs/**/spec.md
   - Every Scenario heading MUST end with a stable Scenario ID in parentheses:
-    - Example: #### Scenario: Create a user (USER-MGMT-FE-S001)
+    - Example: #### Scenario: Create a user (USER-MGMT-S001)
   - Scenario ID format: ^[A-Z0-9]+(?:-[A-Z0-9]+)*-S\d{3,}$
   - Automated tests MUST reference Scenario IDs in test titles using brackets:
-    - Example: it('[USER-MGMT-FE-S001] ...', ...)
+    - Example: it('[USER-MGMT-S001] ...', ...)
   - If a scenario cannot be automated, mark it explicitly with: Tags: manual
 
   Note on Spec Units:
   - Some schemas in this repo (e.g., new-feature, and future fix-feature/change-feature) use Spec Units:
-    - Spec Unit = <domain>-<layer>
-    - <domain>: kebab-case (e.g., user-mgmt)
-    - <layer>: fe | be
-    - Change spec path: openspec/changes/<change>/specs/<domain>-<layer>/spec.md
-    - Main spec path: openspec/specs/<domain>-<layer>/spec.md
+    - Spec Unit = <capability>
+    - <capability>: kebab-case enduring capability/responsibility name (e.g., user-mgmt)
+    - Change spec path: openspec/changes/<change>/specs/<capability>/spec.md
+    - Main spec path: openspec/specs/<capability>/spec.md
 
 rules:
   specs:
     - Every Scenario heading MUST include a Scenario ID suffix in parentheses.
-    - Prefer Scenario IDs that include layer (FE/BE) in the prefix (e.g., USER-MGMT-FE-S001).
+    - Scenario IDs MUST use the uppercased Spec Unit prefix (e.g., USER-MGMT-S001).
     - Prefer Given/When/Then bullets. Keep scenarios testable and observable.
     - If a scenario cannot be automated, include `Tags: manual` and explain why in the change proposal/PR.
   tasks:

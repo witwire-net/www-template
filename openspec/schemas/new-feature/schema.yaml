@@ -1,6 +1,6 @@
 name: new-feature
 version: 1
-description: New feature workflow - proposal → specs (domain-layer Spec Units) → design → tasks
+description: New feature workflow - proposal → specs (capability Spec Units) → design → tasks
 
 artifacts:
   - id: proposal
@@ -15,19 +15,18 @@ artifacts:
       Placeholder rule:
       - Use `<!-- TODO: details of what to write -->` for placeholders.
 
-      This workflow uses fixed-granularity **Spec Units** instead of loosely defined capabilities.
+      This workflow uses fixed-granularity **Spec Units** for enduring capabilities and responsibility areas.
 
       Spec Unit rules:
-      - Spec Unit = `<domain>-<layer>`
-      - `<domain>`: kebab-case (e.g., `user-mgmt`, `billing`, `order-checkout`)
-      - `<layer>`: `fe` or `be`
-      - Delta spec file path (within the change): `specs/<domain>-<layer>/spec.md`
-      - Main spec file path (source of truth after archiving/sync): `openspec/specs/<domain>-<layer>/spec.md`
+      - Spec Unit = `<capability>`
+      - `<capability>`: kebab-case enduring capability/responsibility name (e.g., `user-mgmt`, `billing`, `order-checkout`)
+      - Delta spec file path (within the change): `specs/<capability>/spec.md`
+      - Main spec file path (source of truth after archiving/sync): `openspec/specs/<capability>/spec.md`
 
       Naming rules:
-      - Scenario ID format: `<DOMAIN>-<LAYER>-S###` (e.g., `USER-MGMT-FE-S001`)
-      - Requirement reference ID format (for planning/traceability): `<DOMAIN>-<LAYER>-R###` (e.g., `USER-MGMT-BE-R002`)
-      - `<DOMAIN>` is `<domain>` uppercased with hyphens; `<LAYER>` is `FE` or `BE`.
+      - Scenario ID format: `<CAPABILITY>-S###` (e.g., `USER-MGMT-S001`)
+      - Requirement reference ID format (for planning/traceability): `<CAPABILITY>-R###` (e.g., `USER-MGMT-R002`)
+      - `<CAPABILITY>` is `<capability>` uppercased with hyphens preserved.
 
       Document structure:
       - The proposal MUST include the following headings (in this order):
@@ -42,7 +41,7 @@ artifacts:
       Spec Units section requirements:
       - The Spec Units section is the contract between proposal and specs.
       - Every Spec Unit that will be created or modified MUST be listed here.
-      - Each listed Spec Unit MUST have a corresponding delta spec file in `specs/<domain>-<layer>/spec.md`.
+      - Each listed Spec Unit MUST have a corresponding delta spec file in `specs/<capability>/spec.md`.
       - Spec Unit names MUST describe enduring system capabilities or responsibility areas, not the current change activity.
       - Avoid change-oriented names such as `setup-*`, `migrate-*`, `rename-*`, `cleanup-*`, `replace-*`, `refactor-*`, or names copied directly from the change id unless they also describe a lasting product capability.
       - For each Spec Unit entry, include:
@@ -55,8 +54,7 @@ artifacts:
       - Mark breaking changes with **BREAKING**.
 
       Naming section requirements:
-      - Confirm the DOMAIN prefix you will use for Scenario IDs (derived from `<domain>`).
-      - Confirm that FE and BE scenarios use different prefixes (e.g., `USER-MGMT-FE-*` vs `USER-MGMT-BE-*`).
+      - Confirm the CAPABILITY prefix you will use for Scenario IDs and Requirement reference IDs for every Spec Unit (derived from `<capability>`).
 
       Proposal boundary rules:
       - proposal.md explains why the change is needed and which lasting Spec Units are affected.
@@ -77,7 +75,7 @@ artifacts:
 
       File layout:
       - Create one delta spec per Spec Unit listed in proposal.md.
-      - For Spec Unit `<domain>-<layer>`, create: `specs/<domain>-<layer>/spec.md`
+      - For Spec Unit `<capability>`, create: `specs/<capability>/spec.md`
 
       Delta format:
       - Use top-level `##` headers for delta sections.
@@ -88,7 +86,7 @@ artifacts:
         - `## RENAMED Requirements`
 
       Rules for new vs existing main specs:
-      - If the corresponding main spec does NOT exist yet at `openspec/specs/<domain>-<layer>/spec.md`, the delta spec SHOULD contain only **ADDED** requirements.
+      - If the corresponding main spec does NOT exist yet at `openspec/specs/<capability>/spec.md`, the delta spec SHOULD contain only **ADDED** requirements.
       - MODIFIED/RENAMED require an existing main spec to apply cleanly.
 
       Requirement block rules (ADDED/MODIFIED):
@@ -115,7 +113,7 @@ artifacts:
       Scenario rules:
       - Each scenario MUST be a level-4 heading:
         - `#### Scenario: <name> (<SCENARIO_ID>)`
-      - Scenario IDs MUST be stable and MUST match: `<DOMAIN>-<LAYER>-S###`.
+      - Scenario IDs MUST be stable and MUST match: `<CAPABILITY>-S###`.
       - Scenarios SHOULD be observable and testable.
       - Prefer Given/When/Then style bullets.
 
@@ -127,14 +125,14 @@ artifacts:
       - REMOVED requirements MUST include **Reason** and **Migration** notes.
 
       MODIFIED workflow:
-      1. Locate the existing requirement in `openspec/specs/<domain>-<layer>/spec.md`
+      1. Locate the existing requirement in `openspec/specs/<capability>/spec.md`
       2. Copy the ENTIRE requirement block (from `### Requirement:` through all scenarios)
       3. Paste under `## MODIFIED Requirements` and edit to reflect new behavior
       4. Ensure the requirement header text matches exactly (whitespace-insensitive)
 
       Quality bar:
       - Specs should be testable - each scenario is a potential test case.
-      - Avoid mixing FE and BE concerns in the same Spec Unit; split by `<layer>`.
+      - Keep each Spec Unit focused on one enduring capability or responsibility area. If unrelated capabilities are affected, create separate Spec Units.
     requires:
       - proposal
 
@@ -246,20 +244,20 @@ artifacts:
          - Expected Behavior
 
       Test naming conventions (recommended):
-      - Scenario ID: `<DOMAIN>-<LAYER>-S###` (e.g., `USER-MGMT-FE-S001`)
-      - Requirement reference ID: `<DOMAIN>-<LAYER>-R###` (e.g., `USER-MGMT-BE-R002`)
+      - Scenario ID: `<CAPABILITY>-S###` (e.g., `USER-MGMT-S001`)
+      - Requirement reference ID: `<CAPABILITY>-R###` (e.g., `USER-MGMT-R002`)
       - Category (`CAT`): `HAP`, `ERR`, `BND`, `PERM`, `SEC`, `A11Y`, `PERF`, `REG`, `SMK`
-      - UAT ID: `UAT-<DOMAIN>-<LAYER>-<CAT>-###`
-      - E2E ID: `E2E-<DOMAIN>-<LAYER>-<CAT>-###`
-      - IT ID: `IT-<DOMAIN>-<LAYER>-<CAT>-###`
-      - UT ID: `UT-<DOMAIN>-<LAYER>-<CAT>-###`
+      - UAT ID: `UAT-<CAPABILITY>-<CAT>-###`
+      - E2E ID: `E2E-<CAPABILITY>-<CAT>-###`
+      - IT ID: `IT-<CAPABILITY>-<CAT>-###`
+      - UT ID: `UT-<CAPABILITY>-<CAT>-###`
 
       Traceability rules:
-      - UAT rows SHOULD reference a requirement reference ID (e.g., `USER-MGMT-FE-R001`) and the requirement name.
+      - UAT rows SHOULD reference a requirement reference ID (e.g., `USER-MGMT-R001`) and the requirement name.
       - E2E/IT/UT rows SHOULD reference a Scenario ID.
       - A single Scenario ID may be covered by multiple tests (1:N). Add multiple E2E/IT/UT rows referencing the same Scenario ID as needed (happy/error/boundary/security/performance/etc.).
       - Automated tests MUST include the Scenario ID in the test title in brackets:
-        - Example: `test('[USER-MGMT-FE-S001] ユーザー作成が成功する', async () => { ... })`
+        - Example: `test('[USER-MGMT-S001] ユーザー作成が成功する', async () => { ... })`
 
       Rollback/Migration/Release:
       - If DB or contract changes exist, include rollback and migration steps.

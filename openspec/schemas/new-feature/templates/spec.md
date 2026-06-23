@@ -23,7 +23,7 @@
 <!-- Prefer externally observable behavior, stable constraints, and enduring responsibility boundaries. -->
 <!-- Package/path references are allowed only when they describe lasting structural guarantees. -->
 
-#### Scenario: <!-- TODO: Scenario name (short; conveys test intent). --> (<!-- TODO: <DOMAIN>-<LAYER>-S### e.g., USER-MGMT-FE-S001 -->)
+#### Scenario: <!-- TODO: Scenario name (short; conveys test intent). --> (<!-- TODO: <CAPABILITY>-S### e.g., USER-MGMT-S001 -->)
 
 - **WHEN** <!-- TODO: Trigger/condition (observable action like click/API call). -->
 - **THEN** <!-- TODO: Expected outcome (observable UI/response/side effects/DB/logs). -->
