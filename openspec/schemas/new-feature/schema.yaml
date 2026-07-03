@@ -11,9 +11,11 @@ artifacts:
       Create the proposal document that establishes WHY this change is needed.
       language rule:
       - Think in English; output in Japanese.
+      - Keep only OpenSpec-required structural headings, section labels, IDs, paths, commands, API/protocol names, code identifiers, and exact technical terms in English.
+      - Write all user/operator-facing prose, TODO replacements, summaries, bullets, and explanations in Japanese unless an exact identifier must remain English.
 
       Placeholder rule:
-      - Use `<!-- TODO: details of what to write -->` for placeholders.
+      - Use `<!-- TODO: 日本語で何を書くか -->` for placeholders.
 
       This workflow uses fixed-granularity **Spec Units** for enduring capabilities and responsibility areas.
 
@@ -70,8 +72,15 @@ artifacts:
     instruction: |
       Create delta specification files that define WHAT the system should do.
 
+      Language rule:
+      - Think in English; output in Japanese.
+      - Keep only OpenSpec-required structural tokens in English exactly as required: delta section headings such as `## ADDED Requirements`, requirement/scenario labels such as `### Requirement:` and `#### Scenario:`, `**Customer Context**`, `**Requirement**`, `Tags: manual`, Given/When/Then labels, Scenario IDs, Requirement reference IDs, paths, commands, API/protocol names, package names, code identifiers, and exact technical terms.
+      - `SHALL` and `MUST` are required normative keywords and may remain English inside Japanese sentences.
+      - Write all other prose in Japanese: requirement names, scenario names, Customer Context body, Requirement body around `SHALL`/`MUST`, scenario step descriptions, REMOVED Reason/Migration notes, TODO replacements, summaries, and explanations.
+      - Do not write full English requirement or scenario prose merely because the structural label or normative keyword is English.
+
       Placeholder rule:
-      - Use `<!-- TODO: details of what to write -->` for placeholders. 
+      - Use `<!-- TODO: 日本語で何を書くか -->` for placeholders.
 
       File layout:
       - Create one delta spec per Spec Unit listed in proposal.md.
@@ -91,8 +100,9 @@ artifacts:
 
       Requirement block rules (ADDED/MODIFIED):
       - Each requirement MUST start with: `### Requirement: <name>`
-      - Each requirement MUST include a **Customer Context** section explaining the customer pain/background that motivates it.
-      - Each requirement MUST include normative statements using SHALL or MUST (avoid should/may).
+      - `<name>` MUST be Japanese unless it is an exact identifier.
+      - Each requirement MUST include a **Customer Context** section explaining the customer pain/background that motivates it in Japanese.
+      - Each requirement MUST include normative statements using SHALL or MUST (avoid should/may); the surrounding sentence MUST be Japanese unless an exact identifier is needed.
       - Each requirement MUST include at least one scenario.
       - Requirements define enduring system behavior/constraints, not the work performed in this change.
 
@@ -113,16 +123,17 @@ artifacts:
       Scenario rules:
       - Each scenario MUST be a level-4 heading:
         - `#### Scenario: <name> (<SCENARIO_ID>)`
+      - `<name>` MUST be Japanese unless it is an exact identifier.
       - Scenario IDs MUST be stable and MUST match: `<CAPABILITY>-S###`.
       - Scenarios SHOULD be observable and testable.
-      - Prefer Given/When/Then style bullets.
+      - Prefer Given/When/Then style bullets; keep the label in English if used, but write the step text in Japanese.
 
       Manual scenarios:
       - If a scenario cannot be automated, include `Tags: manual` within the scenario body.
       - Place the tag close to the scenario heading (within the next ~20 lines) so tooling can detect it.
 
       REMOVED rules:
-      - REMOVED requirements MUST include **Reason** and **Migration** notes.
+      - REMOVED requirements MUST include **Reason** and **Migration** notes written in Japanese except exact identifiers.
 
       MODIFIED workflow:
       1. Locate the existing requirement in `openspec/specs/<capability>/spec.md`
@@ -272,8 +283,13 @@ artifacts:
     instruction: |
       Create the task list that breaks down the implementation work.
 
+      Language rule:
+      - Think in English; output in Japanese.
+      - Keep only structural task numbering, checkbox syntax, Scenario IDs, Requirement reference IDs, paths, commands, API/protocol names, package names, code identifiers, and exact technical terms in English.
+      - Write task group names, task descriptions, verification explanations, TODO replacements, and notes in Japanese unless an exact identifier must remain English.
+
       Placeholder rule:
-      - Use `<!-- TODO: details of what to write -->` for placeholders.
+      - Use `<!-- TODO: 日本語で何を書くか -->` for placeholders.
 
       Formatting requirements:
       - MUST follow the template's checkbox format: `- [ ] X.Y Task description`
