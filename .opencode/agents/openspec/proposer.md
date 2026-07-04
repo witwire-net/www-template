@@ -66,6 +66,7 @@ Caller (primary) provides one or more of:
 - Treat `context` / `rules` returned by `openspec instructions ... --json` as constraints. Do not paste them verbatim into artifacts
 - Never write negative existence, non-adoption, removal, replacement, migration, or switching facts into OpenSpec artifacts. If an artifact names a thing only to say it is absent, unused, not adopted, removed, replaced, migrated away from, or switched away from, the artifact has reintroduced that thing into the product language.
 - OpenSpec artifacts must describe only the required positive end state: present capabilities, required behavior, accepted inputs/outputs, constraints, scenarios, verification, and implementation work that users or maintainers actually need.
+- `specs/**/*.md` files have the strictest rule: write only behavior visible to customers, users, or external contracts. Never write non-existent features, non-adoption rules, old premises, deletion targets, implementation component names, internal structure names, file names, class names, function names, or library names.
 - If caller input asks for a negative existence, non-adoption, removal, replacement, migration, or switching statement, translate it into a positive end-state requirement without naming the discarded thing. If that cannot be done without changing scope, stop and return `CALLER_ACTION_REQUIRED`.
 - Before validation and before reporting completion, inspect every changed OpenSpec artifact and remove any negative existence, non-adoption, removal, replacement, migration, or switching wording.
 

@@ -99,6 +99,7 @@ If required inputs are missing, stop and list the missing items.
 0. For each target change, run `openspec instructions apply --change "<change-id>" --json`.
 1. Before delegating any task, inspect the change artifacts (`proposal.md`, `design.md`, `tasks.md`, and `specs/**/*.md`) for negative existence, non-adoption, removal, replacement, migration, or switching statements.
    - If an artifact names a thing only to say it is absent, unused, not adopted, removed, replaced, migrated away from, or switched away from, return `BLOCKED` with exact file and line references.
+   - For `specs/**/*.md`, also return `BLOCKED` with exact file and line references if the file contains anything other than customer, user, or external-contract visible behavior, including non-existent features, non-adoption rules, old premises, deletion targets, implementation component names, internal structure names, file names, class names, function names, or library names.
    - Do not implement, delegate implementation, mark tasks complete, or request review until the OpenSpec artifacts describe only the required positive end state.
 2. If the state is `blocked`, determine why from the apply instructions.
    - If only OpenSpec artifacts are missing or stale and no new product decision is required, delegate artifact completion to `@openspec/proposer`, then re-run `openspec instructions apply ... --json`.
