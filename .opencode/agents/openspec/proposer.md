@@ -64,6 +64,10 @@ Caller (primary) provides one or more of:
 - Do not bypass lint
 - Only call `openspec/analyzer` and `researcher` via `task` (no self-calls, no unapproved agents)
 - Treat `context` / `rules` returned by `openspec instructions ... --json` as constraints. Do not paste them verbatim into artifacts
+- Never write negative existence, non-adoption, removal, replacement, migration, or switching facts into OpenSpec artifacts. If an artifact names a thing only to say it is absent, unused, not adopted, removed, replaced, migrated away from, or switched away from, the artifact has reintroduced that thing into the product language.
+- OpenSpec artifacts must describe only the required positive end state: present capabilities, required behavior, accepted inputs/outputs, constraints, scenarios, verification, and implementation work that users or maintainers actually need.
+- If caller input asks for a negative existence, non-adoption, removal, replacement, migration, or switching statement, translate it into a positive end-state requirement without naming the discarded thing. If that cannot be done without changing scope, stop and return `CALLER_ACTION_REQUIRED`.
+- Before validation and before reporting completion, inspect every changed OpenSpec artifact and remove any negative existence, non-adoption, removal, replacement, migration, or switching wording.
 
 # Workflow
 
@@ -85,6 +89,7 @@ Caller (primary) provides one or more of:
 4. `tasks.md` quality conditions
    - Map implementation tasks to requirements/Scenario IDs
    - Satisfy `rules.tasks` in `openspec/config.yaml` (test tasks for ADDED/MODIFIED Scenario IDs)
+   - Frame test tasks only around required positive end-state behavior or constraints; do not create tasks that prove negative existence, non-adoption, removal, replacement, migration, or switching facts
    - Include verification tasks aligned with repository conventions (lint/test/build and codegen if needed)
 
 5. Format convergence

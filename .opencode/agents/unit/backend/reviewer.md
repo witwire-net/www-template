@@ -37,6 +37,7 @@ permission:
     'go * vet*': deny
     'go build*': deny
     'go * build*': deny
+    'pnpm*': allow
     'rm *': deny
 ---
 

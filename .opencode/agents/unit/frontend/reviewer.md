@@ -37,6 +37,7 @@ permission:
     'vite build*': deny
     'eslint*': deny
     'stylelint*': deny
+    'pnpm*': allow
     'rm *': deny
 ---
 
