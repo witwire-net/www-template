@@ -67,22 +67,25 @@ sequenceDiagram
   S-->>U: TBD
 ```
 
-## UI Wireframes
+## UI Mockups
 
-<!-- Wireframes are generated separately with the `wireframe` skill (.opencode/skills/wireframe/SKILL.md). -->
-<!-- The skill outputs `{name}.wireframe.html` files. Embed them below with relative-path iframes once generated. -->
-<!-- If no wireframe files have been generated yet, write: N/A。wireframe は未生成。 -->
+<!-- UI mockup images are generated per page with the `generate-image` skill (.opencode/skills/generate-image/SKILL.md). -->
+<!-- When a wireframe exists, pass the matching `.wireframe.json` or `.wireframe.html` itself to `generate-image` with `--template ui-mockup --wireframe`. -->
+<!-- Also pass a detailed prompt that summarizes the existing implementation design, design tokens, and shared UI components so the mockup stays visually consistent. -->
+<!-- If image generation cannot produce a usable mockup, use `agent-browser` to open the wireframe HTML preview and capture a screenshot image as fallback. -->
+<!-- Embed only image files in design.md. Do not embed wireframe HTML with `<iframe>`. -->
+<!-- If no UI page or viewable screen is in scope, write: N/A。対象となる UI 画面はない。 -->
 
-<!-- TODO: 生成済み wireframe HTML ごとに、以下の例のような section を追加する。 -->
+<!-- TODO: 各 page/screen ごとに、以下の例のような section を追加する。 -->
 
 ### <!-- TODO: 画面名 -->
 
-<iframe
-  src="<!-- TODO: relative path to {name}.wireframe.html -->"
-  title="<!-- TODO: 画面名 -->"
-  width="<!-- TODO: width in px -->"
-  height="<!-- TODO: height in px -->"
-></iframe>
+![<!-- TODO: 画面名 -->](<!-- TODO: relative path to generated mockup or fallback screenshot image -->)
+
+- Source: <!-- TODO: `generate-image` mockup / `agent-browser` fallback screenshot のどちらかを記述する。 -->
+- Input wireframe: <!-- TODO: 対応する `.wireframe.json` / `.wireframe.html` path。ない場合は N/A と理由を日本語で記述する。 -->
+- Design basis: <!-- TODO: 参照した既存実装、design token、shared UI component などを日本語で記述する。 -->
+- Notes: <!-- TODO: この mockup が示す layout / visual hierarchy / state を日本語で記述する。 -->
 
 ## Domain Model Diagram
 

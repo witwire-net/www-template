@@ -19,6 +19,7 @@ permission:
   skill:
     '*': deny
     'coding-guardian': allow
+    'generate-image': allow
     'openspec-propose': allow
     'openspec-explore': allow
   bash:
@@ -86,6 +87,14 @@ Caller (primary) provides one or more of:
    - Get instructions via `openspec instructions <artifact-id> --change "<change-id>" --json`
    - Read completed dependency artifacts to build context
    - Create/update the artifact per `template` and `outputPath`
+   - For UI-affecting changes, create one raster mockup image per materially distinct page/screen before `design.md` is finalized
+   - Before generating each mockup, inspect existing implementation design evidence that constrains visual consistency: relevant frontend routes/surfaces, shared UI packages/components, and design token or style entrypoints documented by the repository
+   - Convert that evidence into `generate-image` CLI form fields rather than one freeform prompt: `--prompt` for the first-line deliverable directive, then `--purpose`, `--canvas`, `--subject`, `--composition`, `--style`, `--details`, `--text`/`--typography` when needed, and repeated `--constraint` values
+   - When a matching wireframe exists, load `generate-image` via `skill` and create the mockup with `.opencode/skills/generate-image/scripts/generate-image.mjs --template ui-mockup --prompt "<first-line directive>" --purpose "<purpose>" --canvas "<canvas>" --subject "<subject>" --composition "<composition>" --style "<style>" --details "<details>" --constraint "<constraint>" --wireframe <matching-wireframe>`; the wireframe file itself MUST be passed with `--wireframe` and MUST NOT be replaced by a prompt-only summary
+   - Save generated mockups under `openspec/changes/<change-id>/mockups/<screen-slug>.mockup.png`
+   - If `generate-image` cannot produce a usable mockup for a page/screen, use `agent-browser` to open the matching `.wireframe.html` preview and capture `openspec/changes/<change-id>/mockups/<screen-slug>.wireframe-screenshot.png` as the fallback mockup image
+   - Embed only raster image files in `design.md` under `## UI Mockups` using Markdown image syntax. Do not embed wireframe HTML with `<iframe>`
+   - Include every generated/fallback mockup image and its source wireframe artifacts in `design.md` Directory Tree and New / Changed Files
    - Iterate until all required artifacts are filled
 
 4. `tasks.md` quality conditions

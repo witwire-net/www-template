@@ -186,14 +186,16 @@ artifacts:
       - Keep diagrams minimal but accurate.
       - Diagram node/edge labels SHOULD be Japanese unless they are exact package names, class names, API paths, protocol names, or identifiers.
 
-      UI Wireframes (conditional):
-      - Wireframes are produced separately using the `wireframe` skill (`.opencode/skills/wireframe/SKILL.md`).
-        The skill outputs `{name}.wireframe.html` under a directory chosen at generation time.
-      - If one or more `{name}.wireframe.html` files have been generated for this change:
-         - Add a `## UI Wireframes` section in design.md.
-         - For each wireframe HTML file, embed it with a relative-path `<iframe>` and label the screen it represents.
-         - Include the wireframe HTML files in **Directory Tree** and **New / Changed Files**.
-      - If no wireframe HTML files exist yet (skill has not been run), keep the `## UI Wireframes` section and write `N/A。wireframe は未生成。`.
+      UI Mockups (conditional):
+      - UI mockups are raster image artifacts embedded in `## UI Mockups`; never embed wireframe HTML with `<iframe>`.
+      - When the change has UI pages/screens, create one mockup image per materially distinct page/screen using the `generate-image` skill (`.opencode/skills/generate-image/SKILL.md`).
+      - Before generating each mockup, inspect the existing implementation design that could constrain visual consistency: relevant frontend routes/surfaces, shared UI packages/components, and design token or style entrypoints documented by the repository.
+      - Convert that evidence into `generate-image` CLI form fields instead of a single freeform prompt: `--prompt` for the first-line deliverable directive, then `--purpose`, `--canvas`, `--subject`, `--composition`, `--style`, `--details`, `--text`/`--typography` when needed, and repeated `--constraint` values.
+      - When a matching wireframe exists, pass the wireframe file itself to `generate-image` with `--template ui-mockup --wireframe <path>` in addition to the filled CLI form fields. Do not replace the wireframe input with a summary-only prompt.
+      - If `generate-image` cannot produce a usable mockup image for a page/screen, use `agent-browser` to open the matching `.wireframe.html` preview and capture a screenshot image as the fallback mockup.
+      - For each page/screen, embed the resulting image with Markdown image syntax and include Source, Input wireframe, Design basis, and Notes bullets.
+      - Include the generated/fallback image files and their source wireframe files in **Directory Tree** and **New / Changed Files**.
+      - If no UI page or viewable screen is in scope, keep the `## UI Mockups` section and write `N/A。対象となる UI 画面はない。`.
 
       Design boundary rules:
       - design.md explains HOW the approved specs will be implemented.
