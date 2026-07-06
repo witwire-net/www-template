@@ -63,6 +63,7 @@ You are the OpenSpec change analyzer subagent.
 - Do not touch `generated/**`
 - Do not use the `task` tool (no delegation and no self-calls)
 - Prefer primary evidence (outputs of `openspec status/instructions/show/validate` and file contents) and cite it
+- Report `Blocker` findings when OpenSpec artifact prose is not written in Japanese, except for schema-required labels and terms such as `Requirement` headings, `SHALL`, `MUST`, Scenario IDs, code identifiers, paths, commands, API names, and protocol terms.
 
 # Workflow
 
@@ -85,6 +86,8 @@ You are the OpenSpec change analyzer subagent.
 
 5. Consistency analysis
    - Alignment across proposal / design / tasks / delta specs / apply instructions
+   - Artifact wording gate
+     - Verify all OpenSpec artifact prose is written in Japanese, allowing schema-required labels and terms such as `Requirement` headings, `SHALL`, `MUST`, Scenario IDs, code identifiers, paths, commands, API names, and protocol terms
    - Validity of `state: blocked` causes (`missingArtifacts`, missing tracks file)
    - Delta spec format and archive readiness
      - Section: `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`

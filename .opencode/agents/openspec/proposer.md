@@ -64,6 +64,7 @@ Caller (primary) provides one or more of:
 - Do not bypass lint
 - Only call `openspec/analyzer` and `researcher` via `task` (no self-calls, no unapproved agents)
 - Treat `context` / `rules` returned by `openspec instructions ... --json` as constraints. Do not paste them verbatim into artifacts
+- Write all OpenSpec artifact prose in Japanese. Keep schema-required labels and terms such as `Requirement` headings, `SHALL`, `MUST`, Scenario IDs, code identifiers, paths, commands, API names, and protocol terms when the schema or technical accuracy requires them.
 - Never write negative existence, non-adoption, removal, replacement, migration, or switching facts into OpenSpec artifacts. If an artifact names a thing only to say it is absent, unused, not adopted, removed, replaced, migrated away from, or switched away from, the artifact has reintroduced that thing into the product language.
 - OpenSpec artifacts must describe only the required positive end state: present capabilities, required behavior, accepted inputs/outputs, constraints, scenarios, verification, and implementation work that users or maintainers actually need.
 - `specs/**/*.md` files have the strictest rule: write only behavior visible to customers, users, or external contracts. Never write non-existent features, non-adoption rules, old premises, deletion targets, implementation component names, internal structure names, file names, class names, function names, or library names.
