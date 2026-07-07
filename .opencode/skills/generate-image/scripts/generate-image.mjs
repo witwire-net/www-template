@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access, mkdir, readFile, stat } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { dirname, extname, isAbsolute, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
 const VERSION = '0.1.0';
@@ -12,6 +12,7 @@ const DEFAULT_OUTPUT_DIR = resolve(homedir(), 'Pictures', 'codex-images');
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const VALID_QUALITIES = new Set(['low', 'medium', 'high', 'auto']);
 const REPEATABLE_ARGS = new Set(['image', 'imageRole', 'constraint']);
+const GENERATED_IMAGE_LOOKBACK_MS = 30 * 1000;
 
 const TEMPLATES = {
   general: {
@@ -209,6 +210,7 @@ async function main() {
   }
 
   await mkdir(request.outputDir, { recursive: true });
+  const startedAtMs = Date.now();
   const result = await runCodex(command, prompt, request.timeoutMs);
 
   if (result.exitCode !== 0) {
@@ -224,7 +226,7 @@ async function main() {
     );
   }
 
-  const output = await resolveOutputImage(request.outputPath);
+  const output = await resolveOutputImage(request.outputPath, result, startedAtMs);
   process.stdout.write(`${output}\n`);
 }
 
@@ -500,8 +502,8 @@ function buildCodexPrompt(request, wireframeSummary) {
     '',
     'Required final behavior:',
     '1. Use the built-in image generation tool to generate the image.',
-    '2. Save or copy the selected real generated image to TARGET_IMAGE_PATH.',
-    '3. Return only the final absolute image path and no explanation.',
+    '2. Do not use shell commands, filesystem helpers, or sandbox copy/move operations to place the image at TARGET_IMAGE_PATH.',
+    '3. If the image generation tool exposes a generated artifact path, return only that artifact path. Otherwise return only a concise completion message.',
   ]
     .filter((line) => line !== null && line !== undefined)
     .join('\n');
@@ -556,6 +558,7 @@ function buildCodexCommand(request) {
     '--ephemeral',
     '--sandbox',
     'workspace-write',
+    '--json',
     '--cd',
     request.outputDir,
   ];
@@ -584,6 +587,7 @@ async function runCodex(command, prompt, timeoutMs) {
 
     let stdout = '';
     let stderr = '';
+    const generatedImagePaths = new Set();
     let settled = false;
     const timeout = setTimeout(() => {
       child.kill('SIGTERM');
@@ -600,11 +604,15 @@ async function runCodex(command, prompt, timeoutMs) {
     };
 
     child.stdout.on('data', (chunk) => {
-      stdout = limitBuffer(stdout + chunk.toString('utf8'));
+      const text = chunk.toString('utf8');
+      collectGeneratedImagePathsFromText(text, generatedImagePaths);
+      stdout = limitBuffer(stdout + text);
     });
 
     child.stderr.on('data', (chunk) => {
-      stderr = limitBuffer(stderr + chunk.toString('utf8'));
+      const text = chunk.toString('utf8');
+      collectGeneratedImagePathsFromText(text, generatedImagePaths);
+      stderr = limitBuffer(stderr + text);
     });
 
     child.on('error', (error) => {
@@ -617,7 +625,15 @@ async function runCodex(command, prompt, timeoutMs) {
       }
       settled = true;
       clearTimeout(timeout);
-      resolvePromise({ exitCode, signal, stdout, stderr });
+      collectGeneratedImagePathsFromText(stdout, generatedImagePaths);
+      collectGeneratedImagePathsFromText(stderr, generatedImagePaths);
+      resolvePromise({
+        exitCode,
+        signal,
+        stdout,
+        stderr,
+        generatedImagePaths: [...generatedImagePaths],
+      });
     });
 
     child.stdin.end(prompt);
@@ -627,27 +643,265 @@ async function runCodex(command, prompt, timeoutMs) {
 /**
  * 出力画像の存在を確認します。
  *
- * Codex には TARGET_IMAGE_PATH に保存するよう指示しているため、まず exact path を確認します。
- * ここでは rollout log や CODEX_HOME 解析は行わず、Skill の責務を薄く保ちます。
+ * まず exact path を確認します。
+ * Codex の filesystem helper が sandbox 制約で copy に失敗する環境では、Codex 側の生成 artifact を Node 側で回収して配置します。
  */
-async function resolveOutputImage(outputPath) {
-  try {
-    await access(outputPath, fsConstants.R_OK);
-    const fileStat = await stat(outputPath);
-    if (
-      fileStat.isFile() &&
-      fileStat.size > 0 &&
-      IMAGE_EXTENSIONS.has(extname(outputPath).toLowerCase())
-    ) {
+async function resolveOutputImage(outputPath, codexResult, startedAtMs) {
+  if (await isUsableImageFile(outputPath)) {
+    return outputPath;
+  }
+
+  const artifactPath = await findGeneratedArtifact(codexResult, startedAtMs);
+  if (artifactPath) {
+    await mkdir(dirname(outputPath), { recursive: true });
+    await copyFile(artifactPath, outputPath);
+
+    if (await isUsableImageFile(outputPath)) {
       return outputPath;
     }
-  } catch {
-    // 下の明示的な error に集約します。
   }
 
   throw new Error(
-    `Codex completed, but the expected image was not found at ${outputPath}. Re-run with --dry-run to inspect the prompt.`
+    [
+      `Codex completed, but the expected image was not found at ${outputPath}.`,
+      'No unambiguous generated artifact could be recovered from Codex JSON events or CODEX_HOME generated_images.',
+      'Re-run with --dry-run to inspect the prompt, or inspect Codex output for generated image artifacts.',
+    ].join('\n')
   );
+}
+
+/**
+ * 指定 path が読み取り可能な画像ファイルとして使えるか確認します。
+ *
+ * ここでは拡張子と file size を検証し、空 file や想定外拡張子を成果物として扱わないようにします。
+ */
+async function isUsableImageFile(filePath) {
+  try {
+    await access(filePath, fsConstants.R_OK);
+    const fileStat = await stat(filePath);
+    if (
+      fileStat.isFile() &&
+      fileStat.size > 0 &&
+      IMAGE_EXTENSIONS.has(extname(filePath).toLowerCase())
+    ) {
+      return true;
+    }
+  } catch {
+    // 呼び出し元が recovery または明示 error に進めるよう false に集約します。
+  }
+  return false;
+}
+
+/**
+ * Codex が生成した artifact を、JSON event と generated_images directory から安全に 1 件だけ特定します。
+ *
+ * JSON event に path が出ていればそれを優先し、取れない場合だけ実行開始時刻以降の generated_images を限定探索します。
+ */
+async function findGeneratedArtifact(codexResult, startedAtMs) {
+  const eventCandidates = await filterExistingGeneratedImages([
+    ...(codexResult.generatedImagePaths ?? []),
+    ...extractGeneratedImagePathsFromText(`${codexResult.stdout}\n${codexResult.stderr}`),
+  ]);
+
+  if (eventCandidates.length === 1) {
+    return eventCandidates[0];
+  }
+
+  if (eventCandidates.length > 1) {
+    throw new Error(renderAmbiguousArtifactsError('Codex JSON events', eventCandidates));
+  }
+
+  const recentCandidates = await findRecentGeneratedImages(startedAtMs);
+  if (recentCandidates.length === 1) {
+    return recentCandidates[0];
+  }
+
+  if (recentCandidates.length > 1) {
+    throw new Error(renderAmbiguousArtifactsError('generated_images directory', recentCandidates));
+  }
+
+  return null;
+}
+
+/**
+ * stdout/stderr の text から generated_images 配下の画像 path を抽出します。
+ *
+ * JSONL を parse できる場合は構造内の全 string を調べ、parse できない text も regex で救済します。
+ */
+function collectGeneratedImagePathsFromText(text, output = new Set()) {
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    try {
+      collectGeneratedImagePathsFromValue(JSON.parse(trimmed), output);
+    } catch {
+      // JSONL ではない行や途中 chunk は regex fallback に任せます。
+    }
+  }
+
+  for (const match of text.matchAll(
+    /(?:file:\/\/)?(?:~|\/[^\s"'<>]+)\/(?:\.codex\/)?generated_images\/[^\s"'<>]+?\.(?:png|jpe?g|webp)/gi
+  )) {
+    const normalized = normalizeGeneratedImagePath(match[0]);
+    if (normalized) {
+      output.add(normalized);
+    }
+  }
+
+  return [...output];
+}
+
+/**
+ * JSON event 内を再帰的に探索し、generated_images を指す string だけを候補へ追加します。
+ */
+function collectGeneratedImagePathsFromValue(value, output) {
+  if (typeof value === 'string') {
+    for (const candidate of extractGeneratedImagePathsFromText(value)) {
+      output.add(candidate);
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectGeneratedImagePathsFromValue(item, output);
+    }
+    return;
+  }
+
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) {
+      collectGeneratedImagePathsFromValue(item, output);
+    }
+  }
+}
+
+/**
+ * text から generated image path を配列として抽出します。
+ */
+function extractGeneratedImagePathsFromText(text) {
+  return collectGeneratedImagePathsFromText(text, new Set());
+}
+
+/**
+ * Codex artifact path 表記を絶対 path に正規化し、generated_images 配下だけを許可します。
+ */
+function normalizeGeneratedImagePath(rawPath) {
+  const withoutFileScheme = rawPath.startsWith('file://')
+    ? rawPath.slice('file://'.length)
+    : rawPath;
+  const expanded = withoutFileScheme.startsWith('~/')
+    ? resolve(homedir(), withoutFileScheme.slice(2))
+    : withoutFileScheme;
+  const resolved = resolve(expanded);
+
+  if (!IMAGE_EXTENSIONS.has(extname(resolved).toLowerCase())) {
+    return null;
+  }
+
+  return isAllowedGeneratedImagePath(resolved) ? resolved : null;
+}
+
+/**
+ * generated_images 以外の path を artifact として扱わないための境界確認です。
+ */
+function isAllowedGeneratedImagePath(filePath) {
+  return generatedImageRoots().some((root) => {
+    const pathRelativeToRoot = relative(root, filePath);
+    return (
+      pathRelativeToRoot &&
+      !pathRelativeToRoot.startsWith('..') &&
+      !pathRelativeToRoot.startsWith(sep)
+    );
+  });
+}
+
+/**
+ * 既存候補を実ファイル・許可 root・画像拡張子で絞り、重複を除去します。
+ */
+async function filterExistingGeneratedImages(paths) {
+  const uniquePaths = unique(paths.map(normalizeGeneratedImagePath));
+  const existing = [];
+
+  for (const imagePath of uniquePaths) {
+    if (imagePath && (await isUsableImageFile(imagePath))) {
+      existing.push(imagePath);
+    }
+  }
+
+  return existing;
+}
+
+/**
+ * Codex の generated_images directory だけを対象に、今回実行で作られた可能性が高い画像を探します。
+ */
+async function findRecentGeneratedImages(startedAtMs) {
+  const minMtimeMs = startedAtMs - GENERATED_IMAGE_LOOKBACK_MS;
+  const candidates = [];
+
+  for (const root of generatedImageRoots()) {
+    await collectRecentImages(root, minMtimeMs, candidates);
+  }
+
+  return unique(candidates).sort();
+}
+
+/**
+ * generated_images root を再帰走査し、実行開始時刻以降の画像だけを候補へ追加します。
+ */
+async function collectRecentImages(directory, minMtimeMs, output) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const entryPath = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      await collectRecentImages(entryPath, minMtimeMs, output);
+      continue;
+    }
+
+    if (!entry.isFile() || !IMAGE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      continue;
+    }
+
+    const fileStat = await stat(entryPath);
+    if (
+      fileStat.mtimeMs >= minMtimeMs &&
+      fileStat.size > 0 &&
+      isAllowedGeneratedImagePath(entryPath)
+    ) {
+      output.push(entryPath);
+    }
+  }
+}
+
+/**
+ * Codex generated_images の候補 root を返します。
+ *
+ * `CODEX_HOME` がある環境と既定の `~/.codex` の両方を許可します。
+ */
+function generatedImageRoots() {
+  return unique([
+    process.env.CODEX_HOME ? resolve(process.env.CODEX_HOME, 'generated_images') : null,
+    resolve(homedir(), '.codex', 'generated_images'),
+  ]);
+}
+
+/**
+ * 複数 artifact が見つかった場合は誤った画像を選ばず、候補を明示して停止します。
+ */
+function renderAmbiguousArtifactsError(source, candidates) {
+  return [
+    `Multiple generated image artifacts were found from ${source}; refusing to choose implicitly.`,
+    ...candidates.map((candidate) => `- ${candidate}`),
+  ].join('\n');
 }
 
 /**

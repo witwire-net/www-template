@@ -65,6 +65,17 @@ Iteration target:
 
 `--prompt` は短い雰囲気指定ではなく、成果物タイプ、視覚モード、用途を固定する第 1 行として書きます。
 
+## Artifact Recovery Policy
+
+Codex には画像生成だけを担当させます。生成済み画像を指定出力 path に置く処理は `generate-image.mjs` が Node 側で行います。
+
+- `codex exec` は `--json` で実行します。
+- JSONL event から `generated_images` 配下の artifact path を抽出します。
+- JSONL から一意に取れない場合だけ、`CODEX_HOME/generated_images` と `~/.codex/generated_images` を実行開始時刻以降に限定して探索します。
+- 生成 artifact が 1 件だけ特定できた場合に限り、指定された `--out` path へ copy します。
+- 複数候補が見つかった場合は、誤った画像を採用しないため明示エラーで停止します。
+- sandbox を弱めるために `danger-full-access` や bypass option は使いません。
+
 ## Quality Policy
 
 - `low`: 方向性探索、thumbnail、ラフ案。
