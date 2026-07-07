@@ -67,25 +67,23 @@ sequenceDiagram
   S-->>U: TBD
 ```
 
-## UI Mockups
+## UI Wireframe Screenshots
 
-<!-- UI mockup images are generated per page with the `generate-image` skill (.opencode/skills/generate-image/SKILL.md). -->
-<!-- When a wireframe exists, pass the matching `.wireframe.json` or `.wireframe.html` itself to `generate-image` with `--template ui-mockup --wireframe`. -->
-<!-- Also pass a detailed prompt that summarizes the existing implementation design, design tokens, and shared UI components so the mockup stays visually consistent. -->
-<!-- If image generation cannot produce a usable mockup, use `agent-browser` to open the wireframe HTML preview and capture a screenshot image as fallback. -->
-<!-- Embed only image files in design.md. Do not embed wireframe HTML with `<iframe>`. -->
+<!-- Wireframes are generated separately with the `wireframe` skill (.opencode/skills/wireframe/SKILL.md). -->
+<!-- The skill outputs `.wireframe.json` and `.wireframe.html` files. Use `agent-browser` to open each `.wireframe.html` preview and capture a screenshot image. -->
+<!-- OpenSpec design artifacts do not generate AI mockup images. -->
+<!-- Embed only screenshot image files in design.md. Do not embed wireframe HTML with `<iframe>`. -->
 <!-- If no UI page or viewable screen is in scope, write: N/A。対象となる UI 画面はない。 -->
 
 <!-- TODO: 各 page/screen ごとに、以下の例のような section を追加する。 -->
 
 ### <!-- TODO: 画面名 -->
 
-![<!-- TODO: 画面名 -->](<!-- TODO: relative path to generated mockup or fallback screenshot image -->)
+![<!-- TODO: 画面名 -->](<!-- TODO: relative path to wireframe screenshot image -->)
 
-- Source: <!-- TODO: `generate-image` mockup / `agent-browser` fallback screenshot のどちらかを記述する。 -->
-- Input wireframe: <!-- TODO: 対応する `.wireframe.json` / `.wireframe.html` path。ない場合は N/A と理由を日本語で記述する。 -->
-- Design basis: <!-- TODO: 参照した既存実装、design token、shared UI component などを日本語で記述する。 -->
-- Notes: <!-- TODO: この mockup が示す layout / visual hierarchy / state を日本語で記述する。 -->
+- Source wireframe: <!-- TODO: 対応する `.wireframe.json` / `.wireframe.html` path。 -->
+- Screenshot: <!-- TODO: `agent-browser` で取得した screenshot image path。 -->
+- Notes: <!-- TODO: この wireframe screenshot が示す layout / visual hierarchy / state を日本語で記述する。 -->
 
 ## Domain Model Diagram
 
