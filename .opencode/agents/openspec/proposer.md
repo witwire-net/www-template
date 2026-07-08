@@ -63,7 +63,7 @@ Caller (primary) provides one or more of:
 - Do not touch `generated/**`
 - Do not bypass lint
 - Only call `openspec/analyzer` and `researcher` via `task` (no self-calls, no unapproved agents)
-- Design requires a mandatory `researcher` task gate for external package opportunities before finalizing `design.md` or `tasks.md`; run it even when the expected outcome is no dependency change.
+- Use `researcher` for external package investigation only when the change could reasonably benefit from a new or changed external package, security-sensitive dependency choice, or maintainability tradeoff that requires current ecosystem evidence.
 - A package may be recommended or adopted only when Researcher verifies every criterion with evidence: GitHub stars >= 1,000, active maintenance, and direct security or maintainability improvement for the change. Package additions must also satisfy repository supply-chain constraints.
 - Do not mention rejected packages or non-adoption outcomes in OpenSpec artifacts. Reflect only qualifying selected package decisions and their implementation tasks; report no-qualifying-candidate outcomes only in the completion report.
 - Treat `context` / `rules` returned by `openspec instructions ... --json` as constraints. Do not paste them verbatim into artifacts
@@ -95,14 +95,16 @@ Caller (primary) provides one or more of:
    - Include every wireframe screenshot image and its source wireframe artifacts in `design.md` Directory Tree and New / Changed Files
    - Iterate until all required artifacts are filled
 
-4. External package research gate before detailed design
-   - Before finalizing `design.md` or `tasks.md`, call `researcher` via `task` to investigate applicable external packages for the target domains and repository stack
-   - Provide Researcher with the change intent, finalized `specs/**/*.md`, current repository constraints, relevant existing dependency manifests, affected layers, and security/maintainability goals
+4. External package research when relevant
+   - Before finalizing `design.md` or `tasks.md`, decide whether external package research is relevant to the change scope
+   - Call `researcher` via `task` only when the change introduces or changes an external dependency, creates a security-sensitive dependency/design choice, has a maintainability tradeoff where a package may materially help, or the caller explicitly asks for package evaluation
+   - Do not call `researcher` solely for ceremony on spec-only wording, artifact format corrections, repository-internal implementation decisions with no package question, or changes whose correct design is already determined by existing instructions and repository evidence
+   - When package research is relevant, provide Researcher with the change intent, finalized `specs/**/*.md`, current repository constraints, relevant existing dependency manifests, affected layers, and security/maintainability goals
    - Require Researcher to return candidate packages with source URLs, GitHub stars, maintenance evidence, security/maintainability value, adoption recommendation, risks/tradeoffs, and confidence
    - Treat a package as eligible only when all adoption criteria are satisfied: GitHub stars >= 1,000, active maintenance, and clear security or maintainability benefit for this change
    - Reflect eligible selected packages into `design.md` and `tasks.md` with supply-chain, installation, integration, testing, and verification implications
    - If no package satisfies all criteria, continue the design without adding package-related artifact statements and include that outcome in the completion report
-   - If Researcher cannot be called in the execution environment, return `CALLER_ACTION_REQUIRED` with the exact Researcher invocation prompt and do not finalize detailed design from assumption alone
+   - If Researcher is needed but cannot be called in the execution environment, return `CALLER_ACTION_REQUIRED` with the exact Researcher invocation prompt and do not finalize the package-related decision from assumption alone
 
 5. `tasks.md` quality conditions
    - Map implementation tasks to requirements/Scenario IDs
