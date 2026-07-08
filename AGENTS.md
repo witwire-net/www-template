@@ -3,6 +3,7 @@
 - Think in **English**; MUST respond in **Japanese**.
 - Before calling `task` for any subagent, you MUST read the target agent definition and verify both `permission.task` and any self-call prohibition such as `Do not self-call.`.
 - You MUST doubt your assumptions, verify factual claims against available evidence, and MUST NOT present unsupported statements as facts.
+- Write `AGENTS.md` in English. Pull request bodies and pull request template content MUST be written in Japanese, except for code identifiers, commands, logs, file paths, and issue or PR references.
 
 ## Credo
 
@@ -64,6 +65,15 @@ Before beginning any work, you MUST summarize your understanding of the Credo be
 - Server tests: `pnpm test:server`
 - Client tests: `pnpm test:client`
 - E2E: `pnpm test:e2e`
+
+## Pull Requests
+
+- Always use `.github/pull_request_template.md` when creating a pull request, and fill every template item completely with no blank fields.
+- Write the pull request body in Japanese. Code identifiers, commands, logs, file paths, and issue or PR references may remain in their original form.
+- Do not delete sections or checklist items that do not apply. Instead, write `なし（理由: ...）` or a concrete reason explaining why the item does not apply.
+- Check every checklist item after writing the applicable confirmation or non-applicable reason. Do not leave unchecked items in the pull request body.
+- For pull requests with UI / UX changes, attach screenshots in all of these sections: `Desktop Before`, `Desktop After`, `Mobile Before`, and `Mobile After`.
+- The pull request body is validated by `.github/workflows/validate-pr-template.yml`; when using any pull request creation tool, read the template first and prepare a body that passes this validation.
 
 ## Architecture Notes
 

@@ -1,0 +1,143 @@
+name: Validate PR Template
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate-pr-template:
+    name: Validate PR Template
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          node <<'NODE'
+          // PR本文だけを検証し、フォーク由来のコードを実行しないことで安全性を保つ。
+          const body = process.env.PR_BODY ?? '';
+          const errors = [];
+
+          // 正規表現へ利用者入力を埋め込むため、見出しや項目名を安全にエスケープする。
+          const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+          // テンプレートの主要見出しが消されていないかを確認し、レビュー観点の欠落を防ぐ。
+          const requiredHeadings = [
+            '## 概要',
+            '## 顧客価値',
+            '## 変更内容',
+            '## 関連Issue / OpenSpec',
+            '## セキュリティ確認',
+            '## 仕様・API契約',
+            '## アーキテクチャ確認',
+            '## UI / UX変更',
+            '## DB / マイグレーション',
+            '## テスト',
+            '## レビュー観点',
+            '## リリース影響',
+          ];
+
+          for (const heading of requiredHeadings) {
+            if (!body.includes(heading)) {
+              errors.push(`必須見出しがありません: ${heading}`);
+            }
+          }
+
+          // `- 項目名: 値` の形式で、PR作成者が各欄を空欄にしていないかを確認する。
+          const getFieldValue = (label) => {
+            const pattern = new RegExp(`^-\\s*${escapeRegex(label)}\\s*:\\s*(.*)$`, 'm');
+            const match = body.match(pattern);
+            return match ? match[1].trim() : null;
+          };
+
+          const requiredFields = [
+            '目的',
+            '主な変更',
+            '利用者',
+            '改善される体験',
+            '変更内容',
+            'Issue',
+            'OpenSpec Change',
+            'Scenario ID',
+            'UI / UX変更',
+            'UI / UX変更の説明',
+            '影響範囲',
+            'デスクトップ確認',
+            'モバイル確認',
+            'アクセシビリティ確認',
+            'DB変更',
+            'マイグレーション',
+            'データ影響',
+            '実行した確認',
+            '未実行の確認と理由',
+            '重点確認箇所',
+            '環境変数',
+            '設定変更',
+            '運用影響',
+          ];
+
+          for (const label of requiredFields) {
+            const value = getFieldValue(label);
+            if (value === null) {
+              errors.push(`必須項目がありません: ${label}`);
+            } else if (value === '') {
+              errors.push(`必須項目が空欄です: ${label}`);
+            }
+          }
+
+          // チェックリストを未確認のまま残すと、セキュリティや仕様確認の抜け漏れにつながるため失敗させる。
+          if (/-\s*\[\s\]/.test(body)) {
+            errors.push('未チェックのチェックボックスがあります。該当しない項目も理由を書いたうえでチェックしてください。');
+          }
+
+          const uiChangeValue = getFieldValue('UI / UX変更');
+          if (uiChangeValue !== null && uiChangeValue !== 'あり' && uiChangeValue !== 'なし') {
+            errors.push('`UI / UX変更` は `あり` または `なし` のどちらかだけを記入してください。');
+          }
+
+          // GitHubの画像添付で一般的に生成されるMarkdown画像、HTML画像、user-attachments URLを受け付ける。
+          const imagePattern = /!\[[^\]]*\]\([^)]*\)|<img\b[^>]*\bsrc=["'][^"']+["'][^>]*>|https:\/\/github\.com\/user-attachments\/assets\/[A-Za-z0-9-]+/i;
+
+          // 指定見出しから次の見出しまでを取り出し、各スクリーンショット欄の画像有無を個別に判定する。
+          const getSubsection = (heading) => {
+            const startPattern = new RegExp(`^${escapeRegex(heading)}\\s*$`, 'm');
+            const startMatch = body.match(startPattern);
+            if (!startMatch || startMatch.index === undefined) {
+              return null;
+            }
+
+            const contentStart = startMatch.index + startMatch[0].length;
+            const rest = body.slice(contentStart);
+            const nextHeadingIndex = rest.search(/\n#{2,4}\s/);
+            return nextHeadingIndex === -1 ? rest : rest.slice(0, nextHeadingIndex);
+          };
+
+          if (uiChangeValue === 'あり') {
+            for (const heading of ['#### Desktop Before', '#### Desktop After', '#### Mobile Before', '#### Mobile After']) {
+              const subsection = getSubsection(heading);
+              if (subsection === null) {
+                errors.push(`UI / UX変更ありの場合に必須のスクリーンショット欄がありません: ${heading}`);
+              } else if (!imagePattern.test(subsection)) {
+                errors.push(`UI / UX変更ありの場合は画像添付が必須です: ${heading}`);
+              }
+            }
+          }
+
+          if (errors.length > 0) {
+            console.error('PRテンプレート検証に失敗しました。');
+            for (const error of errors) {
+              console.error(`- ${error}`);
+            }
+            process.exit(1);
+          }
+
+          console.log('PRテンプレート検証に成功しました。');
+          NODE
