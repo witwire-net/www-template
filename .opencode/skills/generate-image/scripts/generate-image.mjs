@@ -1,18 +1,55 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access, copyFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { access, copyFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
+import process from 'node:process';
+import { clearTimeout, setTimeout } from 'node:timers';
 
 const VERSION = '0.1.0';
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_OUTPUT_DIR = resolve(homedir(), 'Pictures', 'codex-images');
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const VALID_QUALITIES = new Set(['low', 'medium', 'high', 'auto']);
-const REPEATABLE_ARGS = new Set(['image', 'imageRole', 'constraint']);
 const GENERATED_IMAGE_LOOKBACK_MS = 30 * 1000;
+const IMAGE_CONSTRAINTS = {
+  doNotInventNewLabelText: 'Do not invent new label text.',
+  doNotRedesignLabelsUnlessRequested: 'Do not redesign labels unless requested.',
+  doNotRedesignPreservedSubjects: 'Do not redesign preserved subjects.',
+  doNotUseKeyColorInsideSubject: 'Do not use the key color inside the subject.',
+  noAuthenticationScreenUnlessRequested: 'No authentication screen unless requested.',
+  noClutter: 'No clutter.',
+  noDecorativeBadgesUnlessRequested: 'No decorative badges unless requested.',
+  noDuplicateText: 'No duplicate text.',
+  noExtraCopyBeyondRequestedText: 'No extra copy beyond requested text.',
+  noExtraLabels: 'No extra labels.',
+  noExtraObjects: 'No extra objects.',
+  noExtraPropsUnlessRequested: 'No extra props unless requested.',
+  noFakeLogos: 'No fake logos.',
+  noFakeLogosOrTrademarks: 'No fake logos or trademarks.',
+  noFakeLogosOrTrademarksUnlessRequested:
+    'No fake logos or trademarks unless explicitly requested.',
+  noIdentityOrLabelDrift: 'No identity or label drift.',
+  noInventedBrandMarks: 'No invented brand marks.',
+  noInventedLabelText: 'No invented label text.',
+  noPlaceholderImage: 'No placeholder image.',
+  noRandomAnalyticsChartsUnlessRequested: 'No random analytics charts unless requested.',
+  noRandomStatistics: 'No random statistics.',
+  noRedesignUnlessRequested: 'No redesign unless requested.',
+  noShadowsGradientsTextureReflectionsFloorPlaneOrLightingVariationInBackground:
+    'No shadows, gradients, texture, reflections, floor plane, or lighting variation in the background.',
+  noUnintendedLogoCopying: 'No unintended logo copying.',
+  noUnrelatedLogos: 'No unrelated logos.',
+  noUnrelatedProps: 'No unrelated props.',
+  noUnreadableDenseMicrotext: 'No unreadable dense microtext.',
+  noUnreadableMicrotext: 'No unreadable microtext.',
+  noUnreadableUiText: 'No unreadable UI text.',
+  noWatermark: 'No watermark.',
+  useFlatChromaKeyBackground:
+    'Use a perfectly flat solid #00ff00 background unless the subject is green; then use #ff00ff.',
+};
 
 const TEMPLATES = {
   general: {
@@ -22,9 +59,9 @@ const TEMPLATES = {
     composition: 'Use a clear focal point, intentional spacing, and a practical visual hierarchy.',
     style: 'Choose a coherent visual language that supports the requested use case.',
     constraints: [
-      'No watermark.',
-      'No fake logos or trademarks unless explicitly requested.',
-      'No placeholder image.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noFakeLogosOrTrademarksUnlessRequested,
+      IMAGE_CONSTRAINTS.noPlaceholderImage,
     ],
   },
   'ui-mockup': {
@@ -37,12 +74,12 @@ const TEMPLATES = {
     style:
       'Realistic shippable product UI, readable typography, coherent color system, practical component hierarchy, not concept art.',
     constraints: [
-      'No fake logos or trademarks.',
-      'No watermark.',
-      'No decorative badges unless requested.',
-      'No unreadable dense microtext.',
-      'No random analytics charts unless requested.',
-      'No authentication screen unless requested.',
+      IMAGE_CONSTRAINTS.noFakeLogosOrTrademarks,
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noDecorativeBadgesUnlessRequested,
+      IMAGE_CONSTRAINTS.noUnreadableDenseMicrotext,
+      IMAGE_CONSTRAINTS.noRandomAnalyticsChartsUnlessRequested,
+      IMAGE_CONSTRAINTS.noAuthenticationScreenUnlessRequested,
     ],
     wireframePolicy: [
       'Use the wireframe as layout and information architecture guidance only.',
@@ -63,10 +100,10 @@ const TEMPLATES = {
     style:
       'Polished product photography or product-render visual with controlled lighting and realistic material detail.',
     constraints: [
-      'No watermark.',
-      'No unrelated props.',
-      'No fake logos or trademarks unless explicitly requested.',
-      'No invented label text.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noUnrelatedProps,
+      IMAGE_CONSTRAINTS.noFakeLogosOrTrademarksUnlessRequested,
+      IMAGE_CONSTRAINTS.noInventedLabelText,
     ],
   },
   'landing-hero': {
@@ -78,11 +115,11 @@ const TEMPLATES = {
       'Wide composition, clear hierarchy, intentional negative space for page copy, and a restrained visual cluster.',
     style: 'Web-ready hero image with polished but not overdecorated product visuals.',
     constraints: [
-      'No watermark.',
-      'No fake logos.',
-      'No decorative badges unless requested.',
-      'No clutter.',
-      'No unreadable UI text.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noFakeLogos,
+      IMAGE_CONSTRAINTS.noDecorativeBadgesUnlessRequested,
+      IMAGE_CONSTRAINTS.noClutter,
+      IMAGE_CONSTRAINTS.noUnreadableUiText,
     ],
   },
   'ad-creative': {
@@ -94,10 +131,10 @@ const TEMPLATES = {
     style:
       'Tasteful campaign photography, editorial design, or poster-like layout according to the request.',
     constraints: [
-      'No watermark.',
-      'No unrelated logos.',
-      'No duplicate text.',
-      'No extra copy beyond requested text.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noUnrelatedLogos,
+      IMAGE_CONSTRAINTS.noDuplicateText,
+      IMAGE_CONSTRAINTS.noExtraCopyBeyondRequestedText,
     ],
   },
   infographic: {
@@ -110,10 +147,10 @@ const TEMPLATES = {
     style:
       'Minimal editorial infographic, high contrast, readable typography, no decorative clutter.',
     constraints: [
-      'No watermark.',
-      'No extra labels.',
-      'No unreadable microtext.',
-      'No random statistics.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noExtraLabels,
+      IMAGE_CONSTRAINTS.noUnreadableMicrotext,
+      IMAGE_CONSTRAINTS.noRandomStatistics,
     ],
   },
   'product-shot': {
@@ -125,10 +162,10 @@ const TEMPLATES = {
     style:
       'Premium product photography with realistic materials, label clarity, and controlled studio lighting.',
     constraints: [
-      'No watermark.',
-      'No invented brand marks.',
-      'No extra props unless requested.',
-      'Do not redesign labels unless requested.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noInventedBrandMarks,
+      IMAGE_CONSTRAINTS.noExtraPropsUnlessRequested,
+      IMAGE_CONSTRAINTS.doNotRedesignLabelsUnlessRequested,
     ],
   },
   'transparent-cutout': {
@@ -139,10 +176,10 @@ const TEMPLATES = {
     composition: 'Centered subject, full silhouette visible, no cropped important edges.',
     style: 'Clean product or object rendering with a perfectly flat solid background.',
     constraints: [
-      'Use a perfectly flat solid #00ff00 background unless the subject is green; then use #ff00ff.',
-      'No shadows, gradients, texture, reflections, floor plane, or lighting variation in the background.',
-      'No watermark.',
-      'Do not use the key color inside the subject.',
+      IMAGE_CONSTRAINTS.useFlatChromaKeyBackground,
+      IMAGE_CONSTRAINTS.noShadowsGradientsTextureReflectionsFloorPlaneOrLightingVariationInBackground,
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.doNotUseKeyColorInsideSubject,
     ],
   },
   'image-edit': {
@@ -153,10 +190,10 @@ const TEMPLATES = {
       'Preserve camera angle, framing, scale, and scene geometry unless the user explicitly requests otherwise.',
     style: "Match the original image's lighting, texture, perspective, and physical realism.",
     constraints: [
-      'No watermark.',
-      'No redesign unless requested.',
-      'No extra objects.',
-      'No identity or label drift.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noRedesignUnlessRequested,
+      IMAGE_CONSTRAINTS.noExtraObjects,
+      IMAGE_CONSTRAINTS.noIdentityOrLabelDrift,
     ],
     editMode: true,
   },
@@ -169,13 +206,179 @@ const TEMPLATES = {
     style:
       'Coherent final image that uses references deliberately without copying unrelated details.',
     constraints: [
-      'No watermark.',
-      'No unintended logo copying.',
-      'Do not redesign preserved subjects.',
-      'Do not invent new label text.',
+      IMAGE_CONSTRAINTS.noWatermark,
+      IMAGE_CONSTRAINTS.noUnintendedLogoCopying,
+      IMAGE_CONSTRAINTS.doNotRedesignPreservedSubjects,
+      IMAGE_CONSTRAINTS.doNotInventNewLabelText,
     ],
   },
 };
+const TEMPLATE_NAMES = Object.keys(TEMPLATES);
+
+const BOOLEAN_ARG_SETTERS = new Map([
+  [
+    'dryRun',
+    (args) => {
+      args.dryRun = true;
+    },
+  ],
+  [
+    'help',
+    (args) => {
+      args.help = true;
+    },
+  ],
+  [
+    'version',
+    (args) => {
+      args.version = true;
+    },
+  ],
+]);
+
+const REPEATABLE_ARG_SETTERS = new Map([
+  [
+    'constraint',
+    (args, value) => {
+      args.constraint.push(value);
+    },
+  ],
+  [
+    'image',
+    (args, value) => {
+      args.image.push(value);
+    },
+  ],
+  [
+    'imageRole',
+    (args, value) => {
+      args.imageRole.push(value);
+    },
+  ],
+]);
+
+const SCALAR_ARG_SETTERS = new Map([
+  [
+    'canvas',
+    (args, value) => {
+      args.canvas = value;
+    },
+  ],
+  [
+    'changeOnly',
+    (args, value) => {
+      args.changeOnly = value;
+    },
+  ],
+  [
+    'composition',
+    (args, value) => {
+      args.composition = value;
+    },
+  ],
+  [
+    'constraints',
+    (args, value) => {
+      args.constraints = value;
+    },
+  ],
+  [
+    'details',
+    (args, value) => {
+      args.details = value;
+    },
+  ],
+  [
+    'iterationTarget',
+    (args, value) => {
+      args.iterationTarget = value;
+    },
+  ],
+  [
+    'out',
+    (args, value) => {
+      args.out = value;
+    },
+  ],
+  [
+    'physicalRealism',
+    (args, value) => {
+      args.physicalRealism = value;
+    },
+  ],
+  [
+    'preserve',
+    (args, value) => {
+      args.preserve = value;
+    },
+  ],
+  [
+    'prompt',
+    (args, value) => {
+      args.prompt = value;
+    },
+  ],
+  [
+    'purpose',
+    (args, value) => {
+      args.purpose = value;
+    },
+  ],
+  [
+    'quality',
+    (args, value) => {
+      args.quality = value;
+    },
+  ],
+  [
+    'size',
+    (args, value) => {
+      args.size = value;
+    },
+  ],
+  [
+    'style',
+    (args, value) => {
+      args.style = value;
+    },
+  ],
+  [
+    'subject',
+    (args, value) => {
+      args.subject = value;
+    },
+  ],
+  [
+    'template',
+    (args, value) => {
+      args.template = value;
+    },
+  ],
+  [
+    'text',
+    (args, value) => {
+      args.text = value;
+    },
+  ],
+  [
+    'timeoutMs',
+    (args, value) => {
+      args.timeoutMs = value;
+    },
+  ],
+  [
+    'typography',
+    (args, value) => {
+      args.typography = value;
+    },
+  ],
+  [
+    'wireframe',
+    (args, value) => {
+      args.wireframe = value;
+    },
+  ],
+]);
 
 /**
  * CLI の入口です。
@@ -238,9 +441,10 @@ async function main() {
  */
 function parseArgs(argv) {
   const args = { image: [], imageRole: [], constraint: [] };
+  const tokens = [...argv];
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
+  while (tokens.length > 0) {
+    const token = tokens.shift();
 
     if (!token.startsWith('--')) {
       throw new Error(`Unexpected positional argument: ${token}`);
@@ -251,27 +455,66 @@ function parseArgs(argv) {
     const key = camelCase(rawKey);
     const inlineValue = eqIndex === -1 ? null : token.slice(eqIndex + 1);
 
-    if (['dryRun', 'help', 'version'].includes(key)) {
-      args[key] = true;
+    const booleanArgSetter = BOOLEAN_ARG_SETTERS.get(key);
+    if (booleanArgSetter) {
+      booleanArgSetter(args);
       continue;
     }
 
-    const value = inlineValue ?? argv[index + 1];
+    const value = inlineValue ?? tokens.shift();
     if (value === undefined || value.startsWith('--')) {
       throw new Error(`Missing value for --${rawKey}`);
     }
-    if (inlineValue === null) {
-      index += 1;
+
+    const repeatableArgSetter = REPEATABLE_ARG_SETTERS.get(key);
+    if (repeatableArgSetter) {
+      repeatableArgSetter(args, value);
+      continue;
     }
 
-    if (REPEATABLE_ARGS.has(key)) {
-      args[key].push(value);
-    } else {
-      args[key] = value;
+    const scalarArgSetter = SCALAR_ARG_SETTERS.get(key);
+    if (scalarArgSetter) {
+      scalarArgSetter(args, value);
+      continue;
     }
+
+    throw new Error(`Unknown option: --${rawKey}`);
   }
 
   return args;
+}
+
+/**
+ * template 名から対応する定義を返します。
+ *
+ * 動的な object property 参照を避け、許可された template 名だけを明示的に選択します。
+ * 未知の template 名は null を返し、呼び出し側で利用者向けの候補一覧付き error にします。
+ */
+function templateForName(templateName) {
+  switch (templateName) {
+    case 'ad-creative':
+      return TEMPLATES['ad-creative'];
+    case 'general':
+      return TEMPLATES.general;
+    case 'image-edit':
+      return TEMPLATES['image-edit'];
+    case 'infographic':
+      return TEMPLATES.infographic;
+    case 'landing-hero':
+      return TEMPLATES['landing-hero'];
+    case 'product-mockup':
+      return TEMPLATES['product-mockup'];
+    case 'product-shot':
+      return TEMPLATES['product-shot'];
+    case 'reference-composite':
+      return TEMPLATES['reference-composite'];
+    case 'transparent-cutout':
+      return TEMPLATES['transparent-cutout'];
+    case 'ui-mockup':
+      return TEMPLATES['ui-mockup'];
+    default:
+      return null;
+  }
 }
 
 /**
@@ -282,11 +525,9 @@ function parseArgs(argv) {
  */
 function normalizeRequest(args) {
   const templateName = args.template ?? 'general';
-  const template = TEMPLATES[templateName];
+  const template = templateForName(templateName);
   if (!template) {
-    throw new Error(
-      `Unknown template: ${templateName}. Available: ${Object.keys(TEMPLATES).join(', ')}`
-    );
+    throw new Error(`Unknown template: ${templateName}. Available: ${TEMPLATE_NAMES.join(', ')}`);
   }
 
   const prompt = requiredString(args.prompt, 'prompt');
@@ -374,7 +615,7 @@ async function loadWireframe(filePath) {
   }
 
   if (extension === '.html' || extension === '.htm') {
-    const match = text.match(/const\s+WIREFRAME_DATA\s*=\s*([\s\S]*?);\s*(?:\n|$)/);
+    const match = text.match(/const\s+WIREFRAME_DATA\s*=\s*([\S\s]*?);\s*(?:\n|$)/);
     if (!match) {
       throw new Error(`Unable to find WIREFRAME_DATA in ${filePath}`);
     }
@@ -1068,13 +1309,13 @@ function renderImageRoles(images, imageRoles) {
   }
 
   const lines = ['Input images:'];
-  images.forEach((imagePath, index) => {
+  for (const [index, imagePath] of images.entries()) {
     const role =
-      imageRoles[index] ??
+      imageRoles.at(index) ??
       `Image ${index + 1}: reference image; use only according to the user's request.`;
     lines.push(`${role}`);
     lines.push(`Path: ${imagePath}`);
-  });
+  }
   lines.push('');
   return lines.join('\n');
 }
@@ -1244,7 +1485,7 @@ function defaultIterationTarget(templateName) {
  * shell 表示用に引数を quote します。
  */
 function shellQuote(value) {
-  if (/^[A-Za-z0-9_./:=+-]+$/.test(value)) {
+  if (/^[\w+./:=-]+$/.test(value)) {
     return value;
   }
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -1263,7 +1504,7 @@ function camelCase(value) {
 function slugify(value) {
   return value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^\da-z]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
 
