@@ -2,7 +2,7 @@
 description: MAGI deliberation member MELCHIOR (Gemini)
 mode: subagent
 hidden: true
-model: github-copilot/gemini-3.1-pro-preview
+model: openai/gpt-5.5
 temperature: 0.3
 permission:
   edit: deny

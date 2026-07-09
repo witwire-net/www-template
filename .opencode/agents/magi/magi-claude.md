@@ -2,7 +2,7 @@
 description: MAGI deliberation member CASPER (Claude)
 mode: subagent
 hidden: true
-model: github-copilot/claude-opus-4.6
+model: openai/gpt-5.5
 temperature: 0.3
 permission:
   edit: deny
