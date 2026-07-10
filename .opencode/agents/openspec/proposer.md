@@ -1,8 +1,8 @@
 ---
 description: Create/update an OpenSpec change along the artifact graph; converge validate and drive analyzer and decisions.
 mode: subagent
-model: openai/gpt-5.5
-reasoningEffort: 'high'
+model: openai/gpt-5.6-sol
+reasoningEffort: 'xhigh'
 temperature: 0.3
 permission:
   edit: allow

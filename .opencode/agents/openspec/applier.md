@@ -1,8 +1,8 @@
 ---
 description: Apply an OpenSpec change through tasks.md, delegating implementation and reviews with dependency-safe parallel execution until archive-ready.
 mode: subagent
-model: openai/gpt-5.4-mini
-reasoningEffort: 'high'
+model: openai/gpt-5.6-luna
+reasoningEffort: 'xhigh'
 temperature: 0.1
 permission:
   edit: deny
