@@ -2,8 +2,8 @@
 description: Build agent helper
 mode: subagent
 hidden: false
-model: openai/gpt-5.6-terra
-reasoningEffort: 'xhigh'
+model: openai/gpt-5.5
+reasoningEffort: 'high'
 permission:
   edit: allow
   webfetch: allow

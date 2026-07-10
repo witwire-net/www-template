@@ -1,8 +1,8 @@
 ---
 description: Backend implementation specialist for packages/backend, packages/typespec, and packages/admin. Loads coding-guardian and orchestration-playbook skills to implement, fix, investigate, and iterate until reviewer approval, then returns results to the caller.
 mode: subagent
-model: openai/gpt-5.6-terra
-reasoningEffort: 'xhigh'
+model: openai/gpt-5.4
+reasoningEffort: 'high'
 temperature: 0.1
 permission:
   edit: allow
