@@ -16,6 +16,8 @@ When ready to implement, run /opsx-apply
 
 **Input**: The argument after `/opsx-propose` is the change name (kebab-case), OR a description of what the user wants to build.
 
+Before starting, load `openspec-apply-readiness` via the `skill` tool and use it as the definition of apply-ready.
+
 **Steps**
 
 1. **If no input provided, ask what they want to build**
@@ -78,6 +80,13 @@ When ready to implement, run /opsx-apply
    - Use **AskUserQuestion tool** to clarify
    - Then continue with creation
 
+   d. **Converge the shared apply-readiness contract**:
+   - Run `openspec instructions apply --change "<name>" --json`
+   - Read every returned `contextFiles` path
+   - Evaluate AR-001 through AR-010 from `openspec-apply-readiness`
+   - Fix every `NEEDS_FIXES` finding and ask for every required `NEEDS_DECISIONS` item
+   - Do not declare the change apply-ready until the result is `READY`
+
 5. **Show final status**
    ```bash
    openspec status --change "<name>"
@@ -89,6 +98,7 @@ After completing all artifacts, summarize:
 
 - Change name and location
 - List of artifacts created with brief descriptions
+- Apply-readiness result: `READY`
 - What's ready: "All artifacts created! Ready for implementation."
 - Prompt: "Run `/opsx-apply` to start implementing."
 
@@ -109,3 +119,4 @@ After completing all artifacts, summarize:
 - If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
 - If a change with that name already exists, ask if user wants to continue it or create a new one
 - Verify each artifact file exists after writing before proceeding to next
+- Do not add local readiness gates or use expected file counts; use `openspec-apply-readiness`

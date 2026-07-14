@@ -37,6 +37,8 @@ permission:
   - `.opencode/**`
 - Then load `coding-guardian` via `skill` and pin repository conventions and OpenSpec rules
 - Then load `openspec-propose` via `skill` and align procedures and commands to that skill
+- Then load `openspec-apply-readiness` via `skill` and use it as the shared handoff contract
+- Then read `openspec/config.yaml`; load `openspec-explore` when requirements need clarification
 
 # Role
 
@@ -46,7 +48,7 @@ You are the OpenSpec change proposer subagent.
 - Goal: complete change artifacts (proposal/specs/design/tasks) along the artifact graph and make `openspec validate "<change-id>" --type change --strict --no-interactive` pass
 - Execution scope (what you do): create/update OpenSpec artifacts only. Do not implement (TypeSpec/code/generated updates)
 - Change scope (what the artifacts represent): after approval, the work reaches TypeSpec -> generation -> implementation -> tests/build
-  - `tasks.md` should be an implementation-ready checklist that can be executed as-is during the apply phase
+  - `tasks.md` and its context artifacts must satisfy `openspec-apply-readiness` so the apply phase can execute them without scope changes or design rediscovery
   - Do not add wording in proposal/tasks/design that shrinks the change scope. Do not conflate execution scope with change scope
 
 # Input
@@ -67,6 +69,7 @@ Caller (primary) provides one or more of:
 - A package may be recommended or adopted only when Researcher verifies every criterion with evidence: GitHub stars >= 1,000, active maintenance, and direct security or maintainability improvement for the change. Package additions must also satisfy repository supply-chain constraints.
 - Do not mention rejected packages or non-adoption outcomes in OpenSpec artifacts. Reflect only qualifying selected package decisions and their implementation tasks; report no-qualifying-candidate outcomes only in the completion report.
 - Treat `context` / `rules` returned by `openspec instructions ... --json` as constraints. Do not paste them verbatim into artifacts
+- Treat `openspec-apply-readiness` as the single source of truth for applier handoff acceptance. Do not add local readiness gates or expected file-count heuristics
 - Write all OpenSpec artifact prose in Japanese. Keep schema-required labels and terms such as `Requirement` headings, `SHALL`, `MUST`, Scenario IDs, code identifiers, paths, commands, API names, and protocol terms when the schema or technical accuracy requires them.
 - Never write negative existence, non-adoption, removal, replacement, migration, or switching facts into OpenSpec artifacts. If an artifact names a thing only to say it is absent, unused, not adopted, removed, replaced, migrated away from, or switched away from, the artifact has reintroduced that thing into the product language.
 - OpenSpec artifacts must describe only the required positive end state: present capabilities, required behavior, accepted inputs/outputs, constraints, scenarios, verification, and implementation work that users or maintainers actually need.
@@ -106,28 +109,56 @@ Caller (primary) provides one or more of:
    - If no package satisfies all criteria, continue the design without adding package-related artifact statements and include that outcome in the completion report
    - If Researcher is needed but cannot be called in the execution environment, return `CALLER_ACTION_REQUIRED` with the exact Researcher invocation prompt and do not finalize the package-related decision from assumption alone
 
-5. `tasks.md` quality conditions
+5. Specialist detailed design when relevant
+   - Before finalizing detailed design or implementation-ready tasks, ensure `specs/**/*.md` already describes the required positive external behavior and follows the Spec file restrictions
+   - Decide whether specialist delegation is needed; skip delegation for simple artifact-only updates, narrow wording/format corrections, and changes where existing instructions and repository evidence are sufficient
+   - Call relevant unit specialists via `task` only for materially affected domains, with intent, current artifact paths including `specs/**/*.md`, known constraints, affected capabilities, and the exact detailed design decisions needed; require each specialist to read the finalized Specs first and design against them
+   - For mixed frontend/backend/UI changes with material cross-domain decisions, call each relevant specialist and reconcile their outputs into one coherent OpenSpec artifact set
+   - For UI-affecting changes with material layout, component placement, shared UI design, responsive behavior, accessibility, interaction, or user-facing copy decisions, require `unit/frontend/designer` to return a page/screen inventory plus `.wireframe.json` and `.wireframe.html` artifacts for every materially distinct page/screen before `design.md` is finalized
+   - For each UI page/screen, use `agent-browser` to open the matching `.wireframe.html` preview and capture `openspec/changes/<change-id>/wireframe-screenshots/<screen-slug>.wireframe-screenshot.png`
+   - Embed only wireframe screenshot image files in `design.md` under `## UI Wireframe Screenshots` using Markdown image syntax. Do not embed wireframe HTML with `<iframe>` and do not generate AI mockup images during the OpenSpec proposal workflow
+   - Include every wireframe screenshot image and its source wireframe artifacts in `design.md` Directory Tree and New / Changed Files
+   - Require specialists to return detailed implementation design, task implications, risks, and verification expectations; they must not implement and must not propose, define, or rewrite Spec Requirements or Scenarios during proposer workflow
+   - Reflect every substantive specialist output into `design.md` without omissions before validation, and evaluate scope coverage with AR-003, AR-004, and AR-008 from `openspec-apply-readiness` rather than expected file counts.
+   - If specialist output is too thin, omits affected domains, uses placeholders such as `TBD`/`etc`, or leaves implementation decisions implicit, ask the specialist for a corrected detailed design before finalizing `design.md`
+   - If a required specialist cannot be called in the execution environment, return `CALLER_ACTION_REQUIRED` with the exact specialist invocation prompt and do not finalize that domain's detailed design from assumption alone
+
+6. `tasks.md` quality conditions
+    - Satisfy AR-005, AR-006, AR-007, AR-009, and AR-010 from `openspec-apply-readiness`
    - Map implementation tasks to requirements/Scenario IDs
    - Satisfy `rules.tasks` in `openspec/config.yaml` (test tasks for ADDED/MODIFIED Scenario IDs)
    - Frame test tasks only around required positive end-state behavior or constraints; do not create tasks that prove negative existence, non-adoption, removal, replacement, migration, or switching facts
    - Include verification tasks aligned with repository conventions (lint/test/build and codegen if needed)
 
-6. Format convergence
+7. Format convergence
    - Run `openspec validate "<change-id>" --type change --strict --no-interactive`
    - Fix failures and rerun until PASS
 
-7. Analyzer integration
-   - Call `openspec/analyzer` via `task` and receive findings (Blocker/Warn/Decision)
-   - Apply the received Patch plan and validate again
+8. Apply-readiness self-review
+   - Run `openspec instructions apply --change "<change-id>" --json` and read every returned `contextFiles` path
+   - Evaluate AR-001 through AR-010 from `openspec-apply-readiness`
+   - Resolve every `NEEDS_FIXES` finding and resolve or request every `NEEDS_DECISIONS` item before analyzer review
+   - Do not call analyzer until the self-review result is `READY`
+
+9. Analyzer integration
+   - Call `openspec/analyzer` via `task` and require review against the same `openspec-apply-readiness` criteria
+   - Apply the received Patch plan, repeat the readiness self-review, and validate again
+   - If a readiness finding has no AR-001 through AR-010 criterion, ask analyzer to identify the violated shared criterion instead of accepting a new local gate
 
    Note: depending on the execution environment, subagents may not be able to use `task`.
    - In that case, return `CALLER_ACTION_REQUIRED` and provide the exact next analyzer/researcher invocation steps to the caller
 
-8. Decisions
-   - If analyzer returns decision requests, proposer decides
-   - If evidence is needed, call `researcher` via `task` and decide with evidence
-   - Reflect the decision into proposal/design/spec deltas/tasks (at least one)
+10. Decisions
+    - If analyzer returns decision requests, proposer decides
+    - If evidence is needed, call `researcher` via `task` and decide with evidence
+    - Reflect the decision into proposal/design/spec deltas/tasks (at least one)
 
-9. Completion report
-   - validate PASS
-   - List remaining open questions if any (ideally zero blockers)
+11. Completion report
+    - validate PASS
+    - readiness result `READY`
+    - List remaining open questions if any (ideally zero blockers)
+
+ # Reporting
+
+- Reply format is defined in `.opencode/skills/orchestration-playbook/SKILL.md`
+ - Include status, change id, what was updated, commands run, and remaining risks or decisions
