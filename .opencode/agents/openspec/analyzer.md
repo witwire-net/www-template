@@ -1,7 +1,7 @@
 ---
 description: Analyze an OpenSpec change read-only; report artifact/workflow inconsistencies and suggested fixes.
 mode: subagent
-model: openai/gpt-5.6-terra
+model: openai/gpt-5.6-sol
 reasoningEffort: 'xhigh'
 temperature: 0.1
 permission:

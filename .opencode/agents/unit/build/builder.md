@@ -2,7 +2,7 @@
 description: Build agent helper
 mode: subagent
 hidden: false
-model: openai/gpt-5.6-terra
+model: openai/gpt-5.6-luna
 reasoningEffort: 'xhigh'
 permission:
   edit: allow
