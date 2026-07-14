@@ -22,6 +22,7 @@ permission:
     'git diff*': allow
     'git status*': allow
     'git log*': allow
+    'git merge-base*': allow
     'git show*': allow
     'git grep*': allow
     'pnpm lint*': allow
