@@ -39,6 +39,15 @@ README.md
 | ----------------------------------------------- | -------------- | ---------------------------------------------------------- |
 | <!-- TODO: 種別。例: Add/Update/Delete/Move --> | `path/to/file` | <!-- TODO: 何をなぜ変更するかを日本語で 1 行記述する。 --> |
 
+## Design Decisions
+
+<!-- Material decisions must trace to confirmed intent, approved Specs, and repository evidence. -->
+<!-- Familiarity, common practice, searchable examples, and generic patterns are not repository evidence. -->
+
+| Decision                                    | Intent / Spec Source                                   | Repository Evidence                             | Selected Approach                           | Why It Fits                                                 | Revisit Trigger                                                     |
+| ------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
+| <!-- TODO: 判断対象を日本語で記述する。 --> | <!-- TODO: Intent項目またはRequirement/Scenario ID --> | <!-- TODO: `path:line` またはcommand output --> | <!-- TODO: 採用方針を日本語で記述する。 --> | <!-- TODO: このsystemに適合する理由を日本語で記述する。 --> | <!-- TODO: 再検討が必要になる証拠または条件を日本語で記述する。 --> |
+
 ## System Diagram
 
 ```mermaid

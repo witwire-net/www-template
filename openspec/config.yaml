@@ -14,7 +14,14 @@ context: |
   - public routes use api/v1/*; app routes use api/v1/*
   - GORM imports are allowed only under packages/backend/internal/persistence/**
   - AutoMigrate is banned; use packages/backend/db/migrations/** with golang-migrate
-  - OpenSpec is archived and not part of the default lint/CI loop
+  - OpenSpec is archived from the default lint/CI loop; dedicated `pnpm lint:openspec` validates schemas and confirmed Intent
+
+  Intent confirmation boundary:
+  - Treat the request as evidence of intent, not as an implementation-ready specification.
+  - Every Change MUST begin with a confirmed `intent.md` before proposal, specs, design, or tasks are authored.
+  - Classify solution-shaped terms as a required outcome, a non-negotiable constraint, or a candidate means. Familiarity or common example code is not evidence that a candidate means fits this repository.
+  - Ground the interpretation in repository evidence, separate observations from inferences and assumptions, and check for evidence that would invalidate the interpretation.
+  - The owner MUST explicitly confirm the reconstructed intent. Downstream artifacts preserve that confirmed intent and MUST NOT reinterpret it.
 
   Spec -> Test contract:
   - Change-local specs live under openspec/changes/**/specs/**/spec.md
@@ -34,6 +41,10 @@ context: |
     - Main spec path: openspec/specs/<capability>/spec.md
 
 rules:
+  intent:
+    - Do not write a confirmed intent artifact until the owner explicitly confirms the reconstructed intent.
+    - Cite repository evidence and separate observed facts, inferences, assumptions, and unresolved decisions.
+    - Do not leave decisions that can change customer-visible behavior, contracts, architecture, security, data, dependencies, or scope unresolved in a confirmed intent.
   specs:
     - Every Scenario heading MUST include a Scenario ID suffix in parentheses.
     - Scenario IDs MUST use the uppercased Spec Unit prefix (e.g., USER-MGMT-S001).

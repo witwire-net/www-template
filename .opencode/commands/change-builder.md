@@ -13,7 +13,7 @@ $ARGUMENTS
 Goal
 
 - /change-builder で入力された仕様設計・ドメイン設計を基に、プロジェクト全体を考慮した推奨 Spec 分割（capability）と推奨 Changes 分割（change-id + 依存関係 + 並列グループ）を提案する
-- ユーザーが承諾したら、`openspec/proposer` サブエージェントを呼び出して各 change を作成する（並列可能なものは並列）
+- ユーザーが各 change の再構成済み意図と分割を承諾したら、`openspec/proposer` サブエージェントを呼び出して各 change を作成する（並列可能なものは並列）
 - 全 change の完成（validate PASS）を確認して報告する
 
 Hard rules
@@ -48,6 +48,14 @@ Process
   - API/contract surface (if any)
   - Data model / domain boundaries
   - Open questions / decisions
+- Treat solution-shaped terms as evidence to classify, not automatically as requirements
+- Inspect repository evidence and separate observed facts, inferences, assumptions, and unresolved decisions
+- For each proposed Change, prepare an Intent Card containing:
+  - Actor / situation / problem / desired outcome / priority
+  - Required outcomes / non-negotiable constraints / candidate means
+  - Repository evidence with `path:line`
+  - Falsification check and conclusion
+  - Invariants / boundaries / observable success
 
 3. Propose Spec splitting (capabilities)
 
@@ -67,19 +75,22 @@ Process
   - Risks / breaking notes
   - Dependencies on other changes
 
-5. Ask for approval
+5. Ask for intent and split approval
 
+- Show every Change's complete Intent Card before asking for approval.
 - Use the `question` tool with options:
   - この分割で進める
-  - 分割を修正したい（自由入力で指示）
+  - 意図または分割を修正したい（自由入力で指示）
   - いったん中止
+- Approval confirms both the displayed per-Change intents and the split. Do not infer confirmation from silence or from approval of a materially different earlier summary.
 
 6. If approved, scaffold changes via subagents
 
 - Group changes into parallelizable batches based on dependencies.
 - For each batch, call `task` in parallel:
   - `subagent_type: openspec/proposer`
-  - Prompt includes a YAML `ChangePlan` per change.
+  - Prompt includes a YAML `ChangePlan` and `IntentConfirmation` per change.
+  - `IntentConfirmation` includes `status: confirmed`, the exact approved intent summary, all request-term classifications, and the owner's approval response.
 
 7. Completion check and report
 

@@ -1,5 +1,6 @@
 ## Why
 
+<!-- Derive this proposal from the owner-confirmed intent.md. Do not reinterpret the request here. -->
 <!-- TODO: Motivation. Describe the customer problem/opportunity, current pain, and why now (1-2 short paragraphs). -->
 <!-- MUST NOT describe implementation steps or task ordering here. -->
 

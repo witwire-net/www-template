@@ -1,6 +1,8 @@
 ## ADDED Requirements
 
 <!-- This file defines enduring specification only. -->
+<!-- Derive Customer Context, Requirements, and Scenarios from confirmed intent.md and proposal.md. -->
+<!-- Candidate means in intent.md are not Requirements unless the owner confirmed them as outcomes or constraints. -->
 <!-- MUST NOT write implementation tasks, migration steps, release steps, or change-history prose here. -->
 <!-- Bad: "In this migration, replace packages/frontend/ui." -->
 <!-- Good: "The shared UI package SHALL be reusable from both public and private frontends." -->

@@ -108,6 +108,8 @@ Think freely. When insights crystallize, you might offer:
 - "This feels solid enough to start a change. Want me to create a proposal?"
 - Or keep exploring - no pressure to formalize
 
+Before handing an idea to proposal work, summarize an Intent Candidate containing the actor, situation, problem, desired outcome, priority, request-term classifications, repository evidence, assumptions, falsification check, invariants, boundaries, and observable success. Ask the owner to confirm or correct it. Exploration may discover intent, but it MUST NOT silently convert an unconfirmed interpretation into a Change.
+
 ### When a change exists
 
 If the user mentions a change or you detect one is relevant:
@@ -163,6 +165,8 @@ There's no required ending. Discovery might:
 - **Continue later**: "We can pick this up anytime"
 
 When things crystallize, you might offer a summary - but it's optional. Sometimes the thinking IS the value.
+
+When the user wants to proceed to a Change, the summary is no longer optional: return a confirmed Intent Handoff with the exact owner-approved statement and confirmation response so `/opsx-propose` or `openspec/proposer` can create `intent.md` without asking the same question again.
 
 ---
 

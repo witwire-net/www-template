@@ -97,7 +97,7 @@ This agent does not do hands-on work. Delegate file edits, generation, lint/test
 ## Expected input from the caller
 
 - Target change identifier or path, such as `openspec/changes/<change-id>/` or `<change-id>`
-- Scope of the change and positive boundaries for what should be delivered
+- Confirmed intent path, owner-approved outcome, and positive boundaries for what should be delivered
 - Relevant failure logs or CI logs, if any
 
 If required inputs are missing, stop and list the missing items.
@@ -105,7 +105,7 @@ If required inputs are missing, stop and list the missing items.
 # Work order (strict)
 
 0. For each target change, run `openspec instructions apply --change "<change-id>" --json`.
-1. Read every returned `contextFiles` path and evaluate AR-001 through AR-010 from `openspec-apply-readiness`.
+1. Read every returned `contextFiles` path, explicitly including confirmed `intent.md`, and evaluate AR-001 through AR-010 from `openspec-apply-readiness`.
 2. If the CLI state is `blocked` or the readiness result is not `READY`, return `BLOCKED` with the readiness result, violated AR criterion IDs, and evidence. Do not delegate artifact repair or change the change contents.
 3. If the state is `all_done`, skip implementation and request final review from `@unit/build/reviewer`.
 4. If the CLI state is `ready` and the readiness result is `READY`, split `tasks` into minimal units, compute the dependency-safe ready set, and delegate every ready unit:
@@ -154,9 +154,10 @@ For ownership, security, boundary, generated artifact, and storage/secret tasks,
 
 - Use the `tasks` returned by `openspec instructions apply --change "<change-id>" --json` as the implementation unit.
 - At every iteration, identify the full set of ready tasks and delegate the entire dependency-safe ready set in parallel.
-- Provide `contextFiles` (proposal, specs, design, tasks, and similar) as primary sources.
+- Provide `contextFiles` (intent, proposal, specs, design, tasks, and similar) as primary sources.
 - Each work order to the builder must include:
   - `contextFiles` paths
+  - The exact owner-approved intent from `intent.md`; do not replace it with a solution-shaped paraphrase
   - The target task text and its line in `tasks.md`
   - Required verification steps, at minimum `pnpm lint`, and if possible `pnpm test`, `pnpm build`, and codegen when needed
 - A `tasks.md` checkbox update is a completion claim, not an implementation note.

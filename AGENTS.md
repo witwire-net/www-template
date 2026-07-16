@@ -5,6 +5,15 @@
 - You MUST doubt your assumptions, verify factual claims against available evidence, and MUST NOT present unsupported statements as facts.
 - Write `AGENTS.md` in English. Pull request bodies and pull request template content MUST be written in Japanese, except for code identifiers, commands, logs, file paths, and issue or PR references.
 
+## Intent Before Implementation
+
+- Treat the user's wording as evidence of intent, not automatically as an implementation-ready specification.
+- Before selecting a solution, identify the customer outcome and verify the relevant repository facts and constraints.
+- Classify solution-shaped terms as a required outcome, a non-negotiable constraint, or a candidate means. Do not promote candidate means into requirements without evidence or confirmation.
+- Separate observations from inferences and assumptions. Familiarity, common practice, and readily available example code are not evidence that a solution fits this repository.
+- Ask the user only when unresolved ambiguity could materially change user-visible behavior, external contracts, architecture, security, data, dependencies, or scope.
+- When a workflow provides confirmed intent or an approved specification, preserve that boundary and choose implementation details within it unless contradictory evidence requires escalation.
+
 ## Credo
 
 Before beginning any work, you MUST summarize your understanding of the Credo below in Japanese and explicitly declare that you will strictly comply with it. Do not translate or repeat the Credo verbatim; explain how you will apply it to the current task, then begin the work.

@@ -42,10 +42,13 @@ with artifact evidence showing why the affected domain is outside the change.
 
 - `openspec instructions apply` does not report missing required artifacts.
 - Every path in `contextFiles` exists and is readable.
-- The proposal, specs, design, and tasks describe the same change scope.
+- The confirmed intent, proposal, specs, design, and tasks describe the same change scope.
 
 ### AR-002: Scope and decisions are settled
 
+- `intent.md` records `Intent-Status: CONFIRMED` and `Owner-Confirmation: CONFIRMED` after explicit owner confirmation.
+- The confirmed intent separates repository observations, inferences, assumptions, and candidate means, and includes evidence from a check that could have invalidated the selected interpretation.
+- Solution-shaped terms are classified as required outcomes, non-negotiable constraints, or candidate means; downstream artifacts do not promote candidate means without owner confirmation.
 - No artifact contradiction or unresolved decision can change customer-visible
   behavior, external contracts, architecture ownership, security boundaries,
   persistence, dependencies, or UI behavior.
@@ -62,6 +65,7 @@ with artifact evidence showing why the affected domain is outside the change.
 
 ### AR-004: Implementation does not require design rediscovery
 
+- Material implementation choices trace to the confirmed intent, approved specs, repository evidence, or explicit constraints. Familiarity, common practice, and readily available example code are not sufficient evidence.
 - A responsible implementation agent can identify the intended flow,
   ownership boundaries, error handling, data flow, and affected integration
   points from the context files.

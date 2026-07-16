@@ -1,8 +1,38 @@
 name: new-feature
-version: 1
-description: New feature workflow - proposal → specs (capability Spec Units) → design → tasks
+version: 3
+description: New feature workflow - confirmed intent → proposal → specs (capability Spec Units) → design → tasks
 
 artifacts:
+  - id: intent
+    generates: intent.md
+    description: Owner-confirmed interpretation of the requested outcome and constraints
+    template: intent.md
+    instruction: |
+      Create the intent document that establishes WHAT THE REQUEST MEANS before proposing a change.
+
+      Language rule:
+      - Think in English; output in Japanese.
+      - Keep only the template's headings, structural labels, status values, paths, commands, API/protocol names, code identifiers, and exact technical terms in English.
+      - Write all explanations, evidence interpretations, assumptions, success conditions, and confirmation summaries in Japanese.
+
+      Confirmation gate:
+      - Treat the caller's wording as evidence of intent, not as an implementation-ready specification.
+      - Inspect the relevant repository state before selecting an interpretation.
+      - Classify solution-shaped terms as a required outcome, a non-negotiable constraint, or a candidate means.
+      - Familiarity, common practice, searchable examples, or an existing implementation pattern are not evidence that a candidate means fits this repository.
+      - Separate observed facts, inferences, assumptions, and unresolved decisions.
+      - Look for repository evidence that would invalidate the selected interpretation or support a materially different interpretation.
+      - Present the reconstructed intent to the owner and obtain explicit confirmation before writing a completed intent.md.
+      - Set both `Intent-Status` and `Owner-Confirmation` to `CONFIRMED` only after explicit owner confirmation in the current conversation or a caller-provided confirmation that quotes the approved intent.
+      - A confirmed intent MUST contain no unresolved decision that can change customer-visible behavior, external contracts, architecture, security, data, dependencies, or scope.
+
+      Boundary rules:
+      - intent.md defines the customer/owner outcome, confirmed constraints, relevant repository evidence, and observable success.
+      - intent.md MUST NOT contain implementation tasks, file edit plans, dependency ordering, or detailed technical design.
+      - Candidate means remain candidates unless the owner confirms them as required outcomes or non-negotiable constraints.
+      - Do not create proposal, specs, design, or tasks before this artifact is confirmed.
+    requires: []
+
   - id: proposal
     generates: proposal.md
     description: Initial proposal document outlining the change
@@ -59,11 +89,16 @@ artifacts:
       - Confirm the CAPABILITY prefix you will use for Scenario IDs and Requirement reference IDs for every Spec Unit (derived from `<capability>`).
 
       Proposal boundary rules:
+      - Read the confirmed intent.md before authoring this artifact.
+      - Do not proceed unless both `Intent-Status` and `Owner-Confirmation` are `CONFIRMED`.
+      - Derive the Why, What Changes, affected Spec Units, and Impact from the confirmed outcome, constraints, repository evidence, and observable success.
+      - Do not promote a candidate means from intent.md into product scope unless it was confirmed as a required outcome or non-negotiable constraint.
       - proposal.md explains why the change is needed and which lasting Spec Units are affected.
       - proposal.md MUST NOT contain implementation steps, migration task lists, file-by-file edit plans, dependency ordering, or release checklists.
 
       Keep it concise (1-2 pages). Focus on "why" not "how"; implementation details belong in design.md.
-    requires: []
+    requires:
+      - intent
 
   - id: specs
     generates: 'specs/*/spec.md'
@@ -107,6 +142,9 @@ artifacts:
       - Requirements define enduring system behavior/constraints, not the work performed in this change.
 
       Spec boundary rules:
+      - Read the confirmed intent.md and proposal.md before authoring Requirements or Scenarios.
+      - Every Requirement MUST trace to a confirmed outcome, invariant, boundary, or observable success condition.
+      - Do not promote a candidate means from intent.md into a Requirement unless the owner confirmed it as a required outcome or non-negotiable constraint.
       - spec.md defines WHAT the system must do after the change is complete.
       - spec.md MUST NOT contain implementation tasks, migration procedures, file edit plans, release steps, rollout sequencing, or change-history wording tied to this specific change.
       - Avoid change-relative wording such as "in this change", "during migration", "replace X with Y", or "update package ..." unless it is required to describe a lasting externally observable constraint.
@@ -145,6 +183,7 @@ artifacts:
       - Specs should be testable - each scenario is a potential test case.
       - Keep each Spec Unit focused on one enduring capability or responsibility area. If unrelated capabilities are affected, create separate Spec Units.
     requires:
+      - intent
       - proposal
 
   - id: design
@@ -180,6 +219,13 @@ artifacts:
       New / Changed Files:
       - MUST include every created/edited file.
       - For each entry, state what changes and why in Japanese.
+
+      Design Decisions:
+      - Record each material technical decision in the `## Design Decisions` table from the template.
+      - Trace each decision to confirmed intent and approved Specs.
+      - Cite repository evidence that demonstrates why the selected approach fits this system.
+      - Familiarity, common practice, searchable examples, and generic patterns are not repository evidence.
+      - State the evidence or condition that would require the decision to be reconsidered.
 
       Diagrams:
       - System/Package/Sequence/Domain Model/ER diagrams MUST reflect the spec units being changed.
@@ -275,7 +321,9 @@ artifacts:
       - If DB or contract changes exist, include rollback and migration steps.
       - Provide release steps that a teammate can follow, written in Japanese except commands and identifiers.
     requires:
+      - intent
       - proposal
+      - specs
 
   - id: tasks
     generates: tasks.md
@@ -305,6 +353,8 @@ artifacts:
       - Include tasks for updating docs (spec/design) when behavior changes.
 
       Task boundary rules:
+      - Read the confirmed intent.md, approved Specs, and design.md before authoring tasks.
+      - Every implementation task MUST trace to approved scope or a material design decision; do not create tasks solely because they commonly accompany a named solution.
       - tasks.md defines concrete implementation work only.
       - tasks.md MUST NOT restate product requirements using SHALL/MUST language.
       - tasks.md MUST NOT include Customer Context, requirement prose blocks, or architectural rationale that belongs in proposal/spec/design.
@@ -312,11 +362,13 @@ artifacts:
       Reference specs for what needs to be built, design for how to build it.
       Each task should be verifiable - you know when it's done.
     requires:
+      - intent
       - specs
       - design
 
 apply:
   requires:
+    - intent
     - tasks
   tracks: tasks.md
   instruction: |
