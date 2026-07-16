@@ -5,7 +5,7 @@
 ## 含まれるもの
 
 - Node.js 24 と pnpm
-- Go 1.26.4 以上
+- Go 1.26.5 以上
 - `gopls` `goimports` `dlv` `golangci-lint` `air`
 - `wrangler` `golang-migrate` `oapi-codegen` `openspec` `opencode` `agent-browser`
 - Playwright 実行に必要な Linux 依存
