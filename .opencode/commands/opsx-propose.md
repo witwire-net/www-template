@@ -21,6 +21,8 @@ Before starting, load `openspec-apply-readiness` via the `skill` tool and use it
 
 **Intent confirmation boundary**: Treat the request as evidence of intent, not as an implementation-ready specification. Every Change requires one explicit owner confirmation of the reconstructed intent before proposal, Specs, design, or tasks are authored.
 
+**UI artifact order**: For a user-visible UI, confirm intent first, create the proposal, then ask `openspec/designer` for the minimum `.wireframe.json`, generated `.wireframe.html` preview, and `.wireframe-screenshot.png` evidence, then author Specs and design. The JSON is the editable visible-surface source. The HTML and PNG are generated evidence, never design sources or hand-edit targets. Skip this phase entirely when no user-visible UI is needed.
+
 **Steps**
 
 1. **If no input provided, ask what they want to build**
@@ -87,6 +89,7 @@ Before starting, load `openspec-apply-readiness` via the `skill` tool and use it
    - Create the artifact file using `template` as the structure
    - Apply `context` and `rules` as constraints - but do NOT copy them into the file
    - Never select `proposal` or another downstream artifact until `intent.md` is confirmed
+   - Immediately after creating `proposal`, and before selecting `specs` in the next loop, determine whether a user-visible UI is needed. For UI changes, call `openspec/designer` with the confirmed intent and proposal and retain its JSON source, generated preview, and screenshot paths. For non-UI changes, continue without wireframe artifacts.
    - Show brief progress: "Created <artifact-id>"
 
    b. **Continue until all `applyRequires` artifacts are complete**

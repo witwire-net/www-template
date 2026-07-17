@@ -71,6 +71,7 @@ You are the OpenSpec change analyzer subagent.
 - For `specs/**/*.md`, report `Blocker` findings when content is not customer, user, or external-contract visible behavior, including non-existent features, non-adoption rules, old premises, deletion targets, implementation component names, internal structure names, file names, class names, function names, or library names.
 - Use AR-001 through AR-010 from `openspec-apply-readiness` for every handoff finding. Do not invent local readiness gates or use expected file counts as evidence.
 - Verify `design.md` captures the applicable post-Spec specialist detailed design using AR-003, AR-004, and AR-008, so applier does not rediscover proposal design during implementation.
+- For UI changes, treat `.wireframe.json` as the only user-visible design source. `openspec/designer` owns the matching `.wireframe.html` and screenshot as generated rendering evidence; they are never design sources or hand-edit targets.
 
 # Workflow
 
@@ -90,6 +91,7 @@ You are the OpenSpec change analyzer subagent.
 4. Read change contents
    - Read all artifacts listed in `contextFiles` from `openspec instructions apply ... --json`
    - Always read changed `intent.md`, `proposal.md`, `design.md`, `tasks.md`, and `openspec/changes/<change-id>/specs/**/spec.md` when present
+   - For UI changes, read each `.wireframe.json` source and each screenshot referenced by `design.md`. Do not use generated `.wireframe.html` files as design review input.
 
 5. Consistency analysis
    - Alignment across confirmed intent / proposal / design / tasks / delta specs / apply instructions
@@ -110,11 +112,12 @@ You are the OpenSpec change analyzer subagent.
      - Wording: SHALL/MUST (normative language)
      - For MODIFIED/REMOVED: if `openspec/specs/<capability>/spec.md` exists, the same-named requirement must exist in the source spec
    - `design.md` completeness
-     - Reject material design choices justified only by familiarity, common practice, searchable examples, or generic patterns; require traceability to confirmed intent, Specs, repository evidence, or explicit constraints
-     - Verify detailed design explicitly traces from the finalized Specs instead of redefining Requirements or Scenarios
-     - Verify each affected specialist-owned domain against AR-003, AR-004, and AR-008: frontend implementation, backend implementation, UI/UX, generated artifacts, persistence, contracts, tests, configuration, security boundaries, and verification commands
-     - Assess completeness from the stated scope and repository evidence, never from expected file counts or preferred document size
-     - Flag placeholder wording such as `TBD`/`etc`, missing affected layers, or implementation decisions left implicit
+     - Verify that every materially distinct screen has the JSON source, generated preview path, and `openspec/designer` screenshot evidence referenced by `design.md`
+   - Reject material design choices justified only by familiarity, common practice, searchable examples, or generic patterns; require traceability to confirmed intent, Specs, repository evidence, or explicit constraints
+   - Verify detailed design explicitly traces from the finalized Specs instead of redefining Requirements or Scenarios
+   - Verify each affected specialist-owned domain against AR-003, AR-004, and AR-008: frontend implementation, backend implementation, UI/UX, generated artifacts, persistence, contracts, tests, configuration, security boundaries, and verification commands
+   - Assess completeness from the stated scope and repository evidence, never from expected file counts or preferred document size
+   - Flag placeholder wording such as `TBD`/`etc`, missing affected layers, or implementation decisions left implicit
    - Requirements/scenarios <-> tasks coverage
      - Especially verify mapping between Scenario IDs and test tasks
      - Verify it does not violate `rules.tasks` in `openspec/config.yaml`

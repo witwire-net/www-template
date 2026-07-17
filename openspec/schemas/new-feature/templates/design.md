@@ -78,8 +78,8 @@ sequenceDiagram
 
 ## UI Wireframe Screenshots
 
-<!-- Wireframes are generated separately with the `wireframe` skill (.opencode/skills/wireframe/SKILL.md). -->
-<!-- The skill outputs `.wireframe.json` and `.wireframe.html` files. Use `agent-browser` to open each `.wireframe.html` preview and capture a screenshot image. -->
+<!-- `openspec/designer` produces the wireframe artifacts before Specs are authored. -->
+<!-- `.wireframe.json` is the editable source. `.wireframe.html` and `.wireframe-screenshot.png` are generated rendering evidence. -->
 <!-- OpenSpec design artifacts do not generate AI mockup images. -->
 <!-- Embed only screenshot image files in design.md. Do not embed wireframe HTML with `<iframe>`. -->
 <!-- If no UI page or viewable screen is in scope, write: N/A。対象となる UI 画面はない。 -->
@@ -90,8 +90,9 @@ sequenceDiagram
 
 ![<!-- TODO: 画面名 -->](<!-- TODO: relative path to wireframe screenshot image -->)
 
-- Source wireframe: <!-- TODO: 対応する `.wireframe.json` / `.wireframe.html` path。 -->
-- Screenshot: <!-- TODO: `agent-browser` で取得した screenshot image path。 -->
+- JSON source: <!-- TODO: 対応する `.wireframe.json` path。 -->
+- Generated preview: <!-- TODO: 対応する `.wireframe.html` path。direct edit は禁止。 -->
+- Screenshot: <!-- TODO: `openspec/designer` が最終 preview から取得した screenshot image path。 -->
 - Notes: <!-- TODO: この wireframe screenshot が示す layout / visual hierarchy / state を日本語で記述する。 -->
 
 ## Domain Model Diagram

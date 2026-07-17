@@ -78,6 +78,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 2. Security: no new vulnerabilities; no issues in permissions/inputs/outputs/secrets/dependency boundaries; preserves structure and consistency
 3. General code review: readability, maintainability, tests, error handling, naming, separation of concerns, performance, logging, compatibility
 4. UI/UX: follows `claude-ux` and `gpt-ux` guidance and complies with the brand guidelines under `docs/brand/**`
+5. OpenSpec UI fidelity: when an approved `.wireframe.json` is supplied, implementation preserves its visible actions, information structure, and copy; generated HTML and screenshots are rendering evidence only
 
 ## Check items (required)
 
@@ -95,6 +96,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 - If the original instruction or acceptance criteria are missing, compressed too far to audit, or contradicted by the diff, return overall verdict `BLOCKED`.
 - If any requirement cannot be mapped to evidence, return `BLOCKED` when it affects correctness, security, data integrity, routing, permissions, user-visible behavior, API contract, or UI behavior; otherwise return `Request changes` with the missing evidence.
 - For user-visible UI or browser-behavior changes, require runtime evidence appropriate to the claim, such as agent-browser screenshot, accessibility snapshot, or documented reason runtime inspection was impossible. If runtime inspection is needed and absent, return `BLOCKED`.
+- Do not request visible controls, settings, copy, screens, versions, model names, or internal state absent from an approved `.wireframe.json`. If that source causes a serious business-value, safety, accessibility, or legal failure, return `BLOCKED` with evidence for proposal-phase escalation.
 
 ## Strict UI content checks
 

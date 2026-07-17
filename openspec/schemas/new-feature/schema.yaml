@@ -95,6 +95,7 @@ artifacts:
       - Do not promote a candidate means from intent.md into product scope unless it was confirmed as a required outcome or non-negotiable constraint.
       - proposal.md explains why the change is needed and which lasting Spec Units are affected.
       - proposal.md MUST NOT contain implementation steps, migration task lists, file-by-file edit plans, dependency ordering, or release checklists.
+      - When the change needs a user-visible UI, proposal completion is followed by an `openspec/designer` wireframe JSON, generated preview, and screenshot evidence phase before Specs are authored. The proposal states the user outcome but MUST NOT prescribe UI controls, settings, internal concepts, or visual structure.
 
       Keep it concise (1-2 pages). Focus on "why" not "how"; implementation details belong in design.md.
     requires:
@@ -234,11 +235,11 @@ artifacts:
 
       UI Wireframe Screenshots (conditional):
       - OpenSpec design artifacts MUST NOT generate AI mockup images.
-      - Wireframes are produced separately using the `wireframe` skill (`.opencode/skills/wireframe/SKILL.md`) as `.wireframe.json` and `.wireframe.html` artifacts.
-      - When the change has UI pages/screens, create one wireframe screenshot image per materially distinct page/screen by opening the matching `.wireframe.html` preview with `agent-browser` and capturing a screenshot.
+      - Wireframes are produced before Specs by `openspec/designer` using the `wireframe` skill (`.opencode/skills/wireframe/SKILL.md`). The `.wireframe.json` is the only editable source; `.wireframe.html` and `.wireframe-screenshot.png` are generated rendering evidence.
+      - When the change has UI pages/screens, `openspec/designer` MUST create one wireframe screenshot image per materially distinct page/screen by opening the final matching `.wireframe.html` preview with `agent-browser` and capturing a screenshot.
       - Save screenshots under `openspec/changes/<change-id>/wireframe-screenshots/<screen-slug>.wireframe-screenshot.png`.
       - Embed only screenshot image files in `## UI Wireframe Screenshots` using Markdown image syntax. Never embed wireframe HTML with `<iframe>`.
-      - For each page/screen, include Source wireframe, Screenshot, and Notes bullets.
+      - For each page/screen, include JSON source, Generated preview, Screenshot, and Notes bullets.
       - Include the screenshot image files and their source wireframe files in **Directory Tree** and **New / Changed Files**.
       - If no UI page or viewable screen is in scope, keep the `## UI Wireframe Screenshots` section and write `N/A。対象となる UI 画面はない。`.
 
@@ -247,6 +248,7 @@ artifacts:
       - design.md MUST NOT introduce new product requirements that are absent from spec.md.
       - design.md MUST NOT replace tasks.md by listing the full implementation checklist as prose; task breakdown belongs in tasks.md.
       - Test plans in design.md describe verification design and traceability, not change history.
+      - When a wireframe JSON exists, design.md implements its visible surface and does not add presentation concepts from internal architecture or implementation convenience.
 
       Package-Level Design:
       - Provide a package list with responsibilities, public APIs, and dependencies.

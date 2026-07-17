@@ -62,6 +62,12 @@ with artifact evidence showing why the affected domain is outside the change.
 - Design traces to the specs and does not introduce unstated product behavior.
 - Design resolves cross-layer and domain-specific decisions needed to implement
   the stated behavior.
+- When UI is in scope, the pre-Spec `.wireframe.json` is the source for the
+  visible surface. Specs and design preserve that surface without introducing
+  visible internal concepts, controls, settings, screens, or copy.
+- `openspec/designer` owns the matching generated preview and screenshot
+  evidence. Design references the JSON source, generated preview, and screenshot
+  for every materially distinct screen without treating evidence as a source.
 
 ### AR-004: Implementation does not require design rediscovery
 
@@ -130,6 +136,10 @@ Apply only the relevant domain checks:
 - The planned work can pass through applicable frontend and backend review
   gates plus the final build review required by the applier.
 - Completion does not depend on unverifiable claims or unavailable evidence.
+- Generated wireframe HTML previews match their JSON sources and are not
+  hand-edited.
+- Required wireframe screenshots were captured by `openspec/designer` from the
+  final generated previews and are referenced by design.
 
 ## Evaluation procedure
 

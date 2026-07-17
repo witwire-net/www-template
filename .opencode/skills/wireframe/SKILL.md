@@ -34,6 +34,7 @@ Two files per screen:
 **Output path:**
 
 - With design-id: `designs/{design-id}/output/wireframe/` (automatic)
+- With an OpenSpec change path supplied by the caller: `openspec/changes/<change-id>/wireframes/` (automatic)
 - Without: prompted — ask user for directory path
 
 ## Execution Steps
@@ -53,7 +54,7 @@ If no argument:
 
 ### Step 2: Load cognitive model and generate wireframe JSON
 
-1. Load the wireframe designer cognitive model from `.claude/skills/wireframe/wireframe-designer.md`
+1. Load the wireframe designer cognitive model from `.opencode/skills/wireframe/wireframe-designer.md`
 2. Follow the perception sequence (Phases 1–7) to reason about the layout before producing JSON
 3. Produce a JSON object following the schema below
 
@@ -73,6 +74,10 @@ Derive the filename from the JSON `name` field (slugified, e.g., "KAI 回答ビ�
 
 - Output directory is `designs/{design-id}/output/wireframe/` (no prompt needed)
 
+**If an OpenSpec change path was supplied:**
+
+- Output directory is `openspec/changes/<change-id>/wireframes/` (no prompt needed)
+
 **If no `design-id`:**
 
 - Ask the user where to save the JSON: "Where should I save the wireframe JSON? Provide a directory path."
@@ -87,7 +92,7 @@ Use a Bash command to splice the JSON into the template. This avoids outputting 
 
 ```bash
 python3 -c "
-t = open('.claude/skills/wireframe/wireframe-template.html').read()
+t = open('.opencode/skills/wireframe/wireframe-template.html').read()
 d = open('{json_path}').read()
 open('{html_path}', 'w').write(t.replace('const WIREFRAME_DATA = null;', 'const WIREFRAME_DATA = ' + d + ';'))
 "

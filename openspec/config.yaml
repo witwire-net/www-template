@@ -23,6 +23,15 @@ context: |
   - Ground the interpretation in repository evidence, separate observations from inferences and assumptions, and check for evidence that would invalidate the interpretation.
   - The owner MUST explicitly confirm the reconstructed intent. Downstream artifacts preserve that confirmed intent and MUST NOT reinterpret it.
 
+  UI artifact order:
+  - When a Change needs a user-visible UI, create the artifacts in this order: confirmed intent, proposal, wireframe JSON, generated preview, screenshot evidence, spec, then design.
+  - `openspec/designer` owns the minimum visible surface in `.wireframe.json`, generates the matching `.wireframe.html`, and captures the final `.wireframe-screenshot.png`. The JSON is the only design source; HTML and PNG are generated evidence and are never hand-edited.
+  - Before creating or revising a wireframe, inspect the implemented target UI and every overlapping `.wireframe.json` in active Changes under `openspec/changes/`, excluding `archive/`.
+  - Preserve implemented shell, navigation, information hierarchy, terminology, and interactions outside the requested delta. Preserve visible changes already planned by overlapping active Change wireframes.
+  - If implementation, active wireframes, confirmed intent, or proposal conflict on user-visible behavior, stop for owner clarification instead of choosing a source silently.
+  - Specs define user-observable behavior without adding visible controls, settings, screens, labels, versions, model names, or internal state absent from the wireframe.
+  - During apply, resolve only self-evident implementation details that preserve the visible surface. Escalate contradictions or non-self-evident visible changes.
+
   Spec -> Test contract:
   - Change-local specs live under openspec/changes/**/specs/**/spec.md
   - Canonical main specs live at openspec/specs/**/spec.md
@@ -52,6 +61,7 @@ rules:
     - If a scenario cannot be automated, include `Tags: manual` and explain why in the change proposal/PR.
   tasks:
     - For each ADDED/MODIFIED Scenario ID, include a task to add/update automated tests that reference the Scenario ID.
+    - UI implementation tasks MUST reference the approved `.wireframe.json` source when a wireframe exists. They MUST NOT task direct edits to generated `.wireframe.html` files or screenshot recapture.
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.

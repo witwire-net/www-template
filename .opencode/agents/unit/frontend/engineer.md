@@ -101,6 +101,8 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - Run lint, typecheck, build, and test only through `pnpm` scripts; use `pnpm lint`, `pnpm check`, `pnpm build`/`pnpm build:client`, and `pnpm test:run`/`pnpm test:client` as appropriate
 - Do not call direct verification tools such as `tsc`, `vitest`, `svelte-check`, `vite build`, `eslint`, `stylelint`, `pnpm exec`, or `pnpm --filter ... exec`; if a package script uses `exec` internally, run only the parent `pnpm` script
 - Stop and report before crossing any Ask-first boundary
+- When called from `openspec/applier` for presentation-facing work, require the approved `.wireframe.json` and preserve its visible actions, information structure, and copy. Generated HTML and screenshots are rendering evidence only.
+- Never create, edit, regenerate, or capture OpenSpec wireframe JSON, HTML, or screenshot artifacts. If the approved visible surface is missing, contradictory, or needs a non-self-evident change, return `Status: BLOCKED` for proposal-phase escalation.
 - Do not report completion after changing source code yourself until `unit/frontend/reviewer` returns `Approve`
 - Preserve caller intent when requesting review. Do not compress the original instruction into a vague summary; expand it into explicit acceptance criteria, constraints, non-goals, and any user-visible or security-sensitive requirements.
 - If the original instruction is ambiguous, incomplete, or unavailable, return `Status: BLOCKED` instead of letting the reviewer infer it from your completion report.
