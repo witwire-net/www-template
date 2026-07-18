@@ -57,7 +57,7 @@
     "lint:eslint:admin": "pnpm --filter @www-template/admin-app exec svelte-kit sync && node --max-old-space-size=4096 --expose-gc scripts/eslint-gc.js --no-inline-config --max-warnings 0 packages/admin/app packages/admin/domain packages/admin/api",
     "lint:eslint:i18n": "node --max-old-space-size=4096 --expose-gc scripts/eslint-gc.js --no-inline-config --max-warnings 0 packages/frontend/i18n",
     "lint:i18n:coverage": "tsx scripts/i18n/check-locales.ts",
-    "lint:openspec": "pnpm exec openspec validate --all --strict && node scripts/openspec/verify-change-intent.mjs && node --test scripts/openspec/verify-change-intent.test.mjs",
+    "lint:openspec": "pnpm exec openspec validate --all --strict && node scripts/openspec/verify-change-intent.mjs && node --test scripts/openspec/verify-change-intent.test.mjs && node scripts/openspec/verify-wireframe-previews.mjs",
     "test:root": "vitest run --project root",
     "lint:stylelint": "stylelint \"packages/frontend/ui/src/styles/**/*.css\" --max-warnings 0",
     "format": "pnpm --filter @www-template/typespec format && prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\" && bash scripts/go/format.sh",

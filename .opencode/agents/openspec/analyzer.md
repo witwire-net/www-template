@@ -21,6 +21,7 @@ permission:
     'openspec-explore': allow
   bash:
     '*': ask
+    'pnpm lint*': allow
     'openspec list*': allow
     'openspec status*': allow
     'openspec instructions*': allow
@@ -135,7 +136,10 @@ You are the OpenSpec change analyzer subagent.
      - Verify that each requirement does not contradict the product's core problem statement (defined in `docs/` or the change proposal)
      - Flag any requirement that works against the user value the product is designed to deliver, even if it is internally consistent
 
-6. Output
+6. Run repository guardrails
+   - Run `pnpm lint` and treat any failure as enforced repository evidence. Do not declare `READY` while lint fails.
+
+7. Output
    - One of: `READY | NEEDS_DECISIONS | NEEDS_FIXES | FAILED`
    - Findings with the violated AR-001 through AR-010 criterion, severity (Blocker/Warn/Note), and evidence paths
    - Use `Blocker` only for a failed readiness criterion or enforced repository/schema rule. Do not require changes for preference-only observations

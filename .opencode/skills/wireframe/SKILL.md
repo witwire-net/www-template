@@ -18,10 +18,10 @@ Two modes:
 
 ## Output
 
-Two files per screen:
+One editable source and one generated preview per screen:
 
-- `{name}.wireframe.json` — AI-readable wireframe definition
-- `{name}.wireframe.html` — self-contained HTML preview (open in browser)
+- `{name}.wireframe.json` — the only editable wireframe source
+- `{name}.wireframe.html` — self-contained generated HTML preview (open in browser, never edit)
 
 **HTML preview features:**
 
@@ -34,7 +34,6 @@ Two files per screen:
 **Output path:**
 
 - With design-id: `designs/{design-id}/output/wireframe/` (automatic)
-- With an OpenSpec change path supplied by the caller: `openspec/changes/<change-id>/wireframes/` (automatic)
 - Without: prompted — ask user for directory path
 
 ## Execution Steps
@@ -74,11 +73,7 @@ Derive the filename from the JSON `name` field (slugified, e.g., "KAI 回答ビ�
 
 - Output directory is `designs/{design-id}/output/wireframe/` (no prompt needed)
 
-**If an OpenSpec change path was supplied:**
-
-- Output directory is `openspec/changes/<change-id>/wireframes/` (no prompt needed)
-
-**If no `design-id`:**
+**If no design-id was provided:**
 
 - Ask the user where to save the JSON: "Where should I save the wireframe JSON? Provide a directory path."
 - Use `AskUserQuestion` with a simple text prompt
@@ -88,25 +83,22 @@ Both `.wireframe.json` and `.wireframe.html` go in the same output directory.
 
 ### Step 4: Generate HTML preview
 
-Use a Bash command to splice the JSON into the template. This avoids outputting the ~1000-line template through the Write tool (which is slow because every line becomes output tokens):
+Generate the preview only from JSON with the repository generator:
 
 ```bash
-python3 -c "
-t = open('.opencode/skills/wireframe/wireframe-template.html').read()
-d = open('{json_path}').read()
-open('{html_path}', 'w').write(t.replace('const WIREFRAME_DATA = null;', 'const WIREFRAME_DATA = ' + d + ';'))
-"
+node .opencode/skills/wireframe/scripts/generate-preview.mjs {json_path}
 ```
 
-Replace `{json_path}` and `{html_path}` with the actual output paths from Step 3. Use absolute paths.
+Replace `{json_path}` with the absolute JSON path from Step 3. The generator writes the matching `.wireframe.html` path.
 
-**Do NOT** read the template with the Read tool or write the HTML with the Write tool. The Python script handles both file operations directly on disk.
+**Do NOT** edit generated HTML. When rendering or design inspection reveals a problem, edit JSON and regenerate the preview.
 
 ### Step 5: Output
 
-1. Write both `.wireframe.json` and `.wireframe.html` files to the output directory from Step 3
-2. Open the HTML preview in the browser: `open {path}.wireframe.html`
-3. Confirm to the user:
+1. Write `.wireframe.json` to the output directory from Step 3
+2. Generate the matching `.wireframe.html` preview with the repository generator
+3. Open the HTML preview in the browser: `agent-browser open file://{absolute_path}.wireframe.html`
+4. Confirm to the user:
    ```
    Wireframe generated:
    - JSON: {path}.wireframe.json

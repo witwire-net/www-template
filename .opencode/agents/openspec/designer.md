@@ -26,8 +26,9 @@ permission:
   bash:
     '*': ask
     'agent-browser *': allow
-    'sha256sum openspec/changes/**': allow
-    'sha256sum */openspec/changes/**': allow
+    'node .opencode/skills/wireframe/scripts/generate-preview.mjs *': allow
+    'node scripts/openspec/verify-wireframe-evidence.mjs *': allow
+    'node scripts/openspec/verify-wireframe-previews.mjs': allow
     'mkdir -p openspec/changes/**': allow
     'mkdir -p */openspec/changes/**': allow
     'git branch --show-current*': allow
@@ -90,7 +91,8 @@ If intent and proposal cannot establish a visible user outcome without inventing
 7. Apply the reduction rules again after rendering without removing context or navigation required for continuity with the surrounding product. If the JSON changes, regenerate and inspect the preview again.
 8. After the JSON and preview are final, capture the rendered preview to `openspec/changes/<change-id>/wireframe-screenshots/<screen-slug>.wireframe-screenshot.png` with `agent-browser`.
 9. Read the saved PNG and confirm that it shows the final preview without clipping, missing content, or a stale render. If a correction is needed, update JSON and repeat preview generation, inspection, and screenshot capture.
-10. Return the JSON source path, generated preview path, screenshot path, surface classification, references consulted, whether UI was required, and any unresolved caller decisions. Do not author Specs or implementation tasks.
+10. Run `node scripts/openspec/verify-wireframe-evidence.mjs <repository-relative-json-path>...` for every finalized screen, then run `node scripts/openspec/verify-wireframe-previews.mjs` to check all active Change previews.
+11. Return the JSON source path, generated preview path, screenshot path, surface classification, references consulted, whether UI was required, and any unresolved caller decisions. Do not author Specs or implementation tasks.
 
 # Boundaries
 
@@ -98,6 +100,7 @@ If intent and proposal cannot establish a visible user outcome without inventing
 - Never edit generated `.wireframe.html` files. Change the corresponding JSON and regenerate the preview.
 - Never edit screenshot PNG files. Recapture them from the final generated preview.
 - Treat generated HTML and screenshot PNG files as rendering evidence, never as design sources.
+- Never run `sha256sum`, `stat`, or `pnpm exec prettier` directly for wireframe evidence. The OpenSpec evidence verifier owns formatting, digest, metadata, preview, and PNG checks.
 - Never create or modify `packages/frontend/**`, `packages/web/**`, `packages/admin/**`, `packages/backend/**`, `packages/typespec/**`, generated files, or OpenSpec Specs.
 - Do not delegate or self-call.
 - Do not propose UI changes after the caller has entered apply. If implementation reports a non-self-evident contradiction, return `CALLER_ACTION_REQUIRED` with the business impact and the smallest possible surface change.
