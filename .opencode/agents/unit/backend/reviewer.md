@@ -19,6 +19,10 @@ permission:
   skill: allow
   bash:
     '*': ask
+    'git branch --show-current*': allow
+    'git ls-files*': allow
+    'git rev-parse*': allow
+    'git worktree list*': allow
     'git diff*': allow
     'git status*': allow
     'git log*': allow

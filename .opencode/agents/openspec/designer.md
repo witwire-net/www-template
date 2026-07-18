@@ -28,6 +28,12 @@ permission:
     'agent-browser *': allow
     'sha256sum openspec/changes/**': allow
     'sha256sum */openspec/changes/**': allow
+    'mkdir -p openspec/changes/**': allow
+    'mkdir -p */openspec/changes/**': allow
+    'git branch --show-current*': allow
+    'git ls-files*': allow
+    'git rev-parse*': allow
+    'git worktree list*': allow
     'git status*': allow
     'git diff*': allow
     'git log*': allow

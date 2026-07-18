@@ -19,6 +19,31 @@ permission:
   skill: allow
   bash:
     '*': ask
+    'agent-browser open http://www.localhost:5173*': allow
+    'agent-browser open http://localhost:5174*': allow
+    'agent-browser read http://www.localhost:5173*': allow
+    'agent-browser read http://localhost:5174*': allow
+    'agent-browser snapshot*': allow
+    'agent-browser get *': allow
+    'agent-browser is *': allow
+    'agent-browser hover *': allow
+    'agent-browser focus *': allow
+    'agent-browser scroll*': allow
+    'agent-browser wait*': allow
+    'agent-browser set viewport *': allow
+    'agent-browser set device *': allow
+    'agent-browser set media *': allow
+    'agent-browser screenshot /tmp/opencode/**': allow
+    'agent-browser console*': allow
+    'agent-browser errors*': allow
+    'agent-browser back*': allow
+    'agent-browser forward*': allow
+    'agent-browser reload*': allow
+    'agent-browser close*': allow
+    'git branch --show-current*': allow
+    'git ls-files*': allow
+    'git rev-parse*': allow
+    'git worktree list*': allow
     'git diff*': allow
     'git status*': allow
     'git log*': allow
@@ -97,6 +122,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 - If any requirement cannot be mapped to evidence, return `BLOCKED` when it affects correctness, security, data integrity, routing, permissions, user-visible behavior, API contract, or UI behavior; otherwise return `Request changes` with the missing evidence.
 - For user-visible UI or browser-behavior changes, require runtime evidence appropriate to the claim, such as agent-browser screenshot, accessibility snapshot, or documented reason runtime inspection was impossible. If runtime inspection is needed and absent, return `BLOCKED`.
 - Do not request visible controls, settings, copy, screens, versions, model names, or internal state absent from an approved `.wireframe.json`. If that source causes a serious business-value, safety, accessibility, or legal failure, return `BLOCKED` with evidence for proposal-phase escalation.
+- Use `agent-browser` only for read-only inspection of `http://www.localhost:5173` and `http://localhost:5174`; do not click controls, submit forms, or persist browser state, and save any screenshot only under `/tmp/opencode/`.
 
 ## Strict UI content checks
 
