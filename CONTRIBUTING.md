@@ -3,7 +3,7 @@
 ## 前提
 
 - Node.js 24.12+
-- pnpm 11.6.0
+- pnpm 11.16.0
 - Go 1.26.5+
 - backend 実行には `DATABASE_URL`, `VALKEY_URL`, `OPENSEARCH_URL`, `R2_ENDPOINT`, `R2_REGION`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `MAIL_FROM_ADDRESS`
 

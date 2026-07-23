@@ -8,7 +8,7 @@
     "#openspec/change-artifacts.mjs": "./scripts/openspec/change-artifacts.mjs",
     "#openspec/guard-test-fixture.mjs": "./scripts/openspec/guard-test-fixture.mjs"
   },
-  "packageManager": "pnpm@11.6.0",
+  "packageManager": "pnpm@11.16.0",
   "engines": {
     "node": ">=24.12.0"
   },

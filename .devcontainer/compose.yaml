@@ -26,7 +26,7 @@ services:
       ADMIN_CONFIG_PATH: /workspaces/www-template/.config/local.admin.toml
       NODE_ENV: development
       TOOLCHAIN_GO_VERSION: 1.26.5
-      TOOLCHAIN_PNPM_VERSION: 11.6.0
+      TOOLCHAIN_PNPM_VERSION: 11.16.0
       TOOLCHAIN_GORM_VERSION: 1.31.0
       TOOLCHAIN_GOLANG_MIGRATE_VERSION: 4.18.3
       TOOLCHAIN_OAPI_CODEGEN_VERSION: 2.4.1
