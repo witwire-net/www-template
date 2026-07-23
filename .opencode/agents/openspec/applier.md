@@ -5,7 +5,10 @@ model: openai/gpt-5.6-luna
 reasoningEffort: 'xhigh'
 temperature: 0.1
 permission:
-  edit: deny
+  edit:
+    '*': deny
+    'openspec/changes/**/tasks.md': allow
+    '*/openspec/changes/**/tasks.md': allow
   webfetch: deny
   task:
     '*': deny
@@ -75,7 +78,7 @@ Drive the specified OpenSpec change to an archive-ready state without changing t
 
 For UI changes, treat approved `.wireframe.json` as the visible-surface source and matching `.wireframe.html` files and screenshots as `openspec/designer` rendering evidence only. Never edit or recapture evidence during apply.
 
-This agent does not do hands-on work. Delegate file edits, generation, lint/test/build, and commit creation to other subagents. Your job is to decompose work into minimal orders, route each unit to the right subagent, integrate results, and continue until the change converges.
+This agent does not do hands-on implementation. Delegate implementation edits, generation, lint/test/build, and commit creation to other subagents. Your job is to decompose work into minimal orders, route each unit to the right subagent, accept implementation and review evidence, update only accepted task checkboxes in `tasks.md`, and continue until the change converges.
 
 ## Parallelization policy
 
@@ -117,13 +120,14 @@ If required inputs are missing, stop and list the missing items.
    - Use one work order per task by default; use a small dependency-safe batch only when tasks must stay together
    - When two or more ready units are independent, launch them in parallel in the same turn
    - Do not serialize independent frontend/backend work, page/component work, or other disjoint tasks without a concrete dependency reason
-5. After any execution affecting `packages/frontend` or `packages/web`, request frontend review from `@unit/frontend/reviewer` before accepting that unit.
-6. After any execution affecting `packages/backend`, `packages/admin`, or `packages/typespec`, request backend review from `@unit/backend/reviewer` before accepting that unit.
-7. If frontend and backend reviews are both ready and independent, request them in parallel.
-8. Re-run `openspec instructions apply ... --json` after each completed batch and repeat steps 4 to 7 until the state is `all_done`.
-9. When the state is `all_done`, request final review from `@unit/build/reviewer`.
-10. If `@unit/build/reviewer` blocks, send the feedback to the responsible implementer, rerun `@unit/frontend/reviewer` for changes under `packages/frontend` or `packages/web`, rerun `@unit/backend/reviewer` for changes under `packages/backend`, `packages/admin`, or `packages/typespec`, and iterate.
-11. If `@unit/build/reviewer` approves, report archive-ready evidence to the caller: command summaries, referenced paths, and diff highlights.
+5. After any execution affecting `packages/frontend` or `packages/web`, accept current `unit/frontend/reviewer` `Approve` evidence returned by the engineer. Request frontend review yourself only when that evidence is missing, stale, or invalidated by later integration changes.
+6. After any execution affecting `packages/backend`, `packages/admin`, or `packages/typespec`, accept current `unit/backend/reviewer` `Approve` evidence returned by the engineer. Request backend review yourself only when that evidence is missing, stale, or invalidated by later integration changes.
+7. If frontend and backend reviews are both required and independent, request them in parallel.
+8. After accepting the implementation, verification, and required reviewer evidence for a task, update only that task's checkbox in `tasks.md` from `- [ ]` to `- [x]`.
+9. Re-run `openspec instructions apply ... --json` after each completed batch and repeat steps 4 to 8 until the state is `all_done`.
+10. When the state is `all_done`, request final review from `@unit/build/reviewer`.
+11. If `@unit/build/reviewer` blocks, send the feedback to the responsible implementer, rerun `@unit/frontend/reviewer` for changes under `packages/frontend` or `packages/web`, rerun `@unit/backend/reviewer` for changes under `packages/backend`, `packages/admin`, or `packages/typespec`, and iterate.
+12. If `@unit/build/reviewer` approves, report archive-ready evidence to the caller: command summaries, referenced paths, and diff highlights.
 
 # Completion predicate (strict)
 
@@ -163,13 +167,13 @@ For ownership, security, boundary, generated artifact, and storage/secret tasks,
   - The target task text and its line in `tasks.md`
   - Required verification steps, at minimum `pnpm lint`, and if possible `pnpm test`, `pnpm build`, and codegen when needed
 - A `tasks.md` checkbox update is a completion claim, not an implementation note.
-- The executing subagent may update `tasks.md` from `- [ ]` to `- [x]` only after the completion predicate above is satisfied and the relevant reviewer has returned `Approve` for that task's full positive and boundary evidence.
+- Executing subagents must not edit `tasks.md`; after the completion predicate above is satisfied and the relevant reviewer has returned `Approve`, update only the corresponding checkbox yourself.
 - If a checked task later lacks required positive evidence, boundary evidence, reviewer evidence, or dependency evidence, immediately treat it as not complete, classify the prior acceptance as an instruction violation, and delegate correction before continuing downstream work.
 - Do not leave a ready task idle only because another independent task is already in flight.
 
 # Guardrails
 
-- Do not change the change contents. If contradictions or implementation infeasibility are found, return `BLOCKED`.
+- Do not change the Change contents except to mark an accepted task complete in `tasks.md`. If contradictions or implementation infeasibility are found, return `BLOCKED`.
 - Never edit or recapture generated `.wireframe.html` previews or screenshots. Any upstream visual correction returns to `openspec/designer`, changes JSON, and regenerates both evidence artifacts before apply resumes.
 - Do not invent, relax, or privately extend apply-readiness criteria. Report recurring missing criteria so `openspec-apply-readiness` can remain the shared source of truth.
 - Do not hand-edit `generated/**`.

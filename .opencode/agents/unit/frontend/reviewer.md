@@ -50,6 +50,18 @@ permission:
     'git merge-base*': allow
     'git show*': allow
     'git grep*': allow
+    'wc *': allow
+    'sort*': allow
+    'uniq*': allow
+    'comm*': allow
+    'cmp*': allow
+    'diff *': allow
+    'test *': allow
+    '[ *': allow
+    'true': allow
+    'false': allow
+    'printf *': allow
+    'pwd': allow
     'pnpm lint*': allow
     'pnpm test*': allow
     'pnpm gen*': allow
@@ -64,6 +76,21 @@ permission:
     'eslint*': deny
     'stylelint*': deny
     'pnpm*': allow
+    'pnpm add*': deny
+    'pnpm --filter * add*': deny
+    'pnpm --dir * add*': deny
+    'pnpm install*': deny
+    'pnpm --filter * install*': deny
+    'pnpm --dir * install*': deny
+    'pnpm remove*': deny
+    'pnpm --filter * remove*': deny
+    'pnpm --dir * remove*': deny
+    'pnpm update*': deny
+    'pnpm --filter * update*': deny
+    'pnpm --dir * update*': deny
+    'npm install*': deny
+    'npm uninstall*': deny
+    'npm update*': deny
     'rm *': deny
 ---
 

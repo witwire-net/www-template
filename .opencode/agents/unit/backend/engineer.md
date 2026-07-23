@@ -33,6 +33,9 @@ permission:
     'pnpm gen*': allow
     'pnpm build*': allow
     'pnpm check*': allow
+    'pnpm add*': allow
+    'pnpm --filter * add*': allow
+    'pnpm --dir * add*': allow
     'pnpm exec*': deny
     'pnpm * exec*': deny
     'go test*': deny
@@ -90,6 +93,10 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - If a required deletion or required implementation step is blocked by permissions, scope, missing inputs, or an Ask-first boundary, stop immediately and return `Status: BLOCKED` to the caller with the exact path, attempted command or edit, reason it is blocked, and the caller action needed. Do not invent a lower-quality workaround to keep progressing.
 - `Status: BLOCKED` is the correct response when you cannot safely continue; it does not require reviewer approval because no completed change is being delivered.
 - Follow all guardrails enforced by `coding-guardian`
+- When a work order explicitly authorizes a dependency addition and names both the target package and dependency, execute the addition yourself with `pnpm add`; otherwise return `Status: BLOCKED` without changing dependencies
+- Preserve `minimumReleaseAge: 4320`, never add `minimumReleaseAgeExclude`, never enable `dangerouslyAllowAllBuilds`, and change `allowBuilds` only for a package explicitly approved in the work order
+- If another ready task can modify `pnpm-lock.yaml` or `pnpm-workspace.yaml`, return `Status: BLOCKED` with the shared-file conflict so the caller serializes the dependency changes
+- Do not edit any OpenSpec `tasks.md`; `openspec/applier` owns completion bookkeeping after accepting implementation and review evidence
 - Stay within backend responsibility: `packages/backend`, `packages/typespec`, and `packages/admin`
 - Treat `packages/backend` as the Go product API, migrations, generated Go bindings consumer, backend observability, and backend security boundary owner
 - Treat `packages/typespec` as the API contract source-of-truth owner; edit source contracts only, run `pnpm gen` after contract edits, and never hand-edit generated artifacts
