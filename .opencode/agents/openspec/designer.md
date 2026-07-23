@@ -12,7 +12,7 @@ permission:
     '*/openspec/changes/**': allow
     'openspec/changes/**/*.wireframe.html': deny
     '*/openspec/changes/**/*.wireframe.html': deny
-  webfetch: deny
+  webfetch: allow
   task: deny
   read: allow
   glob: allow
