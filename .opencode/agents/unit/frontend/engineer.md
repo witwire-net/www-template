@@ -2,7 +2,7 @@
 description: Frontend implementation specialist for packages/frontend and packages/web. Loads gpt-ux, coding-guardian, orchestration-playbook, and agent-browser skills to implement, fix, investigate, and iterate until reviewer approval, then returns results to the caller.
 mode: subagent
 model: openai/gpt-5.6-luna
-reasoningEffort: 'xhigh'
+reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: allow

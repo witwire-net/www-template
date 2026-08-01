@@ -2,8 +2,8 @@
 description: Backend review subagent for packages/backend, packages/typespec, and packages/admin.
 mode: subagent
 hidden: true
-model: openai/gpt-5.6-terra
-reasoningEffort: 'xhigh'
+model: openai/gpt-5.6-luna
+reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: deny
