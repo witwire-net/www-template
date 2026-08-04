@@ -3,14 +3,56 @@ description: project orchestrator
 mode: primary
 permission:
   edit: deny
-  webfetch: deny
-  task: allow
+  'github_*': deny
+  'github_get_*': allow
+  'github_list_*': allow
+  'github_search_*': allow
+  github_issue_read: allow
+  github_pull_request_read: allow
+  github_run_secret_scanning: allow
+  'agent-browser_*': allow
+  serena_create_text_file: deny
+  serena_insert_after_symbol: deny
+  serena_insert_before_symbol: deny
+  serena_execute_shell_command: deny
+  serena_replace_content: deny
+  serena_replace_symbol_body: deny
+  serena_rename_symbol: deny
+  serena_safe_delete_symbol: deny
+  serena_write_memory: deny
+  serena_edit_memory: deny
+  serena_delete_memory: deny
+  serena_rename_memory: deny
+  serena_read_file: allow
+  serena_search_for_pattern: allow
+  webfetch: allow
+  read_mcp_resource: allow
+  skill: allow
+  task:
+    '*': deny
+    'magi': allow
+    'magi/magi-claude': allow
+    'magi/magi-gemini': allow
+    'magi/magi-gpt': allow
+    'openspec/analyzer': allow
+    'openspec/applier': allow
+    'openspec/backend/architect': allow
+    'openspec/designer': allow
+    'openspec/frontend/architect': allow
+    'openspec/proposer': allow
+    'planner': allow
+    'researcher': allow
+    'unit/backend/engineer': allow
+    'unit/backend/reviewer': allow
+    'unit/build/builder': allow
+    'unit/build/reviewer': allow
+    'unit/frontend/engineer': allow
+    'unit/frontend/reviewer': allow
   read: allow
   glob: allow
   grep: allow
   list: allow
   lsp: allow
-  skill: allow
   bash:
     '*': deny
     'cd *': allow

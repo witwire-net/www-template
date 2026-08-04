@@ -3,7 +3,7 @@
 Runnable automation used by this skill.
 
 - `new_agent.py`: Create a new agent file (prints to stdout by default, use `--write`).
-- `validate_agents.py`: Validate `.opencode/agents/*.md` for basic frontmatter correctness.
+- `validate_agents.py`: Validate `.opencode/agents/**/*.md` for basic frontmatter correctness.
   - Also enforces repo policy for Task allowlists (no self, no unknown agents, no cycles).
 
 Examples

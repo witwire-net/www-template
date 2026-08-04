@@ -5,7 +5,7 @@ This is intentionally lightweight and stdlib-only.
 
 Checks:
 
-- File name matches the recommended kebab-case: ^[a-z0-9]+(-[a-z0-9]+)*$.
+- Agent path segments match the recommended kebab-case.
 - File starts with YAML frontmatter (--- ... ---).
 - Frontmatter includes a `description:` field.
 - If `mode:` exists, it is one of: primary, subagent, all.
@@ -29,7 +29,8 @@ import sys
 from pathlib import Path
 
 
-AGENT_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+AGENT_NAME_SEGMENT = r"[a-z0-9]+(?:-[a-z0-9]+)*"
+AGENT_NAME_RE = re.compile(rf"^{AGENT_NAME_SEGMENT}(?:/{AGENT_NAME_SEGMENT})*$")
 
 
 def _strip_quotes(value: str) -> str:
@@ -137,14 +138,13 @@ def _task_allow_edges(task_rules: list[tuple[str, str]]) -> list[str]:
 
 
 def validate_agent_file(
-    path: Path, known_agents: set[str]
+    path: Path, name: str, known_agents: set[str]
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     edges: list[str] = []
 
-    name = path.stem
     if not (1 <= len(name) <= 64 and AGENT_NAME_RE.fullmatch(name)):
-        errors.append(f"invalid agent filename (recommended kebab-case): {path.name}")
+        errors.append(f"invalid agent path (recommended kebab-case): {name}")
 
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -288,20 +288,25 @@ def main() -> int:
         sys.stderr.write(f"Error: agents directory not found: {agents_dir}\n")
         return 2
 
-    agent_files = sorted(agents_dir.glob("*.md"))
+    agent_files = sorted(agents_dir.rglob("*.md"))
     if not agent_files:
         sys.stderr.write("Warning: no agents found.\n")
         return 0
 
-    known_agents = {p.stem for p in agent_files}
+    agent_names = {
+        path: path.relative_to(agents_dir).with_suffix("").as_posix()
+        for path in agent_files
+    }
+    known_agents = set(agent_names.values())
 
     all_errors: list[tuple[Path, list[str]]] = []
     task_edges: dict[str, list[str]] = {}
     for path in agent_files:
-        errs, edges = validate_agent_file(path, known_agents)
+        name = agent_names[path]
+        errs, edges = validate_agent_file(path, name, known_agents)
         if errs:
             all_errors.append((path, errs))
-        task_edges[path.stem] = edges
+        task_edges[name] = edges
 
     if all_errors:
         for path, errs in all_errors:

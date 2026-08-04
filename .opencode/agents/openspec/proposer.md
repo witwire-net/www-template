@@ -15,13 +15,12 @@ permission:
   'github_search_*': allow
   github_issue_read: allow
   github_pull_request_read: allow
-  'agent-browser_*': deny
+  github_run_secret_scanning: allow
+  'agent-browser_*': allow
   serena_create_text_file: deny
-  serena_execute_shell_command: deny
   serena_insert_after_symbol: deny
   serena_insert_before_symbol: deny
-  serena_read_file: deny
-  serena_search_for_pattern: deny
+  serena_execute_shell_command: deny
   serena_replace_content: deny
   serena_replace_symbol_body: deny
   serena_rename_symbol: deny
@@ -30,8 +29,11 @@ permission:
   serena_edit_memory: deny
   serena_delete_memory: deny
   serena_rename_memory: deny
-  webfetch: deny
-  read_mcp_resource: deny
+  serena_read_file: allow
+  serena_search_for_pattern: allow
+  webfetch: allow
+  read_mcp_resource: allow
+  skill: allow
   task:
     '*': deny
     'openspec/analyzer': allow
@@ -47,7 +49,6 @@ permission:
   grep: allow
   list: allow
   lsp: allow
-  skill: allow
   bash:
     '*': allow
     'git add*': deny
