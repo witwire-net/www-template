@@ -9,7 +9,29 @@ permission:
     '*': deny
     'openspec/changes/**/tasks.md': allow
     '*/openspec/changes/**/tasks.md': allow
+  'github_*': deny
+  'github_get_*': allow
+  'github_list_*': allow
+  'github_search_*': allow
+  github_issue_read: allow
+  github_pull_request_read: allow
+  'agent-browser_*': deny
+  serena_create_text_file: deny
+  serena_execute_shell_command: deny
+  serena_insert_after_symbol: deny
+  serena_insert_before_symbol: deny
+  serena_read_file: deny
+  serena_search_for_pattern: deny
+  serena_replace_content: deny
+  serena_replace_symbol_body: deny
+  serena_rename_symbol: deny
+  serena_safe_delete_symbol: deny
+  serena_write_memory: deny
+  serena_edit_memory: deny
+  serena_delete_memory: deny
+  serena_rename_memory: deny
   webfetch: deny
+  read_mcp_resource: deny
   task:
     '*': deny
     'unit/backend/engineer': allow
@@ -18,20 +40,16 @@ permission:
     'unit/frontend/reviewer': allow
     'unit/build/builder': allow
     'unit/build/reviewer': allow
-  read: allow
+  read:
+    '*': allow
+    '*.env': deny
+    '*.env.*': deny
+    '*.env.example': allow
   glob: allow
   grep: allow
   list: allow
   lsp: allow
-  skill:
-    '*': deny
-    'coding-guardian': allow
-    'orchestration-playbook': allow
-    'agent-browser': allow
-    'openspec-apply-change': allow
-    'openspec-apply-readiness': allow
-    'openspec-propose': allow
-    'openspec-explore': allow
+  skill: allow
   bash:
     '*': deny
     'openspec list*': allow

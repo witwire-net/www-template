@@ -7,11 +7,37 @@ reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: deny
+  'github_*': deny
+  'github_get_*': allow
+  'github_list_*': allow
+  'github_search_*': allow
+  github_issue_read: allow
+  github_pull_request_read: allow
+  'agent-browser_*': deny
+  serena_create_text_file: deny
+  serena_execute_shell_command: deny
+  serena_insert_after_symbol: deny
+  serena_insert_before_symbol: deny
+  serena_read_file: deny
+  serena_search_for_pattern: deny
+  serena_replace_content: deny
+  serena_replace_symbol_body: deny
+  serena_rename_symbol: deny
+  serena_safe_delete_symbol: deny
+  serena_write_memory: deny
+  serena_edit_memory: deny
+  serena_delete_memory: deny
+  serena_rename_memory: deny
   webfetch: deny
+  read_mcp_resource: deny
   task:
     '*': deny
     'researcher': allow
-  read: allow
+  read:
+    '*': allow
+    '*.env': deny
+    '*.env.*': deny
+    '*.env.example': allow
   glob: allow
   grep: allow
   list: allow
@@ -19,27 +45,27 @@ permission:
   skill: allow
   bash:
     '*': ask
+    'agent-browser *': allow
+    'agent-browser open*': deny
     'agent-browser open http://www.localhost:5173*': allow
     'agent-browser open http://localhost:5174*': allow
+    'agent-browser read http*': deny
     'agent-browser read http://www.localhost:5173*': allow
     'agent-browser read http://localhost:5174*': allow
-    'agent-browser snapshot*': allow
-    'agent-browser get *': allow
-    'agent-browser is *': allow
-    'agent-browser hover *': allow
-    'agent-browser focus *': allow
-    'agent-browser scroll*': allow
-    'agent-browser wait*': allow
-    'agent-browser set viewport *': allow
-    'agent-browser set device *': allow
-    'agent-browser set media *': allow
-    'agent-browser screenshot /tmp/opencode/**': allow
-    'agent-browser console*': allow
-    'agent-browser errors*': allow
-    'agent-browser back*': allow
-    'agent-browser forward*': allow
-    'agent-browser reload*': allow
-    'agent-browser close*': allow
+    'agent-browser pushstate*': deny
+    'agent-browser diff url *': deny
+    'agent-browser screenshot*': deny
+    'agent-browser screenshot */tmp/opencode/**': allow
+    'agent-browser download*': deny
+    'agent-browser download */tmp/opencode/**': allow
+    'agent-browser auth *': deny
+    'agent-browser plugin *': deny
+    'agent-browser install*': deny
+    'agent-browser upgrade*': deny
+    'agent-browser --profile *': deny
+    'agent-browser --restore*': deny
+    'agent-browser --state *': deny
+    'agent-browser --auto-connect*': deny
     'git branch --show-current*': allow
     'git ls-files*': allow
     'git rev-parse*': allow
@@ -50,23 +76,31 @@ permission:
     'git merge-base*': allow
     'git show*': allow
     'git grep*': allow
-    'wc *': allow
-    'sort*': allow
-    'uniq*': allow
-    'comm*': allow
-    'cmp*': allow
-    'diff *': allow
     'test *': allow
     '[ *': allow
     'true': allow
     'false': allow
-    'printf *': allow
     'pwd': allow
-    'pnpm lint*': allow
-    'pnpm test*': allow
-    'pnpm gen*': allow
-    'pnpm build*': allow
-    'pnpm check*': allow
+    'pnpm*': allow
+    'pnpm format*': deny
+    'pnpm format:check*': allow
+    'pnpm run format*': deny
+    'pnpm run format:check*': allow
+    'pnpm gen*': deny
+    'pnpm check:codegen*': deny
+    'pnpm deploy*': deny
+    'pnpm run deploy*': deny
+    'pnpm release:*': deny
+    'pnpm run release:*': deny
+    'pnpm changeset*': deny
+    'pnpm migrate:create*': deny
+    'pnpm migrate:up*': deny
+    'pnpm migrate:down*': deny
+    'pnpm migrate:force*': deny
+    'pnpm exec prettier --write*': deny
+    'pnpm exec eslint *--fix*': deny
+    'pnpm exec openspec new*': deny
+    'pnpm exec wrangler deploy*': deny
     'pnpm exec*': deny
     'pnpm * exec*': deny
     'vitest*': deny
@@ -75,7 +109,6 @@ permission:
     'vite build*': deny
     'eslint*': deny
     'stylelint*': deny
-    'pnpm*': allow
     'pnpm add*': deny
     'pnpm --filter * add*': deny
     'pnpm --dir * add*': deny
@@ -91,6 +124,13 @@ permission:
     'npm install*': deny
     'npm uninstall*': deny
     'npm update*': deny
+    'git add*': deny
+    'git commit*': deny
+    'git push*': deny
+    'git reset*': deny
+    'git clean*': deny
+    'git checkout*': deny
+    'git restore*': deny
     'rm *': deny
 ---
 
@@ -149,7 +189,8 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 - If any requirement cannot be mapped to evidence, return `BLOCKED` when it affects correctness, security, data integrity, routing, permissions, user-visible behavior, API contract, or UI behavior; otherwise return `Request changes` with the missing evidence.
 - For user-visible UI or browser-behavior changes, require runtime evidence appropriate to the claim, such as agent-browser screenshot, accessibility snapshot, or documented reason runtime inspection was impossible. If runtime inspection is needed and absent, return `BLOCKED`.
 - Do not request visible controls, settings, copy, screens, versions, model names, or internal state absent from an approved `.wireframe.json`. If that source causes a serious business-value, safety, accessibility, or legal failure, return `BLOCKED` with evidence for proposal-phase escalation.
-- Use `agent-browser` only for read-only inspection of `http://www.localhost:5173` and `http://localhost:5174`; do not click controls, submit forms, or persist browser state, and save any screenshot only under `/tmp/opencode/`.
+- Use `agent-browser` to exercise the repository-local frontend at `http://www.localhost:5173` or `http://localhost:5174` with local or test data when interaction evidence is needed. Open it as `agent-browser open <local-url> --session frontend-review-<change-or-review-id> --allowed-domains www.localhost,localhost,127.0.0.1`, then append the same `--session frontend-review-<change-or-review-id>` after every related browser action. You may click, type, submit, navigate, resize, and inspect browser state required by the review.
+- Never reuse a browser profile or restored authentication state, upload secrets or private data, install browser extensions or plugins, navigate to a live environment, or perform a destructive or irreversible external action. Save review screenshots and downloads only under `/tmp/opencode/`.
 
 ## Strict UI content checks
 
