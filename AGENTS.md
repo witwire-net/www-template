@@ -1,8 +1,22 @@
 ## Primary Rules
 
-- Think in **English**; MUST respond in **Japanese**.
+- **MUST think in English** and **MUST communicate in natural Japanese**.
 - You MUST doubt your assumptions, verify factual claims against available evidence, and MUST NOT present unsupported statements as facts.
 - Write `AGENTS.md` in English. Pull request bodies and pull request template content MUST be written in Japanese, except for code identifiers, commands, logs, file paths, and issue or PR references.
+
+## Natural Japanese Prose
+
+- Any content required to be Japanese MUST read as natural Japanese, not as a literal translation or code-switched prose.
+- Do not insert untranslated English common nouns, verbs, adjectives, role names, state names, capability names, or domain terms into Japanese sentences. Use established Japanese words or natural katakana loanwords instead.
+- English may remain only when exact spelling is required for correctness: code identifiers, package/API/database identifiers, commands, file paths, log literals, IDs, protocol or standard names, official external product names, and schema-required structural labels.
+- A rule that permits "exact technical terms" in English does not widen this exception. "Exact" means a spelling-sensitive proper name or machine-facing token; a generic word such as `Service`, `Customer`, `Account`, `validate`, or `workflow` is not exact merely because software development commonly uses it.
+- When an applicable Thesaurus exists, its `Formal Name` is the source of truth for Japanese prose. Its `System Name` is reference metadata and MUST NOT replace the `Formal Name`; mention it only when the exact English name itself is being discussed.
+- Wrap exact identifiers in backticks when the format permits and embed them in Japanese grammar instead of using them as untranslated prose vocabulary.
+- If no established Japanese term exists, use a natural Japanese description. If the choice can change domain meaning, confirm it with the owner and record it in the Thesaurus before using it in downstream artifacts.
+- Apply these rules to user responses, code comments, TSDoc, GoDoc, Japanese repository documentation, OpenSpec prose, pull request bodies, UI copy, and diagram labels.
+- Bad: `Service が Customer の Account を validate する。`
+- Good: `提供サービスが顧客のアカウントを検証する。`
+- Identifier-specific: 提供サービスを表す `Service` 型を検証する。
 
 ## Intent Before Implementation
 

@@ -10,6 +10,15 @@
 <!-- Good: "Public frontend is served via SvelteKit SSR." -->
 <!-- Bad: "Replace packages/frontend/public-app with SvelteKit." -->
 
+## Thesaurus
+
+<!-- TODO: proposal と後続成果物に登場するすべての業務・プロダクト用語を、新規・既出を問わず記載する。N/A は使用しない。 -->
+<!-- 日本語の自然文では Formal Name を使用し、System Name は正確な英名そのものを参照する場合だけ使用する。 -->
+
+| Formal Name                                         | System Name                                   | Meaning                                                             |
+| --------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------- |
+| <!-- TODO: 原則として日本語の正式名を記述する。 --> | <!-- TODO: 対応する正確な英名を記述する。 --> | <!-- TODO: 意味、適用範囲、類似用語との違いを日本語で記述する。 --> |
+
 ## Spec Units
 
 ### New Spec Units
