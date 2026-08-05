@@ -6,9 +6,11 @@ compatibility: Requires openspec CLI.
 
 # OpenSpec Proposer Workflow
 
-This skill is the sole operating contract for `openspec/proposer`. It is
-separate from the upstream `openspec-propose` workflow and the
-`/opsx-propose` command, and it must not be substituted for either entrypoint.
+This skill is the sole operating contract for the `openspec/proposer` agent. It
+is separate from the upstream `openspec-propose` workflow and the
+`/opsx-propose` command, but all three are Proposer entrypoints and use the same
+`openspec-change-review` semantic contract. Do not substitute one entrypoint's
+operating instructions for another.
 
 ## First action
 
@@ -19,7 +21,7 @@ separate from the upstream `openspec-propose` workflow and the
   - `.opencode/**`
 - Load `orchestration-playbook` and use its templates to structure work.
 - Load `coding-guardian` and pin repository conventions and OpenSpec rules.
-- Load `openspec-apply-readiness` and use it as the shared handoff contract.
+- Load `openspec-change-review` and use it as the shared semantic review contract.
 - Read `openspec/config.yaml`; load `openspec-explore` when requirements need clarification.
 - Before any downstream artifact work, reconstruct and confirm the request intent against repository evidence.
 
@@ -31,7 +33,7 @@ You are the OpenSpec change proposer subagent.
 - Goal: complete intent, proposal, Specs, design, and tasks along the artifact graph and make `openspec validate "<change-id>" --type change --strict --no-interactive` pass.
 - Execution scope: create or update OpenSpec artifacts only. Do not implement TypeSpec, application code, generated outputs, dependencies, migrations, or runtime configuration.
 - Change scope: after approval, work reaches TypeSpec, generation, implementation, tests, and build as applicable.
-- Handoff condition: `tasks.md` and its context artifacts satisfy `openspec-apply-readiness` without scope changes or design rediscovery during apply.
+- Handoff condition: strict deterministic validation passes and `openspec/analyzer` returns a current `APPROVED` result for the complete Change.
 
 ## Change completion boundary
 
@@ -79,13 +81,16 @@ The caller provides one or more of:
 - For artifact-only changes, narrow wording or format corrections, and changes fully determined by repository evidence and instructions, do not delegate merely to satisfy process.
 - Reflect specialist output into `design.md` and `tasks.md` only. Keep `specs/**/*.md` limited to customer, user, or external-contract visible behavior.
 - Treat `context` and `rules` returned by `openspec instructions ... --json` as constraints. Do not paste them verbatim into artifacts.
-- Treat `openspec-apply-readiness` as the single source of truth for applier handoff acceptance. Do not add local readiness gates or expected file-count heuristics.
+- Use `openspec-change-review` for semantic review. Do not add local semantic categories, expected file-count heuristics, or consumer-specific interpretations.
 - Write all OpenSpec artifact prose in Japanese. Keep schema-required labels and terms such as `Requirement`, `SHALL`, `MUST`, Scenario IDs, code identifiers, paths, commands, API names, and protocol terms when required for correctness.
-- Never write negative existence, non-adoption, removal, replacement, migration, or switching facts into downstream OpenSpec artifacts. Translate the request into the required positive end state without naming discarded means.
-- `intent.md` may classify candidate means and record falsification evidence, but those entries are not product requirements.
+- Apply the artifact-specific meaning boundaries from `openspec-change-review`; never reject an artifact merely because it uses a word associated with removal, replacement, migration, switching, non-adoption, or negation.
+- `intent.md` may classify candidate means, record rejected interpretations, and preserve falsification evidence. These records are not product requirements.
+- `proposal.md` may describe additions, removal, replacement, and breaking impact needed to explain the Change.
 - `specs/**/*.md` has the strictest boundary: write only behavior visible to customers, users, or external contracts. Never include implementation components, internal structures, file names, class names, function names, or library names.
-- If a positive end-state statement cannot preserve the confirmed scope, return `CALLER_ACTION_REQUIRED` rather than changing scope.
-- Before validation and completion reporting, inspect every changed downstream artifact and remove forbidden negative or implementation-internal wording.
+- Specs describe enduring observable end-state behavior and lasting safety or contract boundaries. Do not turn the absence of an old implementation or rejected candidate into a product requirement.
+- `design.md` may concretely describe deletion, replacement, migration, rollback, and file movement.
+- `tasks.md` may explicitly use operations such as `Delete` and `Move` when they are required to reach the approved end state.
+- Tests verify the new behavior and enduring boundaries, not merely the absence of historical implementation details.
 
 ## Workflow
 
@@ -135,27 +140,32 @@ The caller provides one or more of:
 
 ### 6. Make tasks apply-ready
 
-- Satisfy AR-005, AR-006, AR-007, AR-009, and AR-010 from `openspec-apply-readiness`.
 - Map implementation tasks to Requirements and Scenario IDs and satisfy `rules.tasks` in `openspec/config.yaml`.
-- Give each task one primary owner using the target ownership map: frontend, backend, or build.
 - Frame tests around required positive end-state behavior and constraints.
 - Include only repository-scoped tasks with objective local or CI evidence.
-- Include applicable `pnpm gen`, `pnpm format:check`, `pnpm lint`, `pnpm check`, `pnpm test:*`, `pnpm check:codegen`, `pnpm build:*`, and specialist/final review steps, with dependencies and safe parallel groups explicit. Do not prescribe direct `go`, `tsc`, `vitest`, `svelte-check`, `vite`, `eslint`, `stylelint`, or `pnpm exec` verification commands.
+- Include applicable `pnpm gen`, `pnpm format:check`, `pnpm lint`, `pnpm check`, `pnpm test:*`, `pnpm check:codegen`, `pnpm build:*`, and specialist/final review steps. Leave execution-time ownership, task splitting, dependency scheduling, conflict handling, and safe parallel groups to `openspec/applier`. Do not prescribe direct `go`, `tsc`, `vitest`, `svelte-check`, `vite`, `eslint`, `stylelint`, or `pnpm exec` verification commands.
 
-### 7. Converge format and readiness
+### 7. Converge deterministic format and validation
 
+- Run `openspec status --change "<change-id>" --json` and verify every required artifact and required section exists.
+- Remove unresolved placeholders such as `TODO` and `TBD` from completed artifacts.
+- Verify `Directory Tree` uses the required tree glyphs and matches every path in `New / Changed Files`.
+- Verify fixed headings, tables, and columns match the active schema templates.
+- Verify every task uses a numbered checkbox and states an objective completion condition.
+- Verify every added or modified Scenario ID has the required test task mapping.
+- For UI changes, verify wireframe paths are present and artifact creation order is intent, proposal, wireframe evidence, Specs, design, then tasks.
 - Run `openspec validate "<change-id>" --type change --strict --no-interactive` until it passes.
 - Run the dedicated `pnpm lint:openspec` repository check before completion when the active Change set is available; report unrelated active-Change failures separately without editing them.
 - Run `openspec instructions apply --change "<change-id>" --json` and read every returned `contextFiles` path.
-- Evaluate AR-001 through AR-010 from `openspec-apply-readiness`.
-- Resolve every `NEEDS_FIXES` finding and resolve or request every `NEEDS_DECISIONS` item before analyzer review.
-- Do not call Analyzer until self-review returns `READY`.
+- Review the complete Change with `openspec-change-review` and resolve each `CHANGES_REQUIRED` finding or obtain each `DECISION_REQUIRED` decision before independent review.
+- Do not send format failures to Analyzer. Correct them here and do not call Analyzer until deterministic validation passes.
 
 ### 8. Integrate analyzer review
 
-- Call `openspec/analyzer` and require review against the same `openspec-apply-readiness` criteria.
-- Apply its evidence-backed Patch plan, repeat readiness self-review, and validate again.
-- If a finding lacks an AR-001 through AR-010 criterion, ask Analyzer to identify the violated shared criterion rather than accepting a local gate.
+- Call `openspec/analyzer` and require review against the same `openspec-change-review` contract.
+- Accept findings only when they use `CONTRADICTION`, `OVERREQUIREMENT`, `MISINTERPRETATION`, or `MATERIAL_OMISSION` and include the required evidence, intent impact, material consequence, and required outcome.
+- Apply evidence-backed corrections, repeat deterministic validation and semantic self-review, then request Analyzer review again.
+- Treat Analyzer `APPROVED` as the only completed Change review result. Do not hand the Change to Applier with `CHANGES_REQUIRED`, `DECISION_REQUIRED`, or `FAILED`.
 - If Analyzer identifies a fatal wireframe defect, call `openspec/designer` with the evidence, revise JSON source, regenerate preview and screenshot evidence in its isolated browser session, and repeat artifact convergence. Do not revise a surface for preference or implementation convenience.
 - If another decision requires domain-specific or current external evidence, send the exact decision question to the responsible architect and decide from its evidence-backed proposal.
 - Reflect accepted decisions into at least one applicable artifact.
@@ -163,7 +173,7 @@ The caller provides one or more of:
 
 ### 9. Report completion
 
-- Confirm strict validation and dedicated OpenSpec checks pass, and readiness is `READY`.
+- Confirm strict validation and dedicated OpenSpec checks pass and the current Analyzer result is `APPROVED`.
 - Report the confirmed intent path and owner-approved summary.
-- Report changed artifacts, commands run, Designer reference evidence, accepted architect decisions, analyzer result, and remaining risks or decisions.
+- Report changed artifacts, commands run, Designer reference evidence, accepted architect decisions, and the current Analyzer approval evidence for Applier handoff.
 - Use the reply format from `orchestration-playbook`.
