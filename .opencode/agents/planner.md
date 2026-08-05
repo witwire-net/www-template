@@ -39,17 +39,109 @@ permission:
   list: allow
   lsp: allow
   bash:
-    '*': ask
-    'git branch --show-current*': allow
-    'git ls-files*': allow
-    'git rev-parse*': allow
-    'git worktree list*': allow
-    'git diff*': allow
-    'git status*': allow
-    'git log*': allow
-    'git show*': allow
-    'git grep*': allow
+    '*': allow
     'rm *': deny
+    'sudo *': deny
+    'doas *': deny
+    'dd *': deny
+    'mkfs*': deny
+    'shred *': deny
+    'truncate *': deny
+    'wipefs *': deny
+    'fdisk *': deny
+    'parted *': deny
+    'shutdown*': deny
+    'reboot*': deny
+    'poweroff*': deny
+    'halt*': deny
+    'systemctl poweroff*': deny
+    'systemctl reboot*': deny
+    'systemctl halt*': deny
+    'git reset --hard*': deny
+    'git clean *': deny
+    'git checkout -- *': deny
+    'git restore *': deny
+    'git push*': deny
+    'git -C * push*': deny
+    'git branch -D*': deny
+    'git worktree remove*': deny
+    'git worktree prune*': deny
+    'pnpm deploy*': deny
+    'pnpm run deploy*': deny
+    'pnpm publish*': deny
+    'pnpm login*': deny
+    'pnpm logout*': deny
+    'pnpm changeset publish*': deny
+    'pnpm exec changeset publish*': deny
+    'pnpm release:*': deny
+    'pnpm run release:*': deny
+    'pnpm migrate:apply*': deny
+    'pnpm exec wrangler deploy*': deny
+    'pnpm exec wrangler d1 migrations apply*': deny
+    'npx wrangler deploy*': deny
+    'wrangler deploy*': deny
+    'wrangler d1 migrations apply*': deny
+    'pnpm exec wrangler *delete*': deny
+    'npx wrangler *delete*': deny
+    'wrangler *delete*': deny
+    'pnpm exec wrangler secret *': deny
+    'npx wrangler secret *': deny
+    'wrangler secret *': deny
+    'npm publish*': deny
+    'npm login*': deny
+    'npm logout*': deny
+    'yarn npm publish*': deny
+    'bun publish*': deny
+    'docker push*': deny
+    'docker login*': deny
+    'docker logout*': deny
+    'docker volume rm*': deny
+    'docker system prune*': deny
+    'docker compose * down *-v*': deny
+    'terraform apply*': deny
+    'terraform destroy*': deny
+    'kubectl apply*': deny
+    'kubectl delete*': deny
+    'gh pr create*': deny
+    'gh pr merge*': deny
+    'gh pr close*': deny
+    'gh pr edit*': deny
+    'gh issue create*': deny
+    'gh issue close*': deny
+    'gh issue edit*': deny
+    'gh repo create*': deny
+    'gh repo fork*': deny
+    'gh release create*': deny
+    'gh release delete*': deny
+    'gh release edit*': deny
+    'gh release upload*': deny
+    'gh repo delete*': deny
+    'gh workflow run*': deny
+    'gh auth login*': deny
+    'gh auth logout*': deny
+    'gh auth refresh*': deny
+    'gh auth setup-git*': deny
+    'gh auth switch*': deny
+    'gh secret *': deny
+    'gh variable *': deny
+    'gh api *--method POST*': deny
+    'gh api *--method PATCH*': deny
+    'gh api *--method PUT*': deny
+    'gh api *--method DELETE*': deny
+    'gh api *-X POST*': deny
+    'gh api *-X PATCH*': deny
+    'gh api *-X PUT*': deny
+    'gh api *-X DELETE*': deny
+    'wrangler login*': deny
+    'wrangler logout*': deny
+    'pnpm exec wrangler login*': deny
+    'pnpm exec wrangler logout*': deny
+    'npx wrangler login*': deny
+    'npx wrangler logout*': deny
+    'agent-browser auth *': deny
+    'agent-browser --profile *': deny
+    'agent-browser --restore*': deny
+    'agent-browser --state *': deny
 ---
 
 # Planner subagent

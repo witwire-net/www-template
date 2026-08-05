@@ -20,6 +20,8 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
+from bash_policy import default_bash_permission
+
 
 AGENT_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
@@ -114,13 +116,17 @@ def permission_preset(name: str) -> Any:
     if name == "none":
         return None
     if name == "unrestricted":
-        # Shorthand supported by OpenCode.
-        return "allow"
+        return {
+            "edit": "allow",
+            "bash": default_bash_permission(),
+            "webfetch": "allow",
+            "task": "deny",
+        }
     if name == "readonly-subagent":
         return {
             "edit": "deny",
-            "bash": "deny",
-            "webfetch": "deny",
+            "bash": default_bash_permission(),
+            "webfetch": "allow",
             "task": "deny",
             "read": "allow",
             "glob": "allow",
@@ -131,53 +137,26 @@ def permission_preset(name: str) -> Any:
     if name == "review-subagent":
         return {
             "edit": "deny",
-            "webfetch": "deny",
+            "webfetch": "allow",
             "task": "deny",
             "read": "allow",
             "glob": "allow",
             "grep": "allow",
             "list": "allow",
             "lsp": "allow",
-            "bash": {
-                "*": "ask",
-                "git branch --show-current*": "allow",
-                "git ls-files*": "allow",
-                "git rev-parse*": "allow",
-                "git worktree list*": "allow",
-                "git diff*": "allow",
-                "git status*": "allow",
-                "git log*": "allow",
-                "git show*": "allow",
-                "git grep*": "allow",
-                "rm *": "deny",
-            },
+            "bash": default_bash_permission(),
         }
     if name == "implementer-subagent":
         return {
             "edit": "allow",
-            "webfetch": "deny",
+            "webfetch": "allow",
             "task": "deny",
             "read": "allow",
             "glob": "allow",
             "grep": "allow",
             "list": "allow",
             "lsp": "allow",
-            "bash": {
-                "*": "allow",
-                "git status*": "allow",
-                "git diff*": "allow",
-                "git log*": "allow",
-                "pnpm lint*": "allow",
-                "pnpm test*": "allow",
-                "pnpm gen*": "allow",
-                "pnpm build*": "allow",
-                "go test*": "allow",
-                "go vet*": "allow",
-                "git add*": "deny",
-                "git commit*": "deny",
-                "rm *": "deny",
-                "git push*": "deny",
-            },
+            "bash": default_bash_permission(),
         }
     raise ValueError(f"Unknown permission preset: {name}")
 

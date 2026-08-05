@@ -19,6 +19,7 @@ Repo policy checks (to reduce unexpected agents / infinite call loops):
   - Must not allow self
   - Allowed names must exist under `.opencode/agents/`
 - Detect cycles in Task allowlists across agents.
+- Require Bash to allow by default and deny only dangerous operations.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+from bash_policy import DANGEROUS_BASH_PATTERNS, SAFE_DEVELOPMENT_PREFIXES
 
 
 AGENT_NAME_SEGMENT = r"[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -137,6 +140,76 @@ def _task_allow_edges(task_rules: list[tuple[str, str]]) -> list[str]:
     return out
 
 
+def _validate_bash_policy(perm_lines: list[str]) -> list[str]:
+    """通常の開発コマンドを許可し、実害のある操作だけを拒否する。"""
+
+    errors: list[str] = []
+    bash_scalar: str | None = None
+    bash_rules: list[tuple[str, str]] | None = None
+    for index, line in enumerate(perm_lines):
+        if not line.startswith("  bash:"):
+            continue
+        rest = line.split(":", 1)[1].strip()
+        if rest:
+            bash_scalar = _strip_quotes(rest)
+            break
+        bash_rules = []
+        for nested in perm_lines[index + 1 :]:
+            if not nested.strip():
+                continue
+            if not nested.startswith("    "):
+                break
+            entry = nested.strip()
+            if ":" not in entry:
+                continue
+            if entry[0] in {'"', "'"}:
+                quote = entry[0]
+                closing_quote = entry.find(quote, 1)
+                if closing_quote < 0:
+                    continue
+                key_raw = entry[: closing_quote + 1]
+                remainder = entry[closing_quote + 1 :].lstrip()
+                if not remainder.startswith(":"):
+                    continue
+                value_raw = remainder[1:]
+            else:
+                key_raw, value_raw = entry.split(":", 1)
+            bash_rules.append(
+                (_strip_quotes(key_raw.strip()), _strip_quotes(value_raw.strip()))
+            )
+        break
+
+    if bash_scalar is not None:
+        return ["repo policy: permission.bash must be a default-allow mapping"]
+    if bash_rules is None:
+        return ["repo policy: permission.bash must be explicitly declared"]
+    if not bash_rules:
+        return ["repo policy: permission.bash mapping must not be empty"]
+
+    first_key, first_value = bash_rules[0]
+    if not (first_key == "*" and first_value == "allow"):
+        errors.append('repo policy: permission.bash first rule must be "*": allow')
+    for key, value in bash_rules:
+        if value not in {"allow", "deny"}:
+            errors.append(
+                f"repo policy: invalid permission.bash value: {value} (key: {key})"
+            )
+        if value == "deny" and any(
+            key.startswith(prefix) for prefix in SAFE_DEVELOPMENT_PREFIXES
+        ):
+            errors.append(
+                f"repo policy: safe development command must not be denied: {key}"
+            )
+
+    denied = {key for key, value in bash_rules if value == "deny"}
+    for required in DANGEROUS_BASH_PATTERNS:
+        if required not in denied:
+            errors.append(
+                f"repo policy: permission.bash missing dangerous-command deny: {required}"
+            )
+    return errors
+
+
 def validate_agent_file(
     path: Path, name: str, known_agents: set[str]
 ) -> tuple[list[str], list[str]]:
@@ -188,6 +261,8 @@ def validate_agent_file(
 
     if perm_lines is None:
         return errors, []
+
+    errors.extend(_validate_bash_policy(perm_lines))
 
     task_scalar, task_rules = _extract_permission_task_rules(perm_lines)
     if task_scalar is not None:

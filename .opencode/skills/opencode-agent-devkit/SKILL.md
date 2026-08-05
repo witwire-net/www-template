@@ -75,10 +75,10 @@ Recommendation:
 3. Generate agent file
 
 - Use YAML `permission:` (not deprecated `tools:` booleans).
-- Keep permissions least-privilege by default.
+- Allow capabilities by default. Deny only destructive, remote-writing, production, publishing, credential, and operating-system operations.
 - For object-style permissions (e.g. `permission.bash`), rules are evaluated by wildcard match with the last matching rule winning. Put `"*"` first, and put specific deny/allow exceptions after it.
 - For Task delegation allowlists (`permission.task`), also start with `"*": deny`, then allow only explicit subagent names. Do not allow the agent to call itself.
-- If using `bash` allowlists, always deny destructive patterns like `rm *`.
+- Every `permission.bash` mapping starts with `"*": allow`; add only the shared dangerous-operation denylist after it.
 
 4. Report
 
@@ -90,79 +90,22 @@ These are suggested starting points. Customize as needed.
 
 Note: `lsp` is experimental and only available when `OPENCODE_EXPERIMENTAL_LSP_TOOL=true` (or `OPENCODE_EXPERIMENTAL=true`).
 
-### Preset: readonly-subagent
+### Permission presets
 
-```yaml
-permission:
-  edit: deny
-  bash: deny
-  webfetch: deny
-  task: deny
-  read: allow
-  glob: allow
-  grep: allow
-  list: allow
-  lsp: allow
-```
+Generate presets with `scripts/new_agent.py`; do not duplicate the Bash denylist
+in documentation or handwritten templates. The shared source of truth is
+`scripts/bash_policy.py`: Bash is allowed by default, and only destructive,
+remote-writing, production, publishing, credential, and operating-system
+operations are denied.
 
-### Preset: review-subagent
-
-```yaml
-permission:
-  edit: deny
-  webfetch: deny
-  task: deny
-  read: allow
-  glob: allow
-  grep: allow
-  list: allow
-  lsp: allow
-  bash:
-    '*': ask
-    'git branch --show-current*': allow
-    'git ls-files*': allow
-    'git rev-parse*': allow
-    'git worktree list*': allow
-    'git diff*': allow
-    'git status*': allow
-    'git log*': allow
-    'git show*': allow
-    'git grep*': allow
-    'rm *': deny
-```
-
-### Preset: implementer-subagent
-
-```yaml
-permission:
-  edit: allow
-  webfetch: deny
-  task: deny
-  read: allow
-  glob: allow
-  grep: allow
-  list: allow
-  lsp: allow
-  bash:
-    '*': allow
-    'git add*': deny
-    'git commit*': deny
-    'git status*': allow
-    'git diff*': allow
-    'git log*': allow
-    'pnpm lint*': allow
-    'pnpm test*': allow
-    'pnpm gen*': allow
-    'pnpm build*': allow
-    'go test*': allow
-    'go vet*': allow
-    'rm *': deny
-    'git push*': deny
-```
+- `readonly-subagent`: denies edits and Task delegation.
+- `review-subagent`: denies edits and Task delegation.
+- `implementer-subagent`: allows edits and denies Task delegation.
+- All three presets allow read, search, LSP, Skill, Web fetch, and safe Bash operations.
 
 ## Guardrails
 
-- If you allow all bash (`"*": allow`), still deny destructive commands (e.g. `rm *`, `git push*`, `git commit*`, `git add*`) and keep the rest least-privilege where possible.
+- Bash is default-allow. Deny only the shared dangerous-operation list; do not deny format, lint, test, build, codegen, dependency, or recoverable local Git commands.
 - If you enable Task delegation, use an allowlist-style `permission.task` (start with `"*": deny`, then allow only explicit subagent names). Never allow the agent to invoke itself, and avoid permitting other delegators to reduce the risk of infinite call loops.
 - Avoid writing outside the project unless the user explicitly chooses global/custom paths.
 - Never embed secrets in prompts.

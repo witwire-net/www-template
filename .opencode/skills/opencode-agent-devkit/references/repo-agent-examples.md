@@ -20,6 +20,6 @@ Useful examples:
 Patterns to copy:
 
 - Keep `description` short and specific (it is used for agent selection).
-- Use least-privilege `permission` and deny destructive commands (e.g. `rm *`).
+- Allow ordinary capabilities and deny only destructive or external-write operations (e.g. `rm *`, `git push*`).
 - If enabling Task, use allowlist-style `permission.task` (`"*": deny` first) and never allow self.
 - Use a structured prompt body: First action -> Mission -> Inputs -> Protocol -> Output format.

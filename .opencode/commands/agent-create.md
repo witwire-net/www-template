@@ -52,13 +52,13 @@ Minimum questions:
 Minimum custom fields:
 
 - `edit`: allow/ask/deny
-- `bash` policy: deny / ask-all / allow-all / safe-allowlist / custom-patterns
+- `bash` policy: default-allow-with-dangerous-denylist / custom-patterns
 - `webfetch`: allow/ask/deny
 - `task` delegation: deny / allow(allowlist) / ask(allowlist)
 - `lsp`: allow/ask/deny
 - `skill`: deny-all / allow-all / allowlist(coding-guardian) / custom
 
-If `bash` is `custom-patterns`, ask the user to paste a YAML object that will be used under `permission.bash`.
+Bash defaults to allow. If `bash` is `custom-patterns`, ask for additional dangerous-operation denies; never generate default-deny or `ask` rules for ordinary development commands.
 
 If `task` is not `deny`, also ask:
 
