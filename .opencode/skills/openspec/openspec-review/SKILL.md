@@ -14,9 +14,9 @@ defines the owner-confirmed desired state without turning implementation means
 into product requirements, contradictions, added requirements,
 misinterpretation, or material omissions.
 
-It is not an apply preflight. `openspec/applier` consumes an approved handoff
-and owns task routing, runtime dependency analysis, safe parallelism, and
-implementation review.
+It is not an apply preflight. `openspec/applier` reads the current Change
+artifacts and owns task routing, runtime dependency analysis, safe parallelism,
+and implementation review.
 
 ## Source precedence
 
