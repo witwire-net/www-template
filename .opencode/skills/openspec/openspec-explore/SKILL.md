@@ -6,12 +6,12 @@ compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: '1.0'
-  generatedBy: '1.3.1'
+  generatedBy: '1.4.1'
 ---
 
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
-**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY create OpenSpec artifacts (proposals, designs, specs) if the user asks—that's capturing thinking, not implementing.
+**IMPORTANT: Explore mode is for thinking, not writing artifacts or implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or create or edit OpenSpec artifacts. When the user wants to preserve the result, return an Intent Handoff for `/opsx-propose` or `openspec/proposer`; only Proposer may create or revise Change artifacts after owner confirmation.
 
 **This is a stance, not a workflow.** There are no fixed steps, no required sequence, no mandatory outputs. You're a thinking partner helping the user explore.
 
@@ -105,37 +105,43 @@ Think freely. When insights crystallize, you might offer:
 - "This feels solid enough to start a change. Want me to create a proposal?"
 - Or keep exploring - no pressure to formalize
 
+Before handing an idea to proposal work, summarize an Intent Candidate containing the actor, situation, problem, desired outcomes, outcome constraints, required means, candidate means, priority, repository evidence, assumptions, falsification check, invariants, boundaries, and observable success. Ask the owner to confirm or correct it. Exploration may discover intent, but it MUST NOT silently convert an unconfirmed interpretation into a Change. A required or candidate means remains a design input and MUST NOT become a Requirement or Scenario.
+
 ### When a change exists
 
 If the user mentions a change or you detect one is relevant:
 
-1. **Read existing artifacts for context**
-   - `openspec/changes/<name>/proposal.md`
-   - `openspec/changes/<name>/design.md`
-   - `openspec/changes/<name>/tasks.md`
-   - etc.
+1. **Resolve and read existing artifacts for context**
+   - Run `openspec status --change "<name>" --json`.
+   - Use `changeRoot`, `artifactPaths`, and `actionContext` from the status JSON.
+   - Read existing files from `artifactPaths.<artifact>.existingOutputPaths`.
 
 2. **Reference them naturally in conversation**
    - "Your design mentions using Redis, but we just realized SQLite fits better..."
    - "The proposal scopes this to premium users, but we're now thinking everyone..."
 
-3. **Offer to capture when decisions are made**
+3. **Offer to include decisions in the Intent Handoff**
 
-   | Insight Type               | Where to Capture             |
-   | -------------------------- | ---------------------------- |
-   | New requirement discovered | `specs/<capability>/spec.md` |
-   | Requirement changed        | `specs/<capability>/spec.md` |
-   | Design decision made       | `design.md`                  |
-   | Scope changed              | `proposal.md`                |
-   | New work identified        | `tasks.md`                   |
-   | Assumption invalidated     | Relevant artifact            |
+   Separate desired outcomes and outcome constraints from required and candidate
+   means before choosing an artifact. A means remains a design input even when
+   the owner mandates it; never write it into Specs.
+
+   | Insight Type                                  | Where Proposer will route it after confirmation |
+   | --------------------------------------------- | ----------------------------------------------- |
+   | Desired outcome or outcome constraint changed | Intent, then Specs                              |
+   | Required means identified                     | Design constraint and applicable tasks          |
+   | Candidate means identified                    | Design option                                   |
+   | Design decision made                          | Design                                          |
+   | Scope changed                                 | Proposal                                        |
+   | New work identified                           | Tasks                                           |
+   | Assumption invalidated                        | Relevant artifact                               |
 
    Example offers:
-   - "That's a design decision. Capture it in design.md?"
-   - "This is a new requirement. Add it to specs?"
-   - "This changes scope. Update the proposal?"
+   - "That's a design decision. Include it in the handoff?"
+   - "This changes the desired outcome. Reconfirm it in the handoff before Proposer revises Specs?"
+   - "This changes scope. Include it in the handoff?"
 
-4. **The user decides** - Offer and move on. Don't pressure. Don't auto-capture.
+4. **The user decides** - Offer and move on. Don't pressure and don't edit artifacts.
 
 ---
 
@@ -263,7 +269,7 @@ You: That changes everything.
 There's no required ending. Discovery might:
 
 - **Flow into a proposal**: "Ready to start? I can create a change proposal."
-- **Result in artifact updates**: "Updated design.md with these decisions"
+- **Result in an Intent Handoff**: "Prepared the confirmed decisions for Proposer"
 - **Just provide clarity**: User has what they need, moves on
 - **Continue later**: "We can pick this up anytime"
 
@@ -285,11 +291,13 @@ When it feels like things are crystallizing, you might summarize:
 
 But this summary is optional. Sometimes the thinking IS the value.
 
+When the user wants to proceed to a Change, the summary is no longer optional: return a confirmed Intent Handoff with the exact owner-approved statement and confirmation response so `/opsx-propose` or `openspec/proposer` can create `intent.md` without asking the same question again.
+
 ---
 
 ## Guardrails
 
-- **Don't implement** - Never write code or implement features. Creating OpenSpec artifacts is fine, writing application code is not.
+- **Don't write artifacts or implement** - Never create or edit OpenSpec artifacts or application code. Hand confirmed results to Proposer.
 - **Don't fake understanding** - If something is unclear, dig deeper
 - **Don't rush** - Discovery is thinking time, not task time
 - **Don't force structure** - Let patterns emerge naturally

@@ -19,7 +19,9 @@ context: |
   Intent confirmation boundary:
   - Treat the request as evidence of intent, not as an implementation-ready specification.
   - Every Change MUST begin with a confirmed `intent.md` before proposal, specs, design, or tasks are authored.
-  - Classify solution-shaped terms as a required outcome, a non-negotiable constraint, or a candidate means. Familiarity or common example code is not evidence that a candidate means fits this repository.
+  - Classify solution-shaped terms as a desired outcome, an outcome constraint, a required means, or a candidate means. Familiarity or common example code is not evidence that a candidate means fits this repository.
+  - Owner confirmation may make a candidate means binding for design, but MUST NOT turn a technical means into an outcome, product requirement, Requirement, or Scenario.
+  - Specs define how the product or externally owned contract must be, independently of how the repository achieves that state. Required means belong in design and tasks; candidate means remain design options. Neither belongs in Specs.
   - Ground the interpretation in repository evidence, separate observations from inferences and assumptions, and check for evidence that would invalidate the interpretation.
   - The owner MUST explicitly confirm the reconstructed intent. Downstream artifacts preserve that confirmed intent and MUST NOT reinterpret it.
 
@@ -45,7 +47,7 @@ context: |
   Note on Spec Units:
   - Some schemas in this repo (e.g., new-feature, and future fix-feature/change-feature) use Spec Units:
     - Spec Unit = <capability>
-    - <capability>: kebab-case enduring capability/responsibility name (e.g., user-mgmt)
+    - <capability>: kebab-case enduring product capability or external-contract area (e.g., user-mgmt)
     - Change spec path: openspec/changes/<change>/specs/<capability>/spec.md
     - Main spec path: openspec/specs/<capability>/spec.md
 
@@ -55,6 +57,9 @@ rules:
     - Cite repository evidence and separate observed facts, inferences, assumptions, and unresolved decisions.
     - Do not leave decisions that can change customer-visible behavior, contracts, architecture, security, data, dependencies, or scope unresolved in a confirmed intent.
   specs:
+    - Every Requirement and Scenario MUST define a desired end state, behavior, or outcome constraint independently of implementation means.
+    - A required or candidate means MUST NOT become a Requirement or Scenario. Record a required means as a design constraint and a candidate means only as a design option.
+    - Design decisions, tasks, tests, implementation necessity, and references created by the same Change MUST NOT be used to justify adding a Requirement or Scenario.
     - Every Scenario heading MUST include a Scenario ID suffix in parentheses.
     - Scenario IDs MUST use the uppercased Spec Unit prefix (e.g., USER-MGMT-S001).
     - Prefer Given/When/Then bullets. Keep scenarios testable and observable.

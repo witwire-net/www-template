@@ -22,7 +22,8 @@
 
 - Treat the user's wording as evidence of intent, not automatically as an implementation-ready specification.
 - Before selecting a solution, identify the customer outcome and verify the relevant repository facts and constraints.
-- Classify solution-shaped terms as a required outcome, a non-negotiable constraint, or a candidate means. Do not promote candidate means into requirements without evidence or confirmation.
+- Classify solution-shaped terms as a desired outcome, an outcome constraint, a required means, or a candidate means.
+- Confirmation can make a candidate means binding for design, but it never turns a means into an outcome. Only desired outcomes and outcome constraints may become product requirements or OpenSpec Specs; required means remain design constraints.
 - Separate observations from inferences and assumptions. Familiarity, common practice, and readily available example code are not evidence that a solution fits this repository.
 - Ask the user only when unresolved ambiguity could materially change user-visible behavior, external contracts, architecture, security, data, dependencies, or scope.
 - When a workflow provides confirmed intent or an approved specification, preserve that boundary and choose implementation details within it unless contradictory evidence requires escalation.

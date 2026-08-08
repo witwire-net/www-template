@@ -18,7 +18,7 @@ artifacts:
       Confirmation gate:
       - Treat the caller's wording as evidence of intent, not as an implementation-ready specification.
       - Inspect the relevant repository state before selecting an interpretation.
-      - Classify solution-shaped terms as a required outcome, a non-negotiable constraint, or a candidate means.
+      - Classify solution-shaped terms as a desired outcome, an outcome constraint, a required means, or a candidate means.
       - Familiarity, common practice, searchable examples, or an existing implementation pattern are not evidence that a candidate means fits this repository.
       - Separate observed facts, inferences, assumptions, and unresolved decisions.
       - Look for repository evidence that would invalidate the selected interpretation or support a materially different interpretation.
@@ -29,8 +29,9 @@ artifacts:
       Boundary rules:
       - intent.md defines the customer/owner outcome, confirmed constraints, relevant repository evidence, and observable success.
       - intent.md MUST NOT contain implementation tasks, file edit plans, dependency ordering, or detailed technical design.
-      - Candidate means remain candidates unless the owner confirms them as required outcomes or non-negotiable constraints.
-      - Do not create proposal, specs, design, or tasks before this artifact is confirmed.
+      - Owner confirmation may make a candidate means a required means, but it never turns a means into a desired outcome or outcome constraint.
+      - Required means constrain design and tasks; they MUST NOT become product requirements, Spec Units, Requirements, or Scenarios.
+      - Do not create proposal, wireframe, specs, design, or tasks before this artifact is confirmed.
     requires: []
 
   - id: proposal
@@ -47,11 +48,11 @@ artifacts:
       Placeholder rule:
       - Use `<!-- TODO: 日本語で何を書くか -->` for placeholders.
 
-      This workflow uses fixed-granularity **Spec Units** for enduring capabilities and responsibility areas.
+      This workflow uses fixed-granularity **Spec Units** for enduring product capabilities and external-contract areas.
 
       Spec Unit rules:
       - Spec Unit = `<capability>`
-      - `<capability>`: kebab-case enduring capability/responsibility name (e.g., `user-mgmt`, `billing`, `order-checkout`)
+      - `<capability>`: kebab-case enduring product capability or external-contract area (e.g., `user-mgmt`, `billing`, `order-checkout`)
       - Delta spec file path (within the change): `specs/<capability>/spec.md`
       - Main spec file path (source of truth after archiving/sync): `openspec/specs/<capability>/spec.md`
 
@@ -75,12 +76,12 @@ artifacts:
       - The Spec Units section is the contract between proposal and specs.
       - Every Spec Unit that will be created or modified MUST be listed here.
       - Each listed Spec Unit MUST have a corresponding delta spec file in `specs/<capability>/spec.md`.
-      - Spec Unit names MUST describe enduring system capabilities or responsibility areas, not the current change activity.
+      - Spec Unit names MUST describe enduring product capabilities or external-contract areas, not implementation responsibilities or the current change activity.
       - Avoid change-oriented names such as `setup-*`, `migrate-*`, `rename-*`, `cleanup-*`, `replace-*`, `refactor-*`, or names copied directly from the change id unless they also describe a lasting product capability.
       - For each Spec Unit entry, include:
         - a 1-line scope summary (what this Spec Unit covers)
         - whether it is New or Modified
-        - any cross-cutting concerns (security/migration/performance) if relevant
+        - any cross-cutting outcome or external-contract constraints if relevant
 
       What Changes section requirements:
       - Be explicit and user-facing.
@@ -105,7 +106,7 @@ artifacts:
       - Read the confirmed intent.md before authoring this artifact.
       - Do not proceed unless both `Intent-Status` and `Owner-Confirmation` are `CONFIRMED`.
       - Derive the Why, What Changes, Thesaurus, affected Spec Units, and Impact from the confirmed outcome, constraints, repository evidence, and observable success.
-      - Do not promote a candidate means from intent.md into product scope unless it was confirmed as a required outcome or non-negotiable constraint.
+      - A confirmed desired outcome or outcome constraint may define product scope. A required means may be recorded as a design constraint or impact, and a candidate means may be recorded as a design option, but neither may define a Spec Unit or product requirement.
       - proposal.md explains why the change is needed, defines its canonical business and product vocabulary, and identifies which lasting Spec Units are affected.
       - proposal.md MUST NOT contain implementation steps, migration task lists, file-by-file edit plans, dependency ordering, or release checklists.
       - When the change needs a user-visible UI, proposal completion is followed by an `openspec/designer` wireframe JSON, generated preview, and screenshot evidence phase before Specs are authored. The proposal states the user outcome but MUST NOT prescribe UI controls, settings, internal concepts, or visual structure.
@@ -153,12 +154,13 @@ artifacts:
       - Each requirement MUST include a **Customer Context** section explaining the customer pain/background that motivates it in Japanese.
       - Each requirement MUST include normative statements using SHALL or MUST (avoid should/may); the surrounding sentence MUST be Japanese unless an exact identifier is needed.
       - Each requirement MUST include at least one scenario.
-      - Requirements define enduring system behavior/constraints, not the work performed in this change.
+      - Requirements define enduring desired behavior and outcome constraints, not implementation means or the work performed in this change.
 
       Spec boundary rules:
       - Read the confirmed intent.md and proposal.md before authoring Requirements or Scenarios.
-      - Every Requirement MUST trace to a confirmed outcome, invariant, boundary, or observable success condition.
-      - Do not promote a candidate means from intent.md into a Requirement unless the owner confirmed it as a required outcome or non-negotiable constraint.
+      - Every Requirement MUST trace directly to a confirmed desired outcome or outcome constraint.
+      - A required or candidate means MUST NOT become a Requirement or Scenario. Record a required means in design.md as a design constraint and a candidate means only as a design option.
+      - Design decisions, tasks, tests, implementation necessity, and references created by the same Change MUST NOT justify adding a Requirement or Scenario.
       - Use each business and product term's `Formal Name` from the proposal.md Thesaurus consistently in Japanese prose.
       - If a required business or product term is absent from the Thesaurus, update proposal.md before using it in specs.
       - Do not substitute a `System Name` or untranslated English common noun for a `Formal Name`.
@@ -167,13 +169,11 @@ artifacts:
       - Avoid change-relative wording such as "in this change", "during migration", "replace X with Y", or "update package ..." unless it is required to describe a lasting externally observable constraint.
       - spec.md MUST describe only enduring end-state behavior, constraints, boundaries, and observable outcomes.
       - spec.md MUST NOT rely on before/after comparisons or wording whose meaning depends on the current change context.
+      - spec.md and scenarios MUST NOT make the absence of old specifications, legacy behavior, old packages, or old paths the purpose. Define positive end-state behavior and constraints instead.
       - Avoid change-relative labels such as `旧`, `新`, `現行`, `変更後`, `移行後`, `不要になった`, `再混入`, `legacy`, `deprecated`, `cleanup`, `replace`, or `refactor` in requirement/scenario prose.
-      - Rewrite change-relative statements into end-state constraints such as allowed packages, forbidden dependencies, reachable modules, required runtime properties, or observable outputs.
-      - Bad: "旧 frontend 構成は build graph に残ってはならない。"
-      - Good: "公開 frontend と非公開 frontend の build graph は、許可された app entrypoint と shared package のみを到達可能にしなければならない。"
-      - Bad: "legacy backend dependency の再混入を拒否する。"
-      - Good: "Hono、Wrangler、Drizzle、Cloudflare Workers 固有 backend runtime は backend dependency として宣言されてはならない。"
-      - Package/path references are allowed only when they express enduring responsibility boundaries or externally relevant structural guarantees.
+      - Rewrite change-relative statements into positive desired end-state behavior or externally owned contract constraints without prescribing the implementation that achieves them.
+      - Package, file, class, function, framework, migration, algorithm, and internal-path references are implementation means and MUST NOT appear unless the exact identifier is itself part of an externally owned contract.
+      - When a pre-Spec wireframe JSON exists, Specs MUST preserve its visible surface. Specs MUST NOT introduce additional visible controls, settings, screens, labels, version information, model names, or internal implementation state.
 
       Scenario rules:
       - Each scenario MUST be a level-4 heading:
@@ -213,7 +213,7 @@ artifacts:
       Document structure:
       - The design MUST use the English headings, structural section labels, and table column names present in the template.
       - English is allowed ONLY for headings, section labels, table column names, IDs, code identifiers, commands, file paths, API/protocol names, enum values, and short technical terms that should remain exact.
-      - All non-label prose MUST be written in Japanese: section body text, bullet descriptions, table cell descriptions, diagram labels, test names after Scenario IDs, TODO replacements, N/A reasons, and release/rollback explanations.
+      - All non-label prose MUST be written in Japanese: section body text, bullet descriptions, table cell descriptions, diagram labels, test names after Scenario IDs, TODO replacements, N/A reasons, and migration/rollback explanations.
       - If a section is not applicable, keep the section and write "N/A" with a brief Japanese reason.
 
       Placeholder rule:
@@ -222,6 +222,12 @@ artifacts:
 
       Scope:
       - Clearly define In Scope and Out of Scope.
+
+      Change completion boundary:
+      - The change is complete when the approved feature is fully implemented and merge-ready with repository-scoped code, configuration, generated artifacts, documentation, review, and reproducible local or CI verification.
+      - Describe repository changes needed to make runtime integrations deployable, but do not include execution against a live external environment.
+      - MUST NOT include release execution, deployment, environment provisioning, credential access or probes, external approval, staging or production validation, operational rehearsal, or production observation in any design section, acceptance criterion, or completion condition.
+      - Release impact belongs in the pull request template and does not block Change completion.
 
       Assumptions/Dependencies:
       - List prerequisites, external dependencies, and required migrations.
@@ -334,12 +340,13 @@ artifacts:
       - UAT rows SHOULD reference a requirement reference ID (e.g., `USER-MGMT-R001`) and the requirement name.
       - E2E/IT/UT rows SHOULD reference a Scenario ID.
       - A single Scenario ID may be covered by multiple tests (1:N). Add multiple E2E/IT/UT rows referencing the same Scenario ID as needed (happy/error/boundary/security/performance/etc.).
+      - Tests MUST verify required end-state behavior or constraints. Do not create tests whose sole purpose is proving that old specifications, legacy behavior, old packages, or old paths are absent.
       - Automated tests MUST include the Scenario ID in the test title in brackets:
         - Example: `test('[USER-MGMT-S001] ユーザー作成が成功する', async () => { ... })`
 
-      Rollback/Migration/Release:
-      - If DB or contract changes exist, include rollback and migration steps.
-      - Provide release steps that a teammate can follow, written in Japanese except commands and identifiers.
+      Migration / Rollback:
+      - If DB or contract changes exist, include repository-defined migration and rollback design with local or CI verification evidence.
+      - Do not describe actions against a live external environment.
     requires:
       - intent
       - proposal
@@ -380,6 +387,11 @@ artifacts:
       - tasks.md defines concrete implementation work only.
       - tasks.md MUST NOT restate product requirements using SHALL/MUST language.
       - tasks.md MUST NOT include Customer Context, requirement prose blocks, or architectural rationale that belongs in proposal/spec/design.
+      - A Change reaches completion only when the approved feature is fully implemented and merge-ready with repository-scoped code, configuration, generated artifacts, documentation, review, and reproducible local or CI verification.
+      - Every task MUST change, review, or verify repository content and have objective local or CI evidence.
+      - Tasks MUST NOT require release execution, deployment, environment provisioning, credential access or probes, external approval, staging or production validation, operational rehearsal, or production observation.
+      - When runtime integrations need deployment configuration, task the repository configuration and its local or CI verification; never task execution against a live external environment.
+      - When a wireframe JSON exists, UI implementation tasks reference it and MUST NOT direct-edit the matching generated HTML preview.
 
       Reference specs for what needs to be built, design for how to build it.
       Each task should be verifiable - you know when it's done.

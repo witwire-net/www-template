@@ -14,9 +14,9 @@ Owner-Confirmation: PENDING
 
 ## Request Classification
 
-| Request Term / Statement                              | Classification                                                                | Confirmed Meaning                                       |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
-| <!-- TODO: 依頼に含まれる技術名、成果、または制約 --> | <!-- TODO: Required Outcome / Non-negotiable Constraint / Candidate Means --> | <!-- TODO: 所有者が確認した意味を日本語で記述する。 --> |
+| Request Term / Statement                              | Classification                                                                         | Confirmed Meaning                                       |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| <!-- TODO: 依頼に含まれる技術名、成果、または制約 --> | <!-- TODO: Desired Outcome / Outcome Constraint / Required Means / Candidate Means --> | <!-- TODO: 所有者が確認した意味を日本語で記述する。 --> |
 
 ## Repository Evidence
 
