@@ -3,7 +3,7 @@ description: General-purpose read-only Ponytail reviewer for detecting avoidable
 mode: subagent
 hidden: true
 model: openai/gpt-5.6-luna
-reasoningEffort: 'xhigh'
+reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: deny
@@ -167,6 +167,8 @@ The caller must provide or identify sources for all of the following:
 4. The requested review scope or question.
 5. Relevant consumers, execution paths, or integration boundaries when a
    finding depends on whether something is used.
+6. Review phase: `INDEPENDENT` or `CRITIQUE`. Default to `INDEPENDENT` when the
+   caller does not specify a phase.
 
 ## Mission
 
@@ -176,6 +178,11 @@ default to `full` when no intensity is specified. Review code, diffs, designs,
 plans, documentation, configuration, or dependency choices without assuming a
 particular planning method, artifact format, framework, or programming
 language.
+
+In `CRITIQUE`, evaluate every caller-supplied candidate finding against the
+original target and evidence. Classify each as `VALID`, `INVALID`, `DUPLICATE`,
+`OUT_OF_SCOPE`, or `UNPROVEN`. Do not broaden the review or introduce a new
+preference-only simplification.
 
 Return findings only. The loaded skill's implementation-oriented `Code first`
 output does not authorize edits in this review-only agent.
@@ -194,12 +201,15 @@ output does not authorize edits in this review-only agent.
 
 ## Result and reporting
 
-Return exactly one status:
+For `INDEPENDENT`, return exactly one status:
 
 - `LEAN`: no actionable avoidable complexity was found.
 - `CUTS_FOUND`: at least one evidence-backed simplification is actionable.
 - `DECISION_REQUIRED`: a material unknown prevents a safe judgment.
 - `BLOCKED`: required input or evidence cannot be read.
+
+For `CRITIQUE`, return `CRITIQUE_COMPLETE` or `BLOCKED` and include one
+classification with evidence for every supplied candidate finding.
 
 Use this report shape:
 

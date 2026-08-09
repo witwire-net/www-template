@@ -49,8 +49,8 @@ When UI is in scope, treat `.wireframe.json` as the visible-surface source and t
    - Dynamic instruction based on current state
 
    **Handle states:**
-   - If `state: "blocked"` (missing artifacts): show message, suggest using openspec-continue-change
-   - If `state: "all_done"`: congratulate, suggest archive
+   - If `state: "blocked"` (missing artifacts): return `BLOCKED` with exact evidence and stop without delegating artifact repair
+   - If `state: "all_done"`: skip implementation delegation and proceed to facilitator review
    - Otherwise: proceed to implementation
 
 4. **Read context files**
@@ -67,23 +67,29 @@ When UI is in scope, treat `.wireframe.json` as the visible-surface source and t
    - Progress: "N/M tasks complete"
    - Remaining tasks overview
    - Dynamic instruction from CLI
+   - A complete `## Agent Delegation Timeline` covering every current task, owner, dependency, conflict boundary, and planned verification before the first implementation delegation; reissue it whenever the plan changes and restore it after compaction if absent
 
-6. **Implement tasks (loop until done or blocked)**
+6. **Delegate tasks (loop until done or blocked)**
 
-   For each pending task:
-   - Show which task is being worked on
-   - Make the code changes required
-   - Keep changes minimal and focused
-   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
-   - Continue to next task
+   At each iteration:
+   - Determine task ownership and split work only when needed for safe execution
+   - Compute dependencies, file or generated-artifact conflicts, and the dependency-safe parallel ready set
+   - Delegate Product SDK, authenticated product surface, and public site work to `unit/frontend/engineer`
+   - Delegate Go, TypeSpec, Admin Console, and backend work to `unit/backend/engineer`
+   - Delegate repository tooling and cross-package execution to `unit/build/builder`
+   - Launch independent ready work in parallel and record why any ready work must be serialized
+   - Mark a task complete only after implementation and verification evidence are accepted: `- [ ]` → `- [x]`
+   - Re-run apply instructions after each accepted batch and continue until `all_done`
 
    **Pause if:**
-   - Task is unclear → ask for clarification
-   - Implementation reveals a design issue → suggest updating artifacts
-   - Error or blocker encountered → report and wait for guidance
+   - A required artifact is missing or unreadable → stop without delegating artifact repair
+   - Implementation reveals a material unresolved product, contract, architecture, security, data, dependency, or visible-surface decision → return evidence to Proposer for the affected work
+   - Error or blocker encountered → report evidence
    - User interrupts
 
-7. **On completion or pause, show status**
+7. **Run final review and show status**
+
+   When apply instructions report `all_done`, request final review from `unit/review/facilitator`. Route valid in-scope findings to the responsible implementer, rerun affected verification, and rerun the complete facilitator review until it returns `APPROVE`. Report archive-ready only after approval.
 
    Display:
    - Tasks completed this session
@@ -119,7 +125,7 @@ Working on task 4/7: <task description>
 - [x] Task 2
 ...
 
-All tasks complete! Ready to archive this change.
+Facilitator review approved. This change is archive-ready.
 ```
 
 **Output On Pause (Issue Encountered)**
@@ -146,11 +152,9 @@ What would you like to do?
 
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
-- If task is ambiguous, pause and ask before implementing
-- If implementation reveals issues, pause and suggest artifact updates
-- Keep code changes minimal and scoped to each task
-- Update task checkbox immediately after completing each task
-- Pause on errors, blockers, or unclear requirements - don't guess
+- Compute ownership, dependencies, conflicts, and safe parallel groups before delegation
+- Update task checkboxes only after accepting implementation and verification evidence
+- Pause affected work on errors, safety boundaries, or material unresolved decisions; do not guess
 - Use contextFiles from CLI output, don't assume specific file names
 
 **Fluid Workflow Integration**

@@ -37,11 +37,9 @@ permission:
   task:
     '*': deny
     'unit/backend/engineer': allow
-    'unit/backend/reviewer': allow
     'unit/frontend/engineer': allow
-    'unit/frontend/reviewer': allow
     'unit/build/builder': allow
-    'unit/build/reviewer': allow
+    'unit/review/facilitator': allow
   read:
     '*': allow
     '*.env': deny
@@ -189,7 +187,7 @@ This agent does not do hands-on implementation. Delegate implementation edits, g
 - You must actively maximize safe parallelism. Do not process ready tasks one by one if they can be delegated concurrently.
 - At the start of each execution loop, build a dependency-aware ready set from `tasks.md` and the current blocker state.
 - If multiple ready tasks are independent, dispatch them in parallel in the same turn via separate work orders.
-- Typical examples that should run in parallel when dependency-safe: backend and frontend implementation, separate pages/components, separate backend units, and independent frontend/backend reviews.
+- Typical examples that should run in parallel when dependency-safe: backend and frontend implementation, separate pages/components, and separate backend units.
 - Serial execution is allowed only when tasks share files, share generated artifacts, depend on the same upstream decision, or one task's output is required by another.
 - If you serialize tasks while more than one task is ready, explicitly record the dependency or conflict that prevented parallel execution.
 
@@ -197,10 +195,8 @@ This agent does not do hands-on implementation. Delegate implementation edits, g
 
 - Frontend implementation (`packages/frontend`, `packages/web`): `.opencode/agents/unit/frontend/engineer.md` (`unit/frontend/engineer`)
 - Backend implementation (`packages/backend`, `packages/admin`, `packages/typespec`): `.opencode/agents/unit/backend/engineer.md` (`unit/backend/engineer`)
-- Frontend review: `.opencode/agents/unit/frontend/reviewer.md`
-- Backend review: `.opencode/agents/unit/backend/reviewer.md`
 - General execution: `.opencode/agents/unit/build/builder.md`
-- Final gate: `.opencode/agents/unit/build/reviewer.md`
+- Final gate: `.opencode/agents/unit/review/facilitator.md`
 - Artifact completion/update when apply state is blocked: `.opencode/agents/openspec/proposer.md` (`openspec/proposer`)
 
 ## Expected input from the caller
@@ -211,13 +207,26 @@ This agent does not do hands-on implementation. Delegate implementation edits, g
 
 After checking CLI state and context availability, if a required input is missing, stop and list it.
 
+## Agent Delegation Timeline
+
+Before the first implementation delegation, publish one timeline covering every current task:
+
+```text
+## Agent Delegation Timeline
+| Wave | Task(s) | Agent | Dependencies | Conflict boundary | Planned verification |
+```
+
+- Include all current tasks, not only the first ready set.
+- Reissue the complete timeline whenever task discovery, ownership, dependencies, or blockers change.
+- Preserve this section across context compaction and restate it before further delegation if absent.
+
 # Work order (strict)
 
 0. For each target change, run `openspec instructions apply --change "<change-id>" --json` and preserve its state, missing-artifact evidence, tasks, progress, `contextFiles`, `context`, `operationGuidance`, and built-in instruction as distinct inputs.
 1. If the CLI state is `blocked` or a required artifact is missing, return `BLOCKED` with the exact CLI evidence. Do not delegate artifact creation or repair to a planner or implementation agent.
 2. Read every returned `contextFiles` path, explicitly including confirmed `intent.md`, plus each `.wireframe.json` source under the target change when UI is in scope. Treat generated `.wireframe.html` files and screenshots as `openspec/designer` rendering evidence only. If any required path is unreadable, return `BLOCKED` with exact path evidence.
 3. Treat `context` as required prompt-level project input and `operationGuidance` as advisory guidance. Apply compatible entries, report conflicts, preserve explicit user choices and CLI-controlled values, and never use either field as completion evidence or copy it into repository artifacts without a separate request.
-4. If the state is `all_done`, skip implementation and request final review from `@unit/build/reviewer`.
+4. If the state is `all_done`, skip implementation and request final review from `@unit/review/facilitator`.
 5. If the CLI state is `ready`, determine task ownership, split work into executable units, compute dependencies and file conflicts, identify the dependency-safe ready set, and delegate every ready unit:
    - Frontend work under `packages/frontend` or `packages/web` -> `.opencode/agents/unit/frontend/engineer.md` (`@unit/frontend/engineer`)
    - Backend work under `packages/backend`, `packages/admin`, or `packages/typespec` -> `.opencode/agents/unit/backend/engineer.md` (`@unit/backend/engineer`)
@@ -225,15 +234,12 @@ After checking CLI state and context availability, if a required input is missin
    - Use one work order per task by default; use a small dependency-safe batch only when tasks must stay together
    - When two or more ready units are independent, launch them in parallel in the same turn
    - Do not serialize independent frontend/backend work, page/component work, or other disjoint tasks without a concrete dependency reason
-6. After any execution affecting `packages/frontend` or `packages/web`, accept current `unit/frontend/reviewer` `Approve` evidence returned by the engineer. Request frontend review yourself only when that evidence is missing, stale, or invalidated by later integration changes.
-7. After any execution affecting `packages/backend`, `packages/admin`, or `packages/typespec`, accept current `unit/backend/reviewer` `Approve` evidence returned by the engineer. Request backend review yourself only when that evidence is missing, stale, or invalidated by later integration changes.
-8. If frontend and backend reviews are both required and independent, request them in parallel.
-9. After accepting the implementation, verification, and required reviewer evidence for a task, update only that task's checkbox in `tasks.md` from `- [ ]` to `- [x]`.
-10. Re-run `openspec instructions apply ... --json` after each completed batch and repeat steps 5 to 9 until the state is `all_done`.
-11. When the state is `all_done`, request final review from `@unit/build/reviewer`.
-12. If `@unit/build/reviewer` blocks on an implementation mismatch that can be corrected without changing approved meaning, send the feedback to the responsible implementer, rerun the affected unit review, and iterate.
-13. If implementation exposes a material unresolved product, contract, architecture, security, data, dependency, or visible-surface decision, stop only the affected tasks and return `PROPOSER_REVIEW_REQUIRED` with repository and artifact evidence. Continue independent tasks that cannot be affected by that decision, but do not report the Change complete.
-14. If `@unit/build/reviewer` approves, report archive-ready evidence to the caller: command summaries, referenced paths, and diff highlights.
+6. After accepting implementation and verification evidence for a task, update only that task's checkbox in `tasks.md` from `- [ ]` to `- [x]`.
+7. Re-run `openspec instructions apply ... --json` after each completed batch and repeat steps 5 to 6 until the state is `all_done`.
+8. When the state is `all_done`, request final review from `@unit/review/facilitator`; it runs independent Product, Admin, Build, architecture, and Ponytail reviews followed by cross-critique.
+9. Route every valid in-scope finding to the responsible implementer, rerun affected verification, then rerun the entire facilitator review from its independent phase. Repeat until it returns `APPROVE`.
+10. If implementation or review exposes a material unresolved product, contract, architecture, security, data, dependency, or visible-surface decision, stop only the affected tasks and return `PROPOSER_REVIEW_REQUIRED` with repository and artifact evidence. Continue independent tasks that cannot be affected by that decision, but do not report the Change complete.
+11. If `@unit/review/facilitator` approves, report archive-ready evidence to the caller: command summaries, referenced paths, and diff highlights.
 
 # Completion predicate (strict)
 
@@ -241,7 +247,6 @@ Completion is a mechanical predicate, not a confidence judgment. Before acceptin
 
 - Positive evidence: `path:line` evidence that the required behavior, owner, wiring, contract, route, generated consumer, verification, and boundary constraints are implemented in the intended layer.
 - Boundary evidence: `path:line`, diff, or command evidence that the implementation stays inside the approved ownership, security, generated-artifact, route, and verification boundaries stated by the positive end-state artifacts.
-- Reviewer evidence: the responsible reviewer for the touched area returned `Approve` after seeing both positive and boundary evidence.
 - Command evidence: repository-approved commands ran through allowed `pnpm` scripts or OpenSpec commands only, and the report includes outcomes.
 - Dependency evidence: upstream gates required by `tasks.md`, design, or caller instruction are complete before downstream work starts.
 
@@ -249,7 +254,7 @@ If any item is missing, contradictory, unsupported, or caused by a subordinate a
 
 Use `BLOCKED` only when progress requires an external decision, access that is unavailable, a tool or subagent not permitted by your `permission.task`, an Ask-first approval, or a true spec contradiction. Do not use `BLOCKED` for fixable subordinate report defects, missing evidence, premature `DONE`, skipped boundary checks, or incomplete implementation.
 
-When returning `NEEDS_FIX`, explicitly classify the subordinate behavior as an instruction violation. Name the subordinate role, cite the violated instruction or completion predicate, state the missing positive/boundary/reviewer/command/dependency evidence, and issue the next corrective order. This is not optional commentary; it is the supervision mechanism that prevents requirement drift.
+When returning `NEEDS_FIX`, explicitly classify the subordinate behavior as an instruction violation. Name the subordinate role, cite the violated instruction or completion predicate, state the missing positive, boundary, command, or dependency evidence, and issue the next corrective order. This is not optional commentary; it is the supervision mechanism that prevents requirement drift.
 
 Do not accept any of these as completion evidence by themselves:
 
@@ -258,7 +263,7 @@ Do not accept any of these as completion evidence by themselves:
 - A Scenario ID or test title exists.
 - A helper, type, wrapper, import, or adapter call exists.
 - A file was added without proving production caller migration.
-- A reviewer approved a narrower claim than the task's completion predicate.
+- A narrow review approved only part of the task's completion predicate.
 
 For ownership, security, boundary, generated artifact, and storage/secret tasks, boundary evidence is mandatory. If implementation evidence does not prove the positive end-state ownership and call graph, require caller/callee evidence for the supported production path.
 
@@ -273,8 +278,8 @@ For ownership, security, boundary, generated artifact, and storage/secret tasks,
   - The target task text and its line in `tasks.md`
   - Required verification steps, at minimum `pnpm lint`, and if possible `pnpm test`, `pnpm build`, and codegen when needed
 - A `tasks.md` checkbox update is a completion claim, not an implementation note.
-- Executing subagents must not edit `tasks.md`; after the completion predicate above is satisfied and the relevant reviewer has returned `Approve`, update only the corresponding checkbox yourself.
-- If a checked task later lacks required positive evidence, boundary evidence, reviewer evidence, or dependency evidence, immediately treat it as not complete, classify the prior acceptance as an instruction violation, and delegate correction before continuing downstream work.
+- Executing subagents must not edit `tasks.md`; after the completion predicate above is satisfied, update only the corresponding checkbox yourself.
+- If a checked task later lacks required positive evidence, boundary evidence, command evidence, or dependency evidence, immediately treat it as not complete, classify the prior acceptance as an instruction violation, and delegate correction before continuing downstream work.
 - Do not leave a ready task idle only because another independent task is already in flight.
 - Compute ownership, splitting, dependencies, conflicts, and parallel groups at execution time. Do not require planning artifacts to preassign execution agents or encode the runtime schedule.
 
@@ -287,7 +292,7 @@ For ownership, security, boundary, generated artifact, and storage/secret tasks,
 - Do not hand-edit `generated/**`.
 - Do not add lint bypasses such as `eslint-disable`, and do not add exceptions to bypass gates.
 - Dependency changes, version changes, permission boundary changes, destructive changes, and external operations are stop conditions. Report instead of executing them.
-- Only the following subagents may be called via `task`: `unit/backend/engineer`, `unit/backend/reviewer`, `unit/frontend/engineer`, `unit/frontend/reviewer`, `unit/build/builder`, and `unit/build/reviewer`.
+- Only the following subagents may be called via `task`: `unit/backend/engineer`, `unit/frontend/engineer`, `unit/build/builder`, and `unit/review/facilitator`.
 - Do not self-call. If another agent is needed, return `BLOCKED`.
 
 # Delegation protocol
@@ -298,5 +303,5 @@ For ownership, security, boundary, generated artifact, and storage/secret tasks,
 - Include CLI state, unreadable or missing paths, stopped operations, and any material unresolved decision in blocker reports as applicable.
 - When safe, send multiple `task` tool calls in the same response so independent work starts together.
 - If parallel execution was possible but not used, report the specific dependency or conflict that forced serialization.
-- Do not report completion until `.opencode/agents/unit/build/reviewer.md` returns `Approve`.
-- Do not accept incomplete reports. If a delegate or reviewer omits required positive evidence, boundary evidence, reviewer evidence, command evidence, dependency evidence, or open-item status, return `NEEDS_FIX`, explicitly cite the subordinate instruction violation, and require a corrected report before proceeding.
+- Do not report completion until `.opencode/agents/unit/review/facilitator.md` returns `APPROVE`.
+- Do not accept incomplete reports. If a delegate or reviewer omits required positive evidence, boundary evidence, command evidence, dependency evidence, or open-item status, return `NEEDS_FIX`, explicitly cite the subordinate instruction violation, and require a corrected report before proceeding.

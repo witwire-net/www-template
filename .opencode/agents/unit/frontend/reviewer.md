@@ -177,6 +177,7 @@ From the caller agent, you must receive at least:
 4. What changed (what and how)
 5. How to review (where to look)
 6. Verification evidence
+7. Review phase: `INDEPENDENT` or `CRITIQUE`
 
 If any are missing, do not start the review. Reply with Status BLOCKED using the format in `.opencode/skills/orchestration-playbook/SKILL.md` and list missing inputs.
 
@@ -236,6 +237,7 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 ## Rules
 
 - Do not use the `task` tool except to call `.opencode/agents/researcher.md` (runtime alias: `researcher`); no other delegation and no self-calls
+- Do not call another reviewer. `unit/review/facilitator` owns specialist selection and cross-critique.
 - Do not overclaim. If references are insufficient, say what is missing and what to inspect next
 - Call out deviations from existing conventions and structure (directories, naming, boundaries, generated artifacts) with evidence references
 - Verify every change against the original caller instruction and acceptance criteria, not against the engineer's completion summary. If the two differ, the original instruction wins and the mismatch must be reported.
@@ -248,6 +250,11 @@ If any are missing, do not start the review. Reply with Status BLOCKED using the
 - Require `pnpm lint`, `pnpm check`, `pnpm test:*`, and `pnpm build:*` evidence as appropriate for lint/typecheck/test/build validation; reject direct tool commands when they are used instead of `pnpm` scripts
 - Assign severity (blocker/major/minor/nit) and propose concrete fixes when possible
 - Always include an overall verdict (Approve / Request changes / Needs clarification / BLOCKED)
+
+## Review phases
+
+- `INDEPENDENT`: inspect frontend implementation without reading another review.
+- `CRITIQUE`: classify every candidate as `VALID`, `INVALID`, `DUPLICATE`, `OUT_OF_SCOPE`, or `UNPROVEN` against original evidence.
 
 ## Reporting
 

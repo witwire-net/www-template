@@ -46,7 +46,7 @@ Follow the `openspec/applier` execution contract. Do not load or perform a seman
 
    **Handle states:**
    - If `state: "blocked"` (missing artifacts): return `BLOCKED` with exact missing-artifact evidence and stop without delegating artifact creation or repair
-   - If `state: "all_done"`: skip implementation delegation and proceed to final build review
+   - If `state: "all_done"`: skip implementation delegation and proceed to facilitator review
    - Otherwise: proceed to implementation
 
    Treat `context` as required prompt-level input and `operationGuidance` as optional additive advice. Consider every entry, apply only entries compatible with explicit user choices and CLI-controlled values, and report conflicts. Neither field is task-completion evidence, replaces the built-in instruction, or permits bypassing a blocked state.
@@ -70,6 +70,7 @@ Follow the `openspec/applier` execution contract. Do not load or perform a seman
    - Progress: "N/M tasks complete"
    - Remaining tasks overview
    - Dynamic instruction from CLI
+   - A complete `## Agent Delegation Timeline` covering every current task, owner, dependency, conflict boundary, and planned verification before the first implementation delegation; reissue it whenever the plan changes and restore it after compaction if absent
 
 6. **Delegate tasks (loop until done or blocked)**
 
@@ -78,8 +79,7 @@ Follow the `openspec/applier` execution contract. Do not load or perform a seman
    - Compute dependencies, file or generated-artifact conflicts, and the dependency-safe parallel ready set
    - Delegate frontend work to `unit/frontend/engineer`, backend work to `unit/backend/engineer`, and other repository work to `unit/build/builder`
    - Launch independent ready work in parallel and record why any ready work must be serialized
-   - Require applicable `unit/frontend/reviewer` and `unit/backend/reviewer` approval evidence
-   - Mark a task complete only after implementation, verification, and required reviewer evidence are accepted: `- [ ]` → `- [x]`
+   - Mark a task complete only after implementation and verification evidence are accepted: `- [ ]` → `- [x]`
    - Re-run apply instructions after each accepted batch and continue until `all_done`
 
    **Pause if:**
@@ -93,7 +93,7 @@ Follow the `openspec/applier` execution contract. Do not load or perform a seman
 
 7. **Run final review and show status**
 
-   When the CLI reports `all_done`, request final review from `unit/build/reviewer`. Route correctable implementation findings back to the responsible implementer and repeat affected unit review. Report archive-ready only after final approval.
+   When the CLI reports `all_done`, request final review from `unit/review/facilitator`. Route valid in-scope findings to the responsible implementer, rerun affected verification, and rerun the complete facilitator review until it returns `APPROVE`. Report archive-ready only after approval.
 
    Display:
    - Tasks completed this session
@@ -129,7 +129,7 @@ Working on task 4/7: <task description>
 - [x] Task 2
 ...
 
-Final build review approved. This change is archive-ready and can be archived with `/opsx-archive`.
+Facilitator review approved. This change is archive-ready and can be archived with `/opsx-archive`.
 ```
 
 **Output On Pause (Issue Encountered)**

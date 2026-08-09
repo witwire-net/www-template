@@ -2,8 +2,8 @@
 description: Agent that produces work plans and detailed designs
 mode: subagent
 hidden: true
-model: openai/gpt-5.6-sol
-reasoningEffort: 'xhigh'
+model: openai/gpt-5.6-luna
+reasoningEffort: 'max'
 temperature: 0.1
 permission:
   edit: deny

@@ -43,11 +43,9 @@ permission:
     'planner': allow
     'researcher': allow
     'unit/backend/engineer': allow
-    'unit/backend/reviewer': allow
     'unit/build/builder': allow
-    'unit/build/reviewer': allow
     'unit/frontend/engineer': allow
-    'unit/frontend/reviewer': allow
+    'unit/review/facilitator': allow
   read: allow
   glob: allow
   grep: allow
@@ -216,6 +214,7 @@ Subagent output is incomplete until all hold:
 - Meets success criteria (observable)
 - Includes evidence (`path:line`, rationale, commands)
 - Does not violate non-goals or ask-first boundaries
+- Final implementation acceptance comes from `unit/review/facilitator`, which owns specialist selection and cross-critique
 
 Issue follow-up orders to the same subagent for gaps.
 
