@@ -515,7 +515,7 @@ GORM の import は `packages/backend/internal/adapter/postgres/**` のみに許
 
 ## CI/CD
 
-GitHub Actions の `ci.yml` が以下の順番で実行されます（`main` / `develop` への push と PR が対象）。
+GitHub Actions の `ci.yml` が以下の順番で実行されます（`develop` への push と PR が対象）。
 
 ```
 Checkout
