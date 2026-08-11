@@ -11,9 +11,10 @@ import process from 'node:process';
  *
  * @param {string} guardScriptPath - 実行する guard script の絶対パス。
  * @param {Record<string, string>} files - 一時リポジトリへ配置する相対パスと内容。
- * @returns {{ status: number | null; stderr: string }} guard 実行結果。
+ * @param {string[]} [args=[]] - guard script へ渡す追加のコマンドライン引数。
+ * @returns {{ status: number | null; stdout: string; stderr: string }} guard 実行結果。
  */
-export function runGuardInFixture(guardScriptPath, files) {
+export function runGuardInFixture(guardScriptPath, files, args = []) {
   const fixtureDirectory = mkdtempSync(path.join(tmpdir(), 'openspec-guard-'));
 
   try {
@@ -23,12 +24,13 @@ export function runGuardInFixture(guardScriptPath, files) {
       writeFileSync(absolutePath, content, 'utf8');
     }
 
-    const result = spawnSync(process.execPath, [guardScriptPath], {
+    // 実際の CLI と同じ実行経路を通し、引数解釈と終了状態まで一体で確認する。
+    const result = spawnSync(process.execPath, [guardScriptPath, ...args], {
       cwd: fixtureDirectory,
       encoding: 'utf8',
     });
 
-    return { status: result.status, stderr: result.stderr };
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
   } finally {
     rmSync(fixtureDirectory, { force: true, recursive: true });
   }

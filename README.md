@@ -30,19 +30,19 @@ TypeSpec を API 契約の正とし、Svelte フロントエンドと Go バッ�
 
 ## 技術スタック
 
-| 分類               | 内容                                                        |
-| ------------------ | ----------------------------------------------------------- |
-| フロントエンド     | SvelteKit 2, Svelte 5, TypeScript, Vite                     |
-| テスト（フロント） | Vitest, Playwright                                          |
-| API 契約           | TypeSpec 1.8, OpenAPI 3, Spectral, Orval                    |
-| コード生成         | Orval（frontend SDK）, oapi-codegen 2.4（Go bindings）      |
-| バックエンド       | Go 1.26.5, Gin 1.11, GORM 1.31, golang-migrate 4.18         |
-| DB / KVS / Search  | PostgreSQL 18, Valkey 9 (Redis 互換), OpenSearch 3          |
-| Object Storage     | Cloudflare R2 / MinIO（S3 互換）                            |
-| メール             | SMTP（開発時は Mailpit）                                    |
-| ツール             | pnpm 11.16.0, ESLint 9, Prettier, golangci-lint 1.64, Husky |
-| CI                 | GitHub Actions                                              |
-| 開発環境           | VSCode + Dev Containers（Docker Compose）                   |
+| 分類               | 内容                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| フロントエンド     | SvelteKit 2, Svelte 5, TypeScript, Vite                                     |
+| テスト（フロント） | Vitest, Playwright                                                          |
+| API 契約           | TypeSpec 1.8, OpenAPI 3, Spectral, Orval                                    |
+| コード生成         | Orval（frontend SDK）, oapi-codegen 2.4（Go bindings）                      |
+| バックエンド       | Go 1.26.5, Gin 1.11, GORM 1.31, golang-migrate 4.18                         |
+| DB / KVS / Search  | PostgreSQL 18, Valkey 9 (Redis 互換), OpenSearch 3                          |
+| Object Storage     | Cloudflare R2 / MinIO（S3 互換）                                            |
+| メール             | SMTP（開発時は Mailpit）                                                    |
+| ツール             | pnpm 11.16.0, OpenSpec 1.8.0, ESLint 9, Prettier, golangci-lint 1.64, Husky |
+| CI                 | GitHub Actions                                                              |
+| 開発環境           | VSCode + Dev Containers（Docker Compose）                                   |
 
 ---
 
@@ -98,7 +98,7 @@ TypeSpec を API 契約の正とし、Svelte フロントエンドと Go バッ�
 │       │   │   └── health/      # インフラ健全性チェック
 │       │   └── generated/openapi/openapi.gen.go  # 生成 Go バインディング（手編集禁止）
 │       └── tools/analyzers/     # カスタム静的解析ツール（guardrails）
-└── openspec/                    # OpenSpec 仕様（現在は lint / CI 対象外）
+└── openspec/                    # 永続的な振る舞い契約と活動中の変更差分
 ```
 
 ---
@@ -262,6 +262,7 @@ pnpm dev:client       # dev:web のエイリアス
 
 ```bash
 pnpm gen              # TypeSpec -> OpenAPI -> frontend SDK -> Go bindings（フル生成）
+pnpm gen:openspec     # OpenSpec 公式コアコマンドとスキルを再生成
 pnpm gen:openapi      # TypeSpec -> OpenAPI のみ
 pnpm gen:api-sdk      # TypeSpec -> OpenAPI -> frontend SDK
 pnpm gen:backend      # OpenAPI -> Go bindings のみ
@@ -273,6 +274,7 @@ pnpm check:codegen    # 生成物に未コミットの差分があれば失敗�
 ```bash
 pnpm format:check     # Prettier + tsp format + gofmt/goimports のフォーマット確認
 pnpm lint             # Spectral + ESLint + golangci-lint + custom guardrails + security + codegen drift
+pnpm lint:openspec    # OpenSpec schema / artifacts / Scenario traceability / task scope
 pnpm check            # TypeSpec compile + frontend 型チェック + Go build
 pnpm test:run         # web + app + ui + Go ユニットテスト（全て）
 pnpm test:server      # Go ユニットテストのみ
@@ -609,6 +611,7 @@ Conventional Commits 形式を強制します（`commitlint`）。
 | `CONTRIBUTING.md`             | コントリビューター向けの最短フロー                         |
 | `CODING_STANDARDS.md`         | 機械的に fail するルールの完全一覧（guardrail の解説付き） |
 | `AGENTS.md`                   | AI コーディングエージェント向けの実行方針                  |
+| `docs/change-operation.md`    | 変更運用、OpenSpec、UX 方針、レビュー深度の一次資料        |
 | `.devcontainer/README.md`     | Dev Container の詳細（サービス接続先・環境変数）           |
 | `.vscode/extensions.json`     | Dev Container と同じ VSCode 拡張の推奨一覧                 |
 | `.vscode/settings.json`       | VSCode の LSP / formatter / scan 除外設定                  |

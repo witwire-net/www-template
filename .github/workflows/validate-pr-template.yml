@@ -34,6 +34,7 @@ jobs:
             '## 概要',
             '## 顧客価値',
             '## 変更内容',
+            '## 変更運用',
             '## 関連Issue / OpenSpec',
             '## セキュリティ確認',
             '## 仕様・API契約',
@@ -64,15 +65,19 @@ jobs:
             '利用者',
             '改善される体験',
             '変更内容',
+            'Operation Lane',
+            'UX Mode',
+            'Review Depth',
             'Issue',
             'OpenSpec Change',
-            'Scenario ID',
+            'Scenario IDs',
             'UI / UX変更',
             'UI / UX変更の説明',
             '影響範囲',
             'デスクトップ確認',
             'モバイル確認',
             'アクセシビリティ確認',
+            'プロダクトデザイナー確認',
             'DB変更',
             'マイグレーション',
             'データ影響',
@@ -98,6 +103,53 @@ jobs:
             errors.push('未チェックのチェックボックスがあります。該当しない項目も理由を書いたうえでチェックしてください。');
           }
 
+          // 三つの変更運用軸を個別に検証し、運用区分からUX方針やレビュー深度が暗黙に決まることを防ぐ。
+          const operationLaneValue = getFieldValue('Operation Lane');
+          const uxModeValue = getFieldValue('UX Mode');
+          const reviewDepthValue = getFieldValue('Review Depth');
+          if (operationLaneValue !== null && !['DIRECT', 'BEHAVIOR', 'ARCHITECTURE'].includes(operationLaneValue)) {
+            errors.push('`Operation Lane` は `DIRECT`、`BEHAVIOR`、`ARCHITECTURE` のいずれかだけを記入してください。');
+          }
+          if (uxModeValue !== null && !['NONE', 'CONTINUITY', 'SHAPE'].includes(uxModeValue)) {
+            errors.push('`UX Mode` は `NONE`、`CONTINUITY`、`SHAPE` のいずれかだけを記入してください。');
+          }
+          if (reviewDepthValue !== null && !['STANDARD', 'DEEP'].includes(reviewDepthValue)) {
+            errors.push('`Review Depth` は `STANDARD` または `DEEP` のどちらかだけを記入してください。');
+          }
+
+          // 理由付きの「なし」を含めて非該当値を判定し、OpenSpecが必要な運用区分との組み合わせを検証する。
+          const isNoneValue = (value) => /^なし(?:$|[（(])/u.test(value.trim());
+          const openSpecChangeValue = getFieldValue('OpenSpec Change');
+          const scenarioIdsValue = getFieldValue('Scenario IDs');
+          const requiresOpenSpec = operationLaneValue === 'BEHAVIOR' || operationLaneValue === 'ARCHITECTURE';
+          if (requiresOpenSpec && openSpecChangeValue !== null && isNoneValue(openSpecChangeValue)) {
+            errors.push('`BEHAVIOR` と `ARCHITECTURE` では `OpenSpec Change` に `なし` を使用できません。');
+          }
+          if (
+            openSpecChangeValue !== null &&
+            !isNoneValue(openSpecChangeValue) &&
+            !/^[a-z0-9][a-z0-9-]*$/u.test(openSpecChangeValue)
+          ) {
+            errors.push('`OpenSpec Change` は小文字のChange識別子、または `DIRECT` の場合は理由付きの `なし` を記入してください。');
+          }
+          if (requiresOpenSpec && scenarioIdsValue !== null && isNoneValue(scenarioIdsValue)) {
+            errors.push('`BEHAVIOR` と `ARCHITECTURE` では1件以上の `Scenario IDs` が必要です。');
+          }
+
+          // Scenario IDはコンマまたは空白区切りで受け付け、仕様検査と同じ安定識別子形式へ限定する。
+          if (scenarioIdsValue !== null && !isNoneValue(scenarioIdsValue)) {
+            const scenarioIds = scenarioIdsValue
+              .replaceAll('`', '')
+              .split(/[,、\s]+/u)
+              .filter((value) => value !== '');
+            const invalidScenarioIds = scenarioIds.filter(
+              (value) => !/^[\dA-Z]+(?:-[\dA-Z]+)*-S\d{3,}$/u.test(value)
+            );
+            if (scenarioIds.length === 0 || invalidScenarioIds.length > 0) {
+              errors.push('`Scenario IDs` は `USER-MGMT-S001` 形式で記入し、複数の場合はコンマまたは空白で区切ってください。');
+            }
+          }
+
           const uiChangeValue = getFieldValue('UI / UX変更');
           if (uiChangeValue !== null && uiChangeValue !== 'あり' && uiChangeValue !== 'なし') {
             errors.push('`UI / UX変更` は `あり` または `なし` のどちらかだけを記入してください。');
@@ -121,6 +173,13 @@ jobs:
           };
 
           if (uiChangeValue === 'あり') {
+            // 実際のUI変更では、プロダクトデザイナーと実ブラウザによる両表示幅の確認を必須証跡とする。
+            for (const label of ['デスクトップ確認', 'モバイル確認', 'アクセシビリティ確認', 'プロダクトデザイナー確認']) {
+              const value = getFieldValue(label);
+              if (value !== null && isNoneValue(value)) {
+                errors.push(`UI / UX変更ありの場合は実施内容が必須です: ${label}`);
+              }
+            }
             for (const heading of ['#### Desktop Before', '#### Desktop After', '#### Mobile Before', '#### Mobile After']) {
               const subsection = getSubsection(heading);
               if (subsection === null) {

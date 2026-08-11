@@ -1,12 +1,12 @@
 # Generate Image Prompting Reference
 
-この reference は、`generate-image` Skill が Codex CLI の built-in image generation tool に渡す prompt を安定させるための実務ルールです。
+Use this reference to keep instructions sent through `generate-image.mjs`
+consistent, efficient, and editable.
 
 ## Core Principle
 
-最適な prompt は、長文ポエムではなく成果物仕様書です。
-
-目標は、1 回で芸術的に良い画像を出すことではありません。用途に合う画像を、低リトライ、低コスト、編集耐性ありで生成することです。
+Write a deliverable specification, not a long atmospheric prompt. Optimize for
+fit to purpose, low retry count, and safe iteration.
 
 ## Prompt Shape
 
@@ -14,95 +14,83 @@
 Create a [visual mode] [deliverable type] for [specific use case].
 
 Purpose:
-[Where this image will be used and what it must communicate.]
+[Where the image is used and what it communicates.]
 
 Canvas:
-[Aspect ratio, size, orientation, crop, safe area, whitespace.]
+[Aspect ratio, size, orientation, crop, safe area, and whitespace.]
 
 Subject:
-[Main object/person/UI/scene. Be concrete.]
+[Concrete primary object, person, UI, diagram, or scene.]
 
 Composition:
-[Placement, camera angle, hierarchy, spacing, focal point.]
+[Placement, camera angle, hierarchy, spacing, and focal point.]
 
 Style:
-[Photo/design/illustration/UI/poster style. Mention medium, texture, realism level.]
+[Medium, texture, realism, and design language.]
 
 Text:
-[Exact text if needed. Use quotes. State exactly once. State no extra text.]
+[Exact quoted text, exactly once, with no extra text.]
 
 Details:
-[Materials, colors, lighting, props, UI states, environment.]
+[Materials, colors, lighting, props, states, and environment.]
 
 Preserve:
-[For edits: identity, geometry, label, lighting, framing.]
+[For edits: identity, geometry, labels, lighting, and framing.]
 
 Constraints:
-[No clutter, no fake logos, no watermark, no duplicate text, no undesired UI patterns.]
+[One explicit prohibition per line.]
 
 Iteration target:
-[What this generation should optimize: layout, text, realism, brand fit, etc.]
+[Layout, text, realism, brand fit, or another explicit optimization.]
 ```
 
-## CLI Form Mapping
+## CLI Mapping
 
-`generate-image.mjs` は、上の成果物仕様書を CLI フォーム欄として受け取ります。AI に巨大な自由文を渡すのではなく、各欄を分けて渡すことで、毎回同じ順序と粒度の prompt を組み立てます。
+| Prompt section   | CLI option                      |
+| ---------------- | ------------------------------- |
+| First line       | `--prompt`                      |
+| Purpose          | `--purpose`                     |
+| Canvas           | `--canvas`, `--size`            |
+| Subject          | `--subject`                     |
+| Composition      | `--composition`                 |
+| Style            | `--style`                       |
+| Text             | `--text`                        |
+| Typography       | `--typography`                  |
+| Details          | `--details`                     |
+| Preserve         | `--preserve`                    |
+| Constraints      | `--constraint`, `--constraints` |
+| Iteration target | `--iteration-target`            |
 
-| Prompt section   | CLI option                       |
-| ---------------- | -------------------------------- |
-| First line       | `--prompt`                       |
-| Purpose          | `--purpose`                      |
-| Canvas           | `--canvas` と `--size`           |
-| Subject          | `--subject`                      |
-| Composition      | `--composition`                  |
-| Style            | `--style`                        |
-| Text             | `--text`                         |
-| Typography       | `--typography`                   |
-| Details          | `--details`                      |
-| Preserve         | `--preserve`                     |
-| Constraints      | `--constraint` / `--constraints` |
-| Iteration target | `--iteration-target`             |
+`--prompt` is the precise first-line deliverable instruction, not a mood-only
+phrase.
 
-`--prompt` は短い雰囲気指定ではなく、成果物タイプ、視覚モード、用途を固定する第 1 行として書きます。
+## Artifact Recovery
 
-## Artifact Recovery Policy
+Codex generates the image; the Node.js script places it at the requested output
+path.
 
-Codex には画像生成だけを担当させます。生成済み画像を指定出力 path に置く処理は `generate-image.mjs` が Node 側で行います。
+- Run `codex exec` with `--json`.
+- Extract generated paths under `generated_images` from JSONL events.
+- Only when JSONL is insufficient, search `CODEX_HOME/generated_images` and
+  `~/.codex/generated_images` for artifacts created after execution began.
+- Copy only when exactly one artifact is identified.
+- Fail explicitly when multiple candidates exist.
+- Never weaken sandboxing or use bypass flags.
 
-- `codex exec` は `--json` で実行します。
-- JSONL event から `generated_images` 配下の artifact path を抽出します。
-- JSONL から一意に取れない場合だけ、`CODEX_HOME/generated_images` と `~/.codex/generated_images` を実行開始時刻以降に限定して探索します。
-- 生成 artifact が 1 件だけ特定できた場合に限り、指定された `--out` path へ copy します。
-- 複数候補が見つかった場合は、誤った画像を採用しないため明示エラーで停止します。
-- sandbox を弱めるために `danger-full-access` や bypass option は使いません。
+## Quality and Size
 
-## Quality Policy
+- `low`: direction exploration
+- `medium`: normal UI, ad, and product mockups
+- `high`: final text and detailed output
+- `auto`: Codex selects the target
 
-- `low`: 方向性探索、thumbnail、ラフ案。
-- `medium`: 標準。LP 素材、UI 案、広告案、通常の product mockup。
-- `high`: 最終、文字多め、商品ラベル、図解、細部重視。
-- `auto`: Codex 側に任せる場合。
+Common sizes are `1024x1024`, `1536x1024`, `1024x1536`, `2048x1152`, and
+`2048x2048`. Treat quality and size as prompt guidance when the built-in tool
+does not expose them as strict API arguments.
 
-Codex built-in tool 経由では、`quality` は API パラメータ保証ではありません。`Quality target:` として prompt に入れます。
+## Text
 
-## Size Policy
-
-推奨サイズ:
-
-- `1024x1024`: square draft。
-- `1536x1024`: 標準 landscape。
-- `1024x1536`: 標準 portrait。
-- `2048x1152`: 2K landscape。
-- `2048x2048`: 2K square。
-- `3840x2160`: 4K landscape、必要時だけ。
-- `2160x3840`: 4K portrait、必要時だけ。
-- `auto`: Codex 側に任せる場合。
-
-Codex built-in tool 経由では、`size` も API パラメータ保証ではありません。`Canvas:` として prompt に入れます。
-
-## Text In Images
-
-文字が必要な場合は、内容ではなく typography specification として書きます。
+Specify visible text as typography requirements:
 
 ```text
 Text:
@@ -123,25 +111,12 @@ No fake logos.
 No watermark.
 ```
 
-日本語の場合:
-
-```text
-Text:
-Include ONLY this Japanese headline, exactly once:
-"情報を減らすほど、仕事は進む"
-
-Typography:
-Large, clean Japanese gothic type.
-High contrast.
-Horizontal writing.
-No furigana.
-No extra English words.
-No duplicate text.
-```
+For Japanese text, provide the exact Japanese string and specify Japanese font
+style, writing direction, and no extra English words.
 
 ## Editing
 
-編集では、何を変えるかより、何を変えないかを明確にします。
+State both the change and preservation boundary:
 
 ```text
 Edit the input image.
@@ -150,18 +125,18 @@ Change only:
 [One clear change.]
 
 Preserve exactly:
-[Identity, face, product geometry, label, camera angle, lighting, shadows, layout.]
+[Identity, geometry, label, camera angle, lighting, shadows, and layout.]
 
 Physical realism:
-[Scale, contact shadows, reflections, texture, edge blending.]
+[Scale, contact shadows, reflections, texture, and edge blending.]
 
 Constraints:
-[No redesign, no retouching, no extra objects, no logo drift, no watermark.]
+[No redesign, retouching, extra objects, logo drift, or watermark.]
 ```
 
 ## Multiple Images
 
-複数画像は、単なる reference ではなく役割で渡します。
+Assign an explicit role to every input:
 
 ```text
 Image 1:
@@ -171,84 +146,40 @@ Image 2:
 Lighting and background reference only.
 
 Task:
-Create the final image using the product from Image 1 and the lighting mood from Image 2.
-
-Preserve:
-Product label text, product geometry, camera angle, packaging color.
+Use the product from Image 1 with the lighting mood from Image 2.
 
 Do not:
-Do not copy logos or text from Image 2.
-Do not redesign the product.
-Do not invent new label text.
+Copy logos or text from Image 2, redesign the product, or invent label text.
 ```
 
-## ui-mockup With Wireframe
+## Template Guidance
 
-`ui-mockup` は UI 画面そのものを高忠実度な raster image として生成する用途です。
+### UI Mockup
 
-`--wireframe` が指定された場合、wireframe は layout and information architecture guidance としてだけ扱います。低忠実度な visual style はコピーしません。
+- Generate a realistic product screen for comparing UI direction.
+- Prioritize implementable spacing, hierarchy, typography, component structure,
+  reachable states, and current product language.
+- Avoid concept-art vocabulary, fake logos, decorative badges, unreadable
+  microtext, and random analytics.
+- Treat the image as optional non-contract evidence. Never replace implemented
+  UI or browser review with it.
 
-```text
-Create a realistic web app UI mockup for [specific product/use case].
+### Product Mockup
 
-Purpose:
-Product screenshot-style visual for reviewing UI direction.
+- Keep the product or service as the primary subject.
+- Specify device or package, marketing composition, lighting, materials, and
+  whitespace.
+- UI inside a device is supporting content, not the primary deliverable.
 
-Canvas:
-1536x1024 landscape.
-Use practical desktop UI proportions and readable spacing.
+### Landing Hero
 
-Wireframe reference:
-Use the wireframe as layout and information architecture guidance only.
-Preserve the major sections, hierarchy, content groups, navigation roles, and primary actions.
-Do not copy the wireframe's low-fidelity visual style.
-Do not render gray placeholder boxes, generic outlines, equal-weight rectangles, or scaffold labels as final UI styling.
+- Evaluate it above the fold.
+- Reserve negative space for copy and the primary action.
+- Prohibit irrelevant badges, fake logos, and random charts.
 
-Screen structure:
-[summary generated from wireframe]
+### Transparent Cutout
 
-Style:
-Realistic shippable product UI.
-Readable typography.
-Practical component hierarchy.
-Coherent color system.
-Implementable spacing.
-Not concept art.
-
-Constraints:
-No fake logos.
-No watermark.
-No decorative badges.
-No unreadable dense microtext.
-No random analytics charts unless requested.
-
-Iteration target:
-Layout hierarchy and product realism.
-```
-
-## Template Notes
-
-### ui-mockup
-
-- 冒頭は成果物タイプで固定します。
-- Concept art 語彙を避けます。
-- 実装可能な spacing、hierarchy、typography、component structure を重視します。
-- Wireframe がある場合は、構造参照として扱います。
-
-### product-mockup
-
-- 主役は商品・サービスの見せ方です。
-- デバイス、パッケージ、広告構図、光、素材感、余白を明示します。
-- UI が含まれる場合でも、UI は画面内 content であり、主目的は marketing visual です。
-
-### landing-hero
-
-- Above-the-fold で使う画像として評価させます。
-- Negative space、copy area、CTA 周辺の余白を明示します。
-- 不要な badges、fake logos、random charts を禁止します。
-
-### transparent-cutout
-
-- `gpt-image-2` は transparent background を直接サポートしません。
-- 単色 background で生成し、後処理で background removal する前提にします。
-- 影、gradient、floor plane、reflection、texture を背景に入れさせません。
+- Assume direct transparency is unavailable.
+- Generate on a solid removable background.
+- Keep shadows, gradients, floor planes, reflections, and texture out of the
+  background.

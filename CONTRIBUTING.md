@@ -1,5 +1,12 @@
 # Contributing
 
+## ドキュメント
+
+- コーディング規則: `CODING_STANDARDS.md`
+- 変更運用: `docs/change-operation.md`
+- 永続的な振る舞い契約: `openspec/specs/**/spec.md`
+- `pnpm lint` は活動中差分を含む OpenSpec の成果物、Scenario と試験の追跡、作業パッケージの対象範囲を検査します
+
 ## 前提
 
 - Node.js 24.12+
@@ -67,5 +74,32 @@ pnpm build
 
 ## OpenSpec
 
-- `openspec/**` は default lint / CI から外しています
-- 仕様の正は TypeSpec とテストです
+変更を始める前に、`docs/change-operation.md` に従って三軸を独立に決めます。
+
+| 軸               | 値                                     | 判断内容                           |
+| ---------------- | -------------------------------------- | ---------------------------------- |
+| `Operation Lane` | `DIRECT` / `BEHAVIOR` / `ARCHITECTURE` | 振る舞い・構造をどの運用で扱うか   |
+| `UX Mode`        | `NONE` / `CONTINUITY` / `SHAPE`        | 利用者に見える体験をどう扱うか     |
+| `Review Depth`   | `STANDARD` / `DEEP`                    | 独立レビューをどの深さで実施するか |
+
+- `DIRECT`: 観測可能な振る舞いも物質的な内部構造も変えません。OpenSpec Change は不要です。
+- `BEHAVIOR`: 観測可能な振る舞いを変更します。`behavior-change` の OpenSpec Change が必要です。
+- `ARCHITECTURE`: 物質的な内部構造を変更します。`architecture-change` の OpenSpec Change が必要です。
+- `SHAPE` は UX の方向付けが必要な場合だけ使用し、実際の UI 変更にはプロダクトデザイナーの関与とデスクトップ・モバイル双方の実ブラウザ確認が必要です。
+- `STANDARD` を既定とし、重要なセキュリティ、データ、外部契約、移行、領域横断の構造、活動中 Change との相互作用に危険がある場合は `DEEP` を選びます。
+
+Change は次のコマンドで作成し、`openspec/changes/**` を手作業で作りません。
+
+```bash
+scripts/devcontainer/run.sh pnpm openspec new change <change-id> --schema behavior-change
+scripts/devcontainer/run.sh pnpm openspec new change <change-id> --schema architecture-change
+```
+
+OpenSpec `1.8.0` は設定ファイルの既定スキーマを Change 作成時に参照しないため、`--schema` を省略しません。OpenCode の公式コア定義は `pnpm gen:openspec` で再生成し、`.opencode/commands/opsx-*.md` と `.opencode/skills/openspec-*/SKILL.md` を手編集しません。
+
+`tasks.md` は粗い作業パッケージ台帳です。ファイル、補助処理、試験階層の詳細は、現在の作業パッケージと検証結果に基づき実装時に決めます。
+
+```bash
+scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change <change-id>
+scripts/devcontainer/run.sh pnpm lint:openspec:scenario
+```

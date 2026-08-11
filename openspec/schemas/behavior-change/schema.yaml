@@ -1,0 +1,56 @@
+name: behavior-change
+version: 1
+description: 観測可能な振る舞いの変更を、提案、仕様、作業パッケージの順で管理する
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: 依頼の意図、範囲、根拠、解決状況を確定する提案
+    template: proposal.md
+    instruction: |
+      依頼を実装指示とみなさず、顧客が得る成果として解釈する。
+      関連するリポジトリの事実を確認し、観測事実、仮定、判断を分離する。
+      技術や方式を Desired Outcome、Outcome Constraint、Required Means、Candidate Means のいずれかへ分類する。
+      重要な曖昧さがなければ `Intent-Resolution: REQUEST_SUFFICIENT`、所有者が再構成した意図を明示確認した場合は `OWNER_CONFIRMED`、それ以外は `DRAFT` とする。
+      `UX-Mode` は `NONE`、`CONTINUITY`、`SHAPE` のいずれかとする。
+      `CONTINUITY` では既存体験の根拠を Continuity Source に記録する。
+      `SHAPE` では利用者が完了したい中心作業を Primary User Task、体験の方向性を UX Direction に記録する。
+      Thesaurus は業務用語の統一が必要な場合だけ追加する。
+      実装手順、ファイル一覧、試験階層別計画は記載しない。
+    requires: []
+
+  - id: specs
+    generates: 'specs/*/spec.md'
+    description: Spec Unit ごとの観測可能な差分仕様
+    template: spec.md
+    instruction: |
+      proposal.md で列挙した各 Spec Unit に `specs/<capability>/spec.md` を作成する。
+      冒頭の `## Purpose` に、永続的な仕様領域の目的を記載する。
+      差分見出しは `## ADDED Requirements`、`## MODIFIED Requirements`、`## REMOVED Requirements`、`## RENAMED Requirements` だけを使用する。
+      Requirement と Scenario には、利用者または外部契約から観測できる終端状態だけを記載する。
+      実装方式、ファイル、パッケージ、補助処理、移行作業、試験計画を Requirement または Scenario にしない。
+      Scenario 見出しは `#### Scenario: <名称> (<CAPABILITY>-S###)` とし、安定した識別子を付ける。
+      自動化できない Scenario は見出しの近くに `Tags: manual` を記載する。
+    requires:
+      - proposal
+
+  - id: tasks
+    generates: tasks.md
+    description: 実装成果をまとめた粗い作業パッケージ台帳
+    template: tasks.md
+    instruction: |
+      tasks.md は `- [ ] WP<number>: <成果>` 形式の作業パッケージ台帳とする。
+      各作業パッケージに対象の Requirement または Scenario と、客観的な Completion Evidence を記載する。
+      ファイル単位、補助処理単位、試験階層単位へ分解しない。
+      リリース、デプロイ、外部環境操作、認証情報、外部承認を完了条件に含めない。
+    requires:
+      - proposal
+      - specs
+
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: |
+    解決済み提案と差分仕様を守り、作業パッケージ単位で実装と検証を完了する。
+    重要な矛盾または未解決判断を発見した場合は作業を止め、所有者へ確認する。

@@ -1,19 +1,20 @@
 ---
 name: openspec-apply-change
 description: Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks.
+allowed-tools: Bash(openspec:*)
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
   author: openspec
-  version: '1.0'
-  generatedBy: '1.3.1'
+  version: "1.0"
+  generatedBy: "1.8.0"
 ---
 
 Implement tasks from an OpenSpec change.
 
-When UI is in scope, treat `.wireframe.json` as the visible-surface source and the matching `.wireframe.html` and screenshot as `openspec/designer` rendering evidence. Never edit or recapture the evidence during apply. Resolve only self-evident implementation details that preserve existing actions, information structure, and copy. Return `BLOCKED` instead of redesigning the surface when artifacts conflict or a non-self-evident visible change is necessary.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name (e.g., `/opsx-apply add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
@@ -22,18 +23,17 @@ When UI is in scope, treat `.wireframe.json` as the visible-surface source and t
    If a name is provided, use it. Otherwise:
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
+   - If ambiguous, run `openspec list --json` to get available changes and ask the user to select one
 
    Always announce: "Using change: <name>" and how to override (e.g., `/opsx-apply <other>`).
 
 2. **Check status to understand the schema**
-
    ```bash
    openspec status --change "<name>" --json
    ```
-
    Parse the JSON to understand:
    - `schemaName`: The workflow being used (e.g., "spec-driven")
+   - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
 
 3. **Get apply instructions**
@@ -47,11 +47,28 @@ When UI is in scope, treat `.wireframe.json` as the visible-surface source and t
    - Progress (total, complete, remaining)
    - Task list with status
    - Dynamic instruction based on current state
+   - Optional `context`: current required project instruction input from the selected root
+   - Optional `operationGuidance`: current advisory guidance for apply
 
    **Handle states:**
-   - If `state: "blocked"` (missing artifacts): return `BLOCKED` with exact evidence and stop without delegating artifact repair
-   - If `state: "all_done"`: skip implementation delegation and proceed to facilitator review
+   - If `state: "blocked"` (missing artifacts): show message, suggest using `/opsx-continue` (if it is not installed, run `openspec status --change "<name>" --json` to see the next artifact and `openspec instructions <artifact-id> --change "<name>" --json` for how to create it)
+   - If `state: "all_done"`: congratulate, suggest archive
    - Otherwise: proceed to implementation
+
+   Treat `context` as a required prompt-level input. Read and consider it, and
+   apply relevant project facts, conventions, and constraints while implementing.
+   Treat `operationGuidance` as optional additive advice. Read and consider every
+   entry, and follow entries that are applicable and compatible with the built-in
+   workflow.
+
+   Keep both fields separate from CLI-returned state, missing artifacts, tasks,
+   progress, `contextFiles`, and the built-in `instruction`. They are not
+   evidence of task completion, do not replace the built-in instruction, and do
+   not permit bypassing a blocked state. If context conflicts with the built-in
+   instruction, an explicit user choice, or a CLI-controlled value, report the
+   conflict and preserve the controlling value. If guidance is inapplicable or
+   conflicts with those controlling inputs, do not follow it and explain why.
+   These are prompt-level behavior contracts, not enforceable checks.
 
 4. **Read context files**
 
@@ -60,6 +77,9 @@ When UI is in scope, treat `.wireframe.json` as the visible-surface source and t
    - **spec-driven**: proposal, specs, design, tasks
    - Other schemas: follow the contextFiles from CLI output
 
+   Do not copy `context` or `operationGuidance` verbatim into implementation
+   files or planning artifacts unless the user separately asks for that content.
+
 5. **Show current progress**
 
    Display:
@@ -67,29 +87,23 @@ When UI is in scope, treat `.wireframe.json` as the visible-surface source and t
    - Progress: "N/M tasks complete"
    - Remaining tasks overview
    - Dynamic instruction from CLI
-   - A complete `## Agent Delegation Timeline` covering every current task, owner, dependency, conflict boundary, and planned verification before the first implementation delegation; reissue it whenever the plan changes and restore it after compaction if absent
 
-6. **Delegate tasks (loop until done or blocked)**
+6. **Implement tasks (loop until done or blocked)**
 
-   At each iteration:
-   - Determine task ownership and split work only when needed for safe execution
-   - Compute dependencies, file or generated-artifact conflicts, and the dependency-safe parallel ready set
-   - Delegate Product SDK, authenticated product surface, and public site work to `unit/frontend/engineer`
-   - Delegate Go, TypeSpec, Admin Console, and backend work to `unit/backend/engineer`
-   - Delegate repository tooling and cross-package execution to `unit/build/builder`
-   - Launch independent ready work in parallel and record why any ready work must be serialized
-   - Mark a task complete only after implementation and verification evidence are accepted: `- [ ]` → `- [x]`
-   - Re-run apply instructions after each accepted batch and continue until `all_done`
+   For each pending task:
+   - Show which task is being worked on
+   - Make the code changes required
+   - Keep changes minimal and focused
+   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
+   - Continue to next task
 
    **Pause if:**
-   - A required artifact is missing or unreadable → stop without delegating artifact repair
-   - Implementation reveals a material unresolved product, contract, architecture, security, data, dependency, or visible-surface decision → return evidence to Proposer for the affected work
-   - Error or blocker encountered → report evidence
+   - Task is unclear → ask for clarification
+   - Implementation reveals a design issue → suggest updating artifacts
+   - Error or blocker encountered → report and wait for guidance
    - User interrupts
 
-7. **Run final review and show status**
-
-   When apply instructions report `all_done`, request final review from `unit/review/facilitator`. Route valid in-scope findings to the responsible implementer, rerun affected verification, and rerun the complete facilitator review until it returns `APPROVE`. Report archive-ready only after approval.
+7. **On completion or pause, show status**
 
    Display:
    - Tasks completed this session
@@ -125,7 +139,7 @@ Working on task 4/7: <task description>
 - [x] Task 2
 ...
 
-Facilitator review approved. This change is archive-ready.
+All tasks complete! You can archive this change with `/opsx-archive`.
 ```
 
 **Output On Pause (Issue Encountered)**
@@ -149,13 +163,19 @@ What would you like to do?
 ```
 
 **Guardrails**
-
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
-- Compute ownership, dependencies, conflicts, and safe parallel groups before delegation
-- Update task checkboxes only after accepting implementation and verification evidence
-- Pause affected work on errors, safety boundaries, or material unresolved decisions; do not guess
+- If task is ambiguous, pause and ask before implementing
+- If implementation reveals issues, pause and suggest artifact updates
+- Keep code changes minimal and scoped to each task
+- Update task checkbox immediately after completing each task
+- Pause on errors, blockers, or unclear requirements - don't guess
 - Use contextFiles from CLI output, don't assume specific file names
+- Do not use context or operation guidance as proof that a task is complete
+- Apply relevant project context; report conflicts with controlling workflow inputs
+- Consider every guidance entry; explain any inapplicable or conflicting advice
+- Do not copy runtime context or operation guidance into implementation files or planning artifacts
+- Preserve CLI-controlled blocked/ready/all-done behavior and completion criteria
 
 **Fluid Workflow Integration**
 

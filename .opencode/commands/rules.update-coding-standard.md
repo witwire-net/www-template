@@ -1,5 +1,5 @@
 ---
-description: Update `CODING_STANDARDS.md` from this repo's lint/CI/git-hook rules with beginner-friendly NG/OK examples (no invented rules).
+description: Update `CODING_STANDARDS.md` from this repo's actual lint, CI, git-hook, TypeSpec, OpenSpec, Go, and test rules with beginner-friendly examples.
 ---
 
 ## User Input
@@ -32,8 +32,10 @@ This document is **lint-as-rules**: include **only** rules that are mechanically
 6. Spectral behavior must be precise:
    - `packages/typespec/package.json` runs `spectral lint openapi/openapi.json --ruleset .spectral.yaml --fail-severity error`
    - warnings do **not** fail the command; errors do.
-7. Mention OpenSpec only to the extent mechanically true today: it is outside the default `pnpm lint`, hooks, and CI flow.
+7. Mention OpenSpec exactly as implemented through the `behavior-change` and `architecture-change` schemas, `pnpm lint:openspec`, proposal validation, active-delta Scenario/Test traceability, and task/design scope validation.
 8. Use this repo's real file names and paths. Do **not** reference non-existent legacy paths such as `tools/scripts/*`, root `.spectral.yaml`, `eslint.config.mjs`, `commitlint.config.cjs`, or `.lintstagedrc.cjs`.
+9. Keep OpenSpec documented as the persistent observable behavior contract, not a master implementation plan. Document selected-Change `--change` verification, coarse Work Packages, and progressive runtime planning.
+10. Document the independent `Operation Lane`, `UX Mode`, and `Review Depth` vocabulary enforced by `.github/workflows/validate-pr-template.yml`.
 
 ## Required Structure
 
@@ -93,6 +95,13 @@ If a section has no enforceable rules beyond a short scope note, keep it brief a
    - `scripts/codegen/check.sh`
    - `scripts/hooks/format-staged-go.sh`
    - `scripts/hooks/verify-staged-migrations.sh`
+   - `openspec/schemas/behavior-change/schema.yaml`
+   - `openspec/schemas/architecture-change/schema.yaml`
+   - `scripts/openspec/verify-change-proposal.mjs`
+   - `scripts/openspec/verify-scenario-coverage.mjs`
+   - `scripts/openspec/verify-change-task-scope.mjs`
+   - `.github/pull_request_template.md`
+   - `.github/workflows/validate-pr-template.yml`
 3. Read custom analyzers and tests when they are part of actual enforcement:
    - `packages/backend/tools/analyzers/cmd/guardrails/main.go`
    - `packages/backend/internal/adapter/http/product/router_test.go`
@@ -106,6 +115,8 @@ If a section has no enforceable rules beyond a short scope note, keep it brief a
    - Backend guardrails such as Go file placement, allowed internal/external imports by layer, GORM only in persistence, `AutoMigrate` banned, migration filename/pair policy, route literal/path policy, generated folder policy, banned `fmt.Print*`/`print`/`println`, and banned host-derived URL composition.
    - Auth fail-close behavior outside development (`APP_BEARER_TOKEN` requirement) when enforced by tests.
    - Exact CI step order and exact git hook behavior.
+   - `DIRECT`, `BEHAVIOR`, and `ARCHITECTURE` are independent from `NONE`, `CONTINUITY`, and `SHAPE`; review depth is independently `STANDARD` or `DEEP`.
+   - OpenSpec proposals, active-delta Scenario/Test traceability, coarse Work Package scope, material design scope, and selected-Change verification.
 5. Update `CODING_STANDARDS.md` following the constraints above.
 6. Before finishing, sanity-check that every cited rule maps to a real failing command/test/hook in this repo and that every referenced file path exists.
 

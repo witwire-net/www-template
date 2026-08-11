@@ -7,6 +7,7 @@ Read these files before applying `coding-guardian` in this repository.
 - `AGENTS.md`: project workflow, required commands, language policy
 - `CODING_STANDARDS.md`: mechanically enforced rules summary
 - `CONTRIBUTING.md`: contributor workflow and required checks
+- `docs/change-operation.md`: operation lane, UX mode, review depth, and OpenSpec boundary
 - `package.json`: root command graph (`gen`, `lint`, `check`, `test:run`, `build`, `format:check`)
 - `.github/workflows/ci.yml`: default CI order
 
@@ -50,3 +51,17 @@ Read these files before applying `coding-guardian` in this repository.
 - `scripts/codegen/check.sh`
 - `scripts/hooks/format-staged-go.sh`
 - `scripts/hooks/verify-staged-migrations.sh`
+
+## OpenSpec enforcement
+
+- `openspec/config.yaml`: repository OpenSpec rules
+- `openspec/schemas/behavior-change/schema.yaml`: observable behavior Change artifacts
+- `openspec/schemas/architecture-change/schema.yaml`: material architecture Change artifacts
+- `scripts/openspec/verify-change-proposal.mjs`: proposal scope and intent resolution
+- `scripts/openspec/verify-scenario-coverage.mjs`: effective-spec Scenario/Test traceability
+- `scripts/openspec/verify-change-task-scope.mjs`: Work Package and design scope
+
+## Pull request enforcement
+
+- `.github/pull_request_template.md`: required operation metadata and evidence
+- `.github/workflows/validate-pr-template.yml`: field, lane, UX, review, OpenSpec, and UI evidence validation

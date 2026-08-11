@@ -1,6 +1,6 @@
 ---
 name: agents-md-generator
-description: Generate or update a repository’s AGENTS.md (coding-agent instructions) by extracting runnable Commands/Testing hints from common project files (package.json scripts, lockfiles, Makefile, etc.) and producing a best-practice template with required sections (Commands, Testing, Project structure, Code style, Git workflow, Boundaries, Security). Use when asked “AGENTS.mdを作って/生成して/更新して”, “OpenCode用のAGENTS.mdを整備して”, or when onboarding an AI coding agent to a repo.
+description: Generate or update a repository's AGENTS.md by extracting runnable commands and test guidance from project files and producing the required project, style, workflow, boundary, and security sections. Use when creating, refreshing, or onboarding coding-agent instructions.
 ---
 
 # Agents Md Generator

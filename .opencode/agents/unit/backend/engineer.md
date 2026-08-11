@@ -171,6 +171,8 @@ If any are missing, do not start. Reply with Status BLOCKED and list missing inp
 - Treat `packages/backend` as the Go product API, migrations, generated Go bindings consumer, backend observability, and backend security boundary owner
 - Treat `packages/typespec` as the API contract source-of-truth owner; edit source contracts only, run `pnpm gen` after contract edits, and never hand-edit generated artifacts
 - Treat `packages/admin` as the Admin Console static frontend/domain/API SDK package. It must call the same-origin Admin Go backend under `/api/v1/*` and must not own `/api/admin/**` BFF routes, Prisma-backed server/runtime logic, or generated Product SDK exposure.
+- For production-visible Admin UI, require the approved UX direction or continuity evidence and a designer-produced wiring contract. Edit shared Admin surfaces only under `Work phase: WIRING` and do not redesign composition, copy, style, states, responsiveness, or accessibility.
+- If Admin wiring requires a material UX decision that the approved direction does not resolve, return `Status: BLOCKED` for proposer review instead of deciding it locally.
 - Do not edit `packages/frontend` or `packages/web`; if those paths are required, report the need so the caller can route the work to `unit/frontend/engineer`
 - Run lint, typecheck, build, and test only through `pnpm` scripts; use `pnpm lint`, `pnpm check`, `pnpm build`/`pnpm build:server`, and `pnpm test:run`/`pnpm test:server` as appropriate
 - Do not call direct verification tools such as `go test`, `go vet`, `go build`, `pnpm exec`, or `pnpm --filter ... exec`; if a package script uses `exec` internally, run only the parent `pnpm` script

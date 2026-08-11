@@ -1,88 +1,63 @@
-schema: new-feature
+schema: behavior-change
 
 context: |
   Repository: www-template
   Tech stack: TypeScript, SvelteKit, Cloudflare Workers, Go, TypeSpec, Vite
-  Frontend packages: packages/frontend/app (SvelteKit app on Cloudflare Workers), packages/frontend/domain (shared domain logic), packages/frontend/api (API client), packages/frontend/ui (UI primitives)
-  Backend packages: packages/backend/cmd and packages/backend/internal/* (Go API)
+  Product frontend packages: packages/web (public SvelteKit site), packages/frontend/app (product SvelteKit app), packages/frontend/domain (shared domain logic), packages/frontend/api (API client), packages/frontend/ui (UI primitives), packages/frontend/i18n (translations)
+  Admin frontend packages: packages/admin/app (admin SvelteKit app), packages/admin/domain (admin domain logic), packages/admin/api (admin API client)
+  Backend packages: packages/backend/cmd and packages/backend/internal/* (Go product and admin APIs)
   API contract: packages/typespec/main.tsp is the source of truth; pnpm gen regenerates OpenAPI, frontend SDK, and Go bindings
   Testing: Vitest (unit/component/integration), Playwright (e2e), Go tests
 
   Architecture:
   - frontend/app -> frontend/domain -> frontend/api
-  - backend/cmd -> backend/internal/app -> backend/internal/http|persistence|usecases -> backend/internal/domain -> backend/internal/types
+  - backend/cmd -> backend/internal/app -> backend/internal/adapter|backend/internal/application|backend/internal/platform -> backend/internal/domain
   - public routes use api/v1/*; app routes use api/v1/*
-  - GORM imports are allowed only under packages/backend/internal/persistence/**
+  - GORM imports are allowed only under packages/backend/internal/adapter/postgres/**
   - AutoMigrate is banned; use packages/backend/db/migrations/** with golang-migrate
-  - OpenSpec is archived from the default lint/CI loop; dedicated `pnpm lint:openspec` validates schemas and confirmed Intent
+  - OpenSpec is the persistent contract for observable behavior and is enforced by the default `pnpm lint` command
 
-  Intent confirmation boundary:
-  - Treat the request as evidence of intent, not as an implementation-ready specification.
-  - Every Change MUST begin with a confirmed `intent.md` before proposal, specs, design, or tasks are authored.
-  - Classify solution-shaped terms as a desired outcome, an outcome constraint, a required means, or a candidate means. Familiarity or common example code is not evidence that a candidate means fits this repository.
-  - Owner confirmation may make a candidate means binding for design, but MUST NOT turn a technical means into an outcome, product requirement, Requirement, or Scenario.
-  - Specs define how the product or externally owned contract must be, independently of how the repository achieves that state. Required means belong in design and tasks; candidate means remain design options. Neither belongs in Specs.
-  - Ground the interpretation in repository evidence, separate observations from inferences and assumptions, and check for evidence that would invalidate the interpretation.
-  - The owner MUST explicitly confirm the reconstructed intent. Downstream artifacts preserve that confirmed intent and MUST NOT reinterpret it.
+  Intent resolution boundary:
+  - `proposal.md` is the authoritative interpretation of the request.
+  - Use `Intent-Resolution: REQUEST_SUFFICIENT` only when the request itself resolves every material ambiguity.
+  - Use `Intent-Resolution: OWNER_CONFIRMED` only when the owner explicitly confirms the reconstructed intent.
+  - Keep `Intent-Resolution: DRAFT` while an ambiguity could materially change behavior, contracts, architecture, security, data, dependencies, or scope.
+  - Classify solution-shaped wording as Desired Outcome, Outcome Constraint, Required Means, or Candidate Means.
+  - Required Means constrain architecture and tasks. Candidate Means remain options. Neither becomes a product Requirement or Scenario.
 
-  UI artifact order:
-  - When a Change needs a user-visible UI, create the artifacts in this order: confirmed intent, proposal, wireframe JSON, generated preview, screenshot evidence, spec, then design.
-  - `openspec/designer` owns the minimum visible surface in `.wireframe.json`, generates the matching `.wireframe.html`, and captures the final `.wireframe-screenshot.png`. The JSON is the only design source; HTML and PNG are generated evidence and are never hand-edited.
-  - Before creating or revising a wireframe, inspect the implemented target UI and every overlapping `.wireframe.json` in active Changes under `openspec/changes/`, excluding `archive/`.
-  - Preserve implemented shell, navigation, information hierarchy, terminology, and interactions outside the requested delta. Preserve visible changes already planned by overlapping active Change wireframes.
-  - If implementation, active wireframes, confirmed intent, or proposal conflict on user-visible behavior, stop for owner clarification instead of choosing a source silently.
-  - Specs define user-observable behavior without adding visible controls, settings, screens, labels, versions, model names, or internal state absent from the wireframe.
-  - During apply, resolve only self-evident implementation details that preserve the visible surface. Escalate contradictions or non-self-evident visible changes.
+  UI / UX boundary:
+  - `UX-Mode: NONE` means no user-visible surface changes.
+  - `UX-Mode: CONTINUITY` preserves an identified existing experience and records its continuity source.
+  - `UX-Mode: SHAPE` defines the primary user task and the intended experience direction before specifications are written.
+
+  Change completion boundary:
+  - A Change is complete when its Work Packages are implemented and merge-ready with reproducible repository-local or CI evidence.
+  - Do not include release execution, deployment, environment provisioning, credential access, external approval, staging or production validation, rehearsal, or production observation.
 
   Spec -> Test contract:
-  - Change-local specs live under openspec/changes/**/specs/**/spec.md
-  - Canonical main specs live at openspec/specs/**/spec.md
-  - Every Scenario heading MUST end with a stable Scenario ID in parentheses:
-    - Example: #### Scenario: Create a user (USER-MGMT-S001)
-  - Scenario ID format: ^[A-Z0-9]+(?:-[A-Z0-9]+)*-S\d{3,}$
-  - Automated tests MUST reference Scenario IDs in test titles using brackets:
-    - Example: it('[USER-MGMT-S001] ...', ...)
-  - If a scenario cannot be automated, mark it explicitly with: Tags: manual
+  - Main specs live at `openspec/specs/**/spec.md`.
+  - Active delta specs participate in global scenario coverage before archive or sync.
+  - Every Scenario heading ends with a stable ID such as `(USER-MGMT-S001)`.
+  - Automated TypeScript and Go tests reference Scenario IDs in titles such as `[USER-MGMT-S001]`.
+  - A Scenario excluded from automation contains `Tags: manual` close to its heading.
 
-  Note on Spec Units:
-  - Some schemas in this repo (e.g., new-feature, and future fix-feature/change-feature) use Spec Units:
-    - Spec Unit = <capability>
-    - <capability>: kebab-case enduring product capability or external-contract area (e.g., user-mgmt)
-    - Change spec path: openspec/changes/<change>/specs/<capability>/spec.md
-    - Main spec path: openspec/specs/<capability>/spec.md
+  Spec Units:
+  - A Spec Unit is a kebab-case enduring product capability or externally owned contract area.
+  - Main specs live at `openspec/specs/<capability>/spec.md`.
 
 rules:
-  intent:
-    - Do not write a confirmed intent artifact until the owner explicitly confirms the reconstructed intent.
-    - Cite repository evidence and separate observed facts, inferences, assumptions, and unresolved decisions.
-    - Do not leave decisions that can change customer-visible behavior, contracts, architecture, security, data, dependencies, or scope unresolved in a confirmed intent.
+  proposal:
+    - Keep outcomes separate from required and candidate means.
+    - Cite repository evidence and record assumptions, decisions, observable success, and confirmation evidence.
+    - Do not resolve a proposal while a material decision remains open.
   specs:
-    - Every Requirement and Scenario MUST define a desired end state, behavior, or outcome constraint independently of implementation means.
-    - A required or candidate means MUST NOT become a Requirement or Scenario. Record a required means as a design constraint and a candidate means only as a design option.
-    - Design decisions, tasks, tests, implementation necessity, and references created by the same Change MUST NOT be used to justify adding a Requirement or Scenario.
-    - Every Scenario heading MUST include a Scenario ID suffix in parentheses.
-    - Scenario IDs MUST use the uppercased Spec Unit prefix (e.g., USER-MGMT-S001).
-    - Prefer Given/When/Then bullets. Keep scenarios testable and observable.
-    - If a scenario cannot be automated, include `Tags: manual` and explain why in the change proposal/PR.
+    - Begin every delta spec with `## Purpose`.
+    - Requirements and Scenarios contain only observable behavior or externally owned constraints.
+    - Every Scenario heading includes a stable Scenario ID suffix in parentheses.
+    - 'If a Scenario cannot be automated, include `Tags: manual` close to its heading.'
+  design:
+    - Keep only material decisions, boundaries, data, security, migration, rollback, failure modes, risks, verification, and revisit triggers.
   tasks:
-    - For each ADDED/MODIFIED Scenario ID, include a task to add/update automated tests that reference the Scenario ID.
-    - UI implementation tasks MUST reference the approved `.wireframe.json` source when a wireframe exists. They MUST NOT task direct edits to generated `.wireframe.html` files or screenshot recapture.
-
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
-
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+    - Keep `tasks.md` as a coarse Work Package ledger with objective completion evidence.
+    - Do not create file-by-file, helper-by-helper, or test-layer-by-test-layer plans.
+    - Do not require release execution, deployment, external environment operations, credentials, or external approval.

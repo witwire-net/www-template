@@ -1,0 +1,64 @@
+name: architecture-change
+version: 1
+description: 物質的な構造変更を、提案、仕様、設計、作業パッケージの順で管理する
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: 依頼の意図、範囲、根拠、解決状況を確定する提案
+    template: proposal.md
+    instruction: |
+      behavior-change と同じ提案契約を使用する。
+      構造変更という手段を顧客成果へ置き換えず、Required Means または Candidate Means として分類する。
+      重要な曖昧さがなければ `Intent-Resolution: REQUEST_SUFFICIENT`、所有者が再構成した意図を明示確認した場合は `OWNER_CONFIRMED`、それ以外は `DRAFT` とする。
+      `UX-Mode` は `NONE`、`CONTINUITY`、`SHAPE` のいずれかとし、条件に応じた UI / UX Impact を記載する。
+      実装手順、ファイル一覧、試験階層別計画は記載しない。
+    requires: []
+
+  - id: specs
+    generates: 'specs/*/spec.md'
+    description: 構造変更後も成立すべき観測可能な差分仕様
+    template: spec.md
+    instruction: |
+      proposal.md で列挙した各 Spec Unit に `specs/<capability>/spec.md` を作成する。
+      冒頭の `## Purpose` に永続的な仕様領域の目的を記載する。
+      Requirement と Scenario には利用者または外部契約から観測できる終端状態だけを記載し、内部構造を仕様化しない。
+      Scenario 見出しは `#### Scenario: <名称> (<CAPABILITY>-S###)` とする。
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: 仕様を満たすために必要な物質的な設計判断
+    template: design.md
+    instruction: |
+      承認済み仕様を実現するために必要な物質的判断だけを記載する。
+      Material Decisions、Boundaries、Data、Security、Migration、Rollback、Failure Modes、Risks、Verification、Revisit Triggers 以外の節を追加しない。
+      ファイル一覧、ディレクトリ構成、補助処理一覧、詳細な実装手順、試験階層別計画を記載しない。
+      該当しない節は削除せず、理由付きで「なし」と記載する。
+      移行と切り戻しはリポジトリで実施・検証できる境界に限定し、外部環境操作を完了条件にしない。
+    requires:
+      - proposal
+      - specs
+
+  - id: tasks
+    generates: tasks.md
+    description: 実装成果をまとめた粗い作業パッケージ台帳
+    template: tasks.md
+    instruction: |
+      tasks.md は `- [ ] WP<number>: <成果>` 形式の作業パッケージ台帳とする。
+      各作業パッケージに対象の設計判断または Scenario と、客観的な Completion Evidence を記載する。
+      ファイル単位、補助処理単位、試験階層単位へ分解しない。
+      リリース、デプロイ、外部環境操作、認証情報、外部承認を完了条件に含めない。
+    requires:
+      - proposal
+      - specs
+      - design
+
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: |
+    解決済み提案、差分仕様、設計判断を守り、作業パッケージ単位で実装と検証を完了する。
+    重要な矛盾または未解決判断を発見した場合は作業を止め、所有者へ確認する。

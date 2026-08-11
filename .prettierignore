@@ -1,1 +1,6 @@
+# pnpm が生成・管理する lockfile は package manager の出力を保つ。
 pnpm-lock.yaml
+
+# OpenSpec 公式 CLI が生成するコマンドとスキルは生成元の書式を保つ。
+.opencode/commands/opsx-*.md
+.opencode/skills/openspec-*/SKILL.md

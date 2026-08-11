@@ -16,6 +16,26 @@ export function isDirectory(absolutePath) {
 }
 
 /**
+ * 現在作業中である Change の直下ディレクトリを安定した順序で列挙する。
+ *
+ * `archive` は確定済み履歴であり、活動中成果物の検査対象ではないため除外する。
+ * Change ディレクトリがまだ存在しないリポジトリでは空配列を返す。
+ *
+ * @param {string} repositoryRoot - リポジトリルートの絶対パス。
+ * @returns {string[]} 活動中 Change ディレクトリの絶対パス。
+ */
+export function collectActiveChangeDirectories(repositoryRoot) {
+  const changesDirectory = path.join(repositoryRoot, 'openspec', 'changes');
+  if (!isDirectory(changesDirectory)) return [];
+
+  // 出力順を固定し、検査結果と試験結果がファイルシステムの列挙順に依存しないようにする。
+  return readdirSync(changesDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== 'archive')
+    .map((entry) => path.join(changesDirectory, entry.name))
+    .sort();
+}
+
+/**
  * 未アーカイブ Change 配下から条件に一致する artifact を再帰的に収集する。
  *
  * archived Change は現在の workflow と lint の対象外です。この関数は artifact

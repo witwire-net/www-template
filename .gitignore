@@ -59,6 +59,8 @@ coverage/
 
 # Misc
 .turbo/
+__pycache__/
+*.py[cod]
 
 # Serena MCP Server
 .serena/cache/

@@ -23,7 +23,14 @@ from pathlib import Path
 
 
 SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-ALLOWED_FIELDS = {"name", "description", "license", "compatibility", "metadata"}
+ALLOWED_FIELDS = {
+    "name",
+    "description",
+    "allowed-tools",
+    "license",
+    "compatibility",
+    "metadata",
+}
 
 
 @dataclass(frozen=True)
@@ -148,7 +155,7 @@ def collect_skill_files(root: Path, include_global: bool) -> list[Path]:
     ):
         if not base.exists():
             continue
-        files.extend(sorted(base.glob("*/SKILL.md")))
+        files.extend(sorted(base.rglob("SKILL.md")))
 
     if include_global:
         for base in (
@@ -157,7 +164,7 @@ def collect_skill_files(root: Path, include_global: bool) -> list[Path]:
         ):
             if not base.exists():
                 continue
-            files.extend(sorted(base.glob("*/SKILL.md")))
+            files.extend(sorted(base.rglob("SKILL.md")))
 
     # Deduplicate.
     seen: set[Path] = set()

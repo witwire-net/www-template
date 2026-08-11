@@ -28,8 +28,11 @@ Create and maintain OpenCode skills as small, reusable "bundles": a `SKILL.md` p
 
 ## Skill bundle conventions
 
-- One folder per skill name; the folder name must match `name` in frontmatter.
+- One folder per skill name; the immediate folder name must match `name` in
+  frontmatter. Namespace folders may group repository-specific skills.
 - `SKILL.md` must be spelled in ALL CAPS.
+- Accept the Agent Skills `allowed-tools` field used by official generators;
+  OpenCode permissions remain authoritative at runtime.
 - Keep the `description` specific enough that an agent can confidently select the skill.
 - Prefer small, composable skills. If a skill grows large, split it into multiple skills.
 - Put runnable automation in `scripts/` and reference it from `SKILL.md`.

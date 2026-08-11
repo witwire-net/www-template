@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import { access, copyFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
+import { access, copyFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -80,12 +80,6 @@ const TEMPLATES = {
       IMAGE_CONSTRAINTS.noUnreadableDenseMicrotext,
       IMAGE_CONSTRAINTS.noRandomAnalyticsChartsUnlessRequested,
       IMAGE_CONSTRAINTS.noAuthenticationScreenUnlessRequested,
-    ],
-    wireframePolicy: [
-      'Use the wireframe as layout and information architecture guidance only.',
-      'Preserve the major sections, hierarchy, content groups, navigation roles, and primary actions.',
-      "Do not copy the wireframe's low-fidelity visual style.",
-      'Do not render gray placeholder boxes, generic outlines, equal-weight rectangles, or scaffold labels as final UI styling.',
     ],
   },
   'product-mockup': {
@@ -372,12 +366,6 @@ const SCALAR_ARG_SETTERS = new Map([
       args.typography = value;
     },
   ],
-  [
-    'wireframe',
-    (args, value) => {
-      args.wireframe = value;
-    },
-  ],
 ]);
 
 /**
@@ -401,10 +389,7 @@ async function main() {
   }
 
   const request = normalizeRequest(args);
-  const wireframeSummary = request.wireframePath
-    ? summarizeWireframe(await loadWireframe(request.wireframePath))
-    : null;
-  const prompt = buildCodexPrompt(request, wireframeSummary);
+  const prompt = buildCodexPrompt(request);
   const command = buildCodexCommand(request);
 
   if (request.dryRun) {
@@ -567,7 +552,6 @@ function normalizeRequest(args) {
     timeoutMs,
     dryRun: Boolean(args.dryRun),
     iterationTarget: args.iterationTarget ?? defaultIterationTarget(templateName),
-    wireframePath: args.wireframe ? resolve(args.wireframe) : null,
     images,
     imageRoles,
     codexBin: process.env.GENERATE_IMAGE_CODEX_BIN || process.env.CODEX_BIN || 'codex',
@@ -601,93 +585,12 @@ function normalizeForm(args) {
 }
 
 /**
- * wireframe file を読み込みます。
- *
- * `.wireframe.json` はそのまま JSON として解析します。
- * `.wireframe.html` は wireframe skill の preview が含む `const WIREFRAME_DATA = ...;` を抽出します。
- */
-async function loadWireframe(filePath) {
-  const text = await readFile(filePath, 'utf8');
-  const extension = extname(filePath).toLowerCase();
-
-  if (extension === '.json') {
-    return JSON.parse(text);
-  }
-
-  if (extension === '.html' || extension === '.htm') {
-    const match = text.match(/const\s+WIREFRAME_DATA\s*=\s*([\S\s]*?);\s*(?:\n|$)/);
-    if (!match) {
-      throw new Error(`Unable to find WIREFRAME_DATA in ${filePath}`);
-    }
-    return JSON.parse(match[1]);
-  }
-
-  throw new Error(`Unsupported wireframe file extension: ${extension}. Use .json or .html.`);
-}
-
-/**
- * wireframe JSON を GPT-Image-2 向けの短い UI brief に変換します。
- *
- * 変換は AI 要約ではなく deterministic な tree traversal です。
- * 低忠実度 renderer の見た目ではなく、画面名、viewport、layout、役割、主要 action を抽出します。
- */
-function summarizeWireframe(wireframe) {
-  const root = wireframe.root ?? {};
-  const viewport = wireframe.viewport ?? {};
-  const bullets = [];
-  const actions = [];
-  const tables = [];
-  const headings = [];
-
-  walkWireframe(root, (node, depth) => {
-    if (depth <= 4 && bullets.length < 36) {
-      bullets.push(`${'  '.repeat(depth)}- ${describeNode(node)}`);
-    }
-
-    if (node.type === 'button' || node.type === 'link') {
-      actions.push(
-        `${node.name ?? 'Unnamed action'}${node.type === 'button' ? ' (primary/action button)' : ' (secondary/link action)'}`
-      );
-    }
-
-    if (node.type === 'table') {
-      const columns = Array.isArray(node.columns)
-        ? node.columns.map((column) => column.name).filter(Boolean)
-        : [];
-      tables.push(
-        `${node.name ?? 'Table'}${columns.length > 0 ? `: columns ${columns.join(', ')}` : ''}`
-      );
-    }
-
-    if (node.type === 'text' && ['display', 'heading'].includes(node.variant)) {
-      headings.push(
-        `${node.name ?? 'Untitled heading'}${node.variant ? ` (${node.variant})` : ''}`
-      );
-    }
-  });
-
-  return {
-    screenName: wireframe.name ?? 'Unnamed screen',
-    viewport: describeViewport(viewport),
-    layout: describeRootLayout(root),
-    bullets,
-    actions: unique(actions).slice(0, 12),
-    tables: unique(tables).slice(0, 8),
-    headings: unique(headings).slice(0, 8),
-  };
-}
-
-/**
  * Codex に渡す最終 prompt を生成します。
  *
  * 全 template 共通の安全 guardrail と、template 固有の成果物仕様を結合します。
- * wireframe がある場合だけ、UI brief と low-fidelity leakage を避ける指示を追加します。
  */
-function buildCodexPrompt(request, wireframeSummary) {
+function buildCodexPrompt(request) {
   const referenceImages = renderImageRoles(request.images, request.imageRoles);
-  const wireframeBlock = wireframeSummary
-    ? renderWireframeBlock(request.template, wireframeSummary)
-    : null;
 
   return [
     "You are being invoked by OpenCode's generate-image skill to create exactly one raster image.",
@@ -716,7 +619,6 @@ function buildCodexPrompt(request, wireframeSummary) {
     'Composition:',
     request.form.composition ?? request.template.composition,
     '',
-    wireframeBlock,
     referenceImages,
     'Style:',
     request.form.style ?? request.template.style,
@@ -1146,161 +1048,6 @@ function renderAmbiguousArtifactsError(source, candidates) {
 }
 
 /**
- * wireframe tree を深さ優先で走査します。
- *
- * callback には node と depth を渡します。children が無い leaf や table node も要約対象にします。
- */
-function walkWireframe(node, callback, depth = 0) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-
-  callback(node, depth);
-
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      walkWireframe(child, callback, depth + 1);
-    }
-  }
-}
-
-/**
- * wireframe node を一行の役割説明に変換します。
- *
- * 画像生成に効く情報だけを残すため、px 値は補助情報として軽く扱い、style には変換しません。
- */
-function describeNode(node) {
-  const parts = [node.name ?? 'Unnamed node'];
-  const role = describeRole(node);
-  const layout = node.direction ? `${node.direction} layout` : null;
-  const sizing = describeSizing(node);
-  const children =
-    Array.isArray(node.children) && node.children.length > 0
-      ? `${node.children.length} child items`
-      : null;
-
-  for (const value of [role, layout, sizing, children]) {
-    if (value) {
-      parts.push(value);
-    }
-  }
-
-  return parts.join('; ');
-}
-
-/**
- * wireframe node type を UI brief 用の役割に変換します。
- */
-function describeRole(node) {
-  switch (node.type) {
-    case 'text':
-      return node.variant ? `${node.variant} text` : 'text content';
-    case 'button':
-      return 'primary/action button';
-    case 'link':
-      return 'secondary link or navigation action';
-    case 'input':
-      return 'input, search, filter, or form control';
-    case 'card':
-      return 'grouped content card';
-    case 'table':
-      return 'data table';
-    case 'image':
-      return 'media or illustration area';
-    case 'icon':
-      return 'icon affordance';
-    case 'divider':
-      return 'section separator';
-    default:
-      return null;
-  }
-}
-
-/**
- * sizing 情報から、主領域・固定領域・補助領域の手がかりを作ります。
- */
-function describeSizing(node) {
-  const values = [];
-  if (node.grow) {
-    values.push('flexible primary region');
-  }
-  if (typeof node.width === 'number') {
-    values.push(`fixed width ${node.width}px`);
-  }
-  if (typeof node.height === 'number') {
-    values.push(`height ${node.height}px`);
-  }
-  return values.join(', ') || null;
-}
-
-/**
- * viewport を desktop / tablet / mobile と orientation に要約します。
- */
-function describeViewport(viewport) {
-  const width = Number(viewport.width) || null;
-  const height = Number(viewport.height) || null;
-  if (!width || !height) {
-    return 'unspecified viewport';
-  }
-
-  const device = width <= 640 ? 'mobile' : width <= 1024 ? 'tablet' : 'desktop';
-  const orientation = width >= height ? 'landscape' : 'portrait';
-  return `${device} ${orientation}, ${width}x${height}`;
-}
-
-/**
- * root layout を screen-level composition として要約します。
- */
-function describeRootLayout(root) {
-  const direction = root.direction ?? 'vertical';
-  const childCount = Array.isArray(root.children) ? root.children.length : 0;
-  return `${direction} app/screen structure with ${childCount} top-level sections`;
-}
-
-/**
- * wireframe summary を prompt section に整形します。
- */
-function renderWireframeBlock(template, summary) {
-  const policy = template.wireframePolicy ?? [
-    'Use the wireframe as structural guidance only.',
-    'Do not copy low-fidelity wireframe visual styling.',
-  ];
-
-  const lines = [
-    'Wireframe reference:',
-    ...policy,
-    '',
-    'Screen structure:',
-    `- Screen: ${summary.screenName}`,
-    `- Viewport: ${summary.viewport}`,
-    `- Overall layout: ${summary.layout}`,
-    ...summary.bullets,
-  ];
-
-  if (summary.headings.length > 0) {
-    lines.push(
-      '',
-      'Visual/content priority cues:',
-      ...summary.headings.map((heading) => `- ${heading}`)
-    );
-  }
-
-  if (summary.actions.length > 0) {
-    lines.push(
-      '',
-      'Primary and secondary actions:',
-      ...summary.actions.map((action) => `- ${action}`)
-    );
-  }
-
-  if (summary.tables.length > 0) {
-    lines.push('', 'Data surfaces:', ...summary.tables.map((table) => `- ${table}`));
-  }
-
-  return `${lines.join('\n')}\n`;
-}
-
-/**
  * 参照画像と役割説明を prompt section に変換します。
  */
 function renderImageRoles(images, imageRoles) {
@@ -1557,7 +1304,6 @@ Options:
   --out <path>                 Output image path. Default: ~/Pictures/codex-images/<timestamp>-<slug>.png
   --quality <value>            low | medium | high | auto. Default: medium
   --size <value>               auto or WIDTHxHEIGHT. Default: auto
-  --wireframe <path>           Optional .wireframe.json or .wireframe.html reference, mainly for ui-mockup
   --image <path>               Optional reference/edit image. Repeatable
   --image-role <text>          Role label for each --image. Repeatable
   --iteration-target <text>    What this generation should optimize

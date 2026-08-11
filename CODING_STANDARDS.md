@@ -6,7 +6,7 @@
 
 - scope note: ここに書くのは `pnpm format:check`、`pnpm gen`、`pnpm lint`、`pnpm check`、`pnpm test:run`、`pnpm check:codegen`、CI、Git hooks で機械的に落ちるものだけです
 - scope note: prose docs と設定・script・test が食い違うときは、`package.json`、`.github/workflows/ci.yml`、各 config、test、hook の実装を優先してください
-- scope note: `openspec/**` は現在の default `pnpm lint`、Git hooks、CI の対象外です
+- scope note: `pnpm lint` は OpenSpec のスキーマ、厳格な成果物形式、提案、Scenario と試験の追跡、作業パッケージと設計の対象範囲も検査します
 
 ## 1. 契約と生成
 
@@ -23,6 +23,14 @@
 - Enforcement point: `pnpm check:codegen` -> `scripts/codegen/check.sh`; `pnpm lint` -> `package.json` -> `pnpm check:codegen`; CI `.github/workflows/ci.yml`
 - NG例: TypeSpec を変えたのに generated file を commit しない
 - OK例: `pnpm gen` 後の generated file をそのまま commit する
+
+### OpenSpec の振る舞い契約と変更成果物を検証する
+
+- required: `BEHAVIOR` は `behavior-change`、`ARCHITECTURE` は `architecture-change` を使い、主仕様と全活動中差分を重ねた Scenario ID が一意で、各自動化対象 Scenario に TypeScript または Go の試験参照があり、孤立参照がない状態にする
+- required: `proposal.md` は成果と手段を分離し、`tasks.md` は `Covers` と `Completion Evidence` を持つ粗い作業パッケージ台帳にする。`architecture-change` の `design.md` には物質的な判断だけを記載する
+- Enforcement point: `pnpm lint` -> `pnpm lint:openspec` -> `package.json`, `openspec/schemas/behavior-change/schema.yaml`, `openspec/schemas/architecture-change/schema.yaml`, `scripts/openspec/verify-change-proposal.mjs`, `scripts/openspec/verify-scenario-coverage.mjs`, `scripts/openspec/verify-change-task-scope.mjs`
+- NG例: Scenario ID を付けない / 自動化可能な Scenario に試験参照も `Tags: manual` も付けない / `tasks.md` にファイル単位の詳細手順を列挙する
+- OK例: `#### Scenario: ... (AUTH-BE-S001)` と対応する試験参照をそろえ、実装可能な成果単位を作業パッケージとして記録する
 
 ### Product/Admin artifact を物理分離する
 
@@ -558,6 +566,13 @@
 - NG例: ローカルで `pnpm test:run` だけ通して `pnpm gen` や `pnpm check:codegen` を飛ばす
 - OK例: 変更に応じて少なくとも CI と同じ順番で確認する
 
+### PR の変更運用メタデータを検証する
+
+- required: PR 本文に `Operation Lane`、`UX Mode`、`Review Depth` を正しい値で記録し、`BEHAVIOR` と `ARCHITECTURE` では OpenSpec Change と一件以上の Scenario ID を記載する
+- Enforcement point: `.github/workflows/validate-pr-template.yml`; `.github/pull_request_template.md`
+- NG例: `Operation Lane: BEHAVIOR` に対して `OpenSpec Change: なし` と記載する
+- OK例: `Operation Lane: DIRECT` では理由付きの `なし` を使い、`BEHAVIOR` では Change 識別子と `AUTH-BE-S001` 形式の Scenario ID を記載する
+
 ## 8. Git hooks
 
 ### `pre-commit` は staged file を整形・検証する
@@ -593,4 +608,6 @@ Note: `.husky/pre-commit` の実体は `pnpm lint-staged` の後に `pnpm check:
 - TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
 - frontend CSS: `packages/frontend/ui/src/styles/base/global.css`, `packages/frontend/ui/src/styles/tokens.css`, `packages/frontend/ui/src/styles/theme.css`, `packages/frontend/ui/src/styles/base-styles.css`, `packages/frontend/ui/src/styles/components/*.css`, `packages/frontend/ui/src/styles/utilities.css`
 - backend lint / tests: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/product/router_test.go`, `packages/backend/internal/adapter/http/admin/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/product_runtime_test.go`
+- OpenSpec: `openspec/config.yaml`, `openspec/schemas/behavior-change/schema.yaml`, `openspec/schemas/architecture-change/schema.yaml`, `scripts/openspec/verify-change-proposal.mjs`, `scripts/openspec/verify-scenario-coverage.mjs`, `scripts/openspec/verify-change-task-scope.mjs`
+- PR metadata: `.github/pull_request_template.md`, `.github/workflows/validate-pr-template.yml`
 - helper scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/security/govulncheck.sh`, `scripts/security/gitleaks.sh`, `scripts/security/osv-scanner.sh`, `scripts/codegen/check.sh`, `scripts/hooks/format-staged-go.sh`, `scripts/hooks/verify-staged-migrations.sh`

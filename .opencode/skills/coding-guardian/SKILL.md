@@ -1,98 +1,95 @@
 ---
 name: coding-guardian
-description: Enforce this repository's actual coding rules and verification flow (TypeSpec -> generated artifacts -> implementation). Use when writing, modifying, refactoring, or reviewing code in this repository.
+description: Enforce this repository's real Svelte 5, Go, Gin, GORM, TypeSpec, Admin, OpenSpec, and verification rules while editing code, docs, or tooling.
 ---
 
 # Coding Guardian
 
-この skill は、このリポジトリで実際に fail する規約と検証フローから外れないようにガードします。
+Use the repository's enforced rules and command graph as the source of truth.
 
-- 返答言語: `AGENTS.md` に従う
-- 重要: まず `CODING_STANDARDS.md` と enforcement entrypoint を読む
-- 重要: API 契約の正は `packages/typespec/main.tsp`
-- 重要: 生成物は手編集しない
-- 重要: lint 回避は禁止（`eslint-disable` や inline config で逃げない）
-- 重要: `openspec/**` は現在の default `pnpm lint` / hooks / CI の外。明示依頼があるときだけ触る
+## First Actions
 
-## Workflow
-
-### 1) Load the repository rules before editing
-
-最初に次を読む。
+Read:
 
 - `AGENTS.md`
 - `CODING_STANDARDS.md`
 - `CONTRIBUTING.md`
+- `docs/change-operation.md`
 - `.opencode/skills/coding-guardian/references/repo-entrypoints.md`
 
-特に重要な enforcement entrypoint:
+Classify the change through `Operation Lane`, `UX Mode`, and `Review Depth`
+before selecting the workflow. OpenSpec is the persistent observable behavior
+contract and is part of `pnpm lint`.
 
-- root flow: `package.json`, `.github/workflows/ci.yml`, `.husky/pre-commit`, `.husky/commit-msg`, `.lintstagedrc.json`, `commitlint.config.js`, `eslint.config.js`
-- TypeSpec / OpenAPI: `packages/typespec/package.json`, `packages/typespec/.spectral.yaml`, `packages/typespec/spectral/path-policy.js`, `packages/typespec/spectral/app-security.js`, `packages/typespec/spectral/bearer-scheme.js`
-- backend: `packages/backend/.golangci.yml`, `packages/backend/tools/analyzers/cmd/guardrails/main.go`, `packages/backend/internal/adapter/http/product/router_test.go`, `packages/backend/internal/adapter/http/admin/router_test.go`, `packages/backend/internal/adapter/http/openapi_contract_test.go`, `packages/backend/internal/app/product_runtime_test.go`
-- scripts: `scripts/go/lint.sh`, `scripts/go/format-check.sh`, `scripts/go/guardrails.sh`, `scripts/go/verify-module.sh`, `scripts/security/lint-security.sh`, `scripts/codegen/check.sh`
+## Repository Boundaries
 
-### 2) Classify the change before editing
+- API source of truth: `packages/typespec/main.tsp`.
+- Generated Product and Admin OpenAPI, SDK, and Go bindings are never hand-edited.
+- Product frontend: `packages/web -> packages/frontend/ui` and
+  `packages/frontend/app -> packages/frontend/domain -> packages/frontend/api`,
+  with app also depending on shared UI.
+- Admin frontend: `packages/admin/app -> packages/admin/domain -> packages/admin/api`.
+- Server: `packages/backend/cmd -> packages/backend/internal/app ->
+(adapter/* | application | platform/*) -> packages/backend/internal/domain`.
+- Product and Admin remain separate by origin, Go binary, TypeSpec service,
+  OpenAPI artifact, SDK package, Go bindings, routes, and security boundary.
+- GORM remains under `packages/backend/internal/adapter/postgres/**`.
+- Migrations use paired SQL files under `packages/backend/db/migrations/**`;
+  `AutoMigrate` is prohibited.
 
-- Contract / codegen: `packages/typespec/**`, `packages/frontend/api/src/generated/**`, `packages/backend/internal/generated/**`
-- Frontend: `packages/web/**`, `packages/frontend/app/**`, `packages/frontend/domain/**`, `packages/frontend/ui/**`
-- Backend: `packages/backend/**`
-- Tooling / workflow: root config, scripts, hooks, CI, `.opencode/**`
+## Frontend Rules
 
-固定の依存方向:
+- Use Svelte 5 syntax and the existing SvelteKit route modes.
+- App pages and components obtain complete `{ data, actions }` contracts from
+  domain hooks; they do not import API packages or perform raw network calls.
+- Stateful domain composables live in `.svelte.ts` files.
+- `packages/web` remains independent from domain and API packages.
+- Shared presentation belongs in `packages/frontend/ui`; app and Admin surfaces
+  compose it rather than duplicating primitives.
+- User-facing copy uses the repository i18n ownership boundaries.
+- Actual UI changes require the production designer and browser verification at
+  mobile and desktop widths.
 
-- Client: `packages/web -> packages/frontend/ui` and `packages/frontend/app -> packages/frontend/domain -> packages/frontend/api`
-- Server: `packages/backend/cmd/api -> packages/backend/internal/app -> (packages/backend/internal/adapter/http | packages/backend/internal/adapter/postgres | packages/backend/internal/adapter/valkey | packages/backend/internal/adapter/webauthn | packages/backend/internal/adapter/mailer | packages/backend/internal/application | packages/backend/internal/platform/*) -> packages/backend/internal/domain`
-- `packages/backend/internal/generated/openapi` を非 generated code から import できるのは `packages/backend/internal/adapter/http` だけ
+## Backend Rules
 
-### 3) Implement without breaking enforced rules
+- Use repository-approved `pnpm` scripts for Go format, lint, build, and tests.
+- Non-generated Gin routes are literal `/health` or `/api/v1/*` paths.
+- HTTP adapters do not import persistence adapters or expose transport types
+  inward.
+- Domain and application code do not read runtime side-effect sources directly.
+- Admin protected routes preserve operator bearer, Origin, Fetch Metadata,
+  authorization, no-store, and security-header boundaries.
+- Production-like runtime configuration fails closed when required credentials
+  or surface configuration are missing.
 
-- Contract を変えるときは `packages/typespec/main.tsp` を直し、`pnpm gen` と `pnpm check:codegen` で整合を取る
-- `packages/typespec/openapi/openapi.json`、`packages/frontend/api/src/generated/client.ts`、`packages/backend/internal/generated/openapi/openapi.gen.go` は手で直さない
-- Frontend app / domain で `fetch`, `globalThis.fetch`, `axios`, `cross-fetch` を直接使わない
-- Frontend web は native `fetch` を使ってよいが、`axios` / `cross-fetch` は使わない
-- Frontend web / app から `@www-template/api` を直 import しない
-- Frontend web から `@www-template/domain` を import しない
-- Active frontend source に React / TSX を持ち込まない
-- Domain hooks は `use*` export、`{ data, actions }` 戻り値、stateful 実装は `.svelte.ts`
-- Frontend app は SvelteKit SPA（SSR 無効）として保ち、server route / server hook / server-only lib を持ち込まない
-- `packages/web` の SvelteKit route/server 制約と、独立オリジンで動く frontend app の分離を維持する
-- Go file は `packages/backend/cmd/api`, `packages/backend/internal/*`, `packages/backend/tools/analyzers` の許可 layer にだけ置く
-- GORM は `packages/backend/internal/adapter/postgres/**` だけ、`AutoMigrate` は禁止、migration は `packages/backend/db/migrations/*.sql`
-- Non-generated Gin route は `/health` または `/api/v1/*` の string literal だけにする
-- `fmt.Print*`, `print`, `println` と host-derived URL composition を backend code に入れない
+## OpenSpec Rules
 
-### 4) Verify with the real repo flow
+- `DIRECT` creates no Change.
+- `BEHAVIOR` uses `behavior-change`; `ARCHITECTURE` uses
+  `architecture-change`. Always pass `--schema` to `openspec new change`.
+- Official `.opencode/commands/opsx-*.md` and
+  `.opencode/skills/openspec-*/SKILL.md` files are regenerated only through
+  `pnpm gen:openspec`.
+- Specs contain observable outcomes and constraints, not implementation means.
+- Every Scenario has a stable ID. Automated TypeScript and Go tests reference
+  those IDs; only non-automatable Scenarios use `Tags: manual`.
+- `tasks.md` is a coarse Work Package ledger. File, helper, test-layer, and
+  execution-order choices remain runtime implementation details.
 
-変更内容に応じて、少なくとも次を実行する。
+## Verification
 
-- Contract / generated 変更: `pnpm gen` -> `pnpm check:codegen`
-- JS / TS / Svelte / Go code 変更: `pnpm lint` -> `pnpm test:run`
-- Release-ready な変更や横断変更: `pnpm build`
-- TypeSpec 変更: `pnpm format:check` と `pnpm check`
-- Skill 変更: `python3 .opencode/skills/opencode-skills-devkit/scripts/validate_skills.py --root .`
+Run commands through the Dev Container and the repository's `pnpm` scripts.
 
-Changed-file 向けの軽量チェック:
+- OpenSpec or workflow changes: `pnpm gen:openspec`, `pnpm lint:openspec`
+- JavaScript, TypeScript, Svelte, Go, docs, or tooling: `pnpm lint`,
+  `pnpm test:run`
+- TypeSpec or generated contracts: `pnpm gen`, `pnpm check:codegen`
+- Type or compilation changes: `pnpm check`
+- Release-ready cross-cutting changes: `pnpm build`
+- Skill changes:
+  `python3 .opencode/skills/opencode-skills-devkit/scripts/validate_skills.py --root .`
+- Agent changes:
+  `python3 .opencode/skills/opencode-agent-devkit/scripts/validate_agents.py --root .`
 
-- `.opencode/skills/coding-guardian/scripts/check_changed.sh [base]`
-
-### 5) What to report back
-
-- 触った領域（contract / frontend / backend / tooling / skill）
-- どの enforced rule に合わせて設計したか
-- 生成が必要だったか、実行したか
-- 実行した command と結果
-- まだ未実行の verify があれば、その理由
-
-## Common violations to prevent
-
-- generated file の手編集
-- `packages/web` または `packages/frontend/app` から `@www-template/api` の直 import
-- `packages/web` から `@www-template/domain` の直 import
-- frontend app / domain での `fetch` / `axios` / `cross-fetch`
-- `packages/web` での `axios` / `cross-fetch`
-- active frontend source での React / TSX
-- `packages/frontend/app` への SvelteKit route / server hook / form action の持ち込み
-- GORM の layer 逸脱、`AutoMigrate`、migration pair 破れ
-- `packages/backend/internal/adapter/http` から `packages/backend/internal/adapter/postgres` / `packages/backend/internal/adapter/valkey` の直 import
-- backend code での `fmt.Print*` や host-derived URL composition
+Report touched ownership areas, enforced boundaries, generation performed,
+commands and outcomes, and any verification that could not run.
