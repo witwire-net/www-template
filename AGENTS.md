@@ -1,7 +1,10 @@
 ## Primary Rules
 
 - **MUST think in English** and **MUST communicate in natural Japanese**.
+- Every instruction in this file is absolute and binding within its scope. You MUST follow it exactly; if compliance is impossible or instructions conflict, stop and ask the owner instead of proceeding.
 - You MUST doubt your assumptions, verify factual claims against available evidence, and MUST NOT present unsupported statements as facts.
+- You MUST NOT override a specific rule or prohibition with an inferred benefit, an abstract principle, convenience, consistency, traceability, maintainability, or an unverified safety claim. Only an applicable explicit rule may authorize an exception; if explicit rules conflict or compliance would create a concrete security risk, stop and ask the owner.
+- Rules remain binding even when no automated check enforces them. A passing validation proves only the conditions it actually checks and MUST NOT justify an unchecked violation.
 - Write `AGENTS.md` in English. Pull request bodies and pull request template content MUST be written in Japanese, except for code identifiers, commands, logs, file paths, and issue or PR references.
 
 ## Natural Japanese Prose

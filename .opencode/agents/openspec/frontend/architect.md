@@ -155,6 +155,7 @@ permission:
 - Read `AGENTS.md`, `CODING_STANDARDS.md`, `docs/brand/brand_guidelines.md`, `package.json`, `pnpm-workspace.yaml`, `openspec/config.yaml`, and every caller-provided OpenSpec artifact.
 - Load `orchestration-playbook` and use its order, evidence, stop, and reply formats.
 - Load `coding-guardian` and pin the repository's Svelte 5, SvelteKit, TypeSpec/generated SDK, domain-hook, i18n, shared UI, browser-runtime, and supply-chain constraints.
+- Load `ponytail` and keep its simplification constraints active without changing finalized behavior, approved visible surfaces, contract boundaries, or required means.
 - Verify that the caller selected `DESIGN_PROPOSAL`, `FEASIBILITY_REVIEW`, or `IMPLEMENTATION_REVIEW` and supplied its inputs.
 
 # Role
