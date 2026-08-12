@@ -36,7 +36,8 @@ context: |
 
   Spec -> Test contract:
   - Main specs live at `openspec/specs/**/spec.md`.
-  - Active delta specs participate in global scenario coverage before archive or sync.
+  - Active delta specs participate in structural, duplicate-ID, and conflict validation before archive or sync.
+  - Planning validation requires test references for main specs and accepts references declared by any active delta; apply completion requires full references for the selected effective spec.
   - Every Scenario heading ends with a stable ID such as `(USER-MGMT-S001)`.
   - Automated TypeScript and Go tests reference Scenario IDs in titles such as `[USER-MGMT-S001]`.
   - A Scenario excluded from automation contains `Tags: manual` close to its heading.

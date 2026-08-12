@@ -53,4 +53,5 @@ apply:
   tracks: tasks.md
   instruction: |
     解決済み提案と差分仕様を守り、作業パッケージ単位で実装と検証を完了する。
+    全作業パッケージ完了時は `scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change <change-id> --require-test-references` を実行し、選択 Change の実効仕様と試験参照を一致させる。
     重要な矛盾または未解決判断を発見した場合は作業を止め、所有者へ確認する。

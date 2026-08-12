@@ -73,6 +73,8 @@ contract and is part of `pnpm lint`.
 - Specs contain observable outcomes and constraints, not implementation means.
 - Every Scenario has a stable ID. Automated TypeScript and Go tests reference
   those IDs; only non-automatable Scenarios use `Tags: manual`.
+- Planning validates active-delta structure and main-spec references; apply
+  completion adds `--require-test-references` for the selected effective spec.
 - `tasks.md` is a coarse Work Package ledger. File, helper, test-layer, and
   execution-order choices remain runtime implementation details.
 

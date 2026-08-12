@@ -159,7 +159,7 @@ Before beginning any work, you MUST summarize your understanding of the Credo be
 - Every `#### Scenario:` heading MUST end with a stable Scenario ID such as `(USER-MGMT-S001)`.
 - Automated TypeScript tests MUST reference Scenario IDs in titles such as `it('[USER-MGMT-S001] Create a user', async () => { ... })`; Go tests MUST reference the same IDs in test names or nearby comments recognized by the coverage verifier.
 - Add `Tags: manual` near a Scenario only when automation is not possible.
-- `scripts/openspec/verify-scenario-coverage.mjs` applies all active deltas to main specs by default and checks duplicate IDs, missing references, orphan references, and active-change conflicts.
-- Use `scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change <change-id>` for one selected Change, then run `scripts/devcontainer/run.sh pnpm lint:openspec:scenario` before completion to check all active Changes.
+- `scripts/openspec/verify-scenario-coverage.mjs` applies active deltas for structural, duplicate-ID, and conflict validation. Planning requires test references only for main specs and recognizes references declared by any active delta.
+- Use `scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change <change-id>` while planning, add `--require-test-references` at apply completion, then run the command without a selected Change to check all active-Change interactions.
 - `tasks.md` is a coarse Work Package ledger. Plan file-level, helper-level, and test-level implementation progressively at runtime from the current package and evidence; do not persist a detailed master plan in OpenSpec.
 - OpenSpec guardrails run through `pnpm lint:openspec` and include schema validation, strict artifact validation, proposal scope, Scenario/Test traceability, and task/design scope.

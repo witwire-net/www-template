@@ -26,7 +26,7 @@
 
 ### OpenSpec の振る舞い契約と変更成果物を検証する
 
-- required: `BEHAVIOR` は `behavior-change`、`ARCHITECTURE` は `architecture-change` を使い、主仕様と全活動中差分を重ねた Scenario ID が一意で、各自動化対象 Scenario に TypeScript または Go の試験参照があり、孤立参照がない状態にする
+- required: `BEHAVIOR` は `behavior-change`、`ARCHITECTURE` は `architecture-change` を使い、主仕様と全活動中差分を重ねた Scenario ID を一意にする。計画時は主仕様の試験参照を必須とし、実装完了時は選択 Change の実効仕様に TypeScript または Go の試験参照があり、旧参照がない状態にする
 - required: `proposal.md` は成果と手段を分離し、`tasks.md` は `Covers` と `Completion Evidence` を持つ粗い作業パッケージ台帳にする。`architecture-change` の `design.md` には物質的な判断だけを記載する
 - Enforcement point: `pnpm lint` -> `pnpm lint:openspec` -> `package.json`, `openspec/schemas/behavior-change/schema.yaml`, `openspec/schemas/architecture-change/schema.yaml`, `scripts/openspec/verify-change-proposal.mjs`, `scripts/openspec/verify-scenario-coverage.mjs`, `scripts/openspec/verify-change-task-scope.mjs`
 - NG例: Scenario ID を付けない / 自動化可能な Scenario に試験参照も `Tags: manual` も付けない / `tasks.md` にファイル単位の詳細手順を列挙する

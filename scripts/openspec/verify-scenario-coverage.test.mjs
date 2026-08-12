@@ -71,6 +71,32 @@ test('全活動中差分の Scenario を主仕様とともに検査する', () =
   assert.match(result.stdout, /coverage: OK/u);
 });
 
+test('計画時は活動中差分の試験参照を要求しない', () => {
+  const result = runGuardInFixture(guardScriptPath, {
+    'openspec/specs/account/spec.md': createMainSpec(),
+    'openspec/changes/add-account/specs/account/spec.md': createDeltaSpec(),
+    'tests/account.test.ts': "test('[ACCOUNT-S001] display', () => {});\n",
+  });
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /coverage: OK/u);
+});
+
+test('実装完了時は選択した差分の試験参照を要求する', () => {
+  const result = runGuardInFixture(
+    guardScriptPath,
+    {
+      'openspec/specs/account/spec.md': createMainSpec(),
+      'openspec/changes/add-account/specs/account/spec.md': createDeltaSpec(),
+      'tests/account.test.ts': "test('[ACCOUNT-S001] display', () => {});\n",
+    },
+    ['--change', 'add-account', '--require-test-references']
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Missing test reference 'ACCOUNT-S002'/u);
+});
+
 test('Go の試験名にある Scenario 参照を検査対象に含める', () => {
   const result = runGuardInFixture(guardScriptPath, {
     'openspec/specs/account/spec.md': createMainSpec(),
@@ -97,7 +123,8 @@ test('--change は選択した差分だけを主仕様へ重ねる', () => {
         requirement: 'アカウント表示',
         scenarioId: 'ACCOUNT-S020',
       }),
-      'tests/account.test.ts': "test('[ACCOUNT-S010] selected overlay', () => {});\n",
+      'tests/account.test.ts':
+        "test('[ACCOUNT-S001] main', () => {});\ntest('[ACCOUNT-S010] selected overlay', () => {});\n",
     },
     ['--change', 'change-a']
   );
@@ -143,10 +170,14 @@ test('実効仕様内で重複する Scenario ID を拒否する', () => {
   assert.match(result.stderr, /Duplicate Scenario ID 'ACCOUNT-S002'/u);
 });
 
-test('Tags: manual の Scenario は試験参照を要求しない', () => {
-  const result = runGuardInFixture(guardScriptPath, {
-    'openspec/changes/add-account/specs/account/spec.md': createDeltaSpec({ manual: true }),
-  });
+test('Tags: manual の Scenario は実装完了時も試験参照を要求しない', () => {
+  const result = runGuardInFixture(
+    guardScriptPath,
+    {
+      'openspec/changes/add-account/specs/account/spec.md': createDeltaSpec({ manual: true }),
+    },
+    ['--change', 'add-account', '--require-test-references']
+  );
 
   assert.equal(result.status, 0);
 });
@@ -169,7 +200,27 @@ test('実効仕様にない試験参照を拒否する', () => {
   assert.match(result.stderr, /Orphan test reference 'ACCOUNT-S999'/u);
 });
 
-test('MODIFIED は主仕様の旧 Scenario を実効仕様から置き換える', () => {
+test('実装完了時の MODIFIED は旧 Scenario 参照を孤立として拒否する', () => {
+  const result = runGuardInFixture(
+    guardScriptPath,
+    {
+      'openspec/specs/account/spec.md': createMainSpec(),
+      'openspec/changes/change-account/specs/account/spec.md': createDeltaSpec({
+        kind: 'MODIFIED',
+        requirement: 'アカウント表示',
+        scenarioId: 'ACCOUNT-S010',
+      }),
+      'tests/account.test.ts':
+        "test('[ACCOUNT-S001] obsolete', () => {});\ntest('[ACCOUNT-S010] current', () => {});\n",
+    },
+    ['--change', 'change-account', '--require-test-references']
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Orphan test reference 'ACCOUNT-S001'/u);
+});
+
+test('全体検査は MODIFIED 実装後に旧 Scenario 参照を要求しない', () => {
   const result = runGuardInFixture(guardScriptPath, {
     'openspec/specs/account/spec.md': createMainSpec(),
     'openspec/changes/change-account/specs/account/spec.md': createDeltaSpec({
@@ -177,12 +228,11 @@ test('MODIFIED は主仕様の旧 Scenario を実効仕様から置き換える'
       requirement: 'アカウント表示',
       scenarioId: 'ACCOUNT-S010',
     }),
-    'tests/account.test.ts':
-      "test('[ACCOUNT-S001] obsolete', () => {});\ntest('[ACCOUNT-S010] current', () => {});\n",
+    'tests/account.test.ts': "test('[ACCOUNT-S010] current', () => {});\n",
   });
 
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /Orphan test reference 'ACCOUNT-S001'/u);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /coverage: OK/u);
 });
 
 test('差分仕様に Purpose を要求する', () => {

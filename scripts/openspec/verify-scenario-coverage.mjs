@@ -301,16 +301,27 @@ function parseSpecFile(absolutePath, context) {
  * コマンドラインから全活動中差分または単一 Change の選択を解釈する。
  *
  * @param {string[]} args - Node.js 実行引数のスクリプト名以降。
- * @returns {{ changeId: string | null; error: string | null }} 選択結果または利用方法エラー。
+ * @returns {{ changeId: string | null; requireTestReferences: boolean; error: string | null }} 選択結果、試験参照の厳格化指定、または利用方法エラー。
  */
 function parseArguments(args) {
-  if (args.length === 0) return { changeId: null, error: null };
+  if (args.length === 0)
+    return { changeId: null, requireTestReferences: false, error: null };
   if (args.length === 2 && args[0] === '--change' && /^[a-z0-9][a-z0-9-]*$/u.test(args[1] ?? '')) {
-    return { changeId: args[1] ?? null, error: null };
+    return { changeId: args[1] ?? null, requireTestReferences: false, error: null };
+  }
+  if (
+    args.length === 3 &&
+    args[0] === '--change' &&
+    /^[a-z0-9][a-z0-9-]*$/u.test(args[1] ?? '') &&
+    args[2] === '--require-test-references'
+  ) {
+    return { changeId: args[1] ?? null, requireTestReferences: true, error: null };
   }
   return {
     changeId: null,
-    error: 'Usage: node scripts/openspec/verify-scenario-coverage.mjs [--change <change-id>]',
+    requireTestReferences: false,
+    error:
+      'Usage: node scripts/openspec/verify-scenario-coverage.mjs [--change <change-id> [--require-test-references]]',
   };
 }
 
@@ -495,13 +506,36 @@ function collectTestReferences(repositoryRoot) {
 }
 
 /**
- * 解析結果、重複、未参照、孤立参照を一つの診断一覧へまとめる。
+ * 選択した工程で必須となる試験参照と、既知の全 Scenario に対する孤立参照を検査する。
  *
  * @param {Map<string, Scenario[]>} scenariosById - 実効仕様の Scenario 索引。
  * @param {Map<string, Set<string>>} references - 試験からの Scenario 参照。
  * @returns {string[]} 利用者が修正できる診断一覧。
  */
-function validateCoverage(scenariosById, references) {
+function validateCoverage(requiredScenariosById, knownScenarioIds, references) {
+  const errors = [];
+  for (const [id, scenarios] of requiredScenariosById) {
+    if (scenarios.some((scenario) => !scenario.manual) && !references.has(id)) {
+      const scenario = scenarios.find((entry) => !entry.manual) ?? scenarios[0];
+      errors.push(
+        `Missing test reference '${id}': ${scenario?.relPath}:${String(scenario?.line ?? 1)}`
+      );
+    }
+  }
+  for (const [id, paths] of references) {
+    if (!knownScenarioIds.has(id))
+      errors.push(`Orphan test reference '${id}': ${[...paths].sort().join(', ')}`);
+  }
+  return errors.sort();
+}
+
+/**
+ * 活動中差分を適用した実効仕様で Scenario ID の一意性を検査する。
+ *
+ * @param {Map<string, Scenario[]>} scenariosById - 実効仕様の Scenario 索引。
+ * @returns {string[]} 重複した Scenario ID の診断一覧。
+ */
+function validateScenarioDefinitions(scenariosById) {
   const errors = [];
   for (const [id, scenarios] of scenariosById) {
     if (scenarios.length > 1) {
@@ -512,22 +546,12 @@ function validateCoverage(scenariosById, references) {
           .join(', ')}`
       );
     }
-    if (scenarios.some((scenario) => !scenario.manual) && !references.has(id)) {
-      const scenario = scenarios.find((entry) => !entry.manual) ?? scenarios[0];
-      errors.push(
-        `Missing test reference '${id}': ${scenario?.relPath}:${String(scenario?.line ?? 1)}`
-      );
-    }
-  }
-  for (const [id, paths] of references) {
-    if (!scenariosById.has(id))
-      errors.push(`Orphan test reference '${id}': ${[...paths].sort().join(', ')}`);
   }
   return errors.sort();
 }
 
 /**
- * CLI 全体を実行し、活動中差分を含む実効仕様と試験参照の整合を報告する。
+ * CLI 全体を実行し、計画時または実装完了時の仕様と試験参照の整合を報告する。
  *
  * @returns {void}
  */
@@ -565,8 +589,51 @@ function main() {
 
   const effective = buildEffectiveRequirements(baseOperations, deltaOperations);
   errors.push(...effective.errors);
-  const scenariosById = indexScenarios(effective.requirements);
-  errors.push(...validateCoverage(scenariosById, collectTestReferences(repositoryRoot)));
+  const effectiveScenariosById = indexScenarios(effective.requirements);
+  errors.push(...validateScenarioDefinitions(effectiveScenariosById));
+
+  // 選択検査でも別の活動中 Change の実装試験を孤立参照と誤判定しないよう、全差分の ID を収集する。
+  const allDeltaOperations = [];
+  if (parsedArguments.changeId === null) {
+    allDeltaOperations.push(...deltaOperations);
+  } else {
+    const allFiles = collectSpecFiles(repositoryRoot, null);
+    for (const deltaFile of allFiles.deltaFiles) {
+      const parsed = parseSpecFile(deltaFile.path, {
+        repositoryRoot,
+        delta: true,
+        changeId: deltaFile.changeId,
+      });
+      allDeltaOperations.push(...parsed.operations);
+    }
+  }
+  const knownOperations = parsedArguments.requireTestReferences
+    ? [
+        ...effective.requirements,
+        ...allDeltaOperations.filter(
+          (operation) => operation.changeId !== parsedArguments.changeId
+        ),
+      ]
+    : [...baseOperations, ...allDeltaOperations];
+  const knownScenarioIds = new Set(indexScenarios(knownOperations).keys());
+  const replacedMainTargets = new Set(
+    allDeltaOperations
+      .filter((operation) => operation.kind === 'MODIFIED' || operation.kind === 'REMOVED')
+      .map((operation) => `${operation.capability}\u0000${operation.target}`)
+  );
+  const stableBaseOperations = baseOperations.filter(
+    (operation) => !replacedMainTargets.has(`${operation.capability}\u0000${operation.target}`)
+  );
+  const requiredScenariosById = parsedArguments.requireTestReferences
+    ? effectiveScenariosById
+    : indexScenarios(parsedArguments.changeId === null ? stableBaseOperations : baseOperations);
+  errors.push(
+    ...validateCoverage(
+      requiredScenariosById,
+      knownScenarioIds,
+      collectTestReferences(repositoryRoot)
+    )
+  );
 
   if (errors.length === 0) {
     process.stdout.write('OpenSpec scenario coverage: OK\n');

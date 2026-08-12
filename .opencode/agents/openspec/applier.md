@@ -217,7 +217,7 @@ graph. When all packages are complete:
 
 1. Run schema-appropriate generation and repository checks.
 2. Run
-   `scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change "<change-id>"`.
+   `scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change "<change-id>" --require-test-references`.
 3. Run `scripts/devcontainer/run.sh pnpm lint:openspec:scenario` to check
    interaction with every active Change.
 4. Send implementation, artifacts, diff boundary, UX evidence, requested review

@@ -5,7 +5,7 @@
 - コーディング規則: `CODING_STANDARDS.md`
 - 変更運用: `docs/change-operation.md`
 - 永続的な振る舞い契約: `openspec/specs/**/spec.md`
-- `pnpm lint` は活動中差分を含む OpenSpec の成果物、Scenario と試験の追跡、作業パッケージの対象範囲を検査します
+- `pnpm lint` は活動中差分の構造、識別子、競合、主仕様と試験の追跡、作業パッケージの対象範囲を検査します
 
 ## 前提
 
@@ -101,5 +101,6 @@ OpenSpec `1.8.0` は設定ファイルの既定スキーマを Change 作成時�
 
 ```bash
 scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change <change-id>
+scripts/devcontainer/run.sh pnpm lint:openspec:scenario -- --change <change-id> --require-test-references
 scripts/devcontainer/run.sh pnpm lint:openspec:scenario
 ```
