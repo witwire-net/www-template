@@ -3,7 +3,7 @@ description: Read-only UX shaper that derives the Primary User Task and UX Direc
 mode: subagent
 hidden: true
 model: openai/gpt-5.6-sol
-reasoningEffort: 'xhigh'
+reasoningEffort: 'medium'
 temperature: 0.1
 permission:
   edit: deny

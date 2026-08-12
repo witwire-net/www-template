@@ -1,8 +1,8 @@
 ---
 description: Implements Product frontend domain, API integration, routing, data and action wiring, and workflows without redesigning production-visible UI.
 mode: subagent
-model: openai/gpt-5.6-luna
-reasoningEffort: 'max'
+model: openai/gpt-5.6-sol
+reasoningEffort: 'medium'
 temperature: 0.1
 permission:
   edit: allow

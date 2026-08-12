@@ -3,7 +3,7 @@ description: Designs and implements production-visible Svelte UI across shared c
 mode: subagent
 hidden: true
 model: openai/gpt-5.6-sol
-reasoningEffort: 'xhigh'
+reasoningEffort: 'medium'
 temperature: 0.1
 permission:
   edit:
