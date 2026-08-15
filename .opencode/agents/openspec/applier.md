@@ -1,7 +1,7 @@
 ---
 description: Applies a schema-specific OpenSpec Change as a progressive runtime planner, detailing only ready work packages and preserving local implementation freedom.
 mode: subagent
-model: openai/gpt-5.6-luna
+model: openai/gpt-5.6-sol
 reasoningEffort: 'high'
 temperature: 0.1
 permission:

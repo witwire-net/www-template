@@ -2,7 +2,7 @@
 description: Researches the web, repository, specs/standards, best practices, and policies/laws through Agent Browser; records every investigation and answers with evidence-backed takeaways and recommendations.
 mode: subagent
 model: openai/gpt-5.6-luna
-reasoningEffort: 'max'
+reasoningEffort: 'high'
 temperature: 0.1
 permission:
   edit:
